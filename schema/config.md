@@ -224,6 +224,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -231,6 +232,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -560,6 +562,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -567,6 +570,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -834,6 +838,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -841,6 +846,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -1108,6 +1114,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -1115,6 +1122,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -1380,6 +1388,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -1387,6 +1396,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -1689,6 +1699,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -1696,6 +1707,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -1963,6 +1975,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -1970,6 +1983,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -2235,6 +2249,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -2242,6 +2257,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -2557,6 +2573,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -2564,6 +2581,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -2901,6 +2919,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -2908,6 +2927,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -3017,6 +3037,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -3024,6 +3045,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -3091,6 +3113,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -3098,6 +3121,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -3209,6 +3233,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -3216,6 +3241,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -3493,6 +3519,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -3500,6 +3527,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -3850,6 +3878,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -3857,6 +3886,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -4147,6 +4177,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -4154,6 +4185,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -4447,6 +4479,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -4454,6 +4487,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -4734,6 +4768,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -4741,6 +4776,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -5573,6 +5609,7 @@
 |`binds[].listeners[].routes[].policies.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -5580,6 +5617,7 @@
 |`binds[].listeners[].routes[].policies.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.transformations.request`|object|Transform the request before it is forwarded.|
 |`binds[].listeners[].routes[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -5587,6 +5625,7 @@
 |`binds[].listeners[].routes[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -5594,6 +5633,7 @@
 |`binds[].listeners[].routes[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`binds[].listeners[].routes[].policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
@@ -5668,6 +5708,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -5675,6 +5716,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -5985,6 +6027,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -5992,6 +6035,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -6098,6 +6142,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -6105,6 +6150,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -6214,6 +6260,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -6221,6 +6268,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -6288,6 +6336,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -6295,6 +6344,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -6404,6 +6454,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -6411,6 +6462,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -6693,6 +6745,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -6700,6 +6753,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -7002,6 +7056,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -7009,6 +7064,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -7315,6 +7371,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -7322,6 +7379,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -7589,6 +7647,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -7596,6 +7655,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -7863,6 +7923,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -7870,6 +7931,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -8135,6 +8197,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -8142,6 +8205,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -8444,6 +8508,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -8451,6 +8516,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -8718,6 +8784,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -8725,6 +8792,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -8990,6 +9058,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -8997,6 +9066,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -9337,6 +9407,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -9344,6 +9415,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -9450,6 +9522,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -9457,6 +9530,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -9566,6 +9640,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -9573,6 +9648,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -9640,6 +9716,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -9647,6 +9724,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -9756,6 +9834,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -9763,6 +9842,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -10045,6 +10125,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -10052,6 +10133,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -10354,6 +10436,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -10361,6 +10444,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -10667,6 +10751,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -10674,6 +10759,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -10941,6 +11027,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -10948,6 +11035,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -11215,6 +11303,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -11222,6 +11311,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -11487,6 +11577,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -11494,6 +11585,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -11796,6 +11888,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -11803,6 +11896,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -12070,6 +12164,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -12077,6 +12172,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -12342,6 +12438,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -12349,6 +12446,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -12652,6 +12750,7 @@
 |`binds[].listeners[].routes[].backends[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -12659,6 +12758,7 @@
 |`binds[].listeners[].routes[].backends[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -12765,6 +12865,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -12772,6 +12873,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -12881,6 +12983,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -12888,6 +12991,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -12955,6 +13059,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -12962,6 +13067,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -13071,6 +13177,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -13078,6 +13185,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -13360,6 +13468,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -13367,6 +13476,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -13669,6 +13779,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -13676,6 +13787,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -13982,6 +14094,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -13989,6 +14102,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -14256,6 +14370,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -14263,6 +14378,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -14530,6 +14646,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -14537,6 +14654,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -14802,6 +14920,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -14809,6 +14928,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -15111,6 +15231,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -15118,6 +15239,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -15385,6 +15507,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -15392,6 +15515,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -15657,6 +15781,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -15664,6 +15789,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -16006,6 +16132,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -16013,6 +16140,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -16323,6 +16451,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -16330,6 +16459,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -16620,6 +16750,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -16627,6 +16758,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -16920,6 +17052,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -16927,6 +17060,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -17207,6 +17341,7 @@
 |`binds[].listeners[].policies.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].policies.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -17214,6 +17349,7 @@
 |`binds[].listeners[].policies.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`binds[].listeners[].policies.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -17493,6 +17629,7 @@
 |`binds[].listeners[].policies.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].policies.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -17500,6 +17637,7 @@
 |`binds[].listeners[].policies.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.transformations.request`|object|Transform the request before it is forwarded.|
 |`binds[].listeners[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -17507,6 +17645,7 @@
 |`binds[].listeners[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`binds[].listeners[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -17514,6 +17653,7 @@
 |`binds[].listeners[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`binds[].listeners[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`binds[].listeners[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`binds[].listeners[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
@@ -17596,6 +17736,7 @@
 |`frontendPolicies.networkExtAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.networkExtAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -17603,6 +17744,7 @@
 |`frontendPolicies.networkExtAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.networkExtAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.networkExtAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.networkExtAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`frontendPolicies.networkExtAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -17906,6 +18048,7 @@
 |`frontendPolicies.accessLog.otlp.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.accessLog.otlp.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.response`|object|Transform the response before it is returned.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -17913,6 +18056,7 @@
 |`frontendPolicies.accessLog.otlp.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.accessLog.otlp.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.accessLog.otlp.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.accessLog.otlp.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`frontendPolicies.accessLog.otlp.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -18195,6 +18339,7 @@
 |`frontendPolicies.logging.otlp.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`frontendPolicies.logging.otlp.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.logging.otlp.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.logging.otlp.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.logging.otlp.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.logging.otlp.policies.transformations.response`|object|Transform the response before it is returned.|
 |`frontendPolicies.logging.otlp.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -18202,6 +18347,7 @@
 |`frontendPolicies.logging.otlp.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`frontendPolicies.logging.otlp.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.logging.otlp.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.logging.otlp.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.logging.otlp.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.logging.otlp.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`frontendPolicies.logging.otlp.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -18480,6 +18626,7 @@
 |`frontendPolicies.tracing.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`frontendPolicies.tracing.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.tracing.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.tracing.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.tracing.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.tracing.policies.transformations.response`|object|Transform the response before it is returned.|
 |`frontendPolicies.tracing.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -18487,6 +18634,7 @@
 |`frontendPolicies.tracing.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`frontendPolicies.tracing.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`frontendPolicies.tracing.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`frontendPolicies.tracing.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`frontendPolicies.tracing.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`frontendPolicies.tracing.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`frontendPolicies.tracing.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -18852,6 +19000,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -18859,6 +19008,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -19188,6 +19338,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -19195,6 +19346,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -19462,6 +19614,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -19469,6 +19622,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -19736,6 +19890,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -19743,6 +19898,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -20008,6 +20164,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -20015,6 +20172,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -20317,6 +20475,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -20324,6 +20483,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -20591,6 +20751,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -20598,6 +20759,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -20863,6 +21025,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -20870,6 +21033,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -21185,6 +21349,7 @@
 |`policies[].policy.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -21192,6 +21357,7 @@
 |`policies[].policy.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -21529,6 +21695,7 @@
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -21536,6 +21703,7 @@
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -21645,6 +21813,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -21652,6 +21821,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -21719,6 +21889,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -21726,6 +21897,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -21837,6 +22009,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -21844,6 +22017,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -22121,6 +22295,7 @@
 |`policies[].policy.remoteRateLimit.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.remoteRateLimit.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.remoteRateLimit.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.remoteRateLimit.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.remoteRateLimit.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.remoteRateLimit.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.remoteRateLimit.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -22128,6 +22303,7 @@
 |`policies[].policy.remoteRateLimit.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.remoteRateLimit.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.remoteRateLimit.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.remoteRateLimit.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.remoteRateLimit.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.remoteRateLimit.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.remoteRateLimit.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -22478,6 +22654,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -22485,6 +22662,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -22775,6 +22953,7 @@
 |`policies[].policy.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -22782,6 +22961,7 @@
 |`policies[].policy.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -23075,6 +23255,7 @@
 |`policies[].policy.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -23082,6 +23263,7 @@
 |`policies[].policy.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -23362,6 +23544,7 @@
 |`policies[].policy.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -23369,6 +23552,7 @@
 |`policies[].policy.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`policies[].policy.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -24201,6 +24385,7 @@
 |`policies[].policy.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`policies[].policy.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`policies[].policy.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -24208,6 +24393,7 @@
 |`policies[].policy.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`policies[].policy.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.transformations.request`|object|Transform the request before it is forwarded.|
 |`policies[].policy.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -24215,6 +24401,7 @@
 |`policies[].policy.transformations.request.remove`|[]string|Header names to remove.|
 |`policies[].policy.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.transformations.response`|object|Transform the response before it is returned.|
 |`policies[].policy.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -24222,6 +24409,7 @@
 |`policies[].policy.transformations.response.remove`|[]string|Header names to remove.|
 |`policies[].policy.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`policies[].policy.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`policies[].policy.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`policies[].policy.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
@@ -24294,6 +24482,7 @@
 |`backends[].mcp.targets[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].mcp.targets[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].mcp.targets[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].mcp.targets[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].mcp.targets[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].mcp.targets[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].mcp.targets[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -24301,6 +24490,7 @@
 |`backends[].mcp.targets[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].mcp.targets[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].mcp.targets[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].mcp.targets[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].mcp.targets[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].mcp.targets[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].mcp.targets[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -24611,6 +24801,7 @@
 |`backends[].ai.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -24618,6 +24809,7 @@
 |`backends[].ai.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -24724,6 +24916,7 @@
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -24731,6 +24924,7 @@
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -24840,6 +25034,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -24847,6 +25042,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -24914,6 +25110,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -24921,6 +25118,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -25030,6 +25228,7 @@
 |`backends[].ai.policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -25037,6 +25236,7 @@
 |`backends[].ai.policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -25319,6 +25519,7 @@
 |`backends[].ai.policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -25326,6 +25527,7 @@
 |`backends[].ai.policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -25628,6 +25830,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -25635,6 +25838,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -25941,6 +26145,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -25948,6 +26153,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -26215,6 +26421,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -26222,6 +26429,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -26489,6 +26697,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -26496,6 +26705,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -26761,6 +26971,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -26768,6 +26979,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -27070,6 +27282,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -27077,6 +27290,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -27344,6 +27558,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -27351,6 +27566,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -27616,6 +27832,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -27623,6 +27840,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -27963,6 +28181,7 @@
 |`backends[].ai.groups[].providers[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -27970,6 +28189,7 @@
 |`backends[].ai.groups[].providers[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -28076,6 +28296,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -28083,6 +28304,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -28192,6 +28414,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -28199,6 +28422,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -28266,6 +28490,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -28273,6 +28498,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -28382,6 +28608,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -28389,6 +28616,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -28671,6 +28899,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -28678,6 +28907,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -28980,6 +29210,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -28987,6 +29218,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -29293,6 +29525,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -29300,6 +29533,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -29567,6 +29801,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -29574,6 +29809,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -29841,6 +30077,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -29848,6 +30085,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -30113,6 +30351,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -30120,6 +30359,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -30422,6 +30662,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -30429,6 +30670,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -30696,6 +30938,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -30703,6 +30946,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -30968,6 +31212,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -30975,6 +31220,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -31276,6 +31522,7 @@
 |`backends[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -31283,6 +31530,7 @@
 |`backends[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -31389,6 +31637,7 @@
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -31396,6 +31645,7 @@
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -31505,6 +31755,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -31512,6 +31763,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -31579,6 +31831,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -31586,6 +31839,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -31695,6 +31949,7 @@
 |`backends[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -31702,6 +31957,7 @@
 |`backends[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -31984,6 +32240,7 @@
 |`backends[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -31991,6 +32248,7 @@
 |`backends[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -32293,6 +32551,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -32300,6 +32559,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -32606,6 +32866,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -32613,6 +32874,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -32880,6 +33142,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -32887,6 +33150,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -33154,6 +33418,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -33161,6 +33426,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -33426,6 +33692,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -33433,6 +33700,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -33735,6 +34003,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -33742,6 +34011,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -34009,6 +34279,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -34016,6 +34287,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -34281,6 +34553,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -34288,6 +34561,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -34672,6 +34946,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -34679,6 +34954,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -35008,6 +35284,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -35015,6 +35292,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -35282,6 +35560,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -35289,6 +35568,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -35556,6 +35836,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -35563,6 +35844,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -35828,6 +36110,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -35835,6 +36118,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -36137,6 +36421,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -36144,6 +36429,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -36411,6 +36697,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -36418,6 +36705,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -36683,6 +36971,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -36690,6 +36979,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -37005,6 +37295,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -37012,6 +37303,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -37349,6 +37641,7 @@
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -37356,6 +37649,7 @@
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -37465,6 +37759,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -37472,6 +37767,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -37539,6 +37835,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -37546,6 +37843,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -37657,6 +37955,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -37664,6 +37963,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -37941,6 +38241,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -37948,6 +38249,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -38298,6 +38600,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -38305,6 +38608,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -38595,6 +38899,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -38602,6 +38907,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -38895,6 +39201,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -38902,6 +39209,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -39182,6 +39490,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -39189,6 +39498,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -40021,6 +40331,7 @@
 |`routeGroups[].routes[].policies.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -40028,6 +40339,7 @@
 |`routeGroups[].routes[].policies.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.transformations.request`|object|Transform the request before it is forwarded.|
 |`routeGroups[].routes[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -40035,6 +40347,7 @@
 |`routeGroups[].routes[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -40042,6 +40355,7 @@
 |`routeGroups[].routes[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`routeGroups[].routes[].policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
@@ -40116,6 +40430,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -40123,6 +40438,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -40433,6 +40749,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -40440,6 +40757,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -40546,6 +40864,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -40553,6 +40872,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -40662,6 +40982,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -40669,6 +40990,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -40736,6 +41058,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -40743,6 +41066,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -40852,6 +41176,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -40859,6 +41184,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -41141,6 +41467,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -41148,6 +41475,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -41450,6 +41778,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -41457,6 +41786,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -41763,6 +42093,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -41770,6 +42101,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -42037,6 +42369,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -42044,6 +42377,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -42311,6 +42645,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -42318,6 +42653,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -42583,6 +42919,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -42590,6 +42927,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -42892,6 +43230,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -42899,6 +43238,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -43166,6 +43506,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -43173,6 +43514,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -43438,6 +43780,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -43445,6 +43788,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -43785,6 +44129,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -43792,6 +44137,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -43898,6 +44244,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -43905,6 +44252,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -44014,6 +44362,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -44021,6 +44370,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -44088,6 +44438,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -44095,6 +44446,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -44204,6 +44556,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -44211,6 +44564,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -44493,6 +44847,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -44500,6 +44855,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -44802,6 +45158,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -44809,6 +45166,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -45115,6 +45473,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -45122,6 +45481,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -45389,6 +45749,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -45396,6 +45757,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -45663,6 +46025,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -45670,6 +46033,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -45935,6 +46299,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -45942,6 +46307,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -46244,6 +46610,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -46251,6 +46618,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -46518,6 +46886,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -46525,6 +46894,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -46790,6 +47160,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -46797,6 +47168,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -47100,6 +47472,7 @@
 |`routeGroups[].routes[].backends[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -47107,6 +47480,7 @@
 |`routeGroups[].routes[].backends[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -47213,6 +47587,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -47220,6 +47595,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -47329,6 +47705,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -47336,6 +47713,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -47403,6 +47781,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -47410,6 +47789,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -47519,6 +47899,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -47526,6 +47907,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -47808,6 +48190,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -47815,6 +48198,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -48117,6 +48501,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -48124,6 +48509,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -48430,6 +48816,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -48437,6 +48824,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -48704,6 +49092,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -48711,6 +49100,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -48978,6 +49368,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -48985,6 +49376,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -49250,6 +49642,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -49257,6 +49650,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -49559,6 +49953,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -49566,6 +49961,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -49833,6 +50229,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -49840,6 +50237,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -50105,6 +50503,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -50112,6 +50511,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -50481,6 +50881,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -50488,6 +50889,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -50778,6 +51180,7 @@
 |`gateways.*.listeners[].extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -50785,6 +51188,7 @@
 |`gateways.*.listeners[].extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.listeners[].extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -51078,6 +51482,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -51085,6 +51490,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -51365,6 +51771,7 @@
 |`gateways.*.listeners[].extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.listeners[].extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -51372,6 +51779,7 @@
 |`gateways.*.listeners[].extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.listeners[].extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -51651,6 +52059,7 @@
 |`gateways.*.listeners[].transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`gateways.*.listeners[].transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -51658,6 +52067,7 @@
 |`gateways.*.listeners[].transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].transformations.request`|object|Transform the request before it is forwarded.|
 |`gateways.*.listeners[].transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -51665,6 +52075,7 @@
 |`gateways.*.listeners[].transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.listeners[].transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -51672,6 +52083,7 @@
 |`gateways.*.listeners[].transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.listeners[].transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.listeners[].transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.listeners[].transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.listeners[].basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`gateways.*.listeners[].basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
@@ -51781,6 +52193,7 @@
 |`gateways.*.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -51788,6 +52201,7 @@
 |`gateways.*.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -52078,6 +52492,7 @@
 |`gateways.*.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -52085,6 +52500,7 @@
 |`gateways.*.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -52378,6 +52794,7 @@
 |`gateways.*.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -52385,6 +52802,7 @@
 |`gateways.*.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -52665,6 +53083,7 @@
 |`gateways.*.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -52672,6 +53091,7 @@
 |`gateways.*.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`gateways.*.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -52951,6 +53371,7 @@
 |`gateways.*.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`gateways.*.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`gateways.*.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -52958,6 +53379,7 @@
 |`gateways.*.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`gateways.*.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.transformations.request`|object|Transform the request before it is forwarded.|
 |`gateways.*.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -52965,6 +53387,7 @@
 |`gateways.*.transformations.request.remove`|[]string|Header names to remove.|
 |`gateways.*.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.transformations.response`|object|Transform the response before it is returned.|
 |`gateways.*.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -52972,6 +53395,7 @@
 |`gateways.*.transformations.response.remove`|[]string|Header names to remove.|
 |`gateways.*.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`gateways.*.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`gateways.*.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`gateways.*.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`gateways.*.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
@@ -53102,6 +53526,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -53109,6 +53534,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -53438,6 +53864,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -53445,6 +53872,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -53712,6 +54140,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -53719,6 +54148,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -53986,6 +54416,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -53993,6 +54424,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -54258,6 +54690,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -54265,6 +54698,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -54567,6 +55001,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -54574,6 +55009,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -54841,6 +55277,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -54848,6 +55285,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -55113,6 +55551,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -55120,6 +55559,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -55435,6 +55875,7 @@
 |`routes[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -55442,6 +55883,7 @@
 |`routes[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -55779,6 +56221,7 @@
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -55786,6 +56229,7 @@
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -55895,6 +56339,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -55902,6 +56347,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -55969,6 +56415,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -55976,6 +56423,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -56087,6 +56535,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -56094,6 +56543,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -56371,6 +56821,7 @@
 |`routes[].policies.remoteRateLimit.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.remoteRateLimit.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.remoteRateLimit.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.remoteRateLimit.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.remoteRateLimit.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.remoteRateLimit.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.remoteRateLimit.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -56378,6 +56829,7 @@
 |`routes[].policies.remoteRateLimit.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.remoteRateLimit.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.remoteRateLimit.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.remoteRateLimit.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.remoteRateLimit.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.remoteRateLimit.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.remoteRateLimit.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -56728,6 +57180,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -56735,6 +57188,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -57025,6 +57479,7 @@
 |`routes[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -57032,6 +57487,7 @@
 |`routes[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -57325,6 +57781,7 @@
 |`routes[].policies.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -57332,6 +57789,7 @@
 |`routes[].policies.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -57612,6 +58070,7 @@
 |`routes[].policies.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -57619,6 +58078,7 @@
 |`routes[].policies.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].policies.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -58451,6 +58911,7 @@
 |`routes[].policies.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`routes[].policies.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`routes[].policies.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -58458,6 +58919,7 @@
 |`routes[].policies.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`routes[].policies.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.transformations.request`|object|Transform the request before it is forwarded.|
 |`routes[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -58465,6 +58927,7 @@
 |`routes[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -58472,6 +58935,7 @@
 |`routes[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`routes[].policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
@@ -58546,6 +59010,7 @@
 |`routes[].backends[].mcp.targets[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].mcp.targets[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].mcp.targets[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].mcp.targets[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].mcp.targets[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].mcp.targets[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].mcp.targets[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -58553,6 +59018,7 @@
 |`routes[].backends[].mcp.targets[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].mcp.targets[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].mcp.targets[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].mcp.targets[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].mcp.targets[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].mcp.targets[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].mcp.targets[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -58863,6 +59329,7 @@
 |`routes[].backends[].ai.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -58870,6 +59337,7 @@
 |`routes[].backends[].ai.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -58976,6 +59444,7 @@
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -58983,6 +59452,7 @@
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -59092,6 +59562,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -59099,6 +59570,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -59166,6 +59638,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -59173,6 +59646,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -59282,6 +59756,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -59289,6 +59764,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -59571,6 +60047,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -59578,6 +60055,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -59880,6 +60358,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -59887,6 +60366,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -60193,6 +60673,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -60200,6 +60681,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -60467,6 +60949,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -60474,6 +60957,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -60741,6 +61225,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -60748,6 +61233,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -61013,6 +61499,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -61020,6 +61507,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -61322,6 +61810,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -61329,6 +61818,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -61596,6 +62086,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -61603,6 +62094,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -61868,6 +62360,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -61875,6 +62368,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -62215,6 +62709,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -62222,6 +62717,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -62328,6 +62824,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -62335,6 +62832,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -62444,6 +62942,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -62451,6 +62950,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -62518,6 +63018,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -62525,6 +63026,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -62634,6 +63136,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -62641,6 +63144,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -62923,6 +63427,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -62930,6 +63435,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -63232,6 +63738,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -63239,6 +63746,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -63545,6 +64053,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -63552,6 +64061,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -63819,6 +64329,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -63826,6 +64337,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -64093,6 +64605,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -64100,6 +64613,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -64365,6 +64879,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -64372,6 +64887,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -64674,6 +65190,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -64681,6 +65198,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -64948,6 +65466,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -64955,6 +65474,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -65220,6 +65740,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -65227,6 +65748,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -65530,6 +66052,7 @@
 |`routes[].backends[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -65537,6 +66060,7 @@
 |`routes[].backends[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -65643,6 +66167,7 @@
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -65650,6 +66175,7 @@
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -65759,6 +66285,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -65766,6 +66293,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -65833,6 +66361,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -65840,6 +66369,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -65949,6 +66479,7 @@
 |`routes[].backends[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -65956,6 +66487,7 @@
 |`routes[].backends[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -66238,6 +66770,7 @@
 |`routes[].backends[].policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -66245,6 +66778,7 @@
 |`routes[].backends[].policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -66547,6 +67081,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -66554,6 +67089,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -66860,6 +67396,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -66867,6 +67404,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -67134,6 +67672,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -67141,6 +67680,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -67408,6 +67948,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -67415,6 +67956,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -67680,6 +68222,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -67687,6 +68230,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -67989,6 +68533,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -67996,6 +68541,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -68263,6 +68809,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -68270,6 +68817,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -68535,6 +69083,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -68542,6 +69091,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -68885,6 +69435,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -68892,6 +69443,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -69304,6 +69856,7 @@
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -69311,6 +69864,7 @@
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -69420,6 +69974,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -69427,6 +69982,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -69494,6 +70050,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -69501,6 +70058,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -69607,6 +70165,7 @@
 |`llm.providers[].defaults.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -69614,6 +70173,7 @@
 |`llm.providers[].defaults.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.providers[].defaults.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.providers[].defaults.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -70025,6 +70585,7 @@
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].auth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -70032,6 +70593,7 @@
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].auth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].auth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].auth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].auth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -70141,6 +70703,7 @@
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -70148,6 +70711,7 @@
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -70215,6 +70779,7 @@
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -70222,6 +70787,7 @@
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -70328,6 +70894,7 @@
 |`llm.models[].backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -70335,6 +70902,7 @@
 |`llm.models[].backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -70614,6 +71182,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -70621,6 +71190,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -70888,6 +71458,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -70895,6 +71466,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -71162,6 +71734,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -71169,6 +71742,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -71434,6 +72008,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -71441,6 +72016,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -71743,6 +72319,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -71750,6 +72327,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -72017,6 +72595,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -72024,6 +72603,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -72289,6 +72869,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -72296,6 +72877,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -72655,6 +73237,7 @@
 |`llm.policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -72662,6 +73245,7 @@
 |`llm.policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -72952,6 +73536,7 @@
 |`llm.policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -72959,6 +73544,7 @@
 |`llm.policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -73252,6 +73838,7 @@
 |`llm.policies.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -73259,6 +73846,7 @@
 |`llm.policies.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -73539,6 +74127,7 @@
 |`llm.policies.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -73546,6 +74135,7 @@
 |`llm.policies.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -73825,6 +74415,7 @@
 |`llm.policies.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`llm.policies.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`llm.policies.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -73832,6 +74423,7 @@
 |`llm.policies.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`llm.policies.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.transformations.request`|object|Transform the request before it is forwarded.|
 |`llm.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -73839,6 +74431,7 @@
 |`llm.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -73846,6 +74439,7 @@
 |`llm.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`llm.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
@@ -73913,6 +74507,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -73920,6 +74515,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -74187,6 +74783,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -74194,6 +74791,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -74461,6 +75059,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -74468,6 +75067,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -74733,6 +75333,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -74740,6 +75341,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -75042,6 +75644,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -75049,6 +75652,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -75316,6 +75920,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -75323,6 +75928,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -75588,6 +76194,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -75595,6 +76202,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -75884,6 +76492,7 @@
 |`llm.policies.remoteRateLimit.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`llm.policies.remoteRateLimit.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.remoteRateLimit.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.remoteRateLimit.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.remoteRateLimit.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.remoteRateLimit.policies.transformations.response`|object|Transform the response before it is returned.|
 |`llm.policies.remoteRateLimit.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -75891,6 +76500,7 @@
 |`llm.policies.remoteRateLimit.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`llm.policies.remoteRateLimit.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`llm.policies.remoteRateLimit.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.remoteRateLimit.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`llm.policies.remoteRateLimit.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.policies.remoteRateLimit.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`llm.policies.remoteRateLimit.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -76196,6 +76806,7 @@
 |`mcp.targets[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.targets[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.targets[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.targets[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.targets[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.targets[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.targets[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -76203,6 +76814,7 @@
 |`mcp.targets[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.targets[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.targets[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.targets[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.targets[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.targets[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.targets[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -76535,6 +77147,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.mcpGuardrails.processors[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -76542,6 +77155,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.mcpGuardrails.processors[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -76871,6 +77485,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -76878,6 +77493,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -77145,6 +77761,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -77152,6 +77769,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -77419,6 +78037,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -77426,6 +78045,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -77691,6 +78311,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -77698,6 +78319,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -78000,6 +78622,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -78007,6 +78630,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -78274,6 +78898,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -78281,6 +78906,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -78546,6 +79172,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -78553,6 +79180,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -78868,6 +79496,7 @@
 |`mcp.policies.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendTunnel.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -78875,6 +79504,7 @@
 |`mcp.policies.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendTunnel.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -79212,6 +79842,7 @@
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -79219,6 +79850,7 @@
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -79328,6 +79960,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -79335,6 +79968,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -79402,6 +80036,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -79409,6 +80044,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -79520,6 +80156,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -79527,6 +80164,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -79804,6 +80442,7 @@
 |`mcp.policies.remoteRateLimit.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.remoteRateLimit.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.remoteRateLimit.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.remoteRateLimit.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.remoteRateLimit.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.remoteRateLimit.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.remoteRateLimit.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -79811,6 +80450,7 @@
 |`mcp.policies.remoteRateLimit.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.remoteRateLimit.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.remoteRateLimit.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.remoteRateLimit.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.remoteRateLimit.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.remoteRateLimit.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.remoteRateLimit.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -80161,6 +80801,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -80168,6 +80809,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -80458,6 +81100,7 @@
 |`mcp.policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -80465,6 +81108,7 @@
 |`mcp.policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -80758,6 +81402,7 @@
 |`mcp.policies.extProc.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.extProc.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extProc.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extProc.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extProc.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extProc.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.extProc.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -80765,6 +81410,7 @@
 |`mcp.policies.extProc.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.extProc.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extProc.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extProc.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extProc.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extProc.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.extProc.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -81045,6 +81691,7 @@
 |`mcp.policies.extProc.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.extProc.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extProc.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extProc.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extProc.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extProc.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.extProc.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -81052,6 +81699,7 @@
 |`mcp.policies.extProc.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.extProc.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.extProc.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.extProc.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.extProc.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.extProc.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`mcp.policies.extProc.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -81884,6 +82532,7 @@
 |`mcp.policies.transformations.conditional[].request.remove`|[]string|Header names to remove.|
 |`mcp.policies.transformations.conditional[].request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.transformations.conditional[].request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.transformations.conditional[].request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.transformations.conditional[].request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.transformations.conditional[].response`|object|Transform the response before it is returned.|
 |`mcp.policies.transformations.conditional[].response.add`|object|Headers to append using CEL expressions for values.|
@@ -81891,6 +82540,7 @@
 |`mcp.policies.transformations.conditional[].response.remove`|[]string|Header names to remove.|
 |`mcp.policies.transformations.conditional[].response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.transformations.conditional[].response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.transformations.conditional[].response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.transformations.conditional[].response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.transformations.request`|object|Transform the request before it is forwarded.|
 |`mcp.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
@@ -81898,6 +82548,7 @@
 |`mcp.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`mcp.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.transformations.response`|object|Transform the response before it is returned.|
 |`mcp.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -81905,6 +82556,7 @@
 |`mcp.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`mcp.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`mcp.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`mcp.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`mcp.policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
@@ -82002,6 +82654,7 @@
 |`ui.policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string|Header names to remove.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`ui.policies.extAuthz.conditional[].policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.response`|object|Transform the response before it is returned.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -82009,6 +82662,7 @@
 |`ui.policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string|Header names to remove.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`ui.policies.extAuthz.conditional[].policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`ui.policies.extAuthz.conditional[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`ui.policies.extAuthz.conditional[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`ui.policies.extAuthz.conditional[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -82299,6 +82953,7 @@
 |`ui.policies.extAuthz.policies.transformations.request.remove`|[]string|Header names to remove.|
 |`ui.policies.extAuthz.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`ui.policies.extAuthz.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`ui.policies.extAuthz.policies.transformations.request.trailers`|object|Trailers to set using CEL expressions for values.|
 |`ui.policies.extAuthz.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
 |`ui.policies.extAuthz.policies.transformations.response`|object|Transform the response before it is returned.|
 |`ui.policies.extAuthz.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
@@ -82306,6 +82961,7 @@
 |`ui.policies.extAuthz.policies.transformations.response.remove`|[]string|Header names to remove.|
 |`ui.policies.extAuthz.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
 |`ui.policies.extAuthz.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`ui.policies.extAuthz.policies.transformations.response.trailers`|object|Trailers to set using CEL expressions for values.|
 |`ui.policies.extAuthz.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`ui.policies.extAuthz.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
 |`ui.policies.extAuthz.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|

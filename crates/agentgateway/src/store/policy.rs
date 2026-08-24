@@ -17,6 +17,11 @@ pub trait HasExpressions: Send + Sync + 'static {
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
 		std::iter::empty()
 	}
+
+	/// Expressions evaluated after the request and response streams are complete.
+	fn log_expressions(&self) -> impl Iterator<Item = &Expression> {
+		std::iter::empty()
+	}
 }
 
 pub trait PolicyExpressions {
@@ -26,6 +31,10 @@ pub trait PolicyExpressions {
 impl<T: RequestPolicyTrait> HasExpressions for T {
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
 		RequestPolicyTrait::expressions(self)
+	}
+
+	fn log_expressions(&self) -> impl Iterator<Item = &Expression> {
+		RequestPolicyTrait::log_expressions(self)
 	}
 }
 
@@ -46,6 +55,10 @@ pub trait RequestPolicyTrait: Send + Sync + 'static {
 	/// Any expressions used in the policy MUST be included here or they will be ignored.
 	/// Policies that are also response policies MUST include the response-side expressions as well.
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		std::iter::empty()
+	}
+
+	fn log_expressions(&self) -> impl Iterator<Item = &Expression> {
 		std::iter::empty()
 	}
 }
@@ -77,6 +90,10 @@ pub trait BackendPolicyTrait: Send + Sync + 'static {
 	/// Any expressions used in the policy MUST be included here or they will be ignored.
 	/// Policies that are also response policies MUST include the response-side expressions as well.
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		std::iter::empty()
+	}
+
+	fn log_expressions(&self) -> impl Iterator<Item = &Expression> {
 		std::iter::empty()
 	}
 }
@@ -293,6 +310,9 @@ impl<T: HasExpressions> RequestPolicy<T> {
 			for expr in p.pol.expressions() {
 				ctx.register_expression(expr)
 			}
+			for expr in p.pol.log_expressions() {
+				ctx.register_log_expression(expr)
+			}
 		}
 	}
 }
@@ -483,6 +503,9 @@ impl<T: BackendPolicyTrait> BackendPolicy<T> {
 		if let Some(pol) = self.0.as_ref() {
 			for expr in pol.expressions() {
 				ctx.register_expression(expr)
+			}
+			for expr in pol.log_expressions() {
+				ctx.register_log_expression(expr)
 			}
 		}
 	}
