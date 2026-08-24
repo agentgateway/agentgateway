@@ -330,13 +330,12 @@ fn collect_headers(filter: &HeaderFilter, req: &crate::http::Request) -> Vec<wir
 // application-defined codes in the server-error range (-32000..=-32099).
 // -32002 is intentionally skipped: rmcp assigns it to RESOURCE_NOT_FOUND.
 const PERMISSION_DENIED: ErrorCode = ErrorCode(-32001);
-const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
 
 fn translate_error(method: &str, backends: &[String], e: AuthorizationError) -> ErrorData {
 	use wire::authorization_error::Code as C;
 	let code = match C::try_from(e.code).unwrap_or(C::Unknown) {
 		C::PermissionDenied => PERMISSION_DENIED,
-		C::ResourceExhausted => RESOURCE_EXHAUSTED,
+		C::ResourceExhausted => crate::mcp::RESOURCE_EXHAUSTED,
 		C::Invalid => ErrorCode::INVALID_REQUEST,
 		C::Unknown => ErrorCode::INTERNAL_ERROR,
 	};

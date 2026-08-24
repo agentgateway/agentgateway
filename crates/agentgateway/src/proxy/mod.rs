@@ -84,6 +84,7 @@ impl ProxyError {
 			ProxyError::BasicAuthenticationFailure(_) => ProxyResponseReason::BasicAuth,
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
+			ProxyError::MCP(mcp::Error::RateLimited { .. }) => ProxyResponseReason::RateLimit,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
 			ProxyError::AuthorizationFailed
 			| ProxyError::SubstrateEgressDenied(_)
@@ -459,11 +460,18 @@ impl ProxyError {
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::OK,
+			ProxyError::MCP(mcp::Error::RateLimited {
+				request_id: Some(_),
+				..
+			}) => StatusCode::OK,
+			ProxyError::MCP(mcp::Error::RateLimited {
+				request_id: None, ..
+			}) => StatusCode::TOO_MANY_REQUESTS,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);
 
-		// Apply per-error headers
+		// Apply per-error headers (RateLimited's are queued by the denying policy instead).
 		if let ProxyError::RateLimitExceeded {
 			limit,
 			remaining,
@@ -534,6 +542,8 @@ fn proxy_error_to_grpc_status(error: &ProxyError, http_status: StatusCode) -> Co
 		// Gateway API requires invalid backend references to be HTTP 500 for HTTP
 		// requests, but gRPC callers should see the backend as unavailable.
 		ProxyError::NoValidBackends => Code::Unavailable,
+		// HTTP 200 with JSON-RPC error -> gRPC 503
+		ProxyError::MCP(mcp::Error::RateLimited { .. }) => Code::Unavailable,
 		_ => http_status_to_grpc_status(http_status),
 	}
 }

@@ -52,6 +52,9 @@ pub enum FailureMode {
 
 pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
 
+/// Application-defined "over quota" code (MCP defines none); shared with the guardrail mapping.
+pub(crate) const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
+
 /// Method names of rmcp's typed `ClientRequest` variants. Keep this list in sync with rmcp rev
 /// bumps; only `CustomRequest` and failed typed parses consult it, so drift cannot 404 typed
 /// requests.
@@ -159,6 +162,13 @@ pub enum Error {
 	Authorization(RequestId, String, String),
 	#[error("mcpGuardrails rejected: {}", .1.message)]
 	McpGuardrails(RequestId, rmcp::ErrorData),
+	// Deferred rate-limit denial: JSON-RPC error (HTTP 200) with an id, plain 429 without.
+	#[error("{}", .message.as_deref().unwrap_or("rate limit exceeded"))]
+	RateLimited {
+		request_id: Option<RequestId>,
+		status: Option<crate::http::localratelimit::RateLimitStatus>,
+		message: Option<String>,
+	},
 	#[error("failed to process session_id query parameter")]
 	InvalidSessionIdQuery,
 	#[error("failed to establish get stream: {0}")]
@@ -177,6 +187,24 @@ impl Error {
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		let (id, error) = match self {
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
+			Error::RateLimited {
+				request_id: Some(id),
+				status,
+				..
+			} => (
+				id.clone(),
+				ErrorData {
+					code: RESOURCE_EXHAUSTED,
+					message: self.to_string().into(),
+					data: status.map(|s| {
+						serde_json::json!({
+							"limit": s.limit,
+							"remaining": s.remaining,
+							"retryAfterSeconds": s.reset_seconds,
+						})
+					}),
+				},
+			),
 			Error::UnsupportedVersion {
 				request_id: Some(id),
 				version,
