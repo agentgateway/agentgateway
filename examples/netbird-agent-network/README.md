@@ -321,6 +321,12 @@ Sign in at `https://${NETBIRD_MANAGEMENT_DOMAIN}` using the
 `NETBIRD_ADMIN_EMAIL` and `NETBIRD_ADMIN_PASSWORD` values exported in step 1,
 then complete these steps:
 
+On the first sign-in, NetBird offers **Peer-to-Peer Network** and **Remote
+Network Access** onboarding paths. Select **Skip to Dashboard** below those
+options. Those paths configure general-purpose NetBird connectivity, while
+`configure.sh --mode dashboard` has already prepared the proxy token, client
+group, setup key, and Kubernetes workloads required by this example.
+
 1. Open **Agent Network > Providers** and add a provider.
 2. Select **agentgateway**, name it `agentgateway`, and set the upstream URL to
    `http://netbird-agentgateway.netbird-agent-network.svc.cluster.local`.
