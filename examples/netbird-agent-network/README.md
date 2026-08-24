@@ -383,6 +383,35 @@ kubectl exec -n netbird-agent-network deployment/netbird-example-client \
   "https://${NETBIRD_AGENT_ENDPOINT}/v1/models" | jq
 ```
 
+Call each configured model backend from the same NetBird client. These requests
+use the upstream provider APIs and may incur charges:
+
+```bash
+export OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+openai_body=$(jq -cn --arg model "${OPENAI_MODEL}" '{
+  model: $model,
+  messages: [{role: "user", content: "Reply with the word connected."}],
+  max_tokens: 16
+}')
+kubectl exec -n netbird-agent-network deployment/netbird-example-client \
+  -c test -- curl -fsS \
+  "https://${NETBIRD_AGENT_ENDPOINT}/v1/chat/completions" \
+  -H 'Content-Type: application/json' \
+  --data-binary "${openai_body}" | jq
+
+export ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+anthropic_body=$(jq -cn --arg model "${ANTHROPIC_MODEL}" '{
+  model: $model,
+  max_tokens: 16,
+  messages: [{role: "user", content: "Reply with the word connected."}]
+}')
+kubectl exec -n netbird-agent-network deployment/netbird-example-client \
+  -c test -- curl -fsS \
+  "https://${NETBIRD_AGENT_ENDPOINT}/v1/messages" \
+  -H 'Content-Type: application/json' \
+  --data-binary "${anthropic_body}" | jq
+```
+
 An unauthenticated request from outside the NetBird client must be denied:
 
 ```bash
