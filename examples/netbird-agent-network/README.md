@@ -55,12 +55,12 @@ private agentgateway listener
     `-- all other paths ---------> OpenAI
 ```
 
-The Agent Network proxy has a public LoadBalancer and accepts requests from
-authorized NetBird clients. It replaces caller-supplied identity headers with
-trusted NetBird identity, adds the virtual API key, and forwards requests to
-the private AI agentgateway Service. A NetworkPolicy permits only the NetBird
-proxy to reach this gateway. Agentgateway routes Anthropic message requests by
-path and sends all other requests to OpenAI.
+The NetBird Agent Network proxy has a public LoadBalancer and accepts requests
+from authorized NetBird clients. It replaces caller-supplied identity headers
+with trusted NetBird identity, adds the virtual API key, and forwards requests
+to the private AI agentgateway Service. A NetworkPolicy permits only the
+NetBird proxy to reach this gateway. Agentgateway routes Anthropic message
+requests by path and sends all other requests to OpenAI.
 
 Authorized clients reach the Agent Network proxy through NetBird's encrypted
 WireGuard overlay. NetBird DNS resolves the generated endpoint to the proxy
