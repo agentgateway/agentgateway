@@ -2459,3 +2459,63 @@ fn test_de_backend_auth_accepts_each_shape() {
 	assert!(credentials_only.kind.is_none());
 	assert_eq!(credentials_only.credentials.len(), 1);
 }
+
+/// A file-backed `backendAuth` key has to participate in config reloads, the
+/// same way `backendTLS` files and `jwtSign.signingKey` already do. Before this
+/// was resolved through the resource manager, the path was consumed during
+/// deserialization: the value was correct at startup and then frozen, so a
+/// rotated Kubernetes Secret was never picked up and the gateway kept
+/// presenting a retired credential until something else forced a reload.
+#[tokio::test]
+async fn backend_auth_key_file_is_a_tracked_resource() {
+	let dir = tempfile::tempdir().unwrap();
+	let token = dir.path().join("token");
+	// Trailing newline on purpose: `echo` and Kubernetes Secrets both add one,
+	// and the value must still be trimmed.
+	fs::write(&token, "first-token\n").unwrap();
+
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let mut changes = manager.subscribe_changes();
+
+	let yaml = format!(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            key:
+              file: {}
+"#,
+		token.display()
+	);
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml,
+	)
+	.await
+	.expect("config with a file-backed backendAuth key should load");
+
+	// Mark whatever the initial fetch produced as seen, so the assertion below
+	// can only pass on a notification caused by the rewrite.
+	let _ = changes.borrow_and_update();
+
+	// Rewriting the file must reach the manager, which is what triggers a
+	// reload and re-reads the credential.
+	fs::write(&token, "second-token\n").unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a change to the key file should notify the resource manager")
+		.expect("resource change channel should stay open");
+}

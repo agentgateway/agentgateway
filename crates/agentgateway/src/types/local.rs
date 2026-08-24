@@ -2276,16 +2276,15 @@ where
 enum BackendAuthCompat {
 	PlainKey {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-		#[serde(deserialize_with = "deser_key_from_file")]
-		key: SecretString,
+		key: FileOrInline,
 	},
 	FullWithCredentials {
 		#[serde(flatten)]
 		auth: LocalBackendAuthKind,
-		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+		credentials: Vec<LocalBackendAuthCredential>,
 	},
 	CredentialsOnly {
-		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+		credentials: Vec<LocalBackendAuthCredential>,
 	},
 	Full(LocalBackendAuthKind),
 }
@@ -2293,7 +2292,21 @@ enum BackendAuthCompat {
 #[derive(Debug, Clone)]
 pub struct LocalBackendAuth {
 	kind: Option<LocalBackendAuthKind>,
-	credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	credentials: Vec<LocalBackendAuthCredential>,
+}
+
+// Mirrors BackendAuthCredential but holds the credential unresolved, so a
+// file-backed value is loaded through the resource manager rather than at
+// deserialization time.
+/// An additional credential to inject on the backend request.
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(rename = "BackendAuthCredential"))]
+pub struct LocalBackendAuthCredential {
+	/// Where the credential is inserted on the backend request.
+	pub location: crate::http::auth::AuthorizationLocation,
+	/// Credential value.
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+	pub key: FileOrInline,
 }
 
 impl LocalBackendAuth {
@@ -2305,9 +2318,10 @@ impl LocalBackendAuth {
 			Some(LocalBackendAuthKind::Passthrough { location }) => {
 				Some(BackendAuthKind::Passthrough { location })
 			},
-			Some(LocalBackendAuthKind::Key { value, location }) => {
-				Some(BackendAuthKind::Key { value, location })
-			},
+			Some(LocalBackendAuthKind::Key { value, location }) => Some(BackendAuthKind::Key {
+				value: load_secret(&value, resources).await?,
+				location,
+			}),
 			Some(LocalBackendAuthKind::Gcp(auth)) => Some(BackendAuthKind::Gcp(auth)),
 			Some(LocalBackendAuthKind::Aws(auth)) => Some(BackendAuthKind::Aws(auth)),
 			Some(LocalBackendAuthKind::Azure(auth)) => Some(BackendAuthKind::Azure(auth)),
@@ -2323,11 +2337,28 @@ impl LocalBackendAuth {
 			},
 			None => None,
 		};
-		Ok(BackendAuth {
-			kind,
-			credentials: self.credentials,
-		})
+		let mut credentials = Vec::with_capacity(self.credentials.len());
+		for credential in self.credentials {
+			credentials.push(crate::http::auth::BackendAuthCredential {
+				location: credential.location,
+				key: load_secret(&credential.key, resources).await?,
+			});
+		}
+		Ok(BackendAuth { kind, credentials })
 	}
+}
+
+/// Loads a secret through the resource manager, so a file-backed one is watched
+/// and a change to it triggers a config reload rather than being read once at
+/// parse time. Values are trimmed, matching the previous deserialize-time
+/// behaviour: a file written by `echo` or a Kubernetes Secret commonly carries a
+/// trailing newline.
+async fn load_secret(
+	value: &FileOrInline,
+	resources: &crate::resource_manager::ResourceFetcher,
+) -> anyhow::Result<SecretString> {
+	let loaded = crate::serdes::load_file_or_inline(value, resources).await?;
+	Ok(SecretString::from(loaded.trim().to_string()))
 }
 
 #[apply(schema_de!)]
@@ -2341,10 +2372,10 @@ enum LocalBackendAuthKind {
 	},
 	/// Send a configured secret value to the backend.
 	Key {
-		/// Secret value to send to the backend.
+		/// Secret value to send to the backend. File references are watched, so
+		/// rotating the file reloads it without a restart.
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-		#[serde(deserialize_with = "deser_key_from_file")]
-		value: SecretString,
+		value: FileOrInline,
 		/// Where to place the secret in the backend request.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		location: Option<crate::http::auth::AuthorizationLocation>,
