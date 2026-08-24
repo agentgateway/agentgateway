@@ -333,6 +333,13 @@ identity headers trustworthy. If your CNI does not enforce Kubernetes
 NetworkPolicy, apply equivalent controls with a service mesh, firewall, or
 private network.
 
+**Production hardening:** This example uses HTTP between the NetBird Agent
+Network proxy and the private AI agentgateway listener. NetworkPolicy restricts
+that listener to the NetBird proxy but does not encrypt pod-to-pod traffic.
+Production deployments that require encryption within the cluster should use
+HTTPS, service-mesh mTLS, or encrypted pod networking. Do not expose the
+listener until equivalent identity-header trust-boundary controls are in place.
+
 ## Pricing behavior
 
 NetBird meters requests using the model name and pricing catalog it sends to
