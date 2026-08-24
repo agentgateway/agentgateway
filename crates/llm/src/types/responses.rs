@@ -216,6 +216,8 @@ fn scan_value_text_runs(
 				_ => None,
 			}
 		},
+		// parts are pass-through JSON; some providers accept cache_control here
+		|part| Some(part),
 		&mut |text| f(scope, text),
 	);
 }

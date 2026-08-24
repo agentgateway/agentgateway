@@ -413,7 +413,13 @@ impl super::RequestType for Request {
 			match &mut msg.content {
 				Some(Content::Text(text)) => f(scope, text),
 				Some(Content::Array(parts)) => {
-					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), &mut |text| f(scope, text));
+					super::scan_text_runs(
+						parts,
+						" ",
+						|p| p.text.as_mut(),
+						|p| Some(&mut p.rest),
+						&mut |text| f(scope, text),
+					);
 				},
 				None => {},
 			}

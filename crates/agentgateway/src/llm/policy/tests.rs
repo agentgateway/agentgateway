@@ -2972,6 +2972,226 @@ fn test_apply_regex_response_preserves_tool_structure(
 		]
 	}))
 )]
+// the common caching layout: breakpoint on a big context block, volatile text after it
+#[case::mask_carries_drained_blocks_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "for help"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+// two breakpoints collapse into one; the later one wins
+#[case::mask_keeps_survivors_cache_control_over_drained(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+				{"type": "text", "text": "for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+#[case::system_array_mask_carries_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": [
+			{"type": "text", "text": "Contact admin@example.com", "cache_control": {"type": "ephemeral"}},
+			{"type": "text", "text": "for support"}
+		],
+		"messages": [{"role": "user", "content": "hello"}]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": [
+			{"type": "text", "text": "Contact <EMAIL_ADDRESS>\nfor support", "cache_control": {"type": "ephemeral"}}
+		],
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+)]
+// OpenAI-format providers (Bedrock, OpenRouter) accept cache_control on content parts
+#[case::completions_mask_carries_cache_control(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is 123-45-6789", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is <SSN> thanks", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+// OpenAI explicit breakpoints (prompt_cache_breakpoint) survive a collapse too
+#[case::responses_mask_carries_prompt_cache_breakpoint(
+	ChatFmt::Responses,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "my ssn is 123-45-6789", "prompt_cache_breakpoint": {"mode": "explicit"}},
+				{"type": "input_text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "my ssn is <SSN>\nthanks", "prompt_cache_breakpoint": {"mode": "explicit"}}
+			]}
+		]
+	}))
+)]
+#[case::completions_mask_carries_prompt_cache_breakpoint(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is 123-45-6789", "prompt_cache_breakpoint": {"mode": "explicit"}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is <SSN> thanks", "prompt_cache_breakpoint": {"mode": "explicit"}}
+			]}
+		]
+	}))
+)]
+// a masked run must not steal the breakpoint from an untouched run before the image
+#[case::mask_does_not_leak_cache_control_across_runs(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "project context", "cache_control": {"type": "ephemeral"}},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "my ssn is 123-45-6789"},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "project context", "cache_control": {"type": "ephemeral"}},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "my ssn is <SSN> thanks"}
+			]}
+		]
+	}))
+)]
+// two drained parts both marked: the later breakpoint is the one carried
+#[case::mask_carries_latest_drained_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+				{"type": "text", "text": "for help", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help thanks", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+// an explicit null marker is not a breakpoint and must not shadow the real one
+#[case::null_cache_control_does_not_shadow_real_marker(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "for help", "cache_control": null}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
 #[case::mask_preserves_non_text_block_between_runs(
 	ChatFmt::Anthropic,
 	Action::Mask,

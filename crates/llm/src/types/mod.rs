@@ -118,13 +118,21 @@ pub trait RequestType: Send + Sync {
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String));
 }
 
+/// Per-part cache breakpoint markers: Anthropic's `cache_control` and OpenAI's explicit
+/// `prompt_cache_breakpoint` (Responses and Chat Completions).
+const CACHE_MARKER_KEYS: [&str; 2] = ["cache_control", "prompt_cache_breakpoint"];
+
 /// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans
-/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part (keeping its other
-/// fields, e.g. `cache_control`); untouched runs pass through unchanged.
+/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part, which inherits the
+/// run's last cache breakpoint marker (positional metadata; dropping it with the drained parts
+/// would silently disable prompt caching). Other fields of drained parts are dropped. Untouched
+/// runs pass through unchanged. `rest_of` exposes a part's extra-fields JSON object for the
+/// breakpoint carry; return `None` for formats without per-part cache markers.
 pub(crate) fn scan_text_runs<T>(
 	parts: &mut Vec<T>,
 	sep: &str,
 	mut text_of: impl FnMut(&mut T) -> Option<&mut String>,
+	mut rest_of: impl FnMut(&mut T) -> Option<&mut serde_json::Value>,
 	f: &mut dyn FnMut(&mut String),
 ) {
 	if let [part] = parts.as_mut_slice() {
@@ -158,6 +166,36 @@ pub(crate) fn scan_text_runs<T>(
 		if joined == original {
 			i = end;
 			continue;
+		}
+
+		// a breakpoint anywhere in the run must survive the collapse; the survivor's own wins,
+		// else carry the latest one from the parts about to be drained
+		for key in CACHE_MARKER_KEYS {
+			// a JSON-null marker is not a breakpoint; don't let it shadow or carry as one
+			let survivor_marked = rest_of(&mut parts[end - 1])
+				.and_then(|rest| rest.get(key))
+				.is_some_and(|v| !v.is_null());
+			if survivor_marked {
+				continue;
+			}
+			let carried = parts[i..end - 1].iter_mut().rev().find_map(|p| {
+				rest_of(p)
+					.and_then(serde_json::Value::as_object_mut)
+					.and_then(|obj| obj.remove(key))
+					.filter(|v| !v.is_null())
+			});
+			if let Some(marker) = carried
+				&& let Some(rest) = rest_of(&mut parts[end - 1])
+			{
+				// Null only for typed parts whose `rest` defaults to Null; a whole-part
+				// accessor (responses.rs) must never reach here or this would wipe the part
+				if !rest.is_object() {
+					*rest = serde_json::Value::Object(Default::default());
+				}
+				if let Some(obj) = rest.as_object_mut() {
+					obj.insert(key.to_string(), marker);
+				}
+			}
 		}
 
 		// collapse the run's text into the last part, and remove the others

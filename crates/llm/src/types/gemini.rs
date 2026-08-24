@@ -127,6 +127,8 @@ fn visit_content_text(content: &mut vg::Content, f: &mut dyn FnMut(&mut String))
 			vg::Part::Text(tp) if tp.thought != Some(true) => Some(&mut tp.text),
 			_ => None,
 		},
+		// Gemini has no per-part cache marker
+		|_| None,
 		f,
 	);
 }
