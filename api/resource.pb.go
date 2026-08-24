@@ -9268,10 +9268,8 @@ type OAuthTokenExchange struct {
 	AuthorizationLocation *AuthorizationLocation `protobuf:"bytes,13,opt,name=authorization_location,json=authorizationLocation,proto3" json:"authorization_location,omitempty"`
 	// Response cache configuration. When unset uses InMemory cache with defaults
 	Cache *OAuthTokenExchange_TokenCache `protobuf:"bytes,14,opt,name=cache,proto3" json:"cache,omitempty"`
-	// Set by the control plane when OAuth token-exchange configuration cannot
-	// be translated. Control-plane-only: never set from user-facing config.
-	// When present, the data plane accepts the policy but rejects every request
-	// that uses it.
+	// Control-plane-only: set when this configuration cannot be translated.
+	// When present, the data plane rejects every request using this policy.
 	TranslationError *string `protobuf:"bytes,16,opt,name=translation_error,json=translationError,proto3,oneof" json:"translation_error,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -9432,10 +9430,8 @@ type CrossAppAccessAuth struct {
 	// Scope values requested when exchanging the ID-JAG for an access token.
 	// When unset, inherits scopes. When present and empty, omits scope.
 	AccessTokenScopes *CrossAppAccessAuth_ScopeOverride `protobuf:"bytes,8,opt,name=access_token_scopes,json=accessTokenScopes,proto3" json:"access_token_scopes,omitempty"`
-	// Set by the control plane when cross-app access configuration cannot be
-	// translated. Control-plane-only: never set from user-facing config.
-	// When present, the data plane accepts the policy but rejects every request
-	// that uses it.
+	// Control-plane-only: set when this configuration cannot be translated.
+	// When present, the data plane rejects every request using this policy.
 	TranslationError *string `protobuf:"bytes,9,opt,name=translation_error,json=translationError,proto3,oneof" json:"translation_error,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache

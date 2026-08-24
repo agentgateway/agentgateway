@@ -1445,8 +1445,6 @@ func validateOAuthTokenType(tokenType agentgateway.OAuthTokenType, field string)
 	}
 	parsed, err := url.Parse(string(tokenType))
 	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" {
-		// Translation diagnostics are sent to the data plane, so identify the field
-		// without repeating user-controlled values
 		return fmt.Errorf("%s must be a built-in token type or an absolute URI without a fragment", field)
 	}
 	return nil

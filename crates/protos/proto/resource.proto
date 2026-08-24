@@ -2164,10 +2164,8 @@ message OAuthTokenExchange {
   // Response cache configuration. When unset uses InMemory cache with defaults
   TokenCache cache = 14;
 
-  // Set by the control plane when OAuth token-exchange configuration cannot
-  // be translated. Control-plane-only: never set from user-facing config.
-  // When present, the data plane accepts the policy but rejects every request
-  // that uses it.
+  // Control-plane-only: set when this configuration cannot be translated.
+  // When present, the data plane rejects every request using this policy.
   optional string translation_error = 16;
 }
 
@@ -2212,10 +2210,8 @@ message CrossAppAccessAuth {
   // Scope values requested when exchanging the ID-JAG for an access token.
   // When unset, inherits scopes. When present and empty, omits scope.
   ScopeOverride access_token_scopes = 8;
-  // Set by the control plane when cross-app access configuration cannot be
-  // translated. Control-plane-only: never set from user-facing config.
-  // When present, the data plane accepts the policy but rejects every request
-  // that uses it.
+  // Control-plane-only: set when this configuration cannot be translated.
+  // When present, the data plane rejects every request using this policy.
   optional string translation_error = 9;
 }
 

@@ -4363,94 +4363,54 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn invalid_oauth_xds_configuration_is_stored_with_one_warning() {
-		let detail = "missing Secret default/oauth-client";
+	#[rstest::rstest]
+	#[case::oauth_error_preserved(
+		proto::agent::backend_auth_policy::Kind::OauthTokenExchange(proto::agent::OAuthTokenExchange {
+			translation_error: Some("missing Secret default/oauth-client".to_string()),
+			token_endpoint_path: Some("/valid-looking".to_string()),
+			..Default::default()
+		}),
+		"oauthTokenExchange",
+		"missing Secret default/oauth-client"
+	)]
+	#[case::cross_app_access_missing_field(
+		proto::agent::backend_auth_policy::Kind::CrossAppAccess(
+			proto::agent::CrossAppAccessAuth::default()
+		),
+		"crossAppAccess",
+		"missing required field"
+	)]
+	#[case::cross_app_access_error_preserved(
+		proto::agent::backend_auth_policy::Kind::CrossAppAccess(proto::agent::CrossAppAccessAuth {
+			translation_error: Some("secret default/idp-signing-key not found".to_string()),
+			..Default::default()
+		}),
+		"crossAppAccess",
+		"secret default/idp-signing-key not found"
+	)]
+	fn invalid_backend_auth_xds_configuration_is_stored_with_one_warning(
+		#[case] kind: proto::agent::backend_auth_policy::Kind,
+		#[case] variant: &str,
+		#[case] detail: &str,
+	) {
 		let mut diagnostics = Diagnostics::default();
 		let kind = backend_auth_kind_from_proto(
 			proto::agent::BackendAuthPolicy {
-				kind: Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
-					proto::agent::OAuthTokenExchange {
-						translation_error: Some(detail.to_string()),
-						token_endpoint_path: Some("/valid-looking".to_string()),
-						..Default::default()
-					},
-				)),
+				kind: Some(kind),
 				..Default::default()
 			},
 			&mut diagnostics,
 		)
-		.expect("invalid OAuth policy must be accepted")
+		.expect("invalid policy must be accepted")
 		.expect("backend auth kind must be retained");
 
-		let BackendAuthKind::OAuthTokenExchange(oauth) = kind else {
-			panic!("expected OAuth token exchange");
-		};
 		assert_eq!(
-			serde_json::to_value(oauth).unwrap(),
-			json!({"translationError": detail})
+			serde_json::to_value(&kind).unwrap(),
+			json!({variant: {"translationError": detail}})
 		);
 		let warnings = diagnostics.into_warnings();
 		assert_eq!(warnings.len(), 1, "{warnings:?}");
-		assert!(warnings[0].contains(detail));
-	}
-
-	#[test]
-	fn invalid_cross_app_access_xds_configuration_is_stored_with_one_warning() {
-		let mut diagnostics = Diagnostics::default();
-		let kind = backend_auth_kind_from_proto(
-			proto::agent::BackendAuthPolicy {
-				kind: Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(
-					proto::agent::CrossAppAccessAuth::default(),
-				)),
-				..Default::default()
-			},
-			&mut diagnostics,
-		)
-		.expect("invalid cross-app policy must be accepted")
-		.expect("backend auth kind must be retained");
-
-		let BackendAuthKind::CrossAppAccess(cross_app_access) = kind else {
-			panic!("expected cross-app access");
-		};
-		assert_eq!(
-			serde_json::to_value(cross_app_access).unwrap(),
-			json!({"translationError": "missing required field"})
-		);
-		let warnings = diagnostics.into_warnings();
-		assert_eq!(warnings.len(), 1, "{warnings:?}");
-		assert!(warnings[0].contains("missing required field"));
-	}
-
-	#[test]
-	fn cross_app_access_translation_error_is_preserved_exactly() {
-		let detail = "secret default/idp-signing-key not found";
-		let mut diagnostics = Diagnostics::default();
-		let kind = backend_auth_kind_from_proto(
-			proto::agent::BackendAuthPolicy {
-				kind: Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(
-					proto::agent::CrossAppAccessAuth {
-						translation_error: Some(detail.to_string()),
-						..Default::default()
-					},
-				)),
-				..Default::default()
-			},
-			&mut diagnostics,
-		)
-		.expect("invalid cross-app policy must be accepted")
-		.expect("backend auth kind must be retained");
-
-		let BackendAuthKind::CrossAppAccess(cross_app_access) = kind else {
-			panic!("expected cross-app access");
-		};
-		assert_eq!(
-			serde_json::to_value(cross_app_access).unwrap(),
-			json!({"translationError": detail})
-		);
-		let warnings = diagnostics.into_warnings();
-		assert_eq!(warnings.len(), 1, "{warnings:?}");
-		assert!(warnings[0].contains(detail));
+		assert!(warnings[0].contains(detail), "{warnings:?}");
 	}
 
 	#[test]

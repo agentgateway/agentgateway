@@ -10,7 +10,7 @@ use url::form_urlencoded;
 
 use super::{
 	ChainedExchange, ExchangeRequest, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,
-	OAuthTokenExchangeAuth, OAuthTokenType, sign_client_assertion,
+	OAuthTokenExchangeConfig, OAuthTokenType, sign_client_assertion,
 };
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::oauth::{
@@ -166,8 +166,8 @@ pub(super) struct TokenRequestSpec<'a> {
 	expected_issued_token_type: Option<OAuthTokenType>,
 }
 
-impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
-	fn from(auth: &'a OAuthTokenExchangeAuth) -> Self {
+impl<'a> From<&'a OAuthTokenExchangeConfig> for TokenRequestSpec<'a> {
+	fn from(auth: &'a OAuthTokenExchangeConfig) -> Self {
 		Self {
 			target: auth.target.target.as_ref(),
 			policies: &auth.target.policies,
