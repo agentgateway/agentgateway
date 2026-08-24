@@ -254,6 +254,18 @@ kubectl wait --for=condition=Ready certificate/netbird-management \
 curl -fsS "https://${NETBIRD_MANAGEMENT_DOMAIN}/api/instance"
 ```
 
+The two `kubectl wait` commands finish with `condition met` when cert-manager's
+Issuer is ready and the management TLS Secret contains a valid certificate.
+For a fresh database, the final request should return:
+
+```json
+{"setup_required":true}
+```
+
+This confirms that HTTPS routing reaches the NetBird management server and the
+server is ready for the initial owner configuration in step 5. A retained or
+previously initialized database returns `{"setup_required":false}` instead.
+
 ## 5. Configure NetBird
 
 Use one of the following configuration paths. Both create the shared proxy
