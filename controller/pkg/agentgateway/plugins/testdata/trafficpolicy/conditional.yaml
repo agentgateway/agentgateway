@@ -258,11 +258,19 @@ output:
             localRateLimit:
               fillInterval: 1s
               maxTokens: "10"
+              rules:
+              - fillInterval: 1s
+                maxTokens: "10"
+                tokensPerFill: "10"
               tokensPerFill: "10"
         - traffic:
             localRateLimit:
               fillInterval: 60s
               maxTokens: "1"
+              rules:
+              - fillInterval: 60s
+                maxTokens: "1"
+                tokensPerFill: "1"
               tokensPerFill: "1"
       key: traffic/default/ext-auth-conditional:rl-local:default/dummy
       name:

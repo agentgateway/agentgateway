@@ -688,6 +688,8 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
 		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
 		Ok(ProtoRT::Rerank) => llm::RouteType::Rerank,
+		Ok(ProtoRT::GenerateContent) => llm::RouteType::GenerateContent,
+		Ok(ProtoRT::GeminiCountTokens) => llm::RouteType::GeminiCountTokens,
 		Err(_) => {
 			diagnostics.add_warning(format!(
 				"unknown proto RouteType value {}, defaulting to Completions",
@@ -851,6 +853,26 @@ fn convert_provider_format_config(
 	})
 }
 
+fn convert_content_scopes(scopes: &[i32]) -> Result<Vec<llm::ContentScope>, ProtoError> {
+	use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+	if scopes.is_empty() {
+		return Ok(llm::policy::default_content_scope());
+	}
+	scopes
+		.iter()
+		.map(|s| match ProtoScope::try_from(*s) {
+			Ok(ProtoScope::SystemPrompt) => Ok(llm::ContentScope::SystemPrompt),
+			Ok(ProtoScope::Messages) => Ok(llm::ContentScope::Messages),
+			Ok(ProtoScope::ToolOutput) => Ok(llm::ContentScope::ToolOutput),
+			Ok(ProtoScope::ToolInput) => Ok(llm::ContentScope::ToolInput),
+			Ok(ProtoScope::Unspecified) | Err(_) => Err(ProtoError::Generic(format!(
+				"unknown prompt guard content scope value {s}"
+			))),
+		})
+		.collect()
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -948,7 +970,17 @@ fn convert_backend_ai_policy(
 						})
 					},
 				};
-				Ok(llm::policy::RequestGuard { rejection, kind })
+				let guard = llm::policy::RequestGuard {
+					rejection,
+					scope: convert_content_scopes(&reqp.scope)?,
+					kind,
+				};
+
+				// TODO not all guard types properly scan all scopes
+				// avoids silently ignoring configured scopes
+				guard.validate_scope().map_err(ProtoError::Generic)?;
+
+				Ok(guard)
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
@@ -1439,7 +1471,6 @@ impl Bind {
 		Ok(Self {
 			key: s.key.clone().into(),
 			address,
-			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,
 				proto::agent::bind::Protocol::Tcp => BindProtocol::tcp,
@@ -1516,7 +1547,7 @@ impl TCPRoute {
 				.iter()
 				.map(|b| TCPRouteBackendReference {
 					weight: b.weight as usize,
-					backend: resolve_simple_reference(b.backend.as_ref()),
+					backend: resolve_reference(b.backend.as_ref()),
 					inline_policies: Vec::new(),
 				})
 				.collect::<Vec<_>>(),
@@ -1710,6 +1741,7 @@ impl ModelRoute {
 			ModelRoute {
 				key: strng::new(&s.key),
 				name,
+				router_key: strng::new(&s.router_key),
 				kind,
 			},
 			strng::new(&s.listener_key),
@@ -2010,11 +2042,18 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 				},
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection: false,
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {
 			diagnostics.add_warning("guardrail backends are not yet implemented and will be ignored");
 			Backend::Invalid
+		},
+		Some(backend::Kind::ModelRouter(_)) => {
+			return Err(ProtoError::Generic(
+				"model router backend must be dispatched through Store::insert_xds_model_router"
+					.to_string(),
+			));
 		},
 		None => {
 			return Err(ProtoError::Generic("unknown backend".to_string()));
@@ -2477,28 +2516,47 @@ fn traffic_policy_from_proto(
 			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
 		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
-			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
-			let spec = http::localratelimit::RateLimitSpec {
-				max_tokens: lrl.max_tokens,
-				tokens_per_fill: lrl.tokens_per_fill,
-				fill_interval: lrl
-					.fill_interval
-					.ok_or(ProtoError::MissingRequiredField)?
-					.try_into()?,
-				limit_type: match t {
-					tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
-					tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
-				},
+			let convert = |max_tokens: u64,
+			               tokens_per_fill: u64,
+			               fill_interval: Option<prost_types::Duration>,
+			               limit_type: i32| {
+				let t = tps::local_rate_limit::Type::try_from(limit_type)?;
+				http::localratelimit::RateLimitSpec {
+					max_tokens,
+					tokens_per_fill,
+					fill_interval: fill_interval
+						.ok_or(ProtoError::MissingRequiredField)?
+						.try_into()?,
+					limit_type: match t {
+						tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
+						tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
+					},
+				}
+				.try_into()
+				.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))
 			};
-			// Yes, its single with a vec, because we originally supported multiple rate limit policies before
-			// we added the generic multiple support.
-			// If we end up adding "Multiple and execute all" to RequestPolicy, we could translate to that;
-			// until this, this is a single policy with multiple rules.
-			TrafficPolicy::LocalRateLimit(RequestPolicy::single(vec![
-				spec
-					.try_into()
-					.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))?,
-			]))
+			let rules = if lrl.rules.is_empty() {
+				vec![convert(
+					lrl.max_tokens,
+					lrl.tokens_per_fill,
+					lrl.fill_interval,
+					lrl.r#type,
+				)?]
+			} else {
+				lrl
+					.rules
+					.iter()
+					.map(|rule| {
+						convert(
+							rule.max_tokens,
+							rule.tokens_per_fill,
+							rule.fill_interval,
+							rule.r#type,
+						)
+					})
+					.collect::<Result<_, _>>()?
+			};
+			TrafficPolicy::LocalRateLimit(RequestPolicy::single(rules))
 		},
 		Some(tps::Kind::ExtAuthz(ea)) => TrafficPolicy::ExtAuthz(RequestPolicy::single(
 			external_auth_from_proto(ea, diagnostics)?,
@@ -2930,7 +2988,13 @@ fn traffic_policy_from_proto(
 							));
 						},
 					};
-					Ok::<_, ProtoError>((key, meta))
+					Ok::<_, ProtoError>((
+						key,
+						http::apikey::APIKeyPolicy {
+							metadata: meta,
+							allowed_models: Default::default(),
+						},
+					))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
 			TrafficPolicy::APIKey(RequestPolicy::single(http::apikey::APIKeyAuthentication {
@@ -3138,7 +3202,12 @@ fn external_auth_from_proto(
 }
 
 fn convert_duration(d: prost_types::Duration) -> Duration {
-	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
+	// Proto duration fields are signed,
+	// but the standard duration type only represents positive spans of time.
+	// Clamp negative components at zero to avoid unexpected behaviors.
+	let secs = d.seconds.max(0) as u64;
+	let nanos = d.nanos.max(0) as u32;
+	Duration::new(secs, nanos)
 }
 
 fn convert_jwt_sign_ttl(ttl: Option<prost_types::Duration>) -> Result<Option<Duration>, String> {
@@ -4093,6 +4162,48 @@ mod tests {
 	use crate::types::proto::agent::backend_policy_spec::Ai;
 
 	#[test]
+	fn prompt_guard_scope_from_proto() {
+		use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+		// unset scope keeps today's default so existing configs are unaffected
+		assert_eq!(
+			convert_content_scopes(&[]).unwrap(),
+			llm::policy::default_content_scope()
+		);
+		// opting in to tool scanning
+		assert_eq!(
+			convert_content_scopes(&[
+				ProtoScope::Messages as i32,
+				ProtoScope::ToolOutput as i32,
+				ProtoScope::ToolInput as i32,
+			])
+			.unwrap(),
+			vec![
+				llm::ContentScope::Messages,
+				llm::ContentScope::ToolOutput,
+				llm::ContentScope::ToolInput,
+			]
+		);
+		convert_content_scopes(&[ProtoScope::Unspecified as i32]).unwrap_err();
+		convert_content_scopes(&[42]).unwrap_err();
+
+		// TODO respect scopes in all guard types
+		let ai = Ai {
+			prompt_guard: Some(proto::agent::backend_policy_spec::ai::PromptGuard {
+				request: vec![proto::agent::backend_policy_spec::ai::RequestGuard {
+					rejection: None,
+					kind: Some(Kind::OpenaiModeration(Default::default())),
+					scope: vec![ProtoScope::ToolInput as i32],
+				}],
+				..Default::default()
+			}),
+			..Default::default()
+		};
+		let err = convert_backend_ai_policy(&ai, &mut Diagnostics::default()).unwrap_err();
+		assert!(err.to_string().contains("non-default scope"), "{err}");
+	}
+
+	#[test]
 	fn inline_backend_reference_validates_target() {
 		let ip = proto::agent::BackendReference {
 			kind: Some(proto::agent::backend_reference::Kind::Inline(
@@ -4379,6 +4490,26 @@ mod tests {
 						nanos: 0,
 					}),
 					r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+					rules: vec![
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 10,
+							tokens_per_fill: 10,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 1,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+						},
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 5,
+							tokens_per_fill: 5,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 60,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Request as i32,
+						},
+					],
 				},
 			)
 		};
@@ -4406,6 +4537,7 @@ mod tests {
 			panic!("expected conditional local rate limit policy");
 		};
 		assert_eq!(policies.iter().count(), 2);
+		assert!(policies.iter().all(|policy| policy.pol.len() == 2));
 		Ok(())
 	}
 
@@ -4699,6 +4831,14 @@ mod tests {
 					),
 					("/v1/messages".to_string(), RouteType::Messages as i32),
 					("/v1/detect".to_string(), RouteType::Detect as i32),
+					(
+						"/v1beta/models".to_string(),
+						RouteType::GenerateContent as i32,
+					),
+					(
+						"/v1beta/models:countTokens".to_string(),
+						RouteType::GeminiCountTokens as i32,
+					),
 				]
 				.into_iter()
 				.collect(),
@@ -4752,7 +4892,7 @@ mod tests {
 			assert!(post_transformation_policy.get("max_tokens").is_some());
 
 			// Verify routes conversion
-			assert_eq!(ai_policy.routes.len(), 3);
+			assert_eq!(ai_policy.routes.len(), 5);
 			assert_eq!(
 				ai_policy.routes.get("/v1/chat/completions"),
 				Some(&llm::RouteType::Completions)
@@ -4764,6 +4904,14 @@ mod tests {
 			assert_eq!(
 				ai_policy.routes.get("/v1/detect"),
 				Some(&llm::RouteType::Detect)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models"),
+				Some(&llm::RouteType::GenerateContent)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models:countTokens"),
+				Some(&llm::RouteType::GeminiCountTokens)
 			);
 		} else {
 			panic!("Expected AI policy variant");
@@ -4915,6 +5063,28 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn convert_duration_negative_seconds_and_nanos_becomes_zero() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: -500_000_000,
+			}),
+			Duration::ZERO
+		);
+	}
+
+	#[test]
+	fn convert_duration_mixed_sign_clamps_negative_component() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: 500_000_000,
+			}),
+			Duration::from_millis(500)
+		);
+	}
+
 	#[rstest::rstest]
 	#[case::negative(-1, 0)]
 	#[case::invalid_nanos(1, 1_000_000_000)]
@@ -4976,6 +5146,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 1_704_067_200,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "gpt-5-mini".to_string(),
@@ -5036,6 +5207,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: None,
 			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
@@ -5059,6 +5231,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/fast".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 1_704_153_600,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "fast".to_string(),
@@ -5108,6 +5281,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
@@ -5154,6 +5328,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
@@ -5195,6 +5370,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/resilient".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "resilient".to_string(),

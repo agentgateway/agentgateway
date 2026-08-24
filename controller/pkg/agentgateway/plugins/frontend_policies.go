@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -308,12 +307,9 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 	tcp := policy.Spec.Frontend.TCP
 	spec := &api.FrontendPolicySpec_TCP{}
 	if ka := tcp.KeepAlive; ka != nil {
-		spec.Keepalives = &api.KeepaliveConfig{}
-		if ka.Time != nil {
-			spec.Keepalives.Time = durationpb.New(ka.Time.Duration)
-		}
-		if ka.Interval != nil {
-			spec.Keepalives.Interval = durationpb.New(ka.Interval.Duration)
+		spec.Keepalives = &api.KeepaliveConfig{
+			Time:     durationToProto(ka.Time),
+			Interval: durationToProto(ka.Interval),
 		}
 		if ka.Retries != nil {
 			spec.Keepalives.Retries = castUint32(ka.Retries) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
@@ -460,9 +456,8 @@ func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	tls := policy.Spec.Frontend.TLS
-	spec := &api.FrontendPolicySpec_TLS{}
-	if ka := tls.HandshakeTimeout; ka != nil {
-		spec.HandshakeTimeout = durationpb.New(ka.Duration)
+	spec := &api.FrontendPolicySpec_TLS{
+		HandshakeTimeout: durationToProto(tls.HandshakeTimeout),
 	}
 
 	if tls.AlpnProtocols != nil {
@@ -572,9 +567,7 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP1MaxHeaders; v != nil {
 		spec.Http1MaxHeaders = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 	}
-	if v := http.HTTP1IdleTimeout; v != nil {
-		spec.Http1IdleTimeout = durationpb.New(v.Duration)
-	}
+	spec.Http1IdleTimeout = durationToProto(http.HTTP1IdleTimeout)
 	if v := http.HTTP1HeaderCase; v != nil {
 		switch *v {
 		case agentgateway.HTTPHeaderCasePreserve:
@@ -595,15 +588,9 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP2MaxHeaderSize; v != nil {
 		spec.Http2MaxHeaderSize = quantityUint32(v)
 	}
-	if v := http.HTTP2KeepaliveInterval; v != nil {
-		spec.Http2KeepaliveInterval = durationpb.New(v.Duration)
-	}
-	if v := http.HTTP2KeepaliveTimeout; v != nil {
-		spec.Http2KeepaliveTimeout = durationpb.New(v.Duration)
-	}
-	if v := http.MaxConnectionDuration; v != nil {
-		spec.MaxConnectionDuration = durationpb.New(v.Duration)
-	}
+	spec.Http2KeepaliveInterval = durationToProto(http.HTTP2KeepaliveInterval)
+	spec.Http2KeepaliveTimeout = durationToProto(http.HTTP2KeepaliveTimeout)
+	spec.MaxConnectionDuration = durationToProto(http.MaxConnectionDuration)
 
 	httpPolicy := &api.Policy{
 		Key:  name + frontendHttpPolicySuffix,

@@ -37,7 +37,7 @@ See the [DEVELOPMENT.md](DEVELOPMENT.md) file for more information.
   - Add tests for new functionality
 
 - **UI Code**:
-  - Format with `pnpm format`, which runs [Biome](https://biomejs.dev/)
+  - Format and lint with `pnpm check:fix`, which runs [Biome](https://biomejs.dev/)
   - Run `pnpm lint` before submitting changes
   - Ensure all tests pass with `pnpm test:e2e`
   - Add tests for new functionality

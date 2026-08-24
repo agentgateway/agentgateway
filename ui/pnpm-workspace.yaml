@@ -1,3 +1,8 @@
 # Save new dependencies as =1.2.3, not pnpm's default ^1.2.3.
 # https://pnpm.io/settings/other#saveprefix
 savePrefix: '='
+
+# monaco-editor pins dompurify to an exact version with known CVEs
+# (GHSA-55q2-fjhq-7xh7, GHSA-c2j3-45gr-mqc4, GHSA-cmwh-pvxp-8882, GHSA-vxr8-fq34-vvx9).
+overrides:
+  dompurify: '3.4.13'

@@ -15,6 +15,7 @@ use indexmap::IndexMap;
 pub use schemars::JsonSchema;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde_with::serde_as;
 pub use serdes::*;
 
 use crate::store::Stores;
@@ -196,6 +197,10 @@ pub struct RawConfig {
 	standard_attributes: Option<RawStandardAttributes>,
 	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	stats_addr: Option<String>,
+	/// Histogram representation to collect. Native histograms are exposed only through the
+	/// Prometheus protobuf format. Defaults to classic.
+	#[serde(default)]
+	histograms: HistogramMode,
 	/// Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	readiness_addr: Option<String>,
 
@@ -204,6 +209,10 @@ pub struct RawConfig {
 
 	/// MCP gateway settings.
 	mcp: Option<RawMcpConfig>,
+
+	/// Additional request headers whose values should be redacted from trace and debug output.
+	#[serde(default)]
+	sensitive_headers: Vec<String>,
 
 	/// Custom CEL functions available to all CEL expressions. These can define re-usable snippets that
 	/// can be used in any expressions.
@@ -431,6 +440,8 @@ pub enum ConfigStoreMode {
 	File,
 	/// Read a file baseline and store UI-managed overlay resources in the configured database.
 	Hybrid,
+	/// Disallow write operations to the config from the UI
+	ReadOnly,
 }
 
 #[apply(schema_de!)]
@@ -446,6 +457,18 @@ pub enum LoggingFormat {
 	#[default]
 	Text,
 	Json,
+}
+
+#[apply(schema!)]
+#[derive(Default, Copy, Eq, PartialEq)]
+pub enum HistogramMode {
+	/// Collect classic histogram buckets only.
+	#[default]
+	Classic,
+	/// Collect native histogram buckets only.
+	Native,
+	/// Collect both classic and native histogram buckets.
+	Both,
 }
 
 #[apply(schema_de!)]
@@ -595,6 +618,7 @@ impl schemars::JsonSchema for StringBoolFloat {
 	}
 }
 
+#[serde_as]
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
@@ -611,6 +635,7 @@ pub struct Config {
 	pub num_worker_threads: usize,
 	pub admin_addr: Address,
 	pub stats_addr: Address,
+	pub histograms: HistogramMode,
 	pub readiness_addr: Address,
 	// For waypoint identification
 	pub self_addr: Option<types::discovery::WaypointIdentity>,
@@ -624,6 +649,8 @@ pub struct Config {
 	pub logging: crate::telemetry::log::Config,
 	pub database: Option<telemetry::log_store::Config>,
 	pub storage: StorageConfig,
+	#[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
+	pub sensitive_headers: Vec<::http::HeaderName>,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
@@ -731,6 +758,9 @@ pub struct XDSConfig {
 	pub address: Option<String>,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
+	/// Additional headers sent with every xDS request.
+	#[serde(serialize_with = "crate::serdes::ser_sensitive_header_vec")]
+	pub headers: Vec<(String, String)>,
 	pub namespace: Strng,
 	pub gateway: Strng,
 

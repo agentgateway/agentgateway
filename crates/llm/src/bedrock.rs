@@ -70,15 +70,19 @@ impl Provider {
 		use super::RouteType as RT;
 		match route_type {
 			// These routes are only served by the Runtime endpoint.
-			RT::Embeddings | RT::AnthropicTokenCount | RT::Rerank | RT::Realtime => {
-				BedrockEndpoint::Runtime
-			},
+			RT::Embeddings
+			| RT::AnthropicTokenCount
+			| RT::GeminiCountTokens
+			| RT::Rerank
+			| RT::Realtime => BedrockEndpoint::Runtime,
 			// Model listing is a Mantle-native route.
 			RT::Models => BedrockEndpoint::Mantle,
 			// Passthrough/detect stay on Runtime; we cannot reason about the wire format.
 			RT::Detect | RT::Passthrough => BedrockEndpoint::Runtime,
 			// Chat routes all resolve identically, from the preference + catalog tags.
-			RT::Completions | RT::Messages | RT::Responses => self.chat_endpoint(model_id, catalog),
+			RT::Completions | RT::Messages | RT::Responses | RT::GenerateContent => {
+				self.chat_endpoint(model_id, catalog)
+			},
 		}
 	}
 

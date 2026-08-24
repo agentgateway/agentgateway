@@ -23,6 +23,7 @@ import (
 const (
 	GatewayAcceptedMessage           = "Successfully accepted Gateway"
 	GatewayProgrammedMessage         = "Successfully programmed Gateway"
+	GatewayReasonDeploymentFailed    = gwv1.GatewayConditionReason("DeploymentFailed")
 	ListenerSetAcceptedMessage       = "Successfully accepted ListenerSet"
 	ListenerSetProgrammedMessage     = "Successfully programmed ListenerSet"
 	ListenerAcceptedMessage          = "Successfully accepted Listener"

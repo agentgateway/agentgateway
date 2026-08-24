@@ -1,0 +1,23 @@
+event: response.created
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"gpt-4.1-mini","object":"response","output":[],"status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: response.refusal.delta
+data: {"type":"response.refusal.delta","sequence_number":3,"item_id":"","output_index":0,"content_index":0,"delta":"I can"}
+
+event: response.refusal.delta
+data: {"type":"response.refusal.delta","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"delta":"not help with that."}
+
+event: response.refusal.done
+data: {"type":"response.refusal.done","sequence_number":5,"item_id":"","output_index":0,"content_index":0,"refusal":"I cannot help with that."}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":6,"output_index":0,"item":{"type":"message","content":[{"type":"refusal","refusal":"I cannot help with that."}],"id":"","role":"assistant","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":7,"response":{"created_at":123,"id":"","model":"gpt-4.1-mini","object":"response","output":[],"status":"completed","usage":{"input_tokens":5,"output_tokens":3,"total_tokens":8,"input_tokens_details":{"cached_tokens":0},"output_tokens_details":{"reasoning_tokens":0}}}}
+
+data: [DONE]
+

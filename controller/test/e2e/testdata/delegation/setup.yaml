@@ -37,3 +37,31 @@ spec:
   static:
     host: backend.agentgateway-base.svc.cluster.local
     port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-infra-route-delegation
+  namespace: team1
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: infra
+  to:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-team2-root-route-delegation
+  namespace: team2
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: team2-root
+  to:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute

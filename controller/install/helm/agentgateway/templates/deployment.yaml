@@ -11,6 +11,9 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.controller.replicaCount }}
+  {{- if not (kindIs "invalid" .Values.controller.revisionHistoryLimit) }}
+  revisionHistoryLimit: {{ .Values.controller.revisionHistoryLimit }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "agentgateway.selectorLabels" . | nindent 6 }}
@@ -219,6 +222,10 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- if .Values.gatewayClassParametersRefs }}

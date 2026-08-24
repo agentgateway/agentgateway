@@ -219,11 +219,6 @@ impl OAuthTokenExchangeAuth {
 			if self.audiences.is_empty() {
 				return Err("requested_token_type id-jag requires at least one audience".into());
 			}
-			if self.subject_token.token_type == OAuthTokenType::AccessToken {
-				warn!(
-					"oauth token exchange requested_token_type id-jag is configured with an access_token subject; the ID-JAG draft expects an ID token subject"
-				);
-			}
 		}
 
 		if matches!(
@@ -731,7 +726,7 @@ pub(super) async fn apply_token_exchange(
 	auth: &OAuthTokenExchangeAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
-	let client = PolicyClient::new(inputs.clone());
+	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	let access_token = fetch_token(&client, auth, auth.build_exchange_request(req)?)
 		.await
@@ -748,7 +743,7 @@ pub(super) async fn apply_identity_assertion(
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
 	let oauth = auth.oauth_token_exchange();
-	let client = PolicyClient::new(inputs.clone());
+	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	trace!(audience = %auth.audience(), "performing ID-JAG identity assertion exchange");
 	let access_token = fetch_token(&client, oauth, oauth.build_exchange_request(req)?)

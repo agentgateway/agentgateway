@@ -38,7 +38,21 @@ impl ProxyResponse {
 		let ProxyResponse::Error(e) = self else {
 			return ProxyResponseReason::DirectResponse;
 		};
-		match e {
+		e.as_reason()
+	}
+	pub fn downcast(self) -> ProxyError {
+		match self {
+			ProxyResponse::Error(e) => e,
+			ProxyResponse::DirectResponse(_) => ProxyError::ProcessingString(
+				"attempted to return a direct response in an invalid context".to_string(),
+			),
+		}
+	}
+}
+
+impl ProxyError {
+	pub fn as_reason(&self) -> ProxyResponseReason {
+		match self {
 			ProxyError::BindNotFound
 			| ProxyError::ListenerNotFound
 			| ProxyError::RouteNotFound
@@ -54,12 +68,13 @@ impl ProxyResponse {
 			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
-			| ProxyError::AI(_)
 			| ProxyError::RouteCycleDetected
 			| ProxyError::Body(_)
 			| ProxyError::Http(_)
 			| ProxyError::BackendUnsupportedMirror
 			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
+			ProxyError::AIRequest(error) => classify_ai_request(error).reason,
+			ProxyError::AIResponse(error) => classify_ai_response(error).reason,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
 			ProxyError::OidcFailure(_) => ProxyResponseReason::Oidc,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => ProxyResponseReason::JwtAuth,
@@ -82,14 +97,6 @@ impl ProxyResponse {
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
 		}
 	}
-	pub fn downcast(self) -> ProxyError {
-		match self {
-			ProxyResponse::Error(e) => e,
-			ProxyResponse::DirectResponse(_) => ProxyError::ProcessingString(
-				"attempted to return a direct response in an invalid context".to_string(),
-			),
-		}
-	}
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -104,6 +111,8 @@ pub enum ProxyResponseReason {
 	NoHealthyBackend,
 	/// Some internal error in processing occurred
 	Internal,
+	/// The client supplied an invalid request
+	InvalidRequest,
 	/// JWT authentication failed
 	JwtAuth,
 	/// OIDC processing failed
@@ -196,8 +205,10 @@ pub enum ProxyError {
 	RequestTimeout,
 	#[error("processing failed: {0}")]
 	Processing(anyhow::Error),
-	#[error(transparent)]
-	AI(#[from] llm::AIError),
+	#[error("failed to process LLM request: {0}")]
+	AIRequest(llm::AIError),
+	#[error("failed to process LLM response: {0}")]
+	AIResponse(llm::AIError),
 	#[error("invalid http: {0}")]
 	Http(#[from] ::http::Error),
 	#[error("ext_proc failed: {0}")]
@@ -225,6 +236,85 @@ pub enum ProxyError {
 	UpgradeFailed(Option<HeaderValue>, Option<HeaderValue>),
 	#[error("mcp: {0}")]
 	MCP(mcp::Error),
+}
+
+struct AIErrorClassification {
+	status: StatusCode,
+	reason: ProxyResponseReason,
+}
+
+fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
+	match error {
+		llm::AIError::MissingField(_)
+		| llm::AIError::MessageNotFound
+		| llm::AIError::StreamingUnsupported
+		| llm::AIError::UnsupportedModel
+		| llm::AIError::UnsupportedContent
+		| llm::AIError::UnsupportedConversion(_)
+		| llm::AIError::RequestParsing(_) => AIErrorClassification {
+			status: StatusCode::BAD_REQUEST,
+			reason: ProxyResponseReason::InvalidRequest,
+		},
+		llm::AIError::ModelNotFound => AIErrorClassification {
+			status: StatusCode::NOT_FOUND,
+			reason: ProxyResponseReason::InvalidRequest,
+		},
+		llm::AIError::RequestTooLarge => AIErrorClassification {
+			status: StatusCode::PAYLOAD_TOO_LARGE,
+			reason: ProxyResponseReason::InvalidRequest,
+		},
+		llm::AIError::UnsupportedEncoding(_) => AIErrorClassification {
+			status: StatusCode::UNSUPPORTED_MEDIA_TYPE,
+			reason: ProxyResponseReason::InvalidRequest,
+		},
+		llm::AIError::RequestMarshal(_)
+		| llm::AIError::ResponseParsing(_)
+		| llm::AIError::IncompleteResponse
+		| llm::AIError::InvalidResponse(_)
+		| llm::AIError::ResponseMarshal(_)
+		| llm::AIError::ResponseTooLarge
+		| llm::AIError::PromptWebhookError
+		| llm::AIError::ResponseDecoding(_)
+		| llm::AIError::Encoding(_)
+		| llm::AIError::JoinError(_) => AIErrorClassification {
+			status: StatusCode::SERVICE_UNAVAILABLE,
+			reason: ProxyResponseReason::Internal,
+		},
+	}
+}
+
+fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
+	match error {
+		llm::AIError::ResponseParsing(_)
+		| llm::AIError::IncompleteResponse
+		| llm::AIError::InvalidResponse(_)
+		| llm::AIError::ResponseTooLarge
+		| llm::AIError::UnsupportedEncoding(_)
+		| llm::AIError::UnsupportedConversion(_)
+		| llm::AIError::UnsupportedContent
+		| llm::AIError::ResponseDecoding(_) => AIErrorClassification {
+			status: StatusCode::BAD_GATEWAY,
+			reason: ProxyResponseReason::UpstreamFailure,
+		},
+		llm::AIError::PromptWebhookError => AIErrorClassification {
+			status: StatusCode::SERVICE_UNAVAILABLE,
+			reason: ProxyResponseReason::Internal,
+		},
+		llm::AIError::MissingField(_)
+		| llm::AIError::ModelNotFound
+		| llm::AIError::MessageNotFound
+		| llm::AIError::StreamingUnsupported
+		| llm::AIError::UnsupportedModel
+		| llm::AIError::RequestTooLarge
+		| llm::AIError::RequestParsing(_)
+		| llm::AIError::RequestMarshal(_)
+		| llm::AIError::ResponseMarshal(_)
+		| llm::AIError::Encoding(_)
+		| llm::AIError::JoinError(_) => AIErrorClassification {
+			status: StatusCode::INTERNAL_SERVER_ERROR,
+			reason: ProxyResponseReason::Internal,
+		},
+	}
 }
 
 impl ProxyError {
@@ -280,7 +370,13 @@ impl ProxyError {
 				| http::oidc::Error::Config(_)
 				| http::oidc::Error::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			},
-			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::BasicAuthenticationFailure(ref e) => {
+				if e.is_proxy() {
+					StatusCode::PROXY_AUTHENTICATION_REQUIRED
+				} else {
+					StatusCode::UNAUTHORIZED
+				}
+			},
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
@@ -293,27 +389,8 @@ impl ProxyError {
 
 			ProxyError::RequestTimeout => StatusCode::GATEWAY_TIMEOUT,
 			ProxyError::Processing(_) => StatusCode::SERVICE_UNAVAILABLE,
-			ProxyError::AI(ref error) => match error {
-				llm::AIError::MissingField(_)
-				| llm::AIError::MessageNotFound
-				| llm::AIError::StreamingUnsupported
-				| llm::AIError::UnsupportedModel
-				| llm::AIError::UnsupportedContent
-				| llm::AIError::UnsupportedConversion(_)
-				| llm::AIError::RequestParsing(_) => StatusCode::BAD_REQUEST,
-				llm::AIError::ModelNotFound => StatusCode::NOT_FOUND,
-				llm::AIError::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
-				llm::AIError::UnsupportedEncoding(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-				llm::AIError::RequestMarshal(_)
-				| llm::AIError::ResponseParsing(_)
-				| llm::AIError::IncompleteResponse
-				| llm::AIError::InvalidResponse(_)
-				| llm::AIError::ResponseMarshal(_)
-				| llm::AIError::ResponseTooLarge
-				| llm::AIError::PromptWebhookError
-				| llm::AIError::Encoding(_)
-				| llm::AIError::JoinError(_) => StatusCode::SERVICE_UNAVAILABLE,
-			},
+			ProxyError::AIRequest(ref error) => classify_ai_request(error).status,
+			ProxyError::AIResponse(ref error) => classify_ai_response(error).status,
 			ProxyError::Http(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::Body(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
@@ -372,15 +449,18 @@ impl ProxyError {
 			http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
 		}
 
-		// Add WWW-Authenticate header for basic auth failures
+		// Add an authentication challenge for basic auth failures. Requests authenticating to the
+		// gateway as a forward proxy are challenged with `Proxy-Authenticate` (paired with 407);
+		// ordinary requests use `WWW-Authenticate` (paired with 401).
 		if let ProxyError::BasicAuthenticationFailure(err) = &self {
-			let realm = match err {
-				http::basicauth::Error::Missing { realm } => realm,
-				http::basicauth::Error::InvalidCredentials { realm } => realm,
+			let auth_header = format!("Basic realm=\"{}\"", err.realm());
+			let challenge = if err.is_proxy() {
+				hyper::header::PROXY_AUTHENTICATE
+			} else {
+				hyper::header::WWW_AUTHENTICATE
 			};
-			let auth_header = format!("Basic realm=\"{}\"", realm);
 			if let Ok(hv) = HeaderValue::try_from(auth_header) {
-				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
+				rb = rb.header(challenge, hv);
 			}
 		}
 
@@ -440,6 +520,7 @@ fn http_status_to_grpc_status(status: StatusCode) -> Code {
 		StatusCode::OK => Code::Ok,
 		StatusCode::BAD_REQUEST => Code::Internal,
 		StatusCode::UNAUTHORIZED => Code::Unauthenticated,
+		StatusCode::PROXY_AUTHENTICATION_REQUIRED => Code::Unauthenticated,
 		StatusCode::FORBIDDEN => Code::PermissionDenied,
 		// HTTP 404 maps to UNIMPLEMENTED, not gRPC NOT_FOUND.
 		StatusCode::NOT_FOUND => Code::Unimplemented,
@@ -552,6 +633,83 @@ pub fn resolve_simple_backend_with_policies(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn assert_ai_error_mapping(
+		make_error: impl Fn() -> ProxyError,
+		expected_status: StatusCode,
+		expected_reason: ProxyResponseReason,
+	) {
+		assert_eq!(
+			ProxyResponse::Error(make_error()).as_reason(),
+			expected_reason
+		);
+		assert_eq!(
+			make_error().into_response_with_grpc(false).status(),
+			expected_status
+		);
+	}
+
+	#[test]
+	fn ai_error_status_and_reason_depend_on_processing_phase() {
+		assert_ai_error_mapping(
+			|| ProxyError::AIRequest(llm::AIError::UnsupportedEncoding("snappy".into())),
+			StatusCode::UNSUPPORTED_MEDIA_TYPE,
+			ProxyResponseReason::InvalidRequest,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIResponse(llm::AIError::UnsupportedEncoding("snappy".into())),
+			StatusCode::BAD_GATEWAY,
+			ProxyResponseReason::UpstreamFailure,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIRequest(llm::AIError::UnsupportedConversion("request".into())),
+			StatusCode::BAD_REQUEST,
+			ProxyResponseReason::InvalidRequest,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIResponse(llm::AIError::UnsupportedConversion("response".into())),
+			StatusCode::BAD_GATEWAY,
+			ProxyResponseReason::UpstreamFailure,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIRequest(llm::AIError::MessageNotFound),
+			StatusCode::BAD_REQUEST,
+			ProxyResponseReason::InvalidRequest,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIResponse(llm::AIError::MessageNotFound),
+			StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyResponseReason::Internal,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIRequest(llm::AIError::StreamingUnsupported),
+			StatusCode::BAD_REQUEST,
+			ProxyResponseReason::InvalidRequest,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIResponse(llm::AIError::StreamingUnsupported),
+			StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyResponseReason::Internal,
+		);
+		assert_ai_error_mapping(
+			|| {
+				ProxyError::AIResponse(llm::AIError::ResponseDecoding(axum_core::Error::new(
+					std::io::Error::other("decode"),
+				)))
+			},
+			StatusCode::BAD_GATEWAY,
+			ProxyResponseReason::UpstreamFailure,
+		);
+		assert_ai_error_mapping(
+			|| {
+				ProxyError::AIResponse(llm::AIError::Encoding(axum_core::Error::new(
+					std::io::Error::other("encode"),
+				)))
+			},
+			StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyResponseReason::Internal,
+		);
+	}
 
 	#[test]
 	fn grpc_error_response_maps_http_status_to_grpc_status() {

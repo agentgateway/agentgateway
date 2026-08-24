@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
+	infv1 "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -110,6 +111,8 @@ func GetStatus[I, IS any](spec I) IS {
 	case *agentgateway.AgentgatewayBackend:
 		return any(t.Status).(IS)
 	case *agentgateway.AgentgatewayModel:
+		return any(t.Status).(IS)
+	case *infv1.InferencePool:
 		return any(t.Status).(IS)
 	default:
 		// For external resources (registered via extraGVKs), we don't introspect the object here.

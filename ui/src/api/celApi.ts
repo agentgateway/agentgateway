@@ -1,8 +1,8 @@
-import { requestJson } from "./base";
+import { requestJson } from '@/api/base';
 
 export async function evaluateCel(expression: string, data: unknown) {
-  return requestJson<{ result: unknown; error: string | null }>("/cel", {
-    method: "POST",
-    body: JSON.stringify({ expression, data }),
-  });
+	return requestJson<{ result: unknown; error: string | null }>('/cel', {
+		method: 'POST',
+		body: JSON.stringify({ expression, data })
+	});
 }

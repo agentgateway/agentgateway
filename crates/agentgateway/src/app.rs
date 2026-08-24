@@ -74,6 +74,7 @@ pub async fn run(
 	let metrics_handle = Arc::new(crate::metrics::Metrics::new(
 		sub_registry,
 		config.metrics.excluded_metrics.clone(),
+		config.histograms,
 	));
 	let client = client::Client::new(
 		&config.dns,

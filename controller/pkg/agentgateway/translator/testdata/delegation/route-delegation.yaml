@@ -59,6 +59,21 @@ spec:
   ports:
   - port: 8000
 ---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-parent
+  namespace: team1
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: default
+  to:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: child-team1-foo
+---
 # Output
 output:
 - gateway:

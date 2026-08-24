@@ -13,6 +13,7 @@ use futures_util::FutureExt;
 use headers::HeaderMapExt;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
+use opentelemetry::KeyValue;
 use rand::RngExt;
 use rand::seq::{IndexedRandom, IteratorRandom};
 use tracing::{debug, trace};
@@ -43,7 +44,9 @@ use crate::store::{
 	ResponsePolicy, RoutePath,
 };
 use crate::telemetry::log;
-use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog, TraceSampler};
+use crate::telemetry::log::{
+	AsyncLog, DropOnLog, LogBody, RequestLog, SpanWriteOnDrop, SpanWriter, TraceSampler,
+};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, Socket, TCPConnectionInfo, TLSConnectionInfo};
@@ -301,6 +304,7 @@ async fn apply_request_policies(
 		.await?;
 
 	// Mirror is handled separately
+	crate::http::mark_sensitive_headers(req, &c.inputs.cfg.sensitive_headers);
 	Ok(route_retry)
 }
 
@@ -391,7 +395,7 @@ async fn apply_backend_policies(
 		}
 		if matches!(
 			a2a_type,
-			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_)
+			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_, _, _)
 		) {
 			log.add(|l| {
 				l.backend_protocol = Some(cel::BackendProtocol::a2a);
@@ -400,6 +404,7 @@ async fn apply_backend_policies(
 		rp.a2a_type = a2a_type;
 	}
 
+	crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 	Ok(())
 }
 
@@ -482,6 +487,7 @@ async fn apply_gateway_policies(
 		)
 		.await?;
 
+	crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 	Ok(())
 }
 
@@ -681,6 +687,9 @@ impl HTTPProxy {
 				ProxyResponse::DirectResponse(dr) => *dr,
 			},
 		};
+		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
+		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
+		llm::encode_deferred_response(&mut resp);
 		if let Some(log) = log.as_mut() {
 			dtrace::snapshot!(Response, "final response", log, &resp);
 		}
@@ -732,7 +741,7 @@ impl HTTPProxy {
 			ctx.bind = Some(bind_name.clone());
 		});
 
-		sensitive_headers(&mut req);
+		crate::http::mark_sensitive_headers(&mut req, &self.inputs.cfg.sensitive_headers);
 		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
@@ -830,7 +839,7 @@ impl HTTPProxy {
 
 		apply_gateway_policies(
 			&gateway_policies,
-			self.policy_client(),
+			self.policy_client().with_parent(&req),
 			log,
 			&mut req,
 			response_policies,
@@ -900,9 +909,10 @@ impl HTTPProxy {
 		route_policies.register_cel_expressions(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
+		let policy_client = self.policy_client().with_parent(&req);
 		let route_retry = apply_request_policies(
 			&route_policies,
-			&self.policy_client(),
+			&policy_client,
 			log,
 			&mut req,
 			response_policies,
@@ -1254,14 +1264,14 @@ impl HTTPProxy {
 				},
 			};
 			ns.insert_header(req);
-			req.extensions_mut().insert(ns.clone());
 			log.outgoing_span = Some(ns);
+			log.insert_span_writer(req.extensions_mut());
 		}
 	}
 
 	fn detect_misdirected(
 		log: &RequestLog,
-		bind: &Bind,
+		bind: &BindSnapshot,
 		req: &Request,
 		selected_listener: &Listener,
 	) -> Result<(), ProxyError> {
@@ -1598,7 +1608,8 @@ pub async fn build_transport(
 		ApplicationTransport::Plaintext
 	};
 	if let Some(tun) = backend_tunnel {
-		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
+		let backend: BackendWithPolicies =
+			super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?.into();
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tun.policies, None);
 		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
@@ -1824,23 +1835,17 @@ fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
 	Ok(Target::from((host, port)))
 }
 
-/// Evaluates a `Backend::Dynamic` target expression, if one is configured, in
-/// place of the default of reading the request's own :authority/URI. The CEL
-/// context includes any dynamic metadata a route policy (extProc, extAuthz)
-/// already attached to the request -- e.g. `extproc.workerPodIp` -- so the
-/// destination can come from that instead of requiring the policy to rewrite
-/// the request's authority for `target_from_request`/`connect_authority_target`
-/// to then read back. Returns `Ok(None)` when there's no expression, so the
-/// caller falls back to its own default.
-fn dynamic_backend_target_override(
-	req: &Request,
-	expr: &Option<Arc<crate::cel::Expression>>,
+/// Evaluates a `Backend::Dynamic` target expression using the caller's CEL
+/// context. Returns `Ok(None)` when there's no expression, so HTTP and TCP
+/// callers can apply their respective default target behavior.
+pub(super) fn dynamic_backend_target_override<'a>(
+	executor: &'a crate::cel::Executor<'a>,
+	expr: &'a Option<Arc<crate::cel::Expression>>,
 ) -> Result<Option<Target>, ProxyError> {
 	let Some(expr) = expr else {
 		return Ok(None);
 	};
-	let exec = crate::cel::Executor::new_request(req);
-	let value = exec.eval(expr).map_err(|e| {
+	let value = executor.eval(expr).map_err(|e| {
 		ProxyError::ProcessingString(format!("dynamic backend target expression eval: {e}"))
 	})?;
 	let json = value.json().map_err(|e| {
@@ -2034,7 +2039,7 @@ async fn make_backend_call(
 		.await;
 	}
 
-	let policy_client = PolicyClient::new(inputs.clone());
+	let policy_client = PolicyClient::new(inputs.clone()).with_parent(&req);
 	let hbone_source = req
 		.extensions()
 		.get::<WaypointService>()
@@ -2103,9 +2108,13 @@ async fn make_backend_call(
 			if let Some(provider_backend) = &provider.provider_backend {
 				let provider_backend =
 					super::resolve_simple_backend_with_policies(provider_backend, inputs.as_ref())?;
-				let provider_backend_policies = inputs.stores.read_binds().sub_backend_policies(
+				// Use backend_policies (not sub_backend_policies) so policies indexed without a
+				// port -- like the InferenceRouting policy the controller attaches to an
+				// InferencePool's synthesized service -- are found for the provider backend.
+				let provider_backend_policies = inputs.stores.read_binds().backend_policies(
 					provider_backend.backend.target(),
-					Some(&provider_backend.inline_policies),
+					&[&provider_backend.inline_policies],
+					None,
 				);
 				let effective_policies = provider_defaults
 					.merge(policies.as_ref().clone())
@@ -2232,7 +2241,8 @@ async fn make_backend_call(
 			);
 		},
 		Backend::Dynamic(_, expr) => {
-			let target = match dynamic_backend_target_override(&req, expr)? {
+			let executor = crate::cel::Executor::new_request(&req);
+			let target = match dynamic_backend_target_override(&executor, expr)? {
 				Some(target) => target,
 				None => target_from_request(&req)?,
 			};
@@ -2281,7 +2291,7 @@ async fn make_backend_call(
 	};
 	apply_backend_policies(
 		backend_info.clone(),
-		PolicyClient::new(inputs.clone()),
+		policy_client.clone(),
 		&backend_call,
 		&mut req,
 		&mut log,
@@ -2294,7 +2304,8 @@ async fn make_backend_call(
 	// could have been affected). This allows policies like `:authority` overrides (e.g., VPC
 	// endpoint routing) to take effect on the actual upstream connection target.
 	if let Backend::Dynamic(_, expr) = backend {
-		backend_call.target = match dynamic_backend_target_override(&req, expr)? {
+		let executor = crate::cel::Executor::new_request(&req);
+		backend_call.target = match dynamic_backend_target_override(&executor, expr)? {
 			Some(target) => target,
 			None => target_from_request(&req)?,
 		};
@@ -2331,6 +2342,8 @@ async fn make_backend_call(
 				| RouteType::Messages
 				| RouteType::Responses
 				| RouteType::AnthropicTokenCount
+				| RouteType::GenerateContent
+				| RouteType::GeminiCountTokens
 				| RouteType::Embeddings
 				| RouteType::Rerank
 				| RouteType::Detect => {
@@ -2348,7 +2361,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Messages => Box::pin(llm.provider.process_messages_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2358,7 +2371,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Responses => Box::pin(llm.provider.process_responses_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2368,7 +2381,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2377,7 +2390,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2386,7 +2399,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::AnthropicTokenCount => Box::pin(llm.provider.process_count_tokens_request(
 							&backend_info,
 							req,
@@ -2394,7 +2407,27 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
+						RouteType::GenerateContent => Box::pin(llm.provider.process_gemini_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+							Some(inputs.model_catalog.as_handle()),
+						))
+						.await
+						.map_err(ProxyError::AIRequest)?,
+						RouteType::GeminiCountTokens => {
+							Box::pin(llm.provider.process_gemini_count_tokens_request(
+								&backend_info,
+								llm_request_policies.llm.as_deref(),
+								req,
+								&mut log,
+							))
+							.await
+							.map_err(ProxyError::AIRequest)?
+						},
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2402,7 +2435,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request, upstream_route_type) = match r {
@@ -2455,7 +2488,10 @@ async fn make_backend_call(
 
 					// Apply all policies (rate limits, prompt guards, enrichment)
 					// count_tokens skips policies (no tokens generated, no prompts to manipulate)
-					let response_policies = if route_type == RouteType::AnthropicTokenCount {
+					let response_policies = if matches!(
+						route_type,
+						RouteType::AnthropicTokenCount | RouteType::GeminiCountTokens
+					) {
 						LLMResponsePolicies::default()
 					} else {
 						Box::pin(
@@ -2584,11 +2620,12 @@ async fn make_backend_call(
 	dtrace::snapshot!(Request, "final request", &req);
 	let request_body_limit = crate::http::buffer_limit(&req);
 	let req = req.map(|b| dtrace::TracingBody::maybe_wrap("final request", b, request_body_limit));
-	let call = client::Call {
+	let mut call = client::Call {
 		req,
 		target: backend_call.target,
 		transport,
 	};
+	let span_target = backend_call.span_target;
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));
 	let upstream = inputs.upstream.clone();
 	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
@@ -2606,6 +2643,31 @@ async fn make_backend_call(
 	} else {
 		OutboundCallSubtype::Http
 	};
+	let outbound_labels = OutboundCallLabels {
+		kind: OutboundCallKind::Primary,
+		subtype: outbound_subtype,
+	};
+	let mut span = log.as_ref().and_then(|log| {
+		let writer = log.span_writer();
+		writer.is_enabled().then(|| {
+			let mut span = Box::new(writer.start_outbound(outbound_labels));
+			let method = call.req.method().as_str().to_owned();
+			span.rename_span(match &span_target {
+				Some(target) => format!("{method} {target}"),
+				None => method.clone(),
+			});
+			span.add_attribute(KeyValue::new("http.method", method));
+			if let Some(host) = call.req.uri().host() {
+				span.add_attribute(KeyValue::new("http.host", host.to_owned()));
+			}
+			span.add_attribute(KeyValue::new(
+				"http.path",
+				http::get_path_and_query(call.req.uri()).to_owned(),
+			));
+			span.inject_context(&mut call.req);
+			span
+		})
+	});
 	let outbound_start = std::time::Instant::now();
 	log.add(|l| {
 		if l.request_processing_duration.is_none() {
@@ -2613,14 +2675,20 @@ async fn make_backend_call(
 		}
 	});
 	let resp = upstream.call(call).await;
+	if let Some(span) = span.as_deref_mut() {
+		match &resp {
+			Ok(response) => span.add_attribute(KeyValue::new(
+				"http.status",
+				i64::from(response.status().as_u16()),
+			)),
+			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
+		}
+	}
 	let outbound_end = Instant::now();
 	log.add(|l| {
 		l.metrics
 			.upstream_call_duration
-			.get_or_create(&OutboundCallLabels {
-				kind: OutboundCallKind::Primary,
-				subtype: outbound_subtype,
-			})
+			.get_or_create(&outbound_labels)
 			.observe((outbound_end - outbound_start).as_secs_f64());
 		l.upstream_duration = Some(outbound_end - outbound_start);
 		if resp.is_ok() {
@@ -2684,7 +2752,7 @@ async fn make_backend_call(
 				.assert_size::<{ 4 * 1024 }>(),
 		)
 		.await
-		.map_err(ProxyError::AI)?
+		.map_err(ProxyError::AIResponse)?
 	} else {
 		resp
 	};
@@ -2754,7 +2822,8 @@ fn build_connect_backend_call(
 		},
 		Backend::Opaque(_, target) => Ok(BackendCall::from_shared(target.clone(), policies)),
 		Backend::Dynamic(_, expr) => {
-			let target = match dynamic_backend_target_override(req, expr)? {
+			let executor = crate::cel::Executor::new_request(req);
+			let target = match dynamic_backend_target_override(&executor, expr)? {
 				Some(target) => target,
 				None => connect_authority_target(req)?,
 			};
@@ -2793,6 +2862,7 @@ pub fn build_service_call(
 	{
 		return Ok(BackendCall {
 			target: Target::Address(destination),
+			span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 			http_version_override,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
@@ -2963,6 +3033,7 @@ pub fn build_service_call(
 
 	Ok(BackendCall {
 		target,
+		span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 		http_version_override,
 		transport_override,
 		hbone_port,
@@ -3209,6 +3280,26 @@ mod tests {
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
 	use crate::{http, llm};
+
+	#[test]
+	fn configured_request_headers_are_marked_sensitive_at_ingress() {
+		let mut request = ::http::Request::builder()
+			.uri("https://example.com")
+			.header("authorization", "Bearer built-in-secret")
+			.header("my-mcp-token", "configured-secret")
+			.header("x-visible", "visible-value")
+			.body(http::Body::empty())
+			.unwrap();
+
+		crate::http::mark_sensitive_headers(
+			&mut request,
+			&[::http::HeaderName::from_static("my-mcp-token")],
+		);
+
+		assert!(request.headers()["authorization"].is_sensitive());
+		assert!(request.headers()["my-mcp-token"].is_sensitive());
+		assert!(!request.headers()["x-visible"].is_sensitive());
+	}
 
 	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
 		crate::http::retry::Policy {
@@ -3763,13 +3854,17 @@ async fn send_mirror(
 // Connection header field. These are the headers defined by the
 // obsoleted RFC 2616 (section 13.5.1) and are used for backward
 // compatibility.
-static HOP_HEADERS: [HeaderName; 9] = [
+//
+// NOTE: `Proxy-Authorization` is considered hop-by-hop according to
+// RFC 2616, but is deliberately absent here. It is not stripped so
+// that request policies such as `basicAuth` can read it when the
+// gateway acts as an authenticated forward proxy.
+static HOP_HEADERS: [HeaderName; 8] = [
 	header::CONNECTION,
 	// non-standard but still sent by libcurl and rejected by e.g. google
 	HeaderName::from_static("proxy-connection"),
 	HeaderName::from_static("keep-alive"),
 	header::PROXY_AUTHENTICATE,
-	header::PROXY_AUTHORIZATION,
 	header::TE,
 	header::TRAILER,
 	header::TRANSFER_ENCODING,
@@ -3860,14 +3955,6 @@ fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 	}
 }
 
-fn sensitive_headers(req: &mut Request) {
-	for (name, value) in req.headers_mut() {
-		if name == http::header::AUTHORIZATION {
-			value.set_sensitive(true)
-		}
-	}
-}
-
 // The http library will not put the authority into req.uri().authority for HTTP/1. Normalize so
 // the rest of the code doesn't need to worry about it
 fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
@@ -3940,6 +4027,7 @@ fn apply_internal_path(req: &mut Request, internal: &InternalBackend) -> Result<
 
 pub struct BackendCall {
 	pub target: Target,
+	pub span_target: Option<Strng>,
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub hbone_port: u16,
@@ -3953,8 +4041,13 @@ impl BackendCall {
 	}
 
 	pub fn from_shared(target: Target, backend_policies: Arc<BackendPolicies>) -> Self {
+		let span_target = match &target {
+			Target::Hostname(hostname, port) => Some(strng::format!("{hostname}:{port}")),
+			Target::Address(_) | Target::UnixSocket(_) => None,
+		};
 		Self {
 			target,
+			span_target,
 			http_version_override: None,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
@@ -4120,14 +4213,42 @@ pub struct TunnelClient {
 #[derive(Debug, Clone)]
 pub struct PolicyClient {
 	pub inputs: Arc<ProxyInputs>,
-	pub outbound: Option<OutboundCallLabels>,
+	context: Option<Arc<PolicyClientContext>>,
+}
+
+#[derive(Debug)]
+struct PolicyClientContext {
+	outbound: Option<OutboundCallLabels>,
+	span_writer: SpanWriter,
+	dtrace_scope: Option<String>,
 }
 
 impl PolicyClient {
 	pub fn new(inputs: Arc<ProxyInputs>) -> PolicyClient {
 		PolicyClient {
 			inputs,
-			outbound: None,
+			context: None,
+		}
+	}
+
+	pub fn with_parent(&self, req: &http::Request) -> PolicyClient {
+		self.with_parent_extensions(req.extensions())
+	}
+
+	pub(crate) fn with_parent_extensions(&self, extensions: &::http::Extensions) -> PolicyClient {
+		let Some(span_writer) = extensions.get::<SpanWriter>().cloned() else {
+			return self.clone();
+		};
+		PolicyClient {
+			inputs: self.inputs.clone(),
+			context: Some(Arc::new(PolicyClientContext {
+				outbound: self.outbound(),
+				span_writer,
+				dtrace_scope: self
+					.context
+					.as_ref()
+					.and_then(|context| context.dtrace_scope.clone()),
+			})),
 		}
 	}
 
@@ -4138,42 +4259,173 @@ impl PolicyClient {
 	) -> PolicyClient {
 		PolicyClient {
 			inputs: self.inputs.clone(),
-			outbound: Some(OutboundCallLabels { kind, subtype }),
+			context: Some(Arc::new(PolicyClientContext {
+				outbound: Some(OutboundCallLabels { kind, subtype }),
+				span_writer: self
+					.context
+					.as_ref()
+					.map(|context| context.span_writer.clone())
+					.unwrap_or_default(),
+				dtrace_scope: None,
+			})),
+		}
+	}
+
+	pub(crate) fn with_dtrace_scope(&self, scope: impl Into<String>) -> PolicyClient {
+		PolicyClient {
+			inputs: self.inputs.clone(),
+			context: Some(Arc::new(PolicyClientContext {
+				outbound: self.outbound(),
+				span_writer: self
+					.context
+					.as_ref()
+					.map(|context| context.span_writer.clone())
+					.unwrap_or_default(),
+				dtrace_scope: Some(scope.into()),
+			})),
+		}
+	}
+
+	fn outbound(&self) -> Option<OutboundCallLabels> {
+		self.context.as_ref().and_then(|context| context.outbound)
+	}
+
+	fn dtrace_scope(&self) -> Option<&str> {
+		let labels = self.outbound()?;
+		if let Some(scope) = self
+			.context
+			.as_ref()
+			.and_then(|context| context.dtrace_scope.as_deref())
+		{
+			return Some(scope);
+		}
+		Some(match labels.kind {
+			OutboundCallKind::Mirror => "mirror",
+			OutboundCallKind::Primary => match labels.subtype {
+				OutboundCallSubtype::Http => "http",
+				OutboundCallSubtype::Llm => "llm",
+				OutboundCallSubtype::Mcp => "mcp",
+				_ => labels.subtype.as_str(),
+			},
+			OutboundCallKind::Policy => match labels.subtype {
+				OutboundCallSubtype::ExtAuthz => "ext_authz",
+				OutboundCallSubtype::ExtProc => "ext_proc",
+				OutboundCallSubtype::Guardrail => "guardrail",
+				OutboundCallSubtype::RateLimit => "rate_limit",
+				OutboundCallSubtype::Oidc => "oidc",
+				_ => labels.subtype.as_str(),
+			},
+		})
+	}
+
+	fn start_outbound_span(&self, req: &mut Request) -> Option<Box<SpanWriteOnDrop>> {
+		let labels = self.outbound()?;
+		let writer = req.extensions().get::<SpanWriter>().cloned().or_else(|| {
+			self
+				.context
+				.as_ref()
+				.map(|context| context.span_writer.clone())
+		})?;
+		if !writer.is_enabled() {
+			return None;
+		}
+		let mut span = Box::new(writer.start_outbound(labels));
+		span.add_attribute(KeyValue::new(
+			"http.method",
+			req.method().as_str().to_owned(),
+		));
+		if let Some(host) = req.uri().host() {
+			span.add_attribute(KeyValue::new("http.host", host.to_owned()));
+		}
+		span.add_attribute(KeyValue::new(
+			"http.path",
+			http::get_path_and_query(req.uri()).to_owned(),
+		));
+		span.inject_context(req);
+		Some(span)
+	}
+
+	pub(crate) fn start_grpc_span<T>(
+		&self,
+		req: &mut tonic::Request<T>,
+		backend_ref: &SimpleBackendReference,
+		path: &'static str,
+	) -> Option<Box<SpanWriteOnDrop>> {
+		let labels = self.outbound()?;
+		let writer = req.extensions().get::<SpanWriter>().cloned().or_else(|| {
+			self
+				.context
+				.as_ref()
+				.map(|context| context.span_writer.clone())
+		})?;
+		if !writer.is_enabled() {
+			return None;
+		}
+		let mut span = Box::new(writer.start_outbound(labels));
+		span.add_attribute(KeyValue::new("http.method", "POST"));
+		if let Ok(backend) = resolve_simple_backend(backend_ref, self.inputs.as_ref()) {
+			let hostport = backend.backend.hostport();
+			if let Ok(authority) = Authority::try_from(hostport.as_str()) {
+				span.add_attribute(KeyValue::new("http.host", authority.host().to_owned()));
+			}
+		}
+		span.add_attribute(KeyValue::new("http.path", path));
+		span.inject_grpc_context(req);
+		Some(span)
+	}
+
+	fn finish_outbound_span(
+		span: Option<&mut SpanWriteOnDrop>,
+		result: &Result<Response, ProxyError>,
+	) {
+		let Some(span) = span else {
+			return;
+		};
+		match result {
+			Ok(response) => {
+				span.add_attribute(KeyValue::new(
+					"http.status",
+					i64::from(response.status().as_u16()),
+				));
+			},
+			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}
 
 	fn observe_outbound(&self, start: std::time::Instant) {
-		if let Some(labels) = &self.outbound {
+		if let Some(labels) = self.outbound() {
 			self
 				.inputs
 				.metrics
 				.upstream_call_duration
-				.get_or_create(labels)
+				.get_or_create(&labels)
 				.observe(start.elapsed().as_secs_f64());
 		}
 	}
 
-	pub async fn call_reference(
-		&self,
-		req: Request,
-		backend_ref: &SimpleBackendReference,
-	) -> Result<Response, ProxyError> {
-		self
-			.call_reference_with_policies(req, backend_ref, &[])
-			.await
-	}
-
-	pub async fn call_reference_with_policies(
+	pub(crate) async fn call_reference_with_policies_untraced(
 		&self,
 		mut req: Request,
 		backend_ref: &SimpleBackendReference,
 		policies: &[BackendTrafficPolicy],
 	) -> Result<Response, ProxyError> {
 		let start = std::time::Instant::now();
+		let (backend, pols) = self.prepare_reference_call(&mut req, backend_ref, policies)?;
+		let res = self.internal_call_with_policies(req, backend, pols).await;
+		self.observe_outbound(start);
+		res
+	}
+
+	fn prepare_reference_call(
+		&self,
+		req: &mut Request,
+		backend_ref: &SimpleBackendReference,
+		policies: &[BackendTrafficPolicy],
+	) -> Result<(Backend, BackendPolicies), ProxyError> {
 		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
 		trace!("resolved {:?} to {:?}", backend_ref, &backend);
 
-		http::modify_req_uri(&mut req, |uri| {
+		http::modify_req_uri(req, |uri| {
 			if uri.authority.is_none() {
 				// If host is not set, set it to the backend
 				uri.authority = Some(Authority::try_from(backend.backend.hostport())?);
@@ -4188,29 +4440,62 @@ impl PolicyClient {
 
 		let backend = BackendWithPolicies::from(backend);
 		let pols = get_backend_policies(&self.inputs, &backend, policies, None);
-		let res = self
-			.internal_call_with_policies(req, backend.backend, pols)
-			.await;
-		self.observe_outbound(start);
-		res
+		Ok((backend.backend, pols))
 	}
 
-	pub async fn call(
-		&self,
+	pub fn call_reference_with_policies<'a>(
+		&'a self,
+		mut req: Request,
+		backend_ref: &'a SimpleBackendReference,
+		policies: &'a [BackendTrafficPolicy],
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + 'a>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let (backend, pols) = match self.prepare_reference_call(&mut req, backend_ref, policies) {
+				Ok(prepared) => prepared,
+				Err(error) => {
+					let mut span = self.start_outbound_span(&mut req);
+					let result = Err(error);
+					Self::finish_outbound_span(span.as_deref_mut(), &result);
+					return result;
+				},
+			};
+			let mut span = self.start_outbound_span(&mut req);
+			let result = self.internal_call_with_policies(req, backend, pols).await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
+	}
+
+	pub fn call_reference<'a>(
+		&'a self,
 		req: Request,
-		backend: SimpleBackendWithPolicies,
-	) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
-		let backend = BackendWithPolicies::from(backend);
-		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
-		let res = self
-			.internal_call_with_policies(req, backend.backend, pols)
-			.await;
-		self.observe_outbound(start);
-		res
+		backend_ref: &'a SimpleBackendReference,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + 'a>> {
+		self.call_reference_with_policies(req, backend_ref, &[])
 	}
 
-	pub async fn call_with_explicit_policies(
+	pub fn call(
+		&self,
+		mut req: Request,
+		backend: SimpleBackendWithPolicies,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let backend = BackendWithPolicies::from(backend);
+			let pols = get_backend_policies(&self.inputs, &backend, &[], None);
+			let mut span = self.start_outbound_span(&mut req);
+			let result = self
+				.internal_call_with_policies(req, backend.backend, pols)
+				.await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
+	}
+
+	pub(crate) async fn call_with_explicit_policies_untraced(
 		&self,
 		req: Request,
 		backend: &SimpleBackend,
@@ -4225,21 +4510,25 @@ impl PolicyClient {
 		res
 	}
 
-	pub async fn call_with_explicit_policies_list(
+	pub fn call_with_explicit_policies_list(
 		&self,
-		req: Request,
+		mut req: Request,
 		backend: Backend,
 		policies: Vec<BackendTrafficPolicy>,
-	) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
-		let pols = self
-			.inputs
-			.stores
-			.read_binds()
-			.inline_backend_policies(&policies);
-		let res = self.internal_call_with_policies(req, backend, pols).await;
-		self.observe_outbound(start);
-		res
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let pols = self
+				.inputs
+				.stores
+				.read_binds()
+				.inline_backend_policies(&policies);
+			let mut span = self.start_outbound_span(&mut req);
+			let result = self.internal_call_with_policies(req, backend, pols).await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
 	}
 
 	fn internal_call_with_policies<'a>(
@@ -4250,7 +4539,8 @@ impl PolicyClient {
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
 		let mut req = Some(req);
 		Box::pin(async move {
-			Box::pin(
+			let mut response_policies = Default::default();
+			let call = Box::pin(
 				make_backend_call(
 					self.inputs.clone(),
 					Arc::new(LLMRequestPolicies::default()),
@@ -4261,20 +4551,28 @@ impl PolicyClient {
 					// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
 					// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
 					None,
-					&mut Default::default(),
+					&mut response_policies,
 				)
 				.assert_size::<{ 7 * 1024 }>(),
-			)
-			.await
-			.map_err(ProxyResponse::downcast)
+			);
+			let result = dtrace::scope_future(self.dtrace_scope(), call).await;
+			result.map_err(ProxyResponse::downcast)
 		})
 	}
 
-	pub async fn simple_call(&self, req: Request) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
-		let res = Box::pin(self.inputs.upstream.simple_call(req)).await;
-		self.observe_outbound(start);
-		res
+	pub fn simple_call(
+		&self,
+		mut req: Request,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let mut span = self.start_outbound_span(&mut req);
+			let call = Box::pin(self.inputs.upstream.simple_call(req));
+			let result = dtrace::scope_future(self.dtrace_scope(), call).await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
 	}
 }
 
@@ -4362,19 +4660,21 @@ mod route_chain_tests {
 			.unwrap()
 	}
 
-	fn bind() -> Bind {
-		Bind {
-			key: proxymock::BIND_KEY,
-			address: "127.0.0.1:0".parse().unwrap(),
-			listeners: ListenerSet::from_list([Listener {
+	fn bind() -> BindSnapshot {
+		BindSnapshot {
+			bind: Arc::new(Bind {
+				key: proxymock::BIND_KEY,
+				address: "127.0.0.1:0".parse().unwrap(),
+				protocol: BindProtocol::http,
+				tunnel_protocol: Default::default(),
+				mode: Default::default(),
+			}),
+			listeners: Arc::new(ListenerSet::from_list([Listener {
 				key: proxymock::LISTENER_KEY,
 				name: Default::default(),
 				hostname: Default::default(),
 				protocol: ListenerProtocol::HTTP,
-			}]),
-			protocol: BindProtocol::http,
-			tunnel_protocol: Default::default(),
-			mode: Default::default(),
+			}])),
 		}
 	}
 

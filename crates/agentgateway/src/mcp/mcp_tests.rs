@@ -956,14 +956,22 @@ async fn stateless_vnext_tools_list_reaches_upstream() {
 
 #[tokio::test]
 async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize() {
-	let old = mock_streamable_http_server_without_discover().await;
+	let down = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let down_addr = down.local_addr().unwrap();
+	drop(down);
+	let old = mock_streamable_http_server_rejecting_discover().await;
 	let new = mock_modern_streamable_http_server().await;
 	let t = setup_proxy_test("{}")
 		.unwrap()
-		.with_multiplex_mcp_backend(
+		.with_multiplex_mcp_backend_failure_mode(
 			"mcp",
-			vec![("old", old.addr, false), ("new", new.addr, false)],
+			vec![
+				("down", down_addr, false),
+				("old", old.addr, false),
+				("new", new.addr, false),
+			],
 			true,
+			FailureMode::FailOpen,
 		)
 		.with_bind(simple_bind())
 		.with_route(basic_named_route(strng::new("/mcp")));
@@ -994,11 +1002,8 @@ async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize()
 		discover.headers().get("mcp-session-id").is_none(),
 		"modern discover must not create a legacy session"
 	);
-	let discover_body = discover.text().await.unwrap();
-	assert!(
-		discover_body.contains("server/discover") || discover_body.contains("method"),
-		"mixed old/new discover should surface an error that lets the client fall back, got {discover_body}"
-	);
+	let discover_body = read_response_message(discover).await;
+	assert_eq!(discover_body["error"]["code"], -32601, "{discover_body}");
 
 	let init = serde_json::json!({
 		"jsonrpc": "2.0",
@@ -1657,6 +1662,108 @@ fn mcp_json_post<'a>(
 		.json(body)
 }
 
+fn mcp_initialize_body() -> serde_json::Value {
+	serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	})
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_off_allows_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let forbidden = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(forbidden.status(), reqwest::StatusCode::FORBIDDEN);
+
+	let null_origin = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "null")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(null_origin.status(), reqwest::StatusCode::FORBIDDEN);
+
+	// Well-known GETs normally bypass the MCP service and pass directly to the
+	// upstream. DNS rebinding validation must still run before that fast path.
+	let forbidden_well_known = client
+		.get(format!("http://{io}/.well-known/oauth-protected-resource"))
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		forbidden_well_known.status(),
+		reqwest::StatusCode::FORBIDDEN
+	);
+
+	let allowed = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", format!("http://127.0.0.1:{}", io.port()))
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(allowed.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_host() {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	let body = mcp_initialize_body().to_string();
+	let req = format!(
+		"POST /mcp HTTP/1.1\r\nHost: evil.example\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	stream.write_all(req.as_bytes()).await.unwrap();
+	let mut buf = Vec::new();
+	stream.read_to_end(&mut buf).await.unwrap();
+	let text = String::from_utf8_lossy(&buf);
+	assert!(
+		text.starts_with("HTTP/1.1 403"),
+		"expected 403 for Host: evil.example, got: {text}"
+	);
+}
+
 #[tokio::test]
 async fn streamable_http_downstream_sse_frames_include_message_event() {
 	use wiremock::{Mock, ResponseTemplate};
@@ -1712,6 +1819,217 @@ async fn streamable_http_downstream_sse_frames_include_message_event() {
 	assert!(
 		text.contains("event: message\ndata:"),
 		"expected explicit SSE message event, got: {text}"
+	);
+}
+
+#[tokio::test]
+async fn multiplexed_pong_routes_to_pinging_upstream() {
+	// A stateful streamable upstream heartbeats with `ping` on the GET stream and
+	// the legacy downstream replies on POST (#2187). With two upstreams, the pong
+	// must reach the one that pinged, carrying its original request id.
+	use std::sync::{Arc, Mutex};
+
+	use futures_util::StreamExt;
+	use wiremock::matchers::method;
+	use wiremock::{Mock, Request, Respond, ResponseTemplate};
+
+	const INIT_FRAME: &str = concat!(
+		"data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{",
+		"\"protocolVersion\":\"2025-06-18\",",
+		"\"capabilities\":{\"tools\":{}},",
+		"\"serverInfo\":{\"name\":\"mock\",\"version\":\"0.0.1\"}",
+		"}}\n\n",
+	);
+
+	type Pongs = Arc<Mutex<Vec<serde_json::Value>>>;
+	struct UpstreamPost {
+		pongs: Pongs,
+	}
+	impl Respond for UpstreamPost {
+		fn respond(&self, req: &Request) -> ResponseTemplate {
+			let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
+			if body["method"] == "initialize" {
+				return ResponseTemplate::new(200)
+					.insert_header("mcp-session-id", "upstream-session")
+					.set_body_raw(INIT_FRAME, "text/event-stream");
+			}
+			// Anything without a method is the client reply we are waiting for.
+			if body.get("method").is_none() {
+				self.pongs.lock().unwrap().push(body);
+			}
+			ResponseTemplate::new(202)
+		}
+	}
+
+	async fn upstream(ping: bool) -> (wiremock::MockServer, Pongs) {
+		let pongs = Pongs::default();
+		let server = wiremock::MockServer::start().await;
+		Mock::given(method("POST"))
+			.respond_with(UpstreamPost {
+				pongs: pongs.clone(),
+			})
+			.mount(&server)
+			.await;
+		let get_body = if ping {
+			"data: {\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"ping\"}\n\n"
+		} else {
+			": keepalive\n\n"
+		};
+		Mock::given(method("GET"))
+			.respond_with(ResponseTemplate::new(200).set_body_raw(get_body, "text/event-stream"))
+			.mount(&server)
+			.await;
+		(server, pongs)
+	}
+
+	let (alpha, alpha_pongs) = upstream(true).await;
+	let (beta, beta_pongs) = upstream(false).await;
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![
+				("alpha", *alpha.address(), false),
+				("beta", *beta.address(), false),
+			],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	});
+	let init = mcp_json_post(&client, &url, &init_body)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_string();
+	init.bytes().await.unwrap();
+
+	let initialized = serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"});
+	let ack = mcp_json_post(&client, &url, &initialized)
+		.header("mcp-session-id", session_id.clone())
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert!(ack.status().is_success());
+
+	let get = client
+		.get(&url)
+		.header(http::header::ACCEPT.as_str(), "text/event-stream")
+		.header("mcp-session-id", session_id.clone())
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(get.status(), reqwest::StatusCode::OK);
+
+	// The forwarded ping's id is remapped by the proxy; echo back whatever we got.
+	let ping_id = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+		let mut stream = get.bytes_stream();
+		let mut buf = String::new();
+		loop {
+			let chunk = stream
+				.next()
+				.await
+				.expect("GET stream ended without a ping")
+				.unwrap();
+			buf.push_str(std::str::from_utf8(&chunk).unwrap());
+			if let Some(id) = buf
+				.lines()
+				.filter_map(|l| l.strip_prefix("data: "))
+				.filter_map(|d| serde_json::from_str::<serde_json::Value>(d).ok())
+				.find(|v| v["method"] == "ping")
+				.map(|v| v["id"].clone())
+			{
+				return id;
+			}
+		}
+	})
+	.await
+	.unwrap();
+
+	let pong_body = serde_json::json!({"jsonrpc": "2.0", "id": ping_id, "result": {}});
+	let pong = mcp_json_post(&client, &url, &pong_body)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(pong.status(), reqwest::StatusCode::ACCEPTED);
+
+	// The proxy forwards the pong before answering 202, so no waiting is needed.
+	let pongs = alpha_pongs.lock().unwrap();
+	assert_eq!(pongs.len(), 1, "pinging upstream should get the pong");
+	assert_eq!(pongs[0]["id"], 7, "pong must carry the original id");
+	assert!(beta_pongs.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn elicitation_roundtrip_completes_tool_call() {
+	// Mid-tools/call the upstream elicits input from the client; the reply must
+	// route back so the tool call completes instead of hanging.
+	use rmcp::ServiceExt;
+	use rmcp::model::{
+		ClientCapabilities, ClientInfo, ElicitRequestParams, ElicitResult, ElicitationAction,
+		Implementation, ProtocolVersion,
+	};
+	use rmcp::service::RequestContext;
+	use rmcp::transport::StreamableHttpClientTransport;
+
+	struct ElicitingClient;
+	impl rmcp::ClientHandler for ElicitingClient {
+		async fn create_elicitation(
+			&self,
+			_request: ElicitRequestParams,
+			_context: RequestContext<RoleClient>,
+		) -> Result<ElicitResult, rmcp::ErrorData> {
+			Ok(
+				ElicitResult::new(ElicitationAction::Accept)
+					.with_content(serde_json::json!({"confirm": "yes"})),
+			)
+		}
+		fn get_info(&self) -> ClientInfo {
+			let mut info = ClientInfo::new(
+				ClientCapabilities::default(),
+				Implementation::new("test client".to_string(), "0.0.1".to_string()),
+			);
+			// Pre-SEP-2575 client: server-initiated requests are forwarded to it.
+			info.protocol_version = ProtocolVersion::V_2025_06_18;
+			info.capabilities.elicitation = Some(Default::default());
+			info
+		}
+	}
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let transport =
+		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{io}/mcp"));
+	let client = ElicitingClient.serve(transport).await.unwrap();
+	let res = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("elicit"))
+		.await
+		.unwrap();
+	assert_eq!(
+		&res.content[0].as_text().unwrap().text,
+		r#"{"confirm":"yes"}"#
 	);
 }
 
@@ -3467,6 +3785,7 @@ async fn setup_proxy_policies_with_target(
 			legacy_sse,
 			policies,
 			target_policies,
+			false,
 		)
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));
@@ -3585,17 +3904,22 @@ async fn mock_modern_streamable_http_server() -> MockServer {
 }
 
 async fn mock_streamable_http_server_without_discover() -> MockServer {
-	mock_streamable_http_server_with_discover_versions(None).await
+	mock_streamable_http_server_with_discover_versions(None, false).await
+}
+
+async fn mock_streamable_http_server_rejecting_discover() -> MockServer {
+	mock_streamable_http_server_with_discover_versions(None, true).await
 }
 
 // Variant of `mock_modern_streamable_http_server` for tests that need custom upstream
 // `server/discover` versions.
 async fn mock_modern_streamable_http_server_with_versions(versions: &[&str]) -> MockServer {
-	mock_streamable_http_server_with_discover_versions(Some(versions)).await
+	mock_streamable_http_server_with_discover_versions(Some(versions), false).await
 }
 
 async fn mock_streamable_http_server_with_discover_versions(
 	versions: Option<&[&str]>,
+	reject_discover: bool,
 ) -> MockServer {
 	agent_core::telemetry::testing::setup_test_logging();
 	let (tx, rx) = tokio::sync::oneshot::channel();
@@ -3617,15 +3941,18 @@ async fn mock_streamable_http_server_with_discover_versions(
 				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
 				let result = match method {
 					"server/discover" => {
+						if reject_discover {
+							return Err(http::StatusCode::BAD_REQUEST);
+						}
 						let Some(versions) = versions else {
-							return axum::Json(serde_json::json!({
+							return Ok(axum::Json(serde_json::json!({
 								"jsonrpc": "2.0",
 								"id": id,
 								"error": {
 									"code": -32601,
 									"message": method
 								}
-							}));
+							})));
 						};
 						serde_json::json!({
 							"resultType": "complete",
@@ -3665,21 +3992,21 @@ async fn mock_streamable_http_server_with_discover_versions(
 						}]
 					}),
 					_ => {
-						return axum::Json(serde_json::json!({
-							"jsonrpc": "2.0",
-							"id": id,
-							"error": {
-								"code": -32601,
-								"message": method
-							}
-						}));
+						return Ok(axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {
+									"code": -32601,
+									"message": method
+								}
+						})));
 					},
 				};
-				axum::Json(serde_json::json!({
+				Ok(axum::Json(serde_json::json!({
 					"jsonrpc": "2.0",
 					"id": id,
 					"result": result
-				}))
+				})))
 			}
 		}),
 	);
@@ -4431,6 +4758,32 @@ mod mockserver {
 			let init_counter = self.init_counter.lock().await;
 			Ok(CallToolResult::success(vec![ContentBlock::text(
 				init_counter.to_string(),
+			)]))
+		}
+
+		#[tool(description = "Ask the client for confirmation before proceeding")]
+		async fn elicit(&self, rq: RequestContext<RoleServer>) -> Result<CallToolResult, McpError> {
+			// The typed create_elicitation helper is behind a disabled cargo feature;
+			// the generic peer request is equivalent on the wire.
+			let res = rq
+				.peer
+				.send_request(ServerRequest::ElicitRequest(ElicitRequest::new(
+					ElicitRequestParams::FormElicitationParams {
+						meta: None,
+						message: "confirm?".to_string(),
+						requested_schema: ElicitationSchema::new(Default::default()),
+					},
+				)))
+				.await
+				.map_err(|e| McpError::internal_error(e.to_string(), None))?;
+			let ClientResult::ElicitResult(res) = res else {
+				return Err(McpError::internal_error(
+					"unexpected elicitation reply",
+					None,
+				));
+			};
+			Ok(CallToolResult::success(vec![ContentBlock::text(
+				serde_json::to_string(&res.content).unwrap(),
 			)]))
 		}
 	}
@@ -5633,6 +5986,7 @@ async fn test_runtime_fanout_fail_open() {
 		merge,
 		empty_cel(),
 		FailureMode::FailOpen,
+		false,
 	);
 
 	let res = ms.next().await;
@@ -5680,6 +6034,7 @@ async fn test_runtime_fanout_fail_open_skips_jsonrpc_error_frames() {
 		merge,
 		empty_cel(),
 		FailureMode::FailOpen,
+		false,
 	);
 
 	let res = ms.next().await;
@@ -5714,6 +6069,7 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 		merge,
 		empty_cel(),
 		FailureMode::FailOpen,
+		false,
 	);
 
 	let res = ms.next().await;
@@ -5823,6 +6179,7 @@ async fn mcp_extauth_deny() {
 	);
 }
 
+#[allow(clippy::result_large_err)]
 async fn try_mcp_streamable_client(
 	s: SocketAddr,
 ) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>

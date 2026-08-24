@@ -1,0 +1,263 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: llm-pool
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-pool-endpoint-picker
+  namespace: default
+spec:
+  ports:
+  - name: grpc
+    port: 9002
+    targetPort: 9002
+  selector:
+    app: llama
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: llama-pool
+  namespace: default
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: llama-pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: llama
+  targetPorts:
+  - number: 8000
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: llama
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-pool
+    sectionName: llm
+  provider: Custom
+  custom:
+    backendRef:
+      group: inference.networking.k8s.io
+      kind: InferencePool
+      name: llama-pool
+    formats:
+    - type: Completions
+
+---
+# Output
+output:
+- gateway:
+    Name: llm-pool
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - custom:
+              formats:
+              - format: COMPLETIONS
+            name: backend
+            providerBackend:
+              port: 8000
+              service:
+                hostname: llama-pool.default.inference.cluster.local
+                namespace: default
+      key: default/llama/backend.llm
+      name:
+        name: llama
+        namespace: default
+- gateway:
+    Name: llm-pool
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/llm-pool
+      port: 80
+- gateway:
+    Name: llm-pool
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/llm-pool
+      key: default/llm-pool.llm
+      name:
+        gatewayName: llm-pool
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: llm-pool
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/llama/backend.llm
+      key: default/llama.llm
+      listenerKey: default/llm-pool.llm
+      match:
+        model: llama
+- gateway:
+    Name: llm-pool
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: llama-pool-endpoint-picker.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/llama-pool:inference
+      name:
+        kind: InferencePool
+        name: llama-pool
+        namespace: default
+      target:
+        service:
+          hostname: llama-pool.default.inference.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-pool
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/llama-pool:inferencetls
+      name:
+        kind: InferencePool
+        name: llama-pool
+        namespace: default
+      target:
+        service:
+          hostname: llama-pool-endpoint-picker.default.svc.cluster.local
+          namespace: default
+          port: 9002
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: llama
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: llm-pool
+        namespace: default
+        sectionName: llm
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: llama-pool
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: llm-pool
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: llm-pool
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

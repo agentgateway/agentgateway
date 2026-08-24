@@ -1220,6 +1220,7 @@ fn test_embeddings_translation_nova() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 
 	let req = types::embeddings::Request {
@@ -1249,6 +1250,7 @@ fn test_embeddings_nova_omits_dimension_when_unset() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 
 	let req = types::embeddings::Request {
@@ -1278,6 +1280,7 @@ fn test_embeddings_nova_with_passthrough_fields() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 
 	let req = types::embeddings::Request {
@@ -1309,6 +1312,7 @@ fn test_embeddings_nova_rejects_array_input() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 
 	let req = types::embeddings::Request {

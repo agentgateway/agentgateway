@@ -26,7 +26,7 @@ use crate::http::{
 use crate::proxy::dtrace::{Severity, pol_event, pol_result_timed};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponse, dtrace};
-use crate::telemetry::log::RequestLog;
+use crate::telemetry::log::{RequestLog, copy_span_writer};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
@@ -189,6 +189,29 @@ impl ExtAuthz {
 			.map(|cache| cache_store(effective_cache_entries(cache.max_entries)))
 			.unwrap_or_else(default_cache_store);
 		self
+	}
+
+	pub async fn check_network(
+		&self,
+		client: PolicyClient,
+		source: crate::cel::SourceContext,
+		destination: crate::cel::DestinationContext,
+	) -> Result<(), ProxyError> {
+		debug_assert!(matches!(self.protocol, Protocol::Http { .. }));
+		let mut req = ::http::Request::builder()
+			.uri("/")
+			.body(http::Body::empty())
+			.map_err(|e| ProxyError::Processing(e.into()))?;
+		req.extensions_mut().insert(source);
+		req.extensions_mut().insert(destination);
+
+		let response = self.check_http(client, &mut req).await?;
+		match response.direct_response {
+			Some(response) => Err(ProxyError::ExternalAuthorizationFailed(Some(
+				response.status(),
+			))),
+			None => Ok(()),
+		}
 	}
 
 	fn cache_key(&self, req: &Request) -> Result<CacheKey, CacheMissReason> {
@@ -356,9 +379,9 @@ impl ExtAuthz {
 			return cached_response.apply(req);
 		}
 		pol_event!(Severity::Info, "{}", cache_lookup);
-		let chan = self
-			.target
-			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz));
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz);
+		let chan = self.target.grpc_channel(policy_client.clone());
 		let mut grpc_client = AuthorizationClient::new(chan)
 			.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE);
 		// Get connection info with proper error handling
@@ -530,10 +553,18 @@ impl ExtAuthz {
 				tls_session,
 			}),
 		};
+		let mut authz_req = tonic::Request::new(authz_req);
+		copy_span_writer(req.extensions(), authz_req.extensions_mut());
+		let mut span = policy_client.start_grpc_span(
+			&mut authz_req,
+			self.target.target.as_ref(),
+			"/envoy.service.auth.v3.Authorization/Check",
+		);
 
-		let scope = dtrace::start_scope("ext_authz");
 		let resp = grpc_client.check(authz_req).await;
-		drop(scope);
+		if let Some(span) = span.as_deref_mut() {
+			span.record_grpc_result(&resp);
+		}
 
 		trace!("check response: {:?}", resp);
 		let cr = match resp {
@@ -775,6 +806,7 @@ impl ExtAuthz {
 		let mut check_req = rb
 			.body(http::Body::from(body))
 			.map_err(|e| ProxyError::Processing(e.into()))?;
+		copy_span_writer(req.extensions(), check_req.extensions_mut());
 
 		// Include any request headers
 		let include = if self.include_request_headers.is_empty() {
@@ -815,7 +847,6 @@ impl ExtAuthz {
 		check_req
 			.extensions_mut()
 			.insert(BackendRequestTimeout(Duration::from_secs(2)));
-		let scope = dtrace::start_scope("ext_authz");
 		let resp = client
 			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz)
 			.call_reference_with_policies(
@@ -831,7 +862,6 @@ impl ExtAuthz {
 				return self.handle_auth_failure(&e.to_string());
 			},
 		};
-		drop(scope);
 		if resp.status().is_success() {
 			let mut included_headers = HeaderMap::new();
 			for k in include_response_headers {

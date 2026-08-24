@@ -64,16 +64,43 @@ pub fn with_trace<R>(debug_tracer: Option<DebugTracer>, f: impl FnOnce() -> R) -
 	}
 }
 
-pub fn timed_start() -> Option<Instant> {
-	is_active().then(Instant::now)
+async fn with_trace_future<F: Future>(debug_tracer: Option<DebugTracer>, future: F) -> F::Output {
+	match debug_tracer {
+		Some(debug_tracer) => ACTIVE.scope(Some(debug_tracer), future).await,
+		None => future.await,
+	}
 }
 
-pub fn start_scope(name: impl Into<String>) -> ScopeGuard {
-	ACTIVE
-		.try_with(|active| active.as_ref().map(|trace| trace.start_scope(name.into())))
-		.ok()
-		.flatten()
-		.unwrap_or_else(ScopeGuard::noop)
+/// Spawn a task that inherits the caller's active debug trace.
+/// Use this instead of `tokio::spawn` for request-scoped work that emits dtrace events.
+pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+	F: Future + Send + 'static,
+	F::Output: Send + 'static,
+{
+	let debug_tracer = DebugTracer::active().map(|trace| trace.detached());
+	tokio::task::spawn(with_trace_future(debug_tracer, future))
+}
+
+/// Run a future in an optional child dtrace scope of the currently active trace.
+/// The trace state is detached so concurrently-polled sibling futures cannot leak scopes into each other.
+pub async fn scope_future<F: Future>(name: Option<&str>, future: F) -> F::Output {
+	let Some(name) = name else {
+		return future.await;
+	};
+	let debug_tracer = DebugTracer::active().map(|trace| trace.detached());
+	match debug_tracer {
+		Some(debug_tracer) => {
+			ACTIVE
+				.scope(Some(debug_tracer.scoped(name.to_string())), future)
+				.await
+		},
+		None => future.await,
+	}
+}
+
+pub fn timed_start() -> Option<Instant> {
+	is_active().then(Instant::now)
 }
 
 pub fn policy_response_details(pr: &crate::http::PolicyResponse) -> String {
@@ -450,29 +477,7 @@ pub struct DebugTracer {
 
 #[derive(Debug)]
 struct ScopeState {
-	next_id: u64,
-	stack: Vec<ScopeFrame>,
-}
-
-#[derive(Debug)]
-struct ScopeFrame {
-	id: u64,
-	name: String,
-}
-
-#[must_use = "dropping the guard closes the scope"]
-pub struct ScopeGuard {
-	scope_state: Option<Arc<Mutex<ScopeState>>>,
-	id: Option<u64>,
-}
-
-impl ScopeGuard {
-	fn noop() -> Self {
-		Self {
-			scope_state: None,
-			id: None,
-		}
-	}
+	stack: Vec<String>,
 }
 
 struct Watcher {
@@ -583,28 +588,30 @@ impl DebugTracer {
 		let ins = DebugTracer {
 			sender: tx,
 			start: Instant::now(),
-			scope_state: Arc::new(Mutex::new(ScopeState {
-				next_id: 0,
-				stack: Vec::new(),
-			})),
+			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
 		ACTIVE.scope(Some(ins), f(req)).await
 	}
 	pub fn active() -> Option<Self> {
 		ACTIVE.try_with(Clone::clone).ok().flatten()
 	}
-	pub fn start_scope(&self, name: impl Into<String>) -> ScopeGuard {
-		let mut scope_state = self.scope_state.lock().expect("scope mutex poisoned");
-		let id = scope_state.next_id;
-		scope_state.next_id += 1;
-		scope_state.stack.push(ScopeFrame {
-			id,
-			name: name.into(),
-		});
-		ScopeGuard {
-			scope_state: Some(Arc::clone(&self.scope_state)),
-			id: Some(id),
+	fn detached(&self) -> Self {
+		let scope_state = self.scope_state.lock().expect("scope mutex poisoned");
+		Self {
+			sender: self.sender.clone(),
+			start: self.start,
+			scope_state: Arc::new(Mutex::new(ScopeState {
+				stack: scope_state.stack.clone(),
+			})),
 		}
+	}
+	fn scoped(&self, name: String) -> Self {
+		let scoped = self.detached();
+		{
+			let mut scope_state = scoped.scope_state.lock().expect("scope mutex poisoned");
+			scope_state.stack.push(name);
+		}
+		scoped
 	}
 	fn current_scope(&self) -> Vec<String> {
 		self
@@ -612,9 +619,7 @@ impl DebugTracer {
 			.lock()
 			.expect("scope mutex poisoned")
 			.stack
-			.iter()
-			.map(|frame| frame.name.clone())
-			.collect()
+			.clone()
 	}
 	fn send(&self, msg: MessageType) {
 		self.send_with_timings(None, Instant::now(), msg)
@@ -794,47 +799,45 @@ impl DebugTracer {
 	}
 }
 
-impl Drop for ScopeGuard {
-	fn drop(&mut self) {
-		let Some(scope_state) = self.scope_state.as_ref() else {
-			return;
-		};
-		let Some(id) = self.id.take() else {
-			return;
-		};
-		let mut scope_state = scope_state.lock().expect("scope mutex poisoned");
-		if let Some(idx) = scope_state.stack.iter().position(|frame| frame.id == id) {
-			scope_state.stack.remove(idx);
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::cel::{Executor, Expression};
 	use crate::http::Body;
 
-	#[test]
-	fn scope_guard_drop_only_removes_its_own_frame() {
-		let (tx, _rx) = tokio::sync::mpsc::channel(1);
+	#[tokio::test]
+	async fn scope_future_isolates_concurrent_captured_scopes() {
+		let (tx, mut rx) = tokio::sync::mpsc::channel(2);
 		let tracer = DebugTracer {
 			sender: tx,
 			start: Instant::now(),
-			scope_state: Arc::new(Mutex::new(ScopeState {
-				next_id: 0,
-				stack: Vec::new(),
-			})),
+			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
 
-		let first = tracer.start_scope("first");
-		let second = tracer.start_scope("second");
+		let emit = |name| {
+			let tracer = tracer.clone();
+			async move {
+				with_trace_future(Some(tracer), async {
+					scope_future(Some(name), async {
+						tokio::task::yield_now().await;
+						trace(|trace| trace.request_started());
+					})
+					.await;
+				})
+				.await;
+			}
+		};
+		tokio::join!(emit("first"), emit("second"));
 
-		drop(first);
-		assert_eq!(tracer.current_scope(), vec!["second"]);
-
-		drop(second);
-		assert!(tracer.current_scope().is_empty());
+		let mut scopes = vec![
+			rx.recv().await.unwrap().scope,
+			rx.recv().await.unwrap().scope,
+		];
+		scopes.sort();
+		assert_eq!(
+			scopes,
+			vec![vec!["first".to_string()], vec!["second".to_string()]]
+		);
 	}
 
 	#[tokio::test]
@@ -877,10 +880,7 @@ mod tests {
 		let tracer = DebugTracer {
 			sender: tx,
 			start: Instant::now(),
-			scope_state: Arc::new(Mutex::new(ScopeState {
-				next_id: 0,
-				stack: Vec::new(),
-			})),
+			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
 		let req = http::Request::builder()
 			.uri("http://example.com/deferred")

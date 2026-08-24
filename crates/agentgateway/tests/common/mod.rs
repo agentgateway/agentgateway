@@ -19,7 +19,7 @@ pub mod prelude {
 	pub use agentgateway::read_body;
 	pub use agentgateway::test_helpers::proxymock::*;
 	pub use agentgateway::types::agent::{
-		Backend, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol, Listener,
+		Backend, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol, BindSnapshot, Listener,
 		ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch,
 		SimpleBackendReference, Target,
 	};

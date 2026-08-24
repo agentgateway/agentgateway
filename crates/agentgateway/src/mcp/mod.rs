@@ -1,5 +1,6 @@
 mod apps;
 pub(crate) mod auth;
+pub(crate) mod dns_rebinding;
 pub(crate) mod guardrails;
 mod handler;
 mod mergestream;

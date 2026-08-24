@@ -8,7 +8,7 @@ use tokio_sse_codec::{Event, Frame, SseDecoder};
 use tokio_util::codec::BytesCodec;
 
 use super::passthrough::parser as passthrough_parser;
-use super::transform::parser as transform_parser;
+use super::transform::{TransformEvent, parser as transform_parser};
 
 /// Append an OpenAI `[DONE]` event after a body closes successfully.
 pub fn append_done_on_success(body: Body) -> Body {
@@ -79,8 +79,16 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 	let encoder = BytesCodec::new();
 
-	transform_parser(b, decoder, encoder, move |o| {
-		let data = unwrap_sse_data(o)?;
+	transform_parser(b, decoder, encoder, move |event| {
+		let data = match event {
+			TransformEvent::Item(frame) => unwrap_sse_data(frame)?,
+			TransformEvent::Eof => return None,
+			TransformEvent::Error => {
+				let transformed = f(Err(anyhow::anyhow!("upstream SSE stream failed")))?;
+				let json_bytes = serde_json::to_vec(&transformed).ok()?;
+				return Some(crate::parse::encode_sse_event("", Bytes::from(json_bytes)));
+			},
+		};
 		// Pass through [DONE] events unchanged
 		if data.as_ref() == b"[DONE]" {
 			return Some(crate::parse::encode_sse_event(
@@ -98,6 +106,8 @@ pub fn json_transform<I: DeserializeOwned, O: Serialize>(
 pub enum SseJsonEvent<I> {
 	Data(anyhow::Result<I>),
 	Done,
+	Eof,
+	Error,
 }
 
 pub fn json_transform_multi<I: DeserializeOwned, O: Serialize, It>(
@@ -112,28 +122,23 @@ where
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 	let encoder = BytesCodec::new();
 
-	transform_parser(b, decoder, encoder, move |o| {
-		let data = unwrap_sse_data(o);
-		if let Some(data) = &data
-			&& data.as_ref() == b"[DONE]"
-		{
-			return f(SseJsonEvent::Done)
-				.into_iter()
-				.filter_map(|(event_name, item)| {
-					let json_bytes = serde_json::to_vec(&item).ok()?;
-					Some(crate::parse::encode_sse_event(
-						event_name,
-						Bytes::from(json_bytes),
-					))
-				})
-				.collect();
-		}
-		let Some(data) = data else {
-			return vec![];
+	transform_parser(b, decoder, encoder, move |event| {
+		let event = match event {
+			TransformEvent::Eof => SseJsonEvent::Eof,
+			TransformEvent::Error => SseJsonEvent::Error,
+			TransformEvent::Item(frame) => {
+				let Some(data) = unwrap_sse_data(frame) else {
+					return Vec::new();
+				};
+				if data.as_ref() == b"[DONE]" {
+					SseJsonEvent::Done
+				} else {
+					let obj = serde_json::from_slice::<I>(&data);
+					SseJsonEvent::Data(obj.map_err(anyhow::Error::from))
+				}
+			},
 		};
-
-		let obj = serde_json::from_slice::<I>(&data);
-		f(SseJsonEvent::Data(obj.map_err(anyhow::Error::from)))
+		f(event)
 			.into_iter()
 			.filter_map(|(event_name, item)| {
 				let json_bytes = serde_json::to_vec(&item).ok()?;

@@ -1,2322 +1,2049 @@
-import { Link, useLocation } from "@tanstack/react-router";
-import { Pencil, Plus, Route as RouteIcon, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import {
-  EnumSelector,
-  type EnumSelectorOption,
-} from "../components/EnumSelector";
-import {
-  ConfirmDialog,
-  Drawer,
-  Dropdown,
-  EmptyState,
-  Field,
-  FieldGroup,
-  PageHeader,
-  Panel,
-  StatusBanner,
-  Tooltip,
-  YamlBlock,
-} from "../components/Primitives";
-import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
-import { isDatabaseConfigResource } from "../config";
-import {
-  useConfigDumpMode,
-  useDeleteConfigResource,
-  useTrafficConfigData,
-  useUpdateConfig,
-  useUpsertConfigResource,
-} from "../hooks";
-import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import {
-  backendSummary,
-  listenerDisplayName,
-  pathSummary,
-  routeArray,
-  routeContexts,
-  routeDisplayName,
-  trafficStats,
-  type RouteContext,
-  type RouteKind,
-} from "../traffic";
-import type {
-  GatewayConfig,
-  TrafficListener,
-  TrafficRoute,
-  TrafficRouteBackend,
-  TrafficTcpRoute,
-  TrafficTcpRouteBackend,
-} from "../types";
-import type {
-  LocalAttachedRoute,
-  LocalAttachedTCPRoute,
-  RouteMatch as GeneratedRouteMatch,
-} from "../gateway-config";
-import {
-  ReadonlyModeBanner,
-  TrafficDumpRoutesView,
-} from "./traffic/TrafficConfigDumpPanel";
-import { TrafficPolicySection } from "./traffic/TrafficPolicySection";
+import { Link, useLocation } from '@tanstack/react-router';
+import { Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-const pathTypes = ["pathPrefix", "exact", "regex"] as const;
-type HttpMatch = NonNullable<TrafficRoute["matches"]>[number];
-type HeaderMatch = NonNullable<HttpMatch["headers"]>[number];
-type QueryMatch = NonNullable<HttpMatch["query"]>[number];
+import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
+import {
+	ConfirmDialog,
+	Drawer,
+	Dropdown,
+	EmptyState,
+	Field,
+	FieldGroup,
+	PageHeader,
+	Panel,
+	StatusBanner,
+	Tooltip,
+	YamlBlock
+} from '@/components/Primitives';
+import { isDatabaseConfigResource } from '@/config';
+import type {
+	RouteMatch as GeneratedRouteMatch,
+	LocalAttachedRoute,
+	LocalAttachedTCPRoute
+} from '@/gateway-config';
+import {
+	useConfigDumpMode,
+	useDeleteConfigResource,
+	useTrafficConfigData,
+	useUpdateConfig,
+	useUpsertConfigResource
+} from '@/hooks';
+import { ReadonlyModeBanner, TrafficDumpRoutesView } from '@/pages/traffic/TrafficConfigDumpPanel';
+import { TrafficPolicySection } from '@/pages/traffic/TrafficPolicySection';
+import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
+import {
+	backendSummary,
+	listenerDisplayName,
+	pathSummary,
+	type RouteContext,
+	type RouteKind,
+	routeArray,
+	routeContexts,
+	routeDisplayName,
+	trafficStats
+} from '@/traffic';
+import type {
+	GatewayConfig,
+	TrafficListener,
+	TrafficRoute,
+	TrafficRouteBackend,
+	TrafficTcpRoute,
+	TrafficTcpRouteBackend
+} from '@/types';
+
+const pathTypes = ['pathPrefix', 'exact', 'regex'] as const;
+type HttpMatch = NonNullable<TrafficRoute['matches']>[number];
+type HeaderMatch = NonNullable<HttpMatch['headers']>[number];
+type QueryMatch = NonNullable<HttpMatch['query']>[number];
 type LocalAttachedGatewayRoute = LocalAttachedRoute | LocalAttachedTCPRoute;
 type GatewayRouteRow = {
-  kind: RouteKind;
-  route: LocalAttachedGatewayRoute;
-  routeIndex?: number;
-  resourceId?: string;
+	kind: RouteKind;
+	route: LocalAttachedGatewayRoute;
+	routeIndex?: number;
+	resourceId?: string;
 };
 
 export function TrafficRoutesPage() {
-  const mode = useConfigDumpMode();
-  if (mode.isLoading) {
-    return (
-      <div className="page-stack">
-        <PageHeader
-          title="Traffic Routes"
-          description="Match incoming HTTP and TCP traffic and attach inline backends."
-        />
-        <Panel>
-          <StatusBanner
-            state="loading"
-            title="Detecting traffic configuration mode"
-          />
-        </Panel>
-      </div>
-    );
-  }
-  if (mode.data?.mode === "dump") {
-    return (
-      <div className="page-stack">
-        <PageHeader
-          title="Traffic Routes"
-          description="Read-only route inventory from the active gateway dump."
-        />
-        <ReadonlyModeBanner />
-        <TrafficDumpRoutesView dump={mode.data.dump} />
-      </div>
-    );
-  }
-  return <TrafficRoutesEditorPage />;
+	const mode = useConfigDumpMode();
+	if (mode.isLoading) {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title="Traffic Routes"
+					description="Match incoming HTTP and TCP traffic and attach inline backends."
+				/>
+				<Panel>
+					<StatusBanner state="loading" title="Detecting traffic configuration mode" />
+				</Panel>
+			</div>
+		);
+	}
+	if (mode.data?.mode === 'dump') {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title="Traffic Routes"
+					description="Read-only route inventory from the active gateway dump."
+				/>
+				<ReadonlyModeBanner />
+				<TrafficDumpRoutesView dump={mode.data.dump} />
+			</div>
+		);
+	}
+	return <TrafficRoutesEditorPage />;
 }
 
 function TrafficRoutesEditorPage() {
-  const location = useLocation();
-  const traffic = useTrafficConfigData();
-  const config = {
-    ...traffic.config,
-    data: traffic.data,
-    isLoading: traffic.isLoading,
-    isError: Boolean(traffic.error),
-    error: traffic.error,
-  };
-  const update = useUpdateConfig();
-  const help = useSchemaHelp();
-  const hasLegacyBinds = Boolean(config.data?.binds?.length);
-  const routes = useMemo(() => routeContexts(config.data), [config.data]);
-  const listeners = useMemo(
-    () =>
-      (config.data?.binds ?? []).flatMap((bind, bindIndex) =>
-        bind.listeners.map((listener, listenerIndex) => ({
-          bind,
-          bindIndex,
-          listener,
-          listenerIndex,
-        })),
-      ),
-    [config.data],
-  );
-  const stats = trafficStats(config.data);
-  const [editing, setEditing] = useState<{
-    bindIndex: number;
-    listenerIndex: number;
-    kind: RouteKind;
-    routeIndex?: number;
-    route: TrafficRoute | TrafficTcpRoute;
-  } | null>(null);
-  const [deletingRoute, setDeletingRoute] = useState<RouteContext | null>(null);
-  const [openedSearchListener, setOpenedSearchListener] = useState<
-    string | null
-  >(null);
-  const [openedSearchRoute, setOpenedSearchRoute] = useState<string | null>(
-    null,
-  );
-  const searchListener = routeListenerSearch(location.search);
-  const searchRoute = routeEditSearch(location.search);
+	const location = useLocation();
+	const traffic = useTrafficConfigData();
+	const config = {
+		...traffic.config,
+		data: traffic.data,
+		isLoading: traffic.isLoading,
+		isError: Boolean(traffic.error),
+		error: traffic.error
+	};
+	const update = useUpdateConfig();
+	const help = useSchemaHelp();
+	const hasLegacyBinds = Boolean(config.data?.binds?.length);
+	const routes = useMemo(() => routeContexts(config.data), [config.data]);
+	const listeners = useMemo(
+		() =>
+			(config.data?.binds ?? []).flatMap((bind, bindIndex) =>
+				bind.listeners.map((listener, listenerIndex) => ({
+					bind,
+					bindIndex,
+					listener,
+					listenerIndex
+				}))
+			),
+		[config.data]
+	);
+	const stats = trafficStats(config.data);
+	const [editing, setEditing] = useState<{
+		bindIndex: number;
+		listenerIndex: number;
+		kind: RouteKind;
+		routeIndex?: number;
+		route: TrafficRoute | TrafficTcpRoute;
+	} | null>(null);
+	const [deletingRoute, setDeletingRoute] = useState<RouteContext | null>(null);
+	const [openedSearchListener, setOpenedSearchListener] = useState<string | null>(null);
+	const [openedSearchRoute, setOpenedSearchRoute] = useState<string | null>(null);
+	const searchListener = routeListenerSearch(location.search);
+	const searchRoute = routeEditSearch(location.search);
 
-  useEffect(() => {
-    if (
-      !searchListener ||
-      searchRoute ||
-      openedSearchListener === searchListener ||
-      editing ||
-      !listeners.length
-    )
-      return;
-    const selected = listenerFromSearch(searchListener, listeners);
-    setOpenedSearchListener(searchListener);
-    if (!selected) return;
-    const kind = listenerRouteKind(selected.listener);
-    setEditing({
-      bindIndex: selected.bindIndex,
-      listenerIndex: selected.listenerIndex,
-      kind,
-      route: makeRoute(kind),
-    });
-  }, [editing, listeners, openedSearchListener, searchListener, searchRoute]);
+	useEffect(() => {
+		if (
+			!searchListener ||
+			searchRoute ||
+			openedSearchListener === searchListener ||
+			editing ||
+			!listeners.length
+		)
+			return;
+		const selected = listenerFromSearch(searchListener, listeners);
+		setOpenedSearchListener(searchListener);
+		if (!selected) return;
+		const kind = listenerRouteKind(selected.listener);
+		setEditing({
+			bindIndex: selected.bindIndex,
+			listenerIndex: selected.listenerIndex,
+			kind,
+			route: makeRoute(kind)
+		});
+	}, [editing, listeners, openedSearchListener, searchListener, searchRoute]);
 
-  useEffect(() => {
-    if (
-      !searchRoute ||
-      openedSearchRoute === searchRoute ||
-      editing ||
-      !routes.length
-    )
-      return;
-    const selected = routeFromSearch(searchRoute, routes);
-    setOpenedSearchRoute(searchRoute);
-    if (!selected) return;
-    setEditing({
-      bindIndex: selected.bindIndex,
-      listenerIndex: selected.listenerIndex,
-      kind: selected.kind,
-      routeIndex: selected.routeIndex,
-      route: structuredClone(selected.route),
-    });
-  }, [editing, openedSearchRoute, routes, searchRoute]);
+	useEffect(() => {
+		if (!searchRoute || openedSearchRoute === searchRoute || editing || !routes.length) return;
+		const selected = routeFromSearch(searchRoute, routes);
+		setOpenedSearchRoute(searchRoute);
+		if (!selected) return;
+		setEditing({
+			bindIndex: selected.bindIndex,
+			listenerIndex: selected.listenerIndex,
+			kind: selected.kind,
+			routeIndex: selected.routeIndex,
+			route: structuredClone(selected.route)
+		});
+	}, [editing, openedSearchRoute, routes, searchRoute]);
 
-  function openAddRoute(
-    bindIndex: number,
-    listenerIndex: number,
-    listener: TrafficListener,
-  ) {
-    const kind = listenerRouteKind(listener);
-    setEditing({ bindIndex, listenerIndex, kind, route: makeRoute(kind) });
-    writeTrafficRouteSearch({ listener: `${bindIndex}:${listenerIndex}` });
-  }
+	function openAddRoute(bindIndex: number, listenerIndex: number, listener: TrafficListener) {
+		const kind = listenerRouteKind(listener);
+		setEditing({ bindIndex, listenerIndex, kind, route: makeRoute(kind) });
+		writeTrafficRouteSearch({ listener: `${bindIndex}:${listenerIndex}` });
+	}
 
-  function openEditRoute(context: ReturnType<typeof routeContexts>[number]) {
-    setEditing({
-      bindIndex: context.bindIndex,
-      listenerIndex: context.listenerIndex,
-      kind: context.kind,
-      routeIndex: context.routeIndex,
-      route: structuredClone(context.route),
-    });
-    writeTrafficRouteSearch({ route: routeSearchValue(context) });
-  }
+	function openEditRoute(context: ReturnType<typeof routeContexts>[number]) {
+		setEditing({
+			bindIndex: context.bindIndex,
+			listenerIndex: context.listenerIndex,
+			kind: context.kind,
+			routeIndex: context.routeIndex,
+			route: structuredClone(context.route)
+		});
+		writeTrafficRouteSearch({ route: routeSearchValue(context) });
+	}
 
-  function closeEditor() {
-    setEditing(null);
-    setOpenedSearchListener(null);
-    setOpenedSearchRoute(null);
-    writeTrafficRouteSearch(null, "replace");
-  }
+	function closeEditor() {
+		setEditing(null);
+		setOpenedSearchListener(null);
+		setOpenedSearchRoute(null);
+		writeTrafficRouteSearch(null, 'replace');
+	}
 
-  if (!config.isLoading && !config.isError && !hasLegacyBinds) {
-    return <GatewayRoutesEditorPage />;
-  }
+	if (!config.isLoading && !config.isError && !hasLegacyBinds) {
+		return <GatewayRoutesEditorPage />;
+	}
 
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="Traffic Routes"
-        description="Match incoming HTTP and TCP traffic and attach inline backends."
-        actions={
-          listeners.length ? (
-            <button
-              className="button primary"
-              type="button"
-              onClick={() => {
-                const first = listeners[0];
-                openAddRoute(
-                  first.bindIndex,
-                  first.listenerIndex,
-                  first.listener,
-                );
-              }}
-            >
-              <Plus size={16} />
-              Add route
-            </button>
-          ) : undefined
-        }
-      />
+	return (
+		<div className="page-stack">
+			<PageHeader
+				title="Traffic Routes"
+				description="Match incoming HTTP and TCP traffic and attach inline backends."
+				actions={
+					listeners.length ? (
+						<button
+							className="button primary"
+							type="button"
+							onClick={() => {
+								const first = listeners[0];
+								openAddRoute(first.bindIndex, first.listenerIndex, first.listener);
+							}}
+						>
+							<Plus size={16} />
+							Add route
+						</button>
+					) : undefined
+				}
+			/>
 
-      {update.isError ? (
-        <StatusBanner state="bad" title="Save failed">
-          {update.error.message}
-        </StatusBanner>
-      ) : null}
-      {update.isSuccess ? (
-        <StatusBanner state="ok" title="Configuration saved" />
-      ) : null}
-      {stats.invalidListeners ? (
-        <StatusBanner
-          state="warn"
-          title="Some listeners mix HTTP and TCP routes"
-        >
-          Split mixed listeners before using the route form.
-        </StatusBanner>
-      ) : null}
+			{update.isError ? (
+				<StatusBanner state="bad" title="Save failed">
+					{update.error.message}
+				</StatusBanner>
+			) : null}
+			{update.isSuccess ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+			{stats.invalidListeners ? (
+				<StatusBanner state="warn" title="Some listeners mix HTTP and TCP routes">
+					Split mixed listeners before using the route form.
+				</StatusBanner>
+			) : null}
 
-      <Panel>
-        {config.isLoading ? (
-          <StatusBanner state="loading" title="Loading traffic routes" />
-        ) : config.isError ? (
-          <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error?.message}
-          </StatusBanner>
-        ) : !routes.length ? (
-          <EmptyState
-            title="No traffic routes configured"
-            description={
-              hasLegacyBinds
-                ? "Add a route under an HTTP or TCP listener."
-                : "Use traffic gateways for new HTTP routing configuration."
-            }
-            action={
-              hasLegacyBinds ? (
-                <button
-                  className="button primary"
-                  type="button"
-                  onClick={() => {
-                    const first = listeners[0];
-                    if (!first) return;
-                    openAddRoute(
-                      first.bindIndex,
-                      first.listenerIndex,
-                      first.listener,
-                    );
-                  }}
-                >
-                  <RouteIcon size={16} />
-                  Add route
-                </button>
-              ) : (
-                <Link className="button primary" to="/traffic/gateways">
-                  <RouteIcon size={16} />
-                  Manage gateways
-                </Link>
-              )
-            }
-          />
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Bind</th>
-                  <th>Listener</th>
-                  <th>Match</th>
-                  <th>Backends</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {routes.map((context) => (
-                  <tr
-                    key={`${context.bindIndex}-${context.listenerIndex}-${context.kind}-${context.routeIndex}`}
-                  >
-                    <td className="strong">
-                      {routeDisplayName(context.route, context.routeIndex)}
-                    </td>
-                    <td>
-                      <span className="badge">
-                        {context.kind.toUpperCase()}
-                      </span>
-                    </td>
-                    <td>{context.bind.port ?? "*"}</td>
-                    <td>
-                      <Link
-                        className="table-link"
-                        to="/traffic/listeners"
-                        search={{
-                          drawer: `listener:${context.bindIndex}:${context.listenerIndex}`,
-                        }}
-                      >
-                        {listenerDisplayName(
-                          context.listener,
-                          context.listenerIndex,
-                        )}
-                      </Link>
-                    </td>
-                    <td>
-                      {context.kind === "http"
-                        ? httpPathSummary(context.route)
-                        : "TCP"}
-                    </td>
-                    <td>{backendListSummary(context.route.backends)}</td>
-                    <td className="row-actions">
-                      <Tooltip content="Edit route">
-                        <button
-                          className="icon-button"
-                          type="button"
-                          aria-label="Edit route"
-                          onClick={() => openEditRoute(context)}
-                        >
-                          <Pencil size={16} />
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="Delete route">
-                        <button
-                          className="icon-button danger"
-                          type="button"
-                          aria-label="Delete route"
-                          disabled={update.isPending}
-                          onClick={() => setDeletingRoute(context)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </Tooltip>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+			<Panel>
+				{config.isLoading ? (
+					<StatusBanner state="loading" title="Loading traffic routes" />
+				) : config.isError ? (
+					<StatusBanner state="bad" title="Configuration API unavailable">
+						{config.error?.message}
+					</StatusBanner>
+				) : !routes.length ? (
+					<EmptyState
+						title="No traffic routes configured"
+						description={
+							hasLegacyBinds
+								? 'Add a route under an HTTP or TCP listener.'
+								: 'Use traffic gateways for new HTTP routing configuration.'
+						}
+						action={
+							hasLegacyBinds ? (
+								<button
+									className="button primary"
+									type="button"
+									onClick={() => {
+										const first = listeners[0];
+										if (!first) return;
+										openAddRoute(first.bindIndex, first.listenerIndex, first.listener);
+									}}
+								>
+									<RouteIcon size={16} />
+									Add route
+								</button>
+							) : (
+								<Link className="button primary" to="/traffic/gateways">
+									<RouteIcon size={16} />
+									Manage gateways
+								</Link>
+							)
+						}
+					/>
+				) : (
+					<div className="table-wrap">
+						<table>
+							<thead>
+								<tr>
+									<th>Name</th>
+									<th>Type</th>
+									<th>Bind</th>
+									<th>Listener</th>
+									<th>Match</th>
+									<th>Backends</th>
+									<th />
+								</tr>
+							</thead>
+							<tbody>
+								{routes.map(context => (
+									<tr
+										key={`${context.bindIndex}-${context.listenerIndex}-${context.kind}-${context.routeIndex}`}
+									>
+										<td className="strong">
+											{routeDisplayName(context.route, context.routeIndex)}
+										</td>
+										<td>
+											<span className="badge">{context.kind.toUpperCase()}</span>
+										</td>
+										<td>{context.bind.port ?? '*'}</td>
+										<td>
+											<Link
+												className="table-link"
+												to="/traffic/listeners"
+												search={{
+													drawer: `listener:${context.bindIndex}:${context.listenerIndex}`
+												}}
+											>
+												{listenerDisplayName(context.listener, context.listenerIndex)}
+											</Link>
+										</td>
+										<td>{context.kind === 'http' ? httpPathSummary(context.route) : 'TCP'}</td>
+										<td>{backendListSummary(context.route.backends)}</td>
+										<td className="row-actions">
+											<Tooltip content="Edit route">
+												<button
+													className="icon-button"
+													type="button"
+													aria-label="Edit route"
+													onClick={() => openEditRoute(context)}
+												>
+													<Pencil size={16} />
+												</button>
+											</Tooltip>
+											<Tooltip content="Delete route">
+												<button
+													className="icon-button danger"
+													type="button"
+													aria-label="Delete route"
+													disabled={update.isPending}
+													onClick={() => setDeletingRoute(context)}
+												>
+													<Trash2 size={16} />
+												</button>
+											</Tooltip>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</Panel>
 
-      {editing ? (
-        <RouteEditor
-          config={config.data}
-          listeners={listeners}
-          editing={editing}
-          help={help}
-          saving={update.isPending}
-          onCancel={closeEditor}
-          onSave={(nextEditing) =>
-            update.mutate(
-              (next) => {
-                const listener =
-                  next.binds?.[nextEditing.bindIndex]?.listeners?.[
-                    nextEditing.listenerIndex
-                  ];
-                if (!listener) return;
-                const routes = routeArray(listener, nextEditing.kind);
-                if (typeof nextEditing.routeIndex === "number")
-                  routes[nextEditing.routeIndex] = nextEditing.route as never;
-                else routes.push(nextEditing.route as never);
-              },
-              { onSuccess: closeEditor },
-            )
-          }
-        />
-      ) : null}
-      {deletingRoute ? (
-        <ConfirmDialog
-          title="Delete route?"
-          destructive
-          confirmLabel="Delete route"
-          confirmDisabled={update.isPending}
-          onCancel={() => setDeletingRoute(null)}
-          onConfirm={() =>
-            update.mutate(
-              (next) => {
-                const listener =
-                  next.binds?.[deletingRoute.bindIndex]?.listeners?.[
-                    deletingRoute.listenerIndex
-                  ];
-                if (!listener) return;
-                const routes = routeArray(listener, deletingRoute.kind);
-                routes.splice(deletingRoute.routeIndex, 1);
-              },
-              { onSuccess: () => setDeletingRoute(null) },
-            )
-          }
-        >
-          <p>
-            Delete{" "}
-            <strong>
-              {routeDisplayName(deletingRoute.route, deletingRoute.routeIndex)}
-            </strong>
-            ? Traffic matching this route will no longer reach its backends.
-          </p>
-        </ConfirmDialog>
-      ) : null}
-    </div>
-  );
+			{editing ? (
+				<RouteEditor
+					config={config.data}
+					listeners={listeners}
+					editing={editing}
+					help={help}
+					saving={update.isPending}
+					onCancel={closeEditor}
+					onSave={nextEditing =>
+						update.mutate(
+							next => {
+								const listener =
+									next.binds?.[nextEditing.bindIndex]?.listeners?.[nextEditing.listenerIndex];
+								if (!listener) return;
+								const routes = routeArray(listener, nextEditing.kind);
+								if (typeof nextEditing.routeIndex === 'number')
+									routes[nextEditing.routeIndex] = nextEditing.route as never;
+								else routes.push(nextEditing.route as never);
+							},
+							{ onSuccess: closeEditor }
+						)
+					}
+				/>
+			) : null}
+			{deletingRoute ? (
+				<ConfirmDialog
+					title="Delete route?"
+					destructive
+					confirmLabel="Delete route"
+					confirmDisabled={update.isPending}
+					onCancel={() => setDeletingRoute(null)}
+					onConfirm={() =>
+						update.mutate(
+							next => {
+								const listener =
+									next.binds?.[deletingRoute.bindIndex]?.listeners?.[deletingRoute.listenerIndex];
+								if (!listener) return;
+								const routes = routeArray(listener, deletingRoute.kind);
+								routes.splice(deletingRoute.routeIndex, 1);
+							},
+							{ onSuccess: () => setDeletingRoute(null) }
+						)
+					}
+				>
+					<p>
+						Delete{' '}
+						<strong>{routeDisplayName(deletingRoute.route, deletingRoute.routeIndex)}</strong>?
+						Traffic matching this route will no longer reach its backends.
+					</p>
+				</ConfirmDialog>
+			) : null}
+		</div>
+	);
 }
 
 function GatewayRoutesEditorPage() {
-  const traffic = useTrafficConfigData();
-  const config = {
-    ...traffic.config,
-    data: traffic.data,
-    isLoading: traffic.isLoading,
-    isError: Boolean(traffic.error),
-    error: traffic.error,
-  };
-  const upsertResource = useUpsertConfigResource();
-  const deleteResource = useDeleteConfigResource();
-  const help = useSchemaHelp();
-  const routes: GatewayRouteRow[] = [
-    ...(config.data?.routes ?? []).map((route, routeIndex) => {
-      const database = traffic.resources?.find(
-        (resource) =>
-          resource.kind === "traffic.route" && resource.id === route.name,
-      );
-      return {
-        kind: "http" as const,
-        route,
-        routeIndex,
-        resourceId: database?.id ?? route.name ?? undefined,
-      };
-    }),
-    ...(config.data?.tcpRoutes ?? []).map((route, routeIndex) => {
-      const database = traffic.resources?.find(
-        (resource) =>
-          resource.kind === "traffic.tcpRoute" && resource.id === route.name,
-      );
-      return {
-        kind: "tcp" as const,
-        route,
-        routeIndex,
-        resourceId: database?.id ?? route.name ?? undefined,
-      };
-    }),
-  ];
-  const httpGatewayOptions = gatewayReferenceOptions(config.data, "http");
-  const tcpGatewayOptions = gatewayReferenceOptions(config.data, "tcp");
-  const hasGatewayOptions = Boolean(
-    httpGatewayOptions.length || tcpGatewayOptions.length,
-  );
-  const [editing, setEditing] = useState<{
-    kind: RouteKind;
-    routeIndex?: number;
-    resourceId?: string;
-    route: LocalAttachedGatewayRoute;
-  } | null>(null);
-  const saveError =
-    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
-  const saved = upsertResource.isSuccess || deleteResource.isSuccess;
+	const traffic = useTrafficConfigData();
+	const config = {
+		...traffic.config,
+		data: traffic.data,
+		isLoading: traffic.isLoading,
+		isError: Boolean(traffic.error),
+		error: traffic.error
+	};
+	const upsertResource = useUpsertConfigResource();
+	const deleteResource = useDeleteConfigResource();
+	const help = useSchemaHelp();
+	const routes: GatewayRouteRow[] = [
+		...(config.data?.routes ?? []).map((route, routeIndex) => {
+			const database = traffic.resources?.find(
+				resource => resource.kind === 'traffic.route' && resource.id === route.name
+			);
+			return {
+				kind: 'http' as const,
+				route,
+				routeIndex,
+				resourceId: database?.id ?? route.name ?? undefined
+			};
+		}),
+		...(config.data?.tcpRoutes ?? []).map((route, routeIndex) => {
+			const database = traffic.resources?.find(
+				resource => resource.kind === 'traffic.tcpRoute' && resource.id === route.name
+			);
+			return {
+				kind: 'tcp' as const,
+				route,
+				routeIndex,
+				resourceId: database?.id ?? route.name ?? undefined
+			};
+		})
+	];
+	const httpGatewayOptions = gatewayReferenceOptions(config.data, 'http');
+	const tcpGatewayOptions = gatewayReferenceOptions(config.data, 'tcp');
+	const hasGatewayOptions = Boolean(httpGatewayOptions.length || tcpGatewayOptions.length);
+	const [editing, setEditing] = useState<{
+		kind: RouteKind;
+		routeIndex?: number;
+		resourceId?: string;
+		route: LocalAttachedGatewayRoute;
+	} | null>(null);
+	const saveError = upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+	const saved = upsertResource.isSuccess || deleteResource.isSuccess;
 
-  function openAddRoute(kind: RouteKind) {
-    const gatewayOptions =
-      kind === "http" ? httpGatewayOptions : tcpGatewayOptions;
-    setEditing({
-      kind,
-      route: {
-        gateways: gatewayOptions[0]?.value,
-        ...(makeRoute(kind) as LocalAttachedGatewayRoute),
-      },
-    });
-  }
+	function openAddRoute(kind: RouteKind) {
+		const gatewayOptions = kind === 'http' ? httpGatewayOptions : tcpGatewayOptions;
+		setEditing({
+			kind,
+			route: {
+				gateways: gatewayOptions[0]?.value,
+				...(makeRoute(kind) as LocalAttachedGatewayRoute)
+			}
+		});
+	}
 
-  function closeEditor() {
-    setEditing(null);
-  }
+	function closeEditor() {
+		setEditing(null);
+	}
 
-  function databaseRoute(kind: RouteKind, resourceId: string | undefined) {
-    return Boolean(
-      resourceId &&
-        isDatabaseConfigResource(
-          traffic.resources,
-          kind === "http" ? "traffic.route" : "traffic.tcpRoute",
-          resourceId,
-        ),
-    );
-  }
+	function databaseRoute(kind: RouteKind, resourceId: string | undefined) {
+		return Boolean(
+			resourceId &&
+				isDatabaseConfigResource(
+					traffic.resources,
+					kind === 'http' ? 'traffic.route' : 'traffic.tcpRoute',
+					resourceId
+				)
+		);
+	}
 
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="Traffic Routes"
-        description="Attach HTTP and TCP routes to traffic gateways."
-        actions={
-          <button
-            className="button primary"
-            type="button"
-            disabled={!hasGatewayOptions}
-            onClick={() =>
-              openAddRoute(httpGatewayOptions.length ? "http" : "tcp")
-            }
-          >
-            <Plus size={16} />
-            Add route
-          </button>
-        }
-      />
+	return (
+		<div className="page-stack">
+			<PageHeader
+				title="Traffic Routes"
+				description="Attach HTTP and TCP routes to traffic gateways."
+				actions={
+					<button
+						className="button primary"
+						type="button"
+						disabled={!hasGatewayOptions}
+						onClick={() => openAddRoute(httpGatewayOptions.length ? 'http' : 'tcp')}
+					>
+						<Plus size={16} />
+						Add route
+					</button>
+				}
+			/>
 
-      {saveError ? (
-        <StatusBanner state="bad" title="Save failed">
-          {saveError}
-        </StatusBanner>
-      ) : null}
-      {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+			{saveError ? (
+				<StatusBanner state="bad" title="Save failed">
+					{saveError}
+				</StatusBanner>
+			) : null}
+			{saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
-      <Panel>
-        {config.isLoading ? (
-          <StatusBanner state="loading" title="Loading traffic routes" />
-        ) : config.isError ? (
-          <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error?.message}
-          </StatusBanner>
-        ) : !hasGatewayOptions ? (
-          <EmptyState
-            title="No traffic gateways configured"
-            description="Add a gateway before attaching routes."
-            action={
-              <Link className="button primary" to="/traffic/gateways">
-                <RouteIcon size={16} />
-                Manage gateways
-              </Link>
-            }
-          />
-        ) : !routes.length ? (
-          <EmptyState
-            title="No traffic routes configured"
-            description="Attach a route to a gateway."
-            action={
-              <button
-                className="button primary"
-                type="button"
-                onClick={() =>
-                  openAddRoute(httpGatewayOptions.length ? "http" : "tcp")
-                }
-              >
-                <RouteIcon size={16} />
-                Add route
-              </button>
-            }
-          />
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Kind</th>
-                  <th>Gateway</th>
-                  <th>Match</th>
-                  <th>Backends</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {routes.map(({ kind, route, routeIndex, resourceId }) => (
-                  <tr key={`${kind}-${resourceId ?? routeIndex}`}>
-                    <td className="strong">
-                      {routeDisplayName(route, routeIndex ?? 0)}
-                    </td>
-                    <td>
-                      <span className="badge">{kind.toUpperCase()}</span>
-                    </td>
-                    <td>
-                      {effectiveGatewayRouteRef(route, config.data, kind) ||
-                        "Unassigned"}
-                    </td>
-                    <td>{kind === "http" ? httpPathSummary(route) : "TCP"}</td>
-                    <td>{backendListSummary(route.backends)}</td>
-                    <td className="row-actions">
-                      <Tooltip
-                        content={
-                          resourceId
-                            ? "Edit route"
-                            : "Unnamed routes must be edited in raw configuration"
-                        }
-                      >
-                        <button
-                          className="icon-button"
-                          type="button"
-                          aria-label="Edit route"
-                          disabled={!resourceId}
-                          onClick={() =>
-                            setEditing({
-                              kind,
-                              routeIndex,
-                              resourceId,
-                              route: structuredClone(route),
-                            })
-                          }
-                        >
-                          <Pencil size={16} />
-                        </button>
-                      </Tooltip>
-                      <Tooltip
-                        content={
-                          !resourceId
-                            ? "Unnamed routes must be deleted in raw configuration"
-                            : traffic.hybrid && !databaseRoute(kind, resourceId)
-                              ? "File-owned routes cannot be deleted here"
-                              : "Delete route"
-                        }
-                      >
-                        <button
-                          className="icon-button danger"
-                          type="button"
-                          aria-label="Delete route"
-                          disabled={
-                            !resourceId ||
-                            (traffic.hybrid && !databaseRoute(kind, resourceId))
-                          }
-                          onClick={() => {
-                            if (!resourceId) return;
-                            deleteResource.mutate({
-                              kind:
-                                kind === "http"
-                                  ? "traffic.route"
-                                  : "traffic.tcpRoute",
-                              id: resourceId,
-                            });
-                          }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </Tooltip>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+			<Panel>
+				{config.isLoading ? (
+					<StatusBanner state="loading" title="Loading traffic routes" />
+				) : config.isError ? (
+					<StatusBanner state="bad" title="Configuration API unavailable">
+						{config.error?.message}
+					</StatusBanner>
+				) : !hasGatewayOptions ? (
+					<EmptyState
+						title="No traffic gateways configured"
+						description="Add a gateway before attaching routes."
+						action={
+							<Link className="button primary" to="/traffic/gateways">
+								<RouteIcon size={16} />
+								Manage gateways
+							</Link>
+						}
+					/>
+				) : !routes.length ? (
+					<EmptyState
+						title="No traffic routes configured"
+						description="Attach a route to a gateway."
+						action={
+							<button
+								className="button primary"
+								type="button"
+								onClick={() => openAddRoute(httpGatewayOptions.length ? 'http' : 'tcp')}
+							>
+								<RouteIcon size={16} />
+								Add route
+							</button>
+						}
+					/>
+				) : (
+					<div className="table-wrap">
+						<table>
+							<thead>
+								<tr>
+									<th>Name</th>
+									<th>Kind</th>
+									<th>Gateway</th>
+									<th>Match</th>
+									<th>Backends</th>
+									<th />
+								</tr>
+							</thead>
+							<tbody>
+								{routes.map(({ kind, route, routeIndex, resourceId }) => (
+									<tr key={`${kind}-${resourceId ?? routeIndex}`}>
+										<td className="strong">{routeDisplayName(route, routeIndex ?? 0)}</td>
+										<td>
+											<span className="badge">{kind.toUpperCase()}</span>
+										</td>
+										<td>{effectiveGatewayRouteRef(route, config.data, kind) || 'Unassigned'}</td>
+										<td>{kind === 'http' ? httpPathSummary(route) : 'TCP'}</td>
+										<td>{backendListSummary(route.backends)}</td>
+										<td className="row-actions">
+											<Tooltip
+												content={
+													resourceId
+														? 'Edit route'
+														: 'Unnamed routes must be edited in raw configuration'
+												}
+											>
+												<button
+													className="icon-button"
+													type="button"
+													aria-label="Edit route"
+													disabled={!resourceId}
+													onClick={() =>
+														setEditing({
+															kind,
+															routeIndex,
+															resourceId,
+															route: structuredClone(route)
+														})
+													}
+												>
+													<Pencil size={16} />
+												</button>
+											</Tooltip>
+											<Tooltip
+												content={
+													!resourceId
+														? 'Unnamed routes must be deleted in raw configuration'
+														: traffic.hybrid && !databaseRoute(kind, resourceId)
+															? 'File-owned routes cannot be deleted here'
+															: 'Delete route'
+												}
+											>
+												<button
+													className="icon-button danger"
+													type="button"
+													aria-label="Delete route"
+													disabled={
+														!resourceId || (traffic.hybrid && !databaseRoute(kind, resourceId))
+													}
+													onClick={() => {
+														if (!resourceId) return;
+														deleteResource.mutate({
+															kind: kind === 'http' ? 'traffic.route' : 'traffic.tcpRoute',
+															id: resourceId
+														});
+													}}
+												>
+													<Trash2 size={16} />
+												</button>
+											</Tooltip>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</Panel>
 
-      {editing ? (
-        <GatewayRouteEditor
-          config={config.data}
-          editing={editing}
-          help={help}
-          saving={upsertResource.isPending || deleteResource.isPending}
-          onCancel={closeEditor}
-          databaseBacked={
-            traffic.hybrid &&
-            (!editing.resourceId ||
-              databaseRoute(editing.kind, editing.resourceId))
-          }
-          onSave={(nextEditing) => {
-            const name = nextEditing.route.name?.trim();
-            if (!name) return;
-            if (nextEditing.kind === "http") {
-              const { name: _name, ...route } =
-                nextEditing.route as LocalAttachedRoute;
-              upsertResource.mutate(
-                {
-                  kind: "traffic.route",
-                  value: {
-                    ...route,
-                    name,
-                  },
-                  previousId: nextEditing.resourceId,
-                },
-                { onSuccess: closeEditor },
-              );
-            } else {
-              const { name: _name, ...route } =
-                nextEditing.route as LocalAttachedTCPRoute;
-              upsertResource.mutate(
-                {
-                  kind: "traffic.tcpRoute",
-                  value: {
-                    ...route,
-                    name,
-                  },
-                  previousId: nextEditing.resourceId,
-                },
-                { onSuccess: closeEditor },
-              );
-            }
-          }}
-        />
-      ) : null}
-    </div>
-  );
+			{editing ? (
+				<GatewayRouteEditor
+					config={config.data}
+					editing={editing}
+					help={help}
+					saving={upsertResource.isPending || deleteResource.isPending}
+					onCancel={closeEditor}
+					databaseBacked={
+						traffic.hybrid &&
+						(!editing.resourceId || databaseRoute(editing.kind, editing.resourceId))
+					}
+					onSave={nextEditing => {
+						const name = nextEditing.route.name?.trim();
+						if (!name) return;
+						if (nextEditing.kind === 'http') {
+							const { name: _name, ...route } = nextEditing.route as LocalAttachedRoute;
+							upsertResource.mutate(
+								{
+									kind: 'traffic.route',
+									value: {
+										...route,
+										name
+									},
+									previousId: nextEditing.resourceId
+								},
+								{ onSuccess: closeEditor }
+							);
+						} else {
+							const { name: _name, ...route } = nextEditing.route as LocalAttachedTCPRoute;
+							upsertResource.mutate(
+								{
+									kind: 'traffic.tcpRoute',
+									value: {
+										...route,
+										name
+									},
+									previousId: nextEditing.resourceId
+								},
+								{ onSuccess: closeEditor }
+							);
+						}
+					}}
+				/>
+			) : null}
+		</div>
+	);
 }
 
 function GatewayRouteEditor(props: {
-  config?: GatewayConfig;
-  editing: {
-    kind: RouteKind;
-    routeIndex?: number;
-    resourceId?: string;
-    route: LocalAttachedGatewayRoute;
-  };
-  help: SchemaHelp;
-  saving: boolean;
-  databaseBacked?: boolean;
-  onCancel: () => void;
-  onSave: (editing: {
-    kind: RouteKind;
-    routeIndex?: number;
-    resourceId?: string;
-    route: LocalAttachedGatewayRoute;
-  }) => void;
+	config?: GatewayConfig;
+	editing: {
+		kind: RouteKind;
+		routeIndex?: number;
+		resourceId?: string;
+		route: LocalAttachedGatewayRoute;
+	};
+	help: SchemaHelp;
+	saving: boolean;
+	databaseBacked?: boolean;
+	onCancel: () => void;
+	onSave: (editing: {
+		kind: RouteKind;
+		routeIndex?: number;
+		resourceId?: string;
+		route: LocalAttachedGatewayRoute;
+	}) => void;
 }) {
-  const [kind, setKind] = useState<RouteKind>(props.editing.kind);
-  const [route, setRoute] = useState<LocalAttachedGatewayRoute>(
-    props.editing.route,
-  );
-  const gatewayOptions = gatewayReferenceOptions(props.config, kind);
-  const [gateway, setGateway] = useState(
-    effectiveGatewayRouteRef(props.editing.route, props.config, kind),
-  );
-  const [error, setError] = useState<string | null>(null);
-  const preview = cleanGatewayRoute(
-    {
-      ...route,
-      gateways: implicitDefaultRouteGateway(route, props.config, gateway, kind)
-        ? undefined
-        : gateway,
-    } as LocalAttachedGatewayRoute,
-    kind,
-  );
+	const [kind, setKind] = useState<RouteKind>(props.editing.kind);
+	const [route, setRoute] = useState<LocalAttachedGatewayRoute>(props.editing.route);
+	const gatewayOptions = gatewayReferenceOptions(props.config, kind);
+	const [gateway, setGateway] = useState(
+		effectiveGatewayRouteRef(props.editing.route, props.config, kind)
+	);
+	const [error, setError] = useState<string | null>(null);
+	const preview = cleanGatewayRoute(
+		{
+			...route,
+			gateways: implicitDefaultRouteGateway(route, props.config, gateway, kind)
+				? undefined
+				: gateway
+		} as LocalAttachedGatewayRoute,
+		kind
+	);
 
-  function save() {
-    if (!route.name?.trim()) {
-      setError("Enter a route name.");
-      return;
-    }
-    if (!gateway) {
-      setError("Select a gateway.");
-      return;
-    }
-    props.onSave({
-      kind,
-      routeIndex: props.editing.routeIndex,
-      resourceId: props.editing.resourceId,
-      route: preview,
-    });
-  }
+	function save() {
+		if (!route.name?.trim()) {
+			setError('Enter a route name.');
+			return;
+		}
+		if (!gateway) {
+			setError('Select a gateway.');
+			return;
+		}
+		props.onSave({
+			kind,
+			routeIndex: props.editing.routeIndex,
+			resourceId: props.editing.resourceId,
+			route: preview
+		});
+	}
 
-  return (
-    <Drawer
-      title={
-        props.editing.resourceId || typeof props.editing.routeIndex === "number"
-          ? "Edit route"
-          : "Add route"
-      }
-      onClose={props.onCancel}
-      footer={
-        <ConfigDiffSaveActions
-          config={props.config}
-          resourceDiff={
-            props.databaseBacked
-              ? {
-                  original: props.editing.resourceId ? props.editing.route : {},
-                  modified: preview,
-                }
-              : undefined
-          }
-          diffTitle="Route config diff"
-          saveLabel="Save route"
-          saving={props.saving}
-          saveDisabled={!route.name?.trim()}
-          onCancel={props.onCancel}
-          onSave={save}
-          beforeDiff={() => {
-            if (!route.name?.trim()) {
-              setError("Enter a route name.");
-              return false;
-            }
-            if (!gateway) {
-              setError("Select a gateway.");
-              return false;
-            }
-            return true;
-          }}
-          applyDiff={(next) => {
-            if (kind === "http") {
-              if (!Array.isArray(next.routes)) next.routes = [];
-              if (typeof props.editing.routeIndex === "number") {
-                next.routes[props.editing.routeIndex] =
-                  preview as LocalAttachedRoute;
-              } else {
-                next.routes.push(preview as LocalAttachedRoute);
-              }
-            } else {
-              if (!Array.isArray(next.tcpRoutes)) next.tcpRoutes = [];
-              if (typeof props.editing.routeIndex === "number") {
-                next.tcpRoutes[props.editing.routeIndex] =
-                  preview as LocalAttachedTCPRoute;
-              } else {
-                next.tcpRoutes.push(preview as LocalAttachedTCPRoute);
-              }
-            }
-          }}
-        />
-      }
-    >
-      {error ? <StatusBanner state="bad" title={error} /> : null}
-      <div className="route-editor-stack">
-        {!props.editing.resourceId &&
-        typeof props.editing.routeIndex !== "number" ? (
-          <FieldGroup label="Kind" tooltip="Route protocol family.">
-            <EnumSelector
-              ariaLabel="Route kind"
-              value={kind}
-              options={[
-                { value: "http", label: "HTTP" },
-                { value: "tcp", label: "TCP" },
-              ]}
-              onChange={(value) => {
-                const nextKind = value as RouteKind;
-                const nextOptions = gatewayReferenceOptions(
-                  props.config,
-                  nextKind,
-                );
-                setKind(nextKind);
-                setGateway(nextOptions[0]?.value ?? "");
-                setRoute(makeRoute(nextKind) as LocalAttachedGatewayRoute);
-                if (error) setError(null);
-              }}
-            />
-          </FieldGroup>
-        ) : null}
-        <FieldGroup
-          label="Gateway"
-          tooltip="Gateway or gateway listener that owns this route."
-        >
-          <Dropdown
-            ariaLabel="Gateway"
-            value={gateway}
-            options={gatewayOptions}
-            onChange={(value) => {
-              setGateway(value);
-              if (error) setError(null);
-            }}
-          />
-        </FieldGroup>
+	return (
+		<Drawer
+			title={
+				props.editing.resourceId || typeof props.editing.routeIndex === 'number'
+					? 'Edit route'
+					: 'Add route'
+			}
+			onClose={props.onCancel}
+			footer={
+				<ConfigDiffSaveActions
+					config={props.config}
+					resourceDiff={
+						props.databaseBacked
+							? {
+									original: props.editing.resourceId ? props.editing.route : {},
+									modified: preview
+								}
+							: undefined
+					}
+					diffTitle="Route config diff"
+					saveLabel="Save route"
+					saving={props.saving}
+					saveDisabled={!route.name?.trim()}
+					onCancel={props.onCancel}
+					onSave={save}
+					beforeDiff={() => {
+						if (!route.name?.trim()) {
+							setError('Enter a route name.');
+							return false;
+						}
+						if (!gateway) {
+							setError('Select a gateway.');
+							return false;
+						}
+						return true;
+					}}
+					applyDiff={next => {
+						if (kind === 'http') {
+							if (!Array.isArray(next.routes)) next.routes = [];
+							if (typeof props.editing.routeIndex === 'number') {
+								next.routes[props.editing.routeIndex] = preview as LocalAttachedRoute;
+							} else {
+								next.routes.push(preview as LocalAttachedRoute);
+							}
+						} else {
+							if (!Array.isArray(next.tcpRoutes)) next.tcpRoutes = [];
+							if (typeof props.editing.routeIndex === 'number') {
+								next.tcpRoutes[props.editing.routeIndex] = preview as LocalAttachedTCPRoute;
+							} else {
+								next.tcpRoutes.push(preview as LocalAttachedTCPRoute);
+							}
+						}
+					}}
+				/>
+			}
+		>
+			{error ? <StatusBanner state="bad" title={error} /> : null}
+			<div className="route-editor-stack">
+				{!props.editing.resourceId && typeof props.editing.routeIndex !== 'number' ? (
+					<FieldGroup label="Kind" tooltip="Route protocol family.">
+						<EnumSelector
+							ariaLabel="Route kind"
+							value={kind}
+							options={[
+								{ value: 'http', label: 'HTTP' },
+								{ value: 'tcp', label: 'TCP' }
+							]}
+							onChange={value => {
+								const nextKind = value as RouteKind;
+								const nextOptions = gatewayReferenceOptions(props.config, nextKind);
+								setKind(nextKind);
+								setGateway(nextOptions[0]?.value ?? '');
+								setRoute(makeRoute(nextKind) as LocalAttachedGatewayRoute);
+								if (error) setError(null);
+							}}
+						/>
+					</FieldGroup>
+				) : null}
+				<FieldGroup label="Gateway" tooltip="Gateway or gateway listener that owns this route.">
+					<Dropdown
+						ariaLabel="Gateway"
+						value={gateway}
+						options={gatewayOptions}
+						onChange={value => {
+							setGateway(value);
+							if (error) setError(null);
+						}}
+					/>
+				</FieldGroup>
 
-        <div className="form-grid">
-          <Field
-            label="Name"
-            tooltip={
-              kind === "http"
-                ? props.help.field<TrafficRoute>("LocalRoute", "name")
-                : props.help.field<TrafficTcpRoute>("LocalTCPRoute", "name")
-            }
-          >
-            <input
-              value={route.name ?? ""}
-              onChange={(event) =>
-                setRoute({ ...route, name: event.target.value })
-              }
-              placeholder="api"
-            />
-          </Field>
-          <Field
-            label="Hostnames"
-            tooltip={
-              kind === "http"
-                ? props.help.field<TrafficRoute>(
-                    "LocalRoute",
-                    "hostnames",
-                    "Comma-separated hostnames. Wildcards are allowed.",
-                  )
-                : props.help.field<TrafficTcpRoute>(
-                    "LocalTCPRoute",
-                    "hostnames",
-                    "Comma-separated hostnames. Wildcards are allowed.",
-                  )
-            }
-          >
-            <input
-              value={(route.hostnames ?? []).join(", ")}
-              onChange={(event) =>
-                setRoute({ ...route, hostnames: splitList(event.target.value) })
-              }
-              placeholder="example.com, *.example.com"
-            />
-          </Field>
-        </div>
+				<div className="form-grid">
+					<Field
+						label="Name"
+						tooltip={
+							kind === 'http'
+								? props.help.field<TrafficRoute>('LocalRoute', 'name')
+								: props.help.field<TrafficTcpRoute>('LocalTCPRoute', 'name')
+						}
+					>
+						<input
+							value={route.name ?? ''}
+							onChange={event => setRoute({ ...route, name: event.target.value })}
+							placeholder="api"
+						/>
+					</Field>
+					<Field
+						label="Hostnames"
+						tooltip={
+							kind === 'http'
+								? props.help.field<TrafficRoute>(
+										'LocalRoute',
+										'hostnames',
+										'Comma-separated hostnames. Wildcards are allowed.'
+									)
+								: props.help.field<TrafficTcpRoute>(
+										'LocalTCPRoute',
+										'hostnames',
+										'Comma-separated hostnames. Wildcards are allowed.'
+									)
+						}
+					>
+						<input
+							value={(route.hostnames ?? []).join(', ')}
+							onChange={event => setRoute({ ...route, hostnames: splitList(event.target.value) })}
+							placeholder="example.com, *.example.com"
+						/>
+					</Field>
+				</div>
 
-        {kind === "http" ? (
-          <HttpMatchEditor
-            route={route as TrafficRoute}
-            help={props.help}
-            onChange={(nextRoute) => setRoute({ ...route, ...nextRoute })}
-          />
-        ) : null}
+				{kind === 'http' ? (
+					<HttpMatchEditor
+						route={route as TrafficRoute}
+						help={props.help}
+						onChange={nextRoute => setRoute({ ...route, ...nextRoute })}
+					/>
+				) : null}
 
-        <RouteBackendsEditor
-          kind={kind}
-          help={props.help}
-          backends={
-            (route.backends ?? []) as Array<
-              TrafficRouteBackend | TrafficTcpRouteBackend
-            >
-          }
-          onChange={(backends) =>
-            setRoute({ ...route, backends: backends as never })
-          }
-        />
+				<RouteBackendsEditor
+					kind={kind}
+					help={props.help}
+					backends={(route.backends ?? []) as Array<TrafficRouteBackend | TrafficTcpRouteBackend>}
+					onChange={backends => setRoute({ ...route, backends: backends as never })}
+				/>
 
-        <TrafficPolicySection
-          title="Route policies"
-          schemaRoot={kind === "http" ? "FilterOrPolicy" : "TCPFilterOrPolicy"}
-          policies={
-            route.policies as Record<string, unknown> | null | undefined
-          }
-          onChange={(policies) => setRoute({ ...route, policies })}
-        />
+				<TrafficPolicySection
+					title="Route policies"
+					schemaRoot={kind === 'http' ? 'FilterOrPolicy' : 'TCPFilterOrPolicy'}
+					policies={route.policies as Record<string, unknown> | null | undefined}
+					onChange={policies => setRoute({ ...route, policies })}
+				/>
 
-        <details open>
-          <summary>Resulting YAML</summary>
-          <YamlBlock value={preview} />
-        </details>
-      </div>
-    </Drawer>
-  );
+				<details open>
+					<summary>Resulting YAML</summary>
+					<YamlBlock value={preview} />
+				</details>
+			</div>
+		</Drawer>
+	);
 }
 
 function RouteEditor(props: {
-  config?: GatewayConfig;
-  listeners: Array<{
-    bind: { port?: number | null };
-    bindIndex: number;
-    listener: TrafficListener;
-    listenerIndex: number;
-  }>;
-  editing: {
-    bindIndex: number;
-    listenerIndex: number;
-    kind: RouteKind;
-    routeIndex?: number;
-    route: TrafficRoute | TrafficTcpRoute;
-  };
-  help: SchemaHelp;
-  saving: boolean;
-  onCancel: () => void;
-  onSave: (editing: {
-    bindIndex: number;
-    listenerIndex: number;
-    kind: RouteKind;
-    routeIndex?: number;
-    route: TrafficRoute | TrafficTcpRoute;
-  }) => void;
+	config?: GatewayConfig;
+	listeners: Array<{
+		bind: { port?: number | null };
+		bindIndex: number;
+		listener: TrafficListener;
+		listenerIndex: number;
+	}>;
+	editing: {
+		bindIndex: number;
+		listenerIndex: number;
+		kind: RouteKind;
+		routeIndex?: number;
+		route: TrafficRoute | TrafficTcpRoute;
+	};
+	help: SchemaHelp;
+	saving: boolean;
+	onCancel: () => void;
+	onSave: (editing: {
+		bindIndex: number;
+		listenerIndex: number;
+		kind: RouteKind;
+		routeIndex?: number;
+		route: TrafficRoute | TrafficTcpRoute;
+	}) => void;
 }) {
-  const [listenerKey, setListenerKey] = useState(
-    `${props.editing.bindIndex}:${props.editing.listenerIndex}`,
-  );
-  const [kind, setKind] = useState<RouteKind>(props.editing.kind);
-  const [route, setRoute] = useState<TrafficRoute | TrafficTcpRoute>(
-    props.editing.route,
-  );
-  const [error, setError] = useState<string | null>(null);
-  const draft = JSON.stringify({ listenerKey, kind, route });
-  const [initialDraft] = useState(() => draft);
-  const selectedListener = props.listeners.find(
-    (item) => `${item.bindIndex}:${item.listenerIndex}` === listenerKey,
-  );
-  const effectiveKind = selectedListener
-    ? listenerRouteKind(selectedListener.listener)
-    : kind;
-  const preview = cleanRoute(route, effectiveKind);
+	const [listenerKey, setListenerKey] = useState(
+		`${props.editing.bindIndex}:${props.editing.listenerIndex}`
+	);
+	const [kind, setKind] = useState<RouteKind>(props.editing.kind);
+	const [route, setRoute] = useState<TrafficRoute | TrafficTcpRoute>(props.editing.route);
+	const [error, setError] = useState<string | null>(null);
+	const draft = JSON.stringify({ listenerKey, kind, route });
+	const [initialDraft] = useState(() => draft);
+	const selectedListener = props.listeners.find(
+		item => `${item.bindIndex}:${item.listenerIndex}` === listenerKey
+	);
+	const effectiveKind = selectedListener ? listenerRouteKind(selectedListener.listener) : kind;
+	const preview = cleanRoute(route, effectiveKind);
 
-  function save() {
-    const [bindIndex, listenerIndex] = listenerKey.split(":").map(Number);
-    if (!selectedListener) {
-      setError("Select a listener.");
-      return;
-    }
-    props.onSave({
-      bindIndex,
-      listenerIndex,
-      kind: effectiveKind,
-      routeIndex: props.editing.routeIndex,
-      route: preview,
-    });
-  }
+	function save() {
+		const [bindIndex, listenerIndex] = listenerKey.split(':').map(Number);
+		if (!selectedListener) {
+			setError('Select a listener.');
+			return;
+		}
+		props.onSave({
+			bindIndex,
+			listenerIndex,
+			kind: effectiveKind,
+			routeIndex: props.editing.routeIndex,
+			route: preview
+		});
+	}
 
-  return (
-    <Drawer
-      title={
-        typeof props.editing.routeIndex === "number"
-          ? "Edit route"
-          : "Add route"
-      }
-      onClose={props.onCancel}
-      dirty={draft !== initialDraft}
-      saving={props.saving}
-      footer={(requestClose) => (
-        <ConfigDiffSaveActions
-          config={props.config}
-          diffTitle="Route config diff"
-          saveLabel="Save route"
-          saving={props.saving}
-          onCancel={requestClose}
-          onSave={save}
-          beforeDiff={() => {
-            if (!selectedListener) {
-              setError("Select a listener.");
-              return false;
-            }
-            return true;
-          }}
-          applyDiff={(next) => {
-            const [bindIndex, listenerIndex] = listenerKey
-              .split(":")
-              .map(Number);
-            const listener =
-              next.binds?.[bindIndex]?.listeners?.[listenerIndex];
-            if (!listener) return;
-            const routes = routeArray(listener, effectiveKind);
-            if (typeof props.editing.routeIndex === "number") {
-              routes[props.editing.routeIndex] = preview as never;
-            } else {
-              routes.push(preview as never);
-            }
-          }}
-        />
-      )}
-    >
-      {error ? <StatusBanner state="bad" title={error} /> : null}
-      <div className="route-editor-stack">
-        {typeof props.editing.routeIndex !== "number" ? (
-          <FieldGroup label="Listener" tooltip="Listener that owns this route.">
-            <Dropdown
-              ariaLabel="Listener"
-              value={listenerKey}
-              options={props.listeners.map((item) => ({
-                value: `${item.bindIndex}:${item.listenerIndex}`,
-                label: `:${item.bind.port ?? "*"} · ${listenerDisplayName(item.listener, item.listenerIndex)} · ${listenerRouteKind(item.listener).toUpperCase()}`,
-              }))}
-              onChange={(value) => {
-                setListenerKey(value);
-                const nextListener = props.listeners.find(
-                  (item) => `${item.bindIndex}:${item.listenerIndex}` === value,
-                );
-                const nextKind = nextListener
-                  ? listenerRouteKind(nextListener.listener)
-                  : kind;
-                setKind(nextKind);
-                setRoute(makeRoute(nextKind));
-              }}
-            />
-          </FieldGroup>
-        ) : null}
+	return (
+		<Drawer
+			title={typeof props.editing.routeIndex === 'number' ? 'Edit route' : 'Add route'}
+			onClose={props.onCancel}
+			dirty={draft !== initialDraft}
+			saving={props.saving}
+			footer={requestClose => (
+				<ConfigDiffSaveActions
+					config={props.config}
+					diffTitle="Route config diff"
+					saveLabel="Save route"
+					saving={props.saving}
+					onCancel={requestClose}
+					onSave={save}
+					beforeDiff={() => {
+						if (!selectedListener) {
+							setError('Select a listener.');
+							return false;
+						}
+						return true;
+					}}
+					applyDiff={next => {
+						const [bindIndex, listenerIndex] = listenerKey.split(':').map(Number);
+						const listener = next.binds?.[bindIndex]?.listeners?.[listenerIndex];
+						if (!listener) return;
+						const routes = routeArray(listener, effectiveKind);
+						if (typeof props.editing.routeIndex === 'number') {
+							routes[props.editing.routeIndex] = preview as never;
+						} else {
+							routes.push(preview as never);
+						}
+					}}
+				/>
+			)}
+		>
+			{error ? <StatusBanner state="bad" title={error} /> : null}
+			<div className="route-editor-stack">
+				{typeof props.editing.routeIndex !== 'number' ? (
+					<FieldGroup label="Listener" tooltip="Listener that owns this route.">
+						<Dropdown
+							ariaLabel="Listener"
+							value={listenerKey}
+							options={props.listeners.map(item => ({
+								value: `${item.bindIndex}:${item.listenerIndex}`,
+								label: `:${item.bind.port ?? '*'} · ${listenerDisplayName(item.listener, item.listenerIndex)} · ${listenerRouteKind(item.listener).toUpperCase()}`
+							}))}
+							onChange={value => {
+								setListenerKey(value);
+								const nextListener = props.listeners.find(
+									item => `${item.bindIndex}:${item.listenerIndex}` === value
+								);
+								const nextKind = nextListener ? listenerRouteKind(nextListener.listener) : kind;
+								setKind(nextKind);
+								setRoute(makeRoute(nextKind));
+							}}
+						/>
+					</FieldGroup>
+				) : null}
 
-        <div className="form-grid">
-          <Field
-            label="Name"
-            tooltip={
-              effectiveKind === "http"
-                ? props.help.field<TrafficRoute>("LocalRoute", "name")
-                : props.help.field<TrafficTcpRoute>("LocalTCPRoute", "name")
-            }
-          >
-            <input
-              value={route.name ?? ""}
-              onChange={(event) =>
-                setRoute({ ...route, name: event.target.value })
-              }
-              placeholder="api"
-            />
-          </Field>
-          <Field
-            label="Hostnames"
-            tooltip={props.help.field<TrafficRoute>(
-              "LocalRoute",
-              "hostnames",
-              "Comma-separated hostnames. Wildcards are allowed.",
-            )}
-          >
-            <input
-              value={(route.hostnames ?? []).join(", ")}
-              onChange={(event) =>
-                setRoute({ ...route, hostnames: splitList(event.target.value) })
-              }
-              placeholder="example.com, *.example.com"
-            />
-          </Field>
-        </div>
+				<div className="form-grid">
+					<Field
+						label="Name"
+						tooltip={
+							effectiveKind === 'http'
+								? props.help.field<TrafficRoute>('LocalRoute', 'name')
+								: props.help.field<TrafficTcpRoute>('LocalTCPRoute', 'name')
+						}
+					>
+						<input
+							value={route.name ?? ''}
+							onChange={event => setRoute({ ...route, name: event.target.value })}
+							placeholder="api"
+						/>
+					</Field>
+					<Field
+						label="Hostnames"
+						tooltip={props.help.field<TrafficRoute>(
+							'LocalRoute',
+							'hostnames',
+							'Comma-separated hostnames. Wildcards are allowed.'
+						)}
+					>
+						<input
+							value={(route.hostnames ?? []).join(', ')}
+							onChange={event => setRoute({ ...route, hostnames: splitList(event.target.value) })}
+							placeholder="example.com, *.example.com"
+						/>
+					</Field>
+				</div>
 
-        {effectiveKind === "http" ? (
-          <HttpMatchEditor
-            route={route as TrafficRoute}
-            help={props.help}
-            onChange={setRoute}
-          />
-        ) : null}
+				{effectiveKind === 'http' ? (
+					<HttpMatchEditor route={route as TrafficRoute} help={props.help} onChange={setRoute} />
+				) : null}
 
-        <RouteBackendsEditor
-          kind={effectiveKind}
-          help={props.help}
-          backends={
-            (route.backends ?? []) as Array<
-              TrafficRouteBackend | TrafficTcpRouteBackend
-            >
-          }
-          onChange={(backends) =>
-            setRoute({ ...route, backends: backends as never })
-          }
-        />
+				<RouteBackendsEditor
+					kind={effectiveKind}
+					help={props.help}
+					backends={(route.backends ?? []) as Array<TrafficRouteBackend | TrafficTcpRouteBackend>}
+					onChange={backends => setRoute({ ...route, backends: backends as never })}
+				/>
 
-        <TrafficPolicySection
-          title="Route policies"
-          schemaRoot={
-            effectiveKind === "http" ? "FilterOrPolicy" : "TCPFilterOrPolicy"
-          }
-          policies={
-            route.policies as Record<string, unknown> | null | undefined
-          }
-          onChange={(policies) => setRoute({ ...route, policies })}
-        />
+				<TrafficPolicySection
+					title="Route policies"
+					schemaRoot={effectiveKind === 'http' ? 'FilterOrPolicy' : 'TCPFilterOrPolicy'}
+					policies={route.policies as Record<string, unknown> | null | undefined}
+					onChange={policies => setRoute({ ...route, policies })}
+				/>
 
-        <details open>
-          <summary>Resulting YAML</summary>
-          <YamlBlock value={preview} />
-        </details>
-      </div>
-    </Drawer>
-  );
+				<details open>
+					<summary>Resulting YAML</summary>
+					<YamlBlock value={preview} />
+				</details>
+			</div>
+		</Drawer>
+	);
 }
 
 function HttpMatchEditor(props: {
-  route: TrafficRoute;
-  help: SchemaHelp;
-  onChange: (route: TrafficRoute) => void;
+	route: TrafficRoute;
+	help: SchemaHelp;
+	onChange: (route: TrafficRoute) => void;
 }) {
-  const first = props.route.matches?.[0] ?? { path: { pathPrefix: "/" } };
-  const path =
-    first.path && first.path !== "invalid" ? first.path : { pathPrefix: "/" };
-  const pathType =
-    "regex" in path ? "regex" : "exact" in path ? "exact" : "pathPrefix";
-  const pathValue =
-    "regex" in path
-      ? path.regex
-      : "exact" in path
-        ? path.exact
-        : path.pathPrefix;
+	const first = props.route.matches?.[0] ?? { path: { pathPrefix: '/' } };
+	const path = first.path && first.path !== 'invalid' ? first.path : { pathPrefix: '/' };
+	const pathType = 'regex' in path ? 'regex' : 'exact' in path ? 'exact' : 'pathPrefix';
+	const pathValue = 'regex' in path ? path.regex : 'exact' in path ? path.exact : path.pathPrefix;
 
-  function updateFirst(next: typeof first) {
-    const rest = props.route.matches?.slice(1) ?? [];
-    props.onChange({ ...props.route, matches: [next, ...rest] });
-  }
+	function updateFirst(next: typeof first) {
+		const rest = props.route.matches?.slice(1) ?? [];
+		props.onChange({ ...props.route, matches: [next, ...rest] });
+	}
 
-  return (
-    <>
-      <div className="form-grid">
-        <FieldGroup
-          label="Path match"
-          tooltip={props.help.field<GeneratedRouteMatch>("RouteMatch", "path")}
-        >
-          <EnumSelector
-            ariaLabel="Path match"
-            value={pathType}
-            options={pathTypes.map((value) => ({
-              value,
-              label: pathLabel(value),
-            }))}
-            schema={props.help.node([
-              "$defs",
-              "RouteMatch",
-              "properties",
-              "path",
-            ])}
-            onChange={(value) =>
-              updateFirst({
-                ...first,
-                path: { [value]: pathValue || "/" },
-              } as typeof first)
-            }
-          />
-        </FieldGroup>
-        <Field
-          label="Path"
-          tooltip={props.help.field<GeneratedRouteMatch>("RouteMatch", "path")}
-        >
-          <input
-            value={pathValue}
-            onChange={(event) =>
-              updateFirst({
-                ...first,
-                path: { [pathType]: event.target.value },
-              } as typeof first)
-            }
-            placeholder="/"
-          />
-        </Field>
-        <Field
-          label="Method"
-          tooltip={props.help.field<GeneratedRouteMatch>(
-            "RouteMatch",
-            "method",
-          )}
-        >
-          <input
-            value={first.method ?? ""}
-            onChange={(event) =>
-              updateFirst({ ...first, method: event.target.value || undefined })
-            }
-            placeholder="GET"
-          />
-        </Field>
-      </div>
-      <div className="form-grid">
-        <HeaderConditionsEditor
-          headers={first.headers ?? []}
-          onChange={(headers) => updateFirst({ ...first, headers })}
-        />
-        <QueryConditionsEditor
-          query={first.query ?? []}
-          onChange={(query) => updateFirst({ ...first, query })}
-        />
-      </div>
-    </>
-  );
+	return (
+		<>
+			<div className="form-grid">
+				<FieldGroup
+					label="Path match"
+					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}
+				>
+					<EnumSelector
+						ariaLabel="Path match"
+						value={pathType}
+						options={pathTypes.map(value => ({
+							value,
+							label: pathLabel(value)
+						}))}
+						schema={props.help.node(['$defs', 'RouteMatch', 'properties', 'path'])}
+						onChange={value =>
+							updateFirst({
+								...first,
+								path: { [value]: pathValue || '/' }
+							} as typeof first)
+						}
+					/>
+				</FieldGroup>
+				<Field label="Path" tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}>
+					<input
+						value={pathValue}
+						onChange={event =>
+							updateFirst({
+								...first,
+								path: { [pathType]: event.target.value }
+							} as typeof first)
+						}
+						placeholder="/"
+					/>
+				</Field>
+				<Field
+					label="Method"
+					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'method')}
+				>
+					<input
+						value={first.method ?? ''}
+						onChange={event => updateFirst({ ...first, method: event.target.value || undefined })}
+						placeholder="GET"
+					/>
+				</Field>
+			</div>
+			<div className="form-grid">
+				<HeaderConditionsEditor
+					headers={first.headers ?? []}
+					onChange={headers => updateFirst({ ...first, headers })}
+				/>
+				<QueryConditionsEditor
+					query={first.query ?? []}
+					onChange={query => updateFirst({ ...first, query })}
+				/>
+			</div>
+		</>
+	);
 }
 
 function HeaderConditionsEditor(props: {
-  headers: HeaderMatch[];
-  onChange: (headers: HeaderMatch[]) => void;
+	headers: HeaderMatch[];
+	onChange: (headers: HeaderMatch[]) => void;
 }) {
-  return (
-    <div className="traffic-match-editor">
-      <div className="traffic-match-editor-header">
-        <div>
-          <h4>Headers</h4>
-          <p>Every listed header condition must match.</p>
-        </div>
-        <button
-          className="button small"
-          type="button"
-          onClick={() =>
-            props.onChange([
-              ...props.headers,
-              { name: "", value: { exact: "" } },
-            ])
-          }
-        >
-          <Plus size={16} />
-          Add header
-        </button>
-      </div>
-      {props.headers.length ? (
-        <div className="match-header-list">
-          {props.headers.map((header, index) => (
-            <HeaderConditionRow
-              key={index}
-              header={header}
-              onChange={(next) =>
-                props.onChange(
-                  props.headers.map((item, itemIndex) =>
-                    itemIndex === index ? next : item,
-                  ),
-                )
-              }
-              onRemove={() =>
-                props.onChange(
-                  props.headers.filter((_, itemIndex) => itemIndex !== index),
-                )
-              }
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="empty-inline">No header conditions.</div>
-      )}
-    </div>
-  );
+	return (
+		<div className="traffic-match-editor">
+			<div className="traffic-match-editor-header">
+				<div>
+					<h4>Headers</h4>
+					<p>Every listed header condition must match.</p>
+				</div>
+				<button
+					className="button small"
+					type="button"
+					onClick={() => props.onChange([...props.headers, { name: '', value: { exact: '' } }])}
+				>
+					<Plus size={16} />
+					Add header
+				</button>
+			</div>
+			{props.headers.length ? (
+				<div className="match-header-list">
+					{props.headers.map((header, index) => (
+						<HeaderConditionRow
+							key={index}
+							header={header}
+							onChange={next =>
+								props.onChange(
+									props.headers.map((item, itemIndex) => (itemIndex === index ? next : item))
+								)
+							}
+							onRemove={() =>
+								props.onChange(props.headers.filter((_, itemIndex) => itemIndex !== index))
+							}
+						/>
+					))}
+				</div>
+			) : (
+				<div className="empty-inline">No header conditions.</div>
+			)}
+		</div>
+	);
 }
 
 function HeaderConditionRow(props: {
-  header: HeaderMatch;
-  onChange: (header: HeaderMatch) => void;
-  onRemove: () => void;
+	header: HeaderMatch;
+	onChange: (header: HeaderMatch) => void;
+	onRemove: () => void;
 }) {
-  const { mode, text } = matchValueParts(props.header.value);
-  const setMode = (regex: boolean) =>
-    props.onChange({
-      ...props.header,
-      value: regex ? { regex: text } : { exact: text },
-    });
-  const setText = (next: string) =>
-    props.onChange({
-      ...props.header,
-      value: mode === "regex" ? { regex: next } : { exact: next },
-    });
+	const { mode, text } = matchValueParts(props.header.value);
+	const setMode = (regex: boolean) =>
+		props.onChange({
+			...props.header,
+			value: regex ? { regex: text } : { exact: text }
+		});
+	const setText = (next: string) =>
+		props.onChange({
+			...props.header,
+			value: mode === 'regex' ? { regex: next } : { exact: next }
+		});
 
-  return (
-    <div className="header-match-row">
-      <div className="condition-inputs">
-        <input
-          aria-label="Header name"
-          value={props.header.name}
-          onChange={(event) =>
-            props.onChange({ ...props.header, name: event.target.value })
-          }
-          placeholder="Header name"
-        />
-        <input
-          aria-label="Header value"
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder={mode === "regex" ? "Regex value" : "Exact value"}
-        />
-      </div>
-      <div className="condition-actions">
-        <label
-          className={
-            mode === "regex" ? "regex-toggle selected" : "regex-toggle"
-          }
-        >
-          <input
-            type="checkbox"
-            checked={mode === "regex"}
-            onChange={(event) => setMode(event.target.checked)}
-          />
-          Regex
-        </label>
-        <Tooltip content="Remove header condition">
-          <button
-            className="icon-button danger"
-            type="button"
-            aria-label="Remove header condition"
-            onClick={props.onRemove}
-          >
-            <Trash2 size={15} />
-          </button>
-        </Tooltip>
-      </div>
-    </div>
-  );
+	return (
+		<div className="header-match-row">
+			<div className="condition-inputs">
+				<input
+					aria-label="Header name"
+					value={props.header.name}
+					onChange={event => props.onChange({ ...props.header, name: event.target.value })}
+					placeholder="Header name"
+				/>
+				<input
+					aria-label="Header value"
+					value={text}
+					onChange={event => setText(event.target.value)}
+					placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
+				/>
+			</div>
+			<div className="condition-actions">
+				<label className={mode === 'regex' ? 'regex-toggle selected' : 'regex-toggle'}>
+					<input
+						type="checkbox"
+						checked={mode === 'regex'}
+						onChange={event => setMode(event.target.checked)}
+					/>
+					Regex
+				</label>
+				<Tooltip content="Remove header condition">
+					<button
+						className="icon-button danger"
+						type="button"
+						aria-label="Remove header condition"
+						onClick={props.onRemove}
+					>
+						<Trash2 size={15} />
+					</button>
+				</Tooltip>
+			</div>
+		</div>
+	);
 }
 
 function QueryConditionsEditor(props: {
-  query: QueryMatch[];
-  onChange: (query: QueryMatch[]) => void;
+	query: QueryMatch[];
+	onChange: (query: QueryMatch[]) => void;
 }) {
-  return (
-    <div className="traffic-match-editor">
-      <div className="traffic-match-editor-header">
-        <div>
-          <h4>Query</h4>
-          <p>Every listed query condition must match.</p>
-        </div>
-        <button
-          className="button small"
-          type="button"
-          onClick={() =>
-            props.onChange([...props.query, { name: "", value: { exact: "" } }])
-          }
-        >
-          <Plus size={16} />
-          Add query
-        </button>
-      </div>
-      {props.query.length ? (
-        <div className="match-header-list">
-          {props.query.map((query, index) => (
-            <QueryConditionRow
-              key={index}
-              query={query}
-              onChange={(next) =>
-                props.onChange(
-                  props.query.map((item, itemIndex) =>
-                    itemIndex === index ? next : item,
-                  ),
-                )
-              }
-              onRemove={() =>
-                props.onChange(
-                  props.query.filter((_, itemIndex) => itemIndex !== index),
-                )
-              }
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="empty-inline">No query conditions.</div>
-      )}
-    </div>
-  );
+	return (
+		<div className="traffic-match-editor">
+			<div className="traffic-match-editor-header">
+				<div>
+					<h4>Query</h4>
+					<p>Every listed query condition must match.</p>
+				</div>
+				<button
+					className="button small"
+					type="button"
+					onClick={() => props.onChange([...props.query, { name: '', value: { exact: '' } }])}
+				>
+					<Plus size={16} />
+					Add query
+				</button>
+			</div>
+			{props.query.length ? (
+				<div className="match-header-list">
+					{props.query.map((query, index) => (
+						<QueryConditionRow
+							key={index}
+							query={query}
+							onChange={next =>
+								props.onChange(
+									props.query.map((item, itemIndex) => (itemIndex === index ? next : item))
+								)
+							}
+							onRemove={() =>
+								props.onChange(props.query.filter((_, itemIndex) => itemIndex !== index))
+							}
+						/>
+					))}
+				</div>
+			) : (
+				<div className="empty-inline">No query conditions.</div>
+			)}
+		</div>
+	);
 }
 
 function QueryConditionRow(props: {
-  query: QueryMatch;
-  onChange: (query: QueryMatch) => void;
-  onRemove: () => void;
+	query: QueryMatch;
+	onChange: (query: QueryMatch) => void;
+	onRemove: () => void;
 }) {
-  const { mode, text } = matchValueParts(props.query.value);
-  const setMode = (regex: boolean) =>
-    props.onChange({
-      ...props.query,
-      value: regex ? { regex: text } : { exact: text },
-    });
-  const setText = (next: string) =>
-    props.onChange({
-      ...props.query,
-      value: mode === "regex" ? { regex: next } : { exact: next },
-    });
+	const { mode, text } = matchValueParts(props.query.value);
+	const setMode = (regex: boolean) =>
+		props.onChange({
+			...props.query,
+			value: regex ? { regex: text } : { exact: text }
+		});
+	const setText = (next: string) =>
+		props.onChange({
+			...props.query,
+			value: mode === 'regex' ? { regex: next } : { exact: next }
+		});
 
-  return (
-    <div className="header-match-row">
-      <div className="condition-inputs">
-        <input
-          aria-label="Query name"
-          value={props.query.name}
-          onChange={(event) =>
-            props.onChange({ ...props.query, name: event.target.value })
-          }
-          placeholder="Query name"
-        />
-        <input
-          aria-label="Query value"
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder={mode === "regex" ? "Regex value" : "Exact value"}
-        />
-      </div>
-      <div className="condition-actions">
-        <label
-          className={
-            mode === "regex" ? "regex-toggle selected" : "regex-toggle"
-          }
-        >
-          <input
-            type="checkbox"
-            checked={mode === "regex"}
-            onChange={(event) => setMode(event.target.checked)}
-          />
-          Regex
-        </label>
-        <Tooltip content="Remove query condition">
-          <button
-            className="icon-button danger"
-            type="button"
-            aria-label="Remove query condition"
-            onClick={props.onRemove}
-          >
-            <Trash2 size={15} />
-          </button>
-        </Tooltip>
-      </div>
-    </div>
-  );
+	return (
+		<div className="header-match-row">
+			<div className="condition-inputs">
+				<input
+					aria-label="Query name"
+					value={props.query.name}
+					onChange={event => props.onChange({ ...props.query, name: event.target.value })}
+					placeholder="Query name"
+				/>
+				<input
+					aria-label="Query value"
+					value={text}
+					onChange={event => setText(event.target.value)}
+					placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
+				/>
+			</div>
+			<div className="condition-actions">
+				<label className={mode === 'regex' ? 'regex-toggle selected' : 'regex-toggle'}>
+					<input
+						type="checkbox"
+						checked={mode === 'regex'}
+						onChange={event => setMode(event.target.checked)}
+					/>
+					Regex
+				</label>
+				<Tooltip content="Remove query condition">
+					<button
+						className="icon-button danger"
+						type="button"
+						aria-label="Remove query condition"
+						onClick={props.onRemove}
+					>
+						<Trash2 size={15} />
+					</button>
+				</Tooltip>
+			</div>
+		</div>
+	);
 }
 
-type EditableBackendKind =
-  | "host"
-  | "service"
-  | "backend"
-  | "dynamic"
-  | "routeGroup";
+type EditableBackendKind = 'host' | 'service' | 'backend' | 'dynamic' | 'routeGroup';
 type TrafficBackend = TrafficRouteBackend | TrafficTcpRouteBackend;
 type HostBackend = TrafficBackend & { host: string };
 type BackendReference = TrafficBackend & { backend: string };
 type ServiceBackend = TrafficBackend & {
-  service: { name: string; port: number };
+	service: { name: string; port: number };
 };
 type RouteGroupBackend = TrafficBackend & { routeGroup: string };
 
 function RouteBackendsEditor(props: {
-  kind: RouteKind;
-  help: SchemaHelp;
-  backends: TrafficBackend[];
-  onChange: (backends: TrafficBackend[]) => void;
+	kind: RouteKind;
+	help: SchemaHelp;
+	backends: TrafficBackend[];
+	onChange: (backends: TrafficBackend[]) => void;
 }) {
-  return (
-    <div className="traffic-backend-editor">
-      <div className="traffic-match-editor-header">
-        <div>
-          <h4>Backends</h4>
-          <p>Traffic that matches this route is forwarded to these targets.</p>
-        </div>
-        <button
-          className="button small"
-          type="button"
-          onClick={() =>
-            props.onChange([...props.backends, makeBackend(props.kind, "host")])
-          }
-        >
-          <Plus size={16} />
-          Add backend
-        </button>
-      </div>
-      {props.backends.length ? (
-        <div className="route-backend-list">
-          {props.backends.map((backend, index) => (
-            <RouteBackendRow
-              key={index}
-              kind={props.kind}
-              help={props.help}
-              backend={backend}
-              onChange={(next) =>
-                props.onChange(
-                  props.backends.map((item, itemIndex) =>
-                    itemIndex === index ? next : item,
-                  ),
-                )
-              }
-              onRemove={() =>
-                props.onChange(
-                  props.backends.filter((_, itemIndex) => itemIndex !== index),
-                )
-              }
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="empty-inline">No backends configured.</div>
-      )}
-    </div>
-  );
+	return (
+		<div className="traffic-backend-editor">
+			<div className="traffic-match-editor-header">
+				<div>
+					<h4>Backends</h4>
+					<p>Traffic that matches this route is forwarded to these targets.</p>
+				</div>
+				<button
+					className="button small"
+					type="button"
+					onClick={() => props.onChange([...props.backends, makeBackend(props.kind, 'host')])}
+				>
+					<Plus size={16} />
+					Add backend
+				</button>
+			</div>
+			{props.backends.length ? (
+				<div className="route-backend-list">
+					{props.backends.map((backend, index) => (
+						<RouteBackendRow
+							key={index}
+							kind={props.kind}
+							help={props.help}
+							backend={backend}
+							onChange={next =>
+								props.onChange(
+									props.backends.map((item, itemIndex) => (itemIndex === index ? next : item))
+								)
+							}
+							onRemove={() =>
+								props.onChange(props.backends.filter((_, itemIndex) => itemIndex !== index))
+							}
+						/>
+					))}
+				</div>
+			) : (
+				<div className="empty-inline">No backends configured.</div>
+			)}
+		</div>
+	);
 }
 
 function RouteBackendRow(props: {
-  kind: RouteKind;
-  help: SchemaHelp;
-  backend: TrafficBackend;
-  onChange: (backend: TrafficBackend) => void;
-  onRemove: () => void;
+	kind: RouteKind;
+	help: SchemaHelp;
+	backend: TrafficBackend;
+	onChange: (backend: TrafficBackend) => void;
+	onRemove: () => void;
 }) {
-  const type = editableBackendKind(props.backend);
-  if (
-    !type ||
-    (props.kind === "tcp" && (type === "dynamic" || type === "routeGroup"))
-  ) {
-    return (
-      <div className="route-backend-row readonly">
-        <div>
-          <strong>{backendSummary(props.backend)}</strong>
-          <span>Unsupported backend shape in this form</span>
-        </div>
-        <Tooltip content="Remove backend">
-          <button
-            className="icon-button danger"
-            type="button"
-            aria-label="Remove backend"
-            onClick={props.onRemove}
-          >
-            <Trash2 size={15} />
-          </button>
-        </Tooltip>
-      </div>
-    );
-  }
+	const type = editableBackendKind(props.backend);
+	if (!type || (props.kind === 'tcp' && (type === 'dynamic' || type === 'routeGroup'))) {
+		return (
+			<div className="route-backend-row readonly">
+				<div>
+					<strong>{backendSummary(props.backend)}</strong>
+					<span>Unsupported backend shape in this form</span>
+				</div>
+				<Tooltip content="Remove backend">
+					<button
+						className="icon-button danger"
+						type="button"
+						aria-label="Remove backend"
+						onClick={props.onRemove}
+					>
+						<Trash2 size={15} />
+					</button>
+				</Tooltip>
+			</div>
+		);
+	}
 
-  const backend = props.backend;
-  const weight = backendWeight(backend);
-  const policyRoot =
-    props.kind === "http" ? "LocalBackendPolicies" : "LocalTCPBackendPolicies";
-  return (
-    <div className="route-backend-row expanded">
-      <div className="route-backend-main">
-        <div className="route-backend-inputs">
-          <FieldGroup
-            label="Target type"
-            tooltip={props.help.definition(
-              props.kind === "http"
-                ? "LocalRouteBackend"
-                : "LocalTCPRouteBackend",
-            )}
-          >
-            <EnumSelector
-              ariaLabel="Backend target type"
-              value={type}
-              options={backendKindOptions(props.kind)}
-              onChange={(value) =>
-                props.onChange(makeBackend(props.kind, value, backend))
-              }
-            />
-          </FieldGroup>
-          <Field
-            label="Weight"
-            tooltip={
-              props.kind === "http"
-                ? props.help.field<TrafficRouteBackend>(
-                    "LocalRouteBackend",
-                    "weight",
-                  )
-                : props.help.field<TrafficTcpRouteBackend>(
-                    "LocalTCPRouteBackend",
-                    "weight",
-                  )
-            }
-          >
-            <input
-              min={1}
-              type="number"
-              value={weight}
-              onChange={(event) =>
-                props.onChange(
-                  cleanBackendCommon({
-                    ...backend,
-                    weight: Number(event.target.value) || 1,
-                  } as TrafficBackend),
-                )
-              }
-            />
-          </Field>
-        </div>
-        <BackendTargetFields
-          kind={props.kind}
-          backend={backend}
-          targetKind={type}
-          help={props.help}
-          onChange={props.onChange}
-        />
-        <TrafficPolicySection
-          title="Backend policies"
-          schemaRoot={policyRoot}
-          policies={backendPolicies(backend)}
-          onChange={(policies) =>
-            props.onChange(
-              cleanBackendCommon({ ...backend, policies } as TrafficBackend),
-            )
-          }
-        />
-      </div>
-      <Tooltip content="Remove backend">
-        <button
-          className="icon-button danger"
-          type="button"
-          aria-label="Remove backend"
-          onClick={props.onRemove}
-        >
-          <Trash2 size={15} />
-        </button>
-      </Tooltip>
-    </div>
-  );
+	const backend = props.backend;
+	const weight = backendWeight(backend);
+	const policyRoot = props.kind === 'http' ? 'LocalBackendPolicies' : 'LocalTCPBackendPolicies';
+	return (
+		<div className="route-backend-row expanded">
+			<div className="route-backend-main">
+				<div className="route-backend-inputs">
+					<FieldGroup
+						label="Target type"
+						tooltip={props.help.definition(
+							props.kind === 'http' ? 'LocalRouteBackend' : 'LocalTCPRouteBackend'
+						)}
+					>
+						<EnumSelector
+							ariaLabel="Backend target type"
+							value={type}
+							options={backendKindOptions(props.kind)}
+							onChange={value => props.onChange(makeBackend(props.kind, value, backend))}
+						/>
+					</FieldGroup>
+					<Field
+						label="Weight"
+						tooltip={
+							props.kind === 'http'
+								? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'weight')
+								: props.help.field<TrafficTcpRouteBackend>('LocalTCPRouteBackend', 'weight')
+						}
+					>
+						<input
+							min={1}
+							type="number"
+							value={weight}
+							onChange={event =>
+								props.onChange(
+									cleanBackendCommon({
+										...backend,
+										weight: Number(event.target.value) || 1
+									} as TrafficBackend)
+								)
+							}
+						/>
+					</Field>
+				</div>
+				<BackendTargetFields
+					kind={props.kind}
+					backend={backend}
+					targetKind={type}
+					help={props.help}
+					onChange={props.onChange}
+				/>
+				<TrafficPolicySection
+					title="Backend policies"
+					schemaRoot={policyRoot}
+					policies={backendPolicies(backend)}
+					onChange={policies =>
+						props.onChange(cleanBackendCommon({ ...backend, policies } as TrafficBackend))
+					}
+				/>
+			</div>
+			<Tooltip content="Remove backend">
+				<button
+					className="icon-button danger"
+					type="button"
+					aria-label="Remove backend"
+					onClick={props.onRemove}
+				>
+					<Trash2 size={15} />
+				</button>
+			</Tooltip>
+		</div>
+	);
 }
 
 function BackendTargetFields(props: {
-  kind: RouteKind;
-  targetKind: EditableBackendKind;
-  backend: TrafficBackend;
-  help: SchemaHelp;
-  onChange: (backend: TrafficBackend) => void;
+	kind: RouteKind;
+	targetKind: EditableBackendKind;
+	backend: TrafficBackend;
+	help: SchemaHelp;
+	onChange: (backend: TrafficBackend) => void;
 }) {
-  if (props.targetKind === "host" && isHostBackend(props.backend)) {
-    return (
-      <div className="route-backend-target-grid single">
-        <Field
-          label="Host"
-          tooltip={
-            props.kind === "http"
-              ? props.help.field<TrafficRouteBackend>(
-                  "LocalRouteBackend",
-                  "host",
-                )
-              : props.help.field<TrafficTcpRouteBackend>(
-                  "LocalTCPRouteBackend",
-                  "host",
-                )
-          }
-        >
-          <input
-            value={props.backend.host}
-            onChange={(event) =>
-              props.onChange(
-                cleanBackendCommon({
-                  ...props.backend,
-                  host: event.target.value.trimStart(),
-                }),
-              )
-            }
-            placeholder="localhost:8080"
-          />
-        </Field>
-      </div>
-    );
-  }
+	if (props.targetKind === 'host' && isHostBackend(props.backend)) {
+		return (
+			<div className="route-backend-target-grid single">
+				<Field
+					label="Host"
+					tooltip={
+						props.kind === 'http'
+							? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'host')
+							: props.help.field<TrafficTcpRouteBackend>('LocalTCPRouteBackend', 'host')
+					}
+				>
+					<input
+						value={props.backend.host}
+						onChange={event =>
+							props.onChange(
+								cleanBackendCommon({
+									...props.backend,
+									host: event.target.value.trimStart()
+								})
+							)
+						}
+						placeholder="localhost:8080"
+					/>
+				</Field>
+			</div>
+		);
+	}
 
-  if (props.targetKind === "backend" && isBackendReference(props.backend)) {
-    return (
-      <div className="route-backend-target-grid single">
-        <Field
-          label="Backend reference"
-          tooltip={
-            props.kind === "http"
-              ? props.help.field<TrafficRouteBackend>(
-                  "LocalRouteBackend",
-                  "backend",
-                )
-              : props.help.field<TrafficTcpRouteBackend>(
-                  "LocalTCPRouteBackend",
-                  "backend",
-                )
-          }
-        >
-          <input
-            value={props.backend.backend}
-            onChange={(event) =>
-              props.onChange(
-                cleanBackendCommon({
-                  ...props.backend,
-                  backend: event.target.value.trimStart(),
-                }),
-              )
-            }
-            placeholder="backend-name"
-          />
-        </Field>
-      </div>
-    );
-  }
+	if (props.targetKind === 'backend' && isBackendReference(props.backend)) {
+		return (
+			<div className="route-backend-target-grid single">
+				<Field
+					label="Backend reference"
+					tooltip={
+						props.kind === 'http'
+							? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'backend')
+							: props.help.field<TrafficTcpRouteBackend>('LocalTCPRouteBackend', 'backend')
+					}
+				>
+					<input
+						value={props.backend.backend}
+						onChange={event =>
+							props.onChange(
+								cleanBackendCommon({
+									...props.backend,
+									backend: event.target.value.trimStart()
+								})
+							)
+						}
+						placeholder="backend-name"
+					/>
+				</Field>
+			</div>
+		);
+	}
 
-  if (props.targetKind === "service" && isServiceBackend(props.backend)) {
-    const service = props.backend.service;
-    const serviceName = splitServiceName(service.name);
-    return (
-      <div className="route-backend-target-grid service">
-        <Field label="Namespace">
-          <input
-            value={serviceName.namespace}
-            onChange={(event) =>
-              props.onChange(
-                cleanBackendCommon({
-                  ...props.backend,
-                  service: {
-                    ...service,
-                    name: formatServiceName(
-                      event.target.value,
-                      serviceName.hostname,
-                    ),
-                  },
-                }),
-              )
-            }
-            placeholder="default"
-          />
-        </Field>
-        <Field label="Hostname">
-          <input
-            value={serviceName.hostname}
-            onChange={(event) =>
-              props.onChange(
-                cleanBackendCommon({
-                  ...props.backend,
-                  service: {
-                    ...service,
-                    name: formatServiceName(
-                      serviceName.namespace,
-                      event.target.value,
-                    ),
-                  },
-                }),
-              )
-            }
-            placeholder="api"
-          />
-        </Field>
-        <Field label="Port">
-          <input
-            type="number"
-            min={1}
-            max={65535}
-            value={service.port}
-            onChange={(event) =>
-              props.onChange(
-                cleanBackendCommon({
-                  ...props.backend,
-                  service: {
-                    ...service,
-                    port: Number(event.target.value) || 80,
-                  },
-                }),
-              )
-            }
-          />
-        </Field>
-      </div>
-    );
-  }
+	if (props.targetKind === 'service' && isServiceBackend(props.backend)) {
+		const service = props.backend.service;
+		const serviceName = splitServiceName(service.name);
+		return (
+			<div className="route-backend-target-grid service">
+				<Field label="Namespace">
+					<input
+						value={serviceName.namespace}
+						onChange={event =>
+							props.onChange(
+								cleanBackendCommon({
+									...props.backend,
+									service: {
+										...service,
+										name: formatServiceName(event.target.value, serviceName.hostname)
+									}
+								})
+							)
+						}
+						placeholder="default"
+					/>
+				</Field>
+				<Field label="Hostname">
+					<input
+						value={serviceName.hostname}
+						onChange={event =>
+							props.onChange(
+								cleanBackendCommon({
+									...props.backend,
+									service: {
+										...service,
+										name: formatServiceName(serviceName.namespace, event.target.value)
+									}
+								})
+							)
+						}
+						placeholder="api"
+					/>
+				</Field>
+				<Field label="Port">
+					<input
+						type="number"
+						min={1}
+						max={65535}
+						value={service.port}
+						onChange={event =>
+							props.onChange(
+								cleanBackendCommon({
+									...props.backend,
+									service: {
+										...service,
+										port: Number(event.target.value) || 80
+									}
+								})
+							)
+						}
+					/>
+				</Field>
+			</div>
+		);
+	}
 
-  if (props.targetKind === "routeGroup" && isRouteGroupBackend(props.backend)) {
-    return (
-      <div className="route-backend-target-grid single">
-        <Field label="Route group">
-          <input
-            value={props.backend.routeGroup}
-            onChange={(event) =>
-              props.onChange(
-                cleanBackendCommon({
-                  ...props.backend,
-                  routeGroup: event.target.value.trimStart(),
-                }),
-              )
-            }
-            placeholder="shared-routes"
-          />
-        </Field>
-      </div>
-    );
-  }
+	if (props.targetKind === 'routeGroup' && isRouteGroupBackend(props.backend)) {
+		return (
+			<div className="route-backend-target-grid single">
+				<Field label="Route group">
+					<input
+						value={props.backend.routeGroup}
+						onChange={event =>
+							props.onChange(
+								cleanBackendCommon({
+									...props.backend,
+									routeGroup: event.target.value.trimStart()
+								})
+							)
+						}
+						placeholder="shared-routes"
+					/>
+				</Field>
+			</div>
+		);
+	}
 
-  if (props.targetKind === "dynamic") {
-    return (
-      <div className="empty-inline">
-        Dynamic backend selection is enabled for this backend.
-      </div>
-    );
-  }
+	if (props.targetKind === 'dynamic') {
+		return (
+			<div className="empty-inline">Dynamic backend selection is enabled for this backend.</div>
+		);
+	}
 
-  return null;
+	return null;
 }
 
 function makeRoute(kind: RouteKind): TrafficRoute | TrafficTcpRoute {
-  if (kind === "tcp") return { hostnames: [], backends: [] };
-  return {
-    hostnames: [],
-    matches: [{ path: { pathPrefix: "/" } }],
-    backends: [],
-  };
+	if (kind === 'tcp') return { hostnames: [], backends: [] };
+	return {
+		hostnames: [],
+		matches: [{ path: { pathPrefix: '/' } }],
+		backends: []
+	};
 }
 
 function cleanRoute(route: TrafficRoute | TrafficTcpRoute, kind: RouteKind) {
-  const next = { ...route };
-  if (!next.name) delete next.name;
-  if (!next.ruleName) delete next.ruleName;
-  if (!next.hostnames?.length) delete next.hostnames;
-  const backends = (
-    (next.backends ?? []) as Array<TrafficRouteBackend | TrafficTcpRouteBackend>
-  )
-    .map(cleanBackend)
-    .filter(backendIsConfigured);
-  if (backends.length) next.backends = backends as never;
-  else delete next.backends;
-  if (!next.policies) delete next.policies;
-  if (kind === "http" && "matches" in next && next.matches) {
-    next.matches = next.matches.map(cleanHttpMatch);
-  }
-  return next;
+	const next = { ...route };
+	if (!next.name) delete next.name;
+	if (!next.ruleName) delete next.ruleName;
+	if (!next.hostnames?.length) delete next.hostnames;
+	const backends = ((next.backends ?? []) as Array<TrafficRouteBackend | TrafficTcpRouteBackend>)
+		.map(cleanBackend)
+		.filter(backendIsConfigured);
+	if (backends.length) next.backends = backends as never;
+	else delete next.backends;
+	if (!next.policies) delete next.policies;
+	if (kind === 'http' && 'matches' in next && next.matches) {
+		next.matches = next.matches.map(cleanHttpMatch);
+	}
+	return next;
 }
 
 function cleanBackend(backend: TrafficRouteBackend | TrafficTcpRouteBackend) {
-  return editableBackendKind(backend) ? cleanBackendCommon(backend) : backend;
+	return editableBackendKind(backend) ? cleanBackendCommon(backend) : backend;
 }
 
-function backendKindOptions(
-  kind: RouteKind,
-): Array<EnumSelectorOption<EditableBackendKind>> {
-  const base: Array<EnumSelectorOption<EditableBackendKind>> = [
-    { value: "host", label: "Host" },
-    { value: "service", label: "Service" },
-    { value: "backend", label: "Backend reference" },
-  ];
-  if (kind === "tcp") return base;
-  return [
-    ...base,
-    { value: "dynamic", label: "Dynamic" },
-    { value: "routeGroup", label: "Route group" },
-  ];
+function backendKindOptions(kind: RouteKind): Array<EnumSelectorOption<EditableBackendKind>> {
+	const base: Array<EnumSelectorOption<EditableBackendKind>> = [
+		{ value: 'host', label: 'Host' },
+		{ value: 'service', label: 'Service' },
+		{ value: 'backend', label: 'Backend reference' }
+	];
+	if (kind === 'tcp') return base;
+	return [
+		...base,
+		{ value: 'dynamic', label: 'Dynamic' },
+		{ value: 'routeGroup', label: 'Route group' }
+	];
 }
 
-function editableBackendKind(
-  backend: TrafficBackend,
-): EditableBackendKind | null {
-  if (!backend || typeof backend !== "object") return null;
-  if (isHostBackend(backend)) return "host";
-  if (isServiceBackend(backend)) return "service";
-  if (isBackendReference(backend)) return "backend";
-  if ("dynamic" in backend) return "dynamic";
-  if (isRouteGroupBackend(backend)) return "routeGroup";
-  return null;
+function editableBackendKind(backend: TrafficBackend): EditableBackendKind | null {
+	if (!backend || typeof backend !== 'object') return null;
+	if (isHostBackend(backend)) return 'host';
+	if (isServiceBackend(backend)) return 'service';
+	if (isBackendReference(backend)) return 'backend';
+	if ('dynamic' in backend) return 'dynamic';
+	if (isRouteGroupBackend(backend)) return 'routeGroup';
+	return null;
 }
 
 function makeBackend(
-  kind: RouteKind,
-  targetKind: EditableBackendKind,
-  previous?: TrafficBackend,
+	kind: RouteKind,
+	targetKind: EditableBackendKind,
+	previous?: TrafficBackend
 ): TrafficBackend {
-  const common = backendCommon(previous);
-  if (targetKind === "service") {
-    return cleanBackendCommon({
-      ...common,
-      service: {
-        name: "default/",
-        port: 80,
-      },
-    } as TrafficBackend);
-  }
-  if (targetKind === "backend")
-    return cleanBackendCommon({ ...common, backend: "" } as TrafficBackend);
-  if (targetKind === "dynamic" && kind === "http")
-    return cleanBackendCommon({ ...common, dynamic: {} } as TrafficBackend);
-  if (targetKind === "routeGroup" && kind === "http")
-    return cleanBackendCommon({ ...common, routeGroup: "" } as TrafficBackend);
-  return cleanBackendCommon({ ...common, host: "" } as TrafficBackend);
+	const common = backendCommon(previous);
+	if (targetKind === 'service') {
+		return cleanBackendCommon({
+			...common,
+			service: {
+				name: 'default/',
+				port: 80
+			}
+		} as TrafficBackend);
+	}
+	if (targetKind === 'backend')
+		return cleanBackendCommon({ ...common, backend: '' } as TrafficBackend);
+	if (targetKind === 'dynamic' && kind === 'http')
+		return cleanBackendCommon({ ...common, dynamic: {} } as TrafficBackend);
+	if (targetKind === 'routeGroup' && kind === 'http')
+		return cleanBackendCommon({ ...common, routeGroup: '' } as TrafficBackend);
+	return cleanBackendCommon({ ...common, host: '' } as TrafficBackend);
 }
 
 function backendCommon(backend: TrafficBackend | undefined) {
-  const common: { weight?: number; policies?: Record<string, unknown> | null } =
-    {};
-  if (!backend || typeof backend !== "object") return common;
-  if (
-    typeof backend.weight === "number" &&
-    Number.isFinite(backend.weight) &&
-    backend.weight !== 1
-  )
-    common.weight = backend.weight;
-  if (backend.policies && typeof backend.policies === "object")
-    common.policies = backend.policies as Record<string, unknown>;
-  return common;
+	const common: { weight?: number; policies?: Record<string, unknown> | null } = {};
+	if (!backend || typeof backend !== 'object') return common;
+	if (typeof backend.weight === 'number' && Number.isFinite(backend.weight) && backend.weight !== 1)
+		common.weight = backend.weight;
+	if (backend.policies && typeof backend.policies === 'object')
+		common.policies = backend.policies as Record<string, unknown>;
+	return common;
 }
 
 function backendWeight(backend: TrafficBackend) {
-  return typeof backend === "object" &&
-    backend &&
-    typeof backend.weight === "number" &&
-    Number.isFinite(backend.weight)
-    ? backend.weight
-    : 1;
+	return typeof backend === 'object' &&
+		backend &&
+		typeof backend.weight === 'number' &&
+		Number.isFinite(backend.weight)
+		? backend.weight
+		: 1;
 }
 
 function backendPolicies(backend: TrafficBackend) {
-  if (
-    !backend ||
-    typeof backend !== "object" ||
-    !backend.policies ||
-    typeof backend.policies !== "object"
-  )
-    return null;
-  return backend.policies as Record<string, unknown>;
+	if (
+		!backend ||
+		typeof backend !== 'object' ||
+		!backend.policies ||
+		typeof backend.policies !== 'object'
+	)
+		return null;
+	return backend.policies as Record<string, unknown>;
 }
 
 function cleanBackendCommon<T extends TrafficBackend>(backend: T): T {
-  if (!backend || typeof backend !== "object") return backend;
-  const next = structuredClone(backend) as TrafficBackend;
-  if (
-    typeof next.weight !== "number" ||
-    !Number.isFinite(next.weight) ||
-    next.weight === 1
-  )
-    delete next.weight;
-  if (
-    !next.policies ||
-    (typeof next.policies === "object" &&
-      Object.keys(next.policies).length === 0)
-  )
-    delete next.policies;
-  if (isHostBackend(next)) next.host = next.host.trimStart();
-  if (isBackendReference(next)) next.backend = next.backend.trimStart();
-  if (isRouteGroupBackend(next)) next.routeGroup = next.routeGroup.trimStart();
-  if (isServiceBackend(next)) {
-    const name = splitServiceName(next.service.name);
-    next.service = {
-      ...next.service,
-      name: formatServiceName(name.namespace, name.hostname),
-      port: Number(next.service.port) || 80,
-    };
-  }
-  return next as T;
+	if (!backend || typeof backend !== 'object') return backend;
+	const next = structuredClone(backend) as TrafficBackend;
+	if (typeof next.weight !== 'number' || !Number.isFinite(next.weight) || next.weight === 1)
+		delete next.weight;
+	if (
+		!next.policies ||
+		(typeof next.policies === 'object' && Object.keys(next.policies).length === 0)
+	)
+		delete next.policies;
+	if (isHostBackend(next)) next.host = next.host.trimStart();
+	if (isBackendReference(next)) next.backend = next.backend.trimStart();
+	if (isRouteGroupBackend(next)) next.routeGroup = next.routeGroup.trimStart();
+	if (isServiceBackend(next)) {
+		const name = splitServiceName(next.service.name);
+		next.service = {
+			...next.service,
+			name: formatServiceName(name.namespace, name.hostname),
+			port: Number(next.service.port) || 80
+		};
+	}
+	return next as T;
 }
 
 function backendIsConfigured(backend: TrafficBackend) {
-  const kind = editableBackendKind(backend);
-  if (!kind) return true;
-  if (kind === "host" && isHostBackend(backend))
-    return Boolean(backend.host.trim());
-  if (kind === "backend" && isBackendReference(backend))
-    return Boolean(backend.backend.trim());
-  if (kind === "routeGroup" && isRouteGroupBackend(backend))
-    return Boolean(backend.routeGroup.trim());
-  if (kind === "service" && isServiceBackend(backend)) {
-    const name = splitServiceName(backend.service.name);
-    return Boolean(name.hostname.trim() && backend.service.port);
-  }
-  return true;
+	const kind = editableBackendKind(backend);
+	if (!kind) return true;
+	if (kind === 'host' && isHostBackend(backend)) return Boolean(backend.host.trim());
+	if (kind === 'backend' && isBackendReference(backend)) return Boolean(backend.backend.trim());
+	if (kind === 'routeGroup' && isRouteGroupBackend(backend))
+		return Boolean(backend.routeGroup.trim());
+	if (kind === 'service' && isServiceBackend(backend)) {
+		const name = splitServiceName(backend.service.name);
+		return Boolean(name.hostname.trim() && backend.service.port);
+	}
+	return true;
 }
 
 function isHostBackend(backend: TrafficBackend): backend is HostBackend {
-  return Boolean(
-    backend &&
-      typeof backend === "object" &&
-      "host" in backend &&
-      typeof backend.host === "string",
-  );
+	return Boolean(
+		backend && typeof backend === 'object' && 'host' in backend && typeof backend.host === 'string'
+	);
 }
 
-function isBackendReference(
-  backend: TrafficBackend,
-): backend is BackendReference {
-  return Boolean(
-    backend &&
-      typeof backend === "object" &&
-      "backend" in backend &&
-      typeof backend.backend === "string",
-  );
+function isBackendReference(backend: TrafficBackend): backend is BackendReference {
+	return Boolean(
+		backend &&
+			typeof backend === 'object' &&
+			'backend' in backend &&
+			typeof backend.backend === 'string'
+	);
 }
 
-function isRouteGroupBackend(
-  backend: TrafficBackend,
-): backend is RouteGroupBackend {
-  return Boolean(
-    backend &&
-      typeof backend === "object" &&
-      "routeGroup" in backend &&
-      typeof backend.routeGroup === "string",
-  );
+function isRouteGroupBackend(backend: TrafficBackend): backend is RouteGroupBackend {
+	return Boolean(
+		backend &&
+			typeof backend === 'object' &&
+			'routeGroup' in backend &&
+			typeof backend.routeGroup === 'string'
+	);
 }
 
 function isServiceBackend(backend: TrafficBackend): backend is ServiceBackend {
-  if (!backend || typeof backend !== "object" || !("service" in backend))
-    return false;
-  const service = backend.service;
-  if (
-    !service ||
-    typeof service !== "object" ||
-    !("name" in service) ||
-    !("port" in service)
-  )
-    return false;
-  const name = service.name;
-  return typeof name === "string" && typeof service.port === "number";
+	if (!backend || typeof backend !== 'object' || !('service' in backend)) return false;
+	const service = backend.service;
+	if (!service || typeof service !== 'object' || !('name' in service) || !('port' in service))
+		return false;
+	const name = service.name;
+	return typeof name === 'string' && typeof service.port === 'number';
 }
 
 function splitServiceName(name: string): {
-  namespace: string;
-  hostname: string;
+	namespace: string;
+	hostname: string;
 } {
-  const [namespace, hostname] = name.includes("/")
-    ? name.split("/", 2)
-    : ["default", name];
-  return {
-    namespace: namespace.trim() || "default",
-    hostname: hostname.trimStart(),
-  };
+	const [namespace, hostname] = name.includes('/') ? name.split('/', 2) : ['default', name];
+	return {
+		namespace: namespace.trim() || 'default',
+		hostname: hostname.trimStart()
+	};
 }
 
 function formatServiceName(namespace: string, hostname: string): string {
-  return `${namespace.trim() || "default"}/${hostname.trimStart()}`;
+	return `${namespace.trim() || 'default'}/${hostname.trimStart()}`;
 }
 
 function cleanHttpMatch(match: HttpMatch): HttpMatch {
-  const next = { ...match };
-  const headers = (next.headers ?? []).filter((header) => header.name.trim());
-  const query = (next.query ?? []).filter((item) => item.name.trim());
-  if (headers.length) next.headers = headers;
-  else delete next.headers;
-  if (query.length) next.query = query;
-  else delete next.query;
-  if (!next.method) delete next.method;
-  return next;
+	const next = { ...match };
+	const headers = (next.headers ?? []).filter(header => header.name.trim());
+	const query = (next.query ?? []).filter(item => item.name.trim());
+	if (headers.length) next.headers = headers;
+	else delete next.headers;
+	if (query.length) next.query = query;
+	else delete next.query;
+	if (!next.method) delete next.method;
+	return next;
 }
 
 function backendListSummary(
-  backends:
-    | Array<TrafficRouteBackend | TrafficTcpRouteBackend>
-    | null
-    | undefined,
+	backends: Array<TrafficRouteBackend | TrafficTcpRouteBackend> | null | undefined
 ) {
-  if (!backends?.length) return "No backends";
-  return backends.map(backendSummary).join(", ");
+	if (!backends?.length) return 'No backends';
+	return backends.map(backendSummary).join(', ');
 }
 
-function httpPathSummary(
-  route: TrafficRoute | TrafficTcpRoute | LocalAttachedGatewayRoute,
-) {
-  const matches = (route as TrafficRoute).matches;
-  if (!matches?.length) return "/";
-  return pathSummary(route as TrafficRoute);
+function httpPathSummary(route: TrafficRoute | TrafficTcpRoute | LocalAttachedGatewayRoute) {
+	const matches = (route as TrafficRoute).matches;
+	if (!matches?.length) return '/';
+	return pathSummary(route as TrafficRoute);
 }
 
 function listenerRouteKind(listener: TrafficListener): RouteKind {
-  return listener.protocol === "TCP" || listener.protocol === "TLS"
-    ? "tcp"
-    : "http";
+	return listener.protocol === 'TCP' || listener.protocol === 'TLS' ? 'tcp' : 'http';
 }
 
 function routeListenerSearch(search: unknown) {
-  if (!search || typeof search !== "object") return null;
-  const value = (search as { listener?: unknown }).listener;
-  return typeof value === "string" && value.trim() ? value : null;
+	if (!search || typeof search !== 'object') return null;
+	const value = (search as { listener?: unknown }).listener;
+	return typeof value === 'string' && value.trim() ? value : null;
 }
 
 function routeEditSearch(search: unknown) {
-  if (!search || typeof search !== "object") return null;
-  const value = (search as { route?: unknown }).route;
-  return typeof value === "string" && value.trim() ? value : null;
+	if (!search || typeof search !== 'object') return null;
+	const value = (search as { route?: unknown }).route;
+	return typeof value === 'string' && value.trim() ? value : null;
 }
 
 function listenerFromSearch(
-  value: string,
-  listeners: Array<{
-    bindIndex: number;
-    listenerIndex: number;
-    listener: TrafficListener;
-  }>,
+	value: string,
+	listeners: Array<{
+		bindIndex: number;
+		listenerIndex: number;
+		listener: TrafficListener;
+	}>
 ) {
-  const [bindIndex, listenerIndex] = value.split(":").map(Number);
-  if (!Number.isInteger(bindIndex) || !Number.isInteger(listenerIndex))
-    return undefined;
-  return listeners.find(
-    (item) =>
-      item.bindIndex === bindIndex && item.listenerIndex === listenerIndex,
-  );
+	const [bindIndex, listenerIndex] = value.split(':').map(Number);
+	if (!Number.isInteger(bindIndex) || !Number.isInteger(listenerIndex)) return undefined;
+	return listeners.find(
+		item => item.bindIndex === bindIndex && item.listenerIndex === listenerIndex
+	);
 }
 
-function routeFromSearch(
-  value: string,
-  routes: ReturnType<typeof routeContexts>,
-) {
-  const [bindIndex, listenerIndex, kind, routeIndex] = value.split(":");
-  const parsedBindIndex = Number(bindIndex);
-  const parsedListenerIndex = Number(listenerIndex);
-  const parsedRouteIndex = Number(routeIndex);
-  if (
-    !Number.isInteger(parsedBindIndex) ||
-    !Number.isInteger(parsedListenerIndex) ||
-    !Number.isInteger(parsedRouteIndex)
-  )
-    return undefined;
-  if (kind !== "http" && kind !== "tcp") return undefined;
-  return routes.find(
-    (item) =>
-      item.bindIndex === parsedBindIndex &&
-      item.listenerIndex === parsedListenerIndex &&
-      item.kind === kind &&
-      item.routeIndex === parsedRouteIndex,
-  );
+function routeFromSearch(value: string, routes: ReturnType<typeof routeContexts>) {
+	const [bindIndex, listenerIndex, kind, routeIndex] = value.split(':');
+	const parsedBindIndex = Number(bindIndex);
+	const parsedListenerIndex = Number(listenerIndex);
+	const parsedRouteIndex = Number(routeIndex);
+	if (
+		!Number.isInteger(parsedBindIndex) ||
+		!Number.isInteger(parsedListenerIndex) ||
+		!Number.isInteger(parsedRouteIndex)
+	)
+		return undefined;
+	if (kind !== 'http' && kind !== 'tcp') return undefined;
+	return routes.find(
+		item =>
+			item.bindIndex === parsedBindIndex &&
+			item.listenerIndex === parsedListenerIndex &&
+			item.kind === kind &&
+			item.routeIndex === parsedRouteIndex
+	);
 }
 
 function routeSearchValue(context: ReturnType<typeof routeContexts>[number]) {
-  return `${context.bindIndex}:${context.listenerIndex}:${context.kind}:${context.routeIndex}`;
+	return `${context.bindIndex}:${context.listenerIndex}:${context.kind}:${context.routeIndex}`;
 }
 
-function gatewayReferenceOptions(
-  config: GatewayConfig | null | undefined,
-  kind: RouteKind,
-) {
-  return Object.entries(config?.gateways ?? {}).flatMap(([name, gateway]) => {
-    const listeners = gateway.listeners ?? [];
-    if (!listeners.length) {
-      if (gatewayRouteKind(gateway) !== kind) return [];
-      return [
-        {
-          value: name,
-          label: name,
-          description: gateway.port ? `Port ${gateway.port}` : undefined,
-        },
-      ];
-    }
-    const compatibleListeners = listeners.filter(
-      (listener) => gatewayRouteKind(listener) === kind,
-    );
-    if (!compatibleListeners.length) return [];
-    return [
-      {
-        value: name,
-        label: `${name} (all ${kind.toUpperCase()} listeners)`,
-        description: gateway.port ? `Port ${gateway.port}` : undefined,
-      },
-      ...compatibleListeners.map((listener) => {
-        const listenerIndex = listeners.indexOf(listener);
-        const listenerName = listener.name ?? `listener${listenerIndex}`;
-        return {
-          value: `${name}/${listenerName}`,
-          label: `${name}/${listenerName}`,
-          description: listener.hostname ?? undefined,
-        };
-      }),
-    ];
-  });
+function gatewayReferenceOptions(config: GatewayConfig | null | undefined, kind: RouteKind) {
+	return Object.entries(config?.gateways ?? {}).flatMap(([name, gateway]) => {
+		const listeners = gateway.listeners ?? [];
+		if (!listeners.length) {
+			if (gatewayRouteKind(gateway) !== kind) return [];
+			return [
+				{
+					value: name,
+					label: name,
+					description: gateway.port ? `Port ${gateway.port}` : undefined
+				}
+			];
+		}
+		const compatibleListeners = listeners.filter(listener => gatewayRouteKind(listener) === kind);
+		if (!compatibleListeners.length) return [];
+		return [
+			{
+				value: name,
+				label: `${name} (all ${kind.toUpperCase()} listeners)`,
+				description: gateway.port ? `Port ${gateway.port}` : undefined
+			},
+			...compatibleListeners.map(listener => {
+				const listenerIndex = listeners.indexOf(listener);
+				const listenerName = listener.name ?? `listener${listenerIndex}`;
+				return {
+					value: `${name}/${listenerName}`,
+					label: `${name}/${listenerName}`,
+					description: listener.hostname ?? undefined
+				};
+			})
+		];
+	});
 }
 
 function gatewayRouteKind(
-  value:
-    | NonNullable<GatewayConfig["gateways"]>[string]
-    | {
-        protocol?: "HTTP" | "HTTPS" | "TCP" | "TLS" | null;
-        tls?: unknown;
-      },
+	value:
+		| NonNullable<GatewayConfig['gateways']>[string]
+		| {
+				protocol?: 'HTTP' | 'HTTPS' | 'TCP' | 'TLS' | null;
+				tls?: unknown;
+		  }
 ): RouteKind {
-  const protocol = value.protocol ?? (value.tls ? "HTTPS" : "HTTP");
-  return protocol === "TCP" || protocol === "TLS" ? "tcp" : "http";
+	const protocol = value.protocol ?? (value.tls ? 'HTTPS' : 'HTTP');
+	return protocol === 'TCP' || protocol === 'TLS' ? 'tcp' : 'http';
 }
 
-function gatewayRouteRef(route: Pick<LocalAttachedGatewayRoute, "gateways">) {
-  if (Array.isArray(route.gateways)) return route.gateways[0] ?? "";
-  return route.gateways ?? "";
+function gatewayRouteRef(route: Pick<LocalAttachedGatewayRoute, 'gateways'>) {
+	if (Array.isArray(route.gateways)) return route.gateways[0] ?? '';
+	return route.gateways ?? '';
 }
 
 function effectiveGatewayRouteRef(
-  route: Pick<LocalAttachedGatewayRoute, "gateways">,
-  config: GatewayConfig | null | undefined,
-  kind: RouteKind,
+	route: Pick<LocalAttachedGatewayRoute, 'gateways'>,
+	config: GatewayConfig | null | undefined,
+	kind: RouteKind
 ) {
-  return (
-    gatewayRouteRef(route) ||
-    (config?.gateways?.default &&
-    gatewayHasRouteKind(config.gateways.default, kind)
-      ? "default"
-      : "")
-  );
+	return (
+		gatewayRouteRef(route) ||
+		(config?.gateways?.default && gatewayHasRouteKind(config.gateways.default, kind)
+			? 'default'
+			: '')
+	);
 }
 
 function implicitDefaultRouteGateway(
-  route: Pick<LocalAttachedGatewayRoute, "gateways">,
-  config: GatewayConfig | null | undefined,
-  gateway: string,
-  kind: RouteKind,
+	route: Pick<LocalAttachedGatewayRoute, 'gateways'>,
+	config: GatewayConfig | null | undefined,
+	gateway: string,
+	kind: RouteKind
 ) {
-  const defaultGateway = config?.gateways?.default;
-  return (
-    !gatewayRouteRef(route) &&
-    gateway === "default" &&
-    defaultGateway &&
-    gatewayHasRouteKind(defaultGateway, kind)
-  );
+	const defaultGateway = config?.gateways?.default;
+	return (
+		!gatewayRouteRef(route) &&
+		gateway === 'default' &&
+		defaultGateway &&
+		gatewayHasRouteKind(defaultGateway, kind)
+	);
 }
 
 function gatewayHasRouteKind(
-  gateway: NonNullable<GatewayConfig["gateways"]>[string],
-  kind: RouteKind,
+	gateway: NonNullable<GatewayConfig['gateways']>[string],
+	kind: RouteKind
 ) {
-  const listeners = gateway.listeners ?? [];
-  if (!listeners.length) return gatewayRouteKind(gateway) === kind;
-  return listeners.some((listener) => gatewayRouteKind(listener) === kind);
+	const listeners = gateway.listeners ?? [];
+	if (!listeners.length) return gatewayRouteKind(gateway) === kind;
+	return listeners.some(listener => gatewayRouteKind(listener) === kind);
 }
 
 function cleanGatewayRoute(
-  route: LocalAttachedGatewayRoute,
-  kind: RouteKind,
+	route: LocalAttachedGatewayRoute,
+	kind: RouteKind
 ): LocalAttachedGatewayRoute {
-  const next = cleanRoute(route, kind) as LocalAttachedGatewayRoute;
-  if (Array.isArray(next.gateways)) {
-    next.gateways = next.gateways.filter(Boolean);
-    if (next.gateways.length === 1) next.gateways = next.gateways[0];
-  }
-  if (!next.gateways) delete next.gateways;
-  return next;
+	const next = cleanRoute(route, kind) as LocalAttachedGatewayRoute;
+	if (Array.isArray(next.gateways)) {
+		next.gateways = next.gateways.filter(Boolean);
+		if (next.gateways.length === 1) next.gateways = next.gateways[0];
+	}
+	if (!next.gateways) delete next.gateways;
+	return next;
 }
 
 function writeTrafficRouteSearch(
-  next: { listener?: string; route?: string } | null,
-  mode: "push" | "replace" = "push",
+	next: { listener?: string; route?: string } | null,
+	mode: 'push' | 'replace' = 'push'
 ) {
-  const url = new URL(window.location.href);
-  url.searchParams.delete("listener");
-  url.searchParams.delete("route");
-  if (next?.listener) url.searchParams.set("listener", next.listener);
-  if (next?.route) url.searchParams.set("route", next.route);
-  const target = `${url.pathname}${url.search}${url.hash}`;
-  if (mode === "replace") window.history.replaceState(null, "", target);
-  else window.history.pushState(null, "", target);
+	const url = new URL(window.location.href);
+	url.searchParams.delete('listener');
+	url.searchParams.delete('route');
+	if (next?.listener) url.searchParams.set('listener', next.listener);
+	if (next?.route) url.searchParams.set('route', next.route);
+	const target = `${url.pathname}${url.search}${url.hash}`;
+	if (mode === 'replace') window.history.replaceState(null, '', target);
+	else window.history.pushState(null, '', target);
 }
 
 function pathLabel(value: string) {
-  if (value === "pathPrefix") return "Prefix";
-  if (value === "exact") return "Exact";
-  return "Regex";
+	if (value === 'pathPrefix') return 'Prefix';
+	if (value === 'exact') return 'Exact';
+	return 'Regex';
 }
 
 function splitList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+	return value
+		.split(',')
+		.map(item => item.trim())
+		.filter(Boolean);
 }
 
 function matchValueParts(value: unknown): {
-  mode: "exact" | "regex";
-  text: string;
+	mode: 'exact' | 'regex';
+	text: string;
 } {
-  if (value === "invalid") return { mode: "exact", text: "" };
-  if (!value || typeof value !== "object") return { mode: "exact", text: "" };
-  if ("regex" in value)
-    return { mode: "regex", text: String(value.regex ?? "") };
-  if ("exact" in value)
-    return { mode: "exact", text: String(value.exact ?? "") };
-  return { mode: "exact", text: "" };
+	if (value === 'invalid') return { mode: 'exact', text: '' };
+	if (!value || typeof value !== 'object') return { mode: 'exact', text: '' };
+	if ('regex' in value) return { mode: 'regex', text: String(value.regex ?? '') };
+	if ('exact' in value) return { mode: 'exact', text: String(value.exact ?? '') };
+	return { mode: 'exact', text: '' };
 }
