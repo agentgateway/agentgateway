@@ -317,7 +317,9 @@ bootstrap without creating the Agent Network endpoint, provider, or policy:
 ./configure.sh --mode dashboard
 ```
 
-Sign in at `https://${NETBIRD_MANAGEMENT_DOMAIN}` and complete these steps:
+Sign in at `https://${NETBIRD_MANAGEMENT_DOMAIN}` using the
+`NETBIRD_ADMIN_EMAIL` and `NETBIRD_ADMIN_PASSWORD` values exported in step 1,
+then complete these steps:
 
 1. Open **Agent Network > Providers** and add a provider.
 2. Select **agentgateway**, name it `agentgateway`, and set the upstream URL to
