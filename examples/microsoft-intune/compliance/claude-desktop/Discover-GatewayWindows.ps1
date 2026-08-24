@@ -1,6 +1,14 @@
-# Edit this value before uploading the script to Microsoft Intune.
+# Set these values to match the Intune-managed Claude Desktop profile before
+# uploading the script.
+
+# Exact inferenceGatewayBaseUrl. Include a route prefix, such as /claude, only
+# when it is part of the managed Gateway URL.
 $ExpectedClaudeGatewayUrl = "https://llm.example.com/claude"
+
+# Use static for Gateway API key authentication or interactive for Entra ID.
 $ExpectedClaudeCredentialKind = "static"
+
+# Required only for interactive authentication. The flow is browser or broker.
 $ExpectedClaudeOidcAuthFlow = ""
 $ExpectedClaudeOidcIssuer = ""
 $ExpectedClaudeOidcClientId = ""
@@ -36,7 +44,7 @@ if (Test-Path -LiteralPath $policyPath) {
                 $authenticationMatches = $false
             }
         } else {
-            $authenticationMatches = $true
+            $authenticationMatches = $false
         }
 
         $configured = $providerMatches -and $urlMatches -and

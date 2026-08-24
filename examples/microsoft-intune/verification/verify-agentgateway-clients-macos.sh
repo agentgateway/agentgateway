@@ -1,13 +1,26 @@
 #!/bin/sh
 
-# Edit these values before uploading the script to Microsoft Intune.
+# Set these defaults to match the Intune-managed client configuration before
+# uploading the script. Intune does not provide custom environment variables
+# to macOS platform scripts; the environment overrides are for local testing.
+
+# Exact Codex base_url, including /v1, and the matching TOML env_key name.
 EXPECTED_CODEX_BASE_URL=${EXPECTED_CODEX_BASE_URL:-"https://llm.example.com/v1"}
 EXPECTED_CODEX_ENV_KEY=${EXPECTED_CODEX_ENV_KEY:-"AGENTGATEWAY_API_KEY"}
+
+# Exact Claude Desktop inferenceGatewayBaseUrl. Include a route prefix, such
+# as /claude, only when it is part of the managed Gateway URL.
 EXPECTED_CLAUDE_GATEWAY_URL=${EXPECTED_CLAUDE_GATEWAY_URL:-"https://llm.example.com/claude"}
+
+# Use static for Gateway API key authentication or interactive for Entra ID.
 EXPECTED_CLAUDE_CREDENTIAL_KIND=${EXPECTED_CLAUDE_CREDENTIAL_KIND:-"static"}
+
+# Required only for interactive authentication. The flow is browser or broker.
 EXPECTED_CLAUDE_OIDC_AUTH_FLOW=${EXPECTED_CLAUDE_OIDC_AUTH_FLOW:-""}
 EXPECTED_CLAUDE_OIDC_ISSUER=${EXPECTED_CLAUDE_OIDC_ISSUER:-""}
 EXPECTED_CLAUDE_OIDC_CLIENT_ID=${EXPECTED_CLAUDE_OIDC_CLIENT_ID:-""}
+
+# Enable only the clients and checks required by the assigned Intune group.
 VERIFY_CODEX=${VERIFY_CODEX:-true}
 VERIFY_CLAUDE_DESKTOP=${VERIFY_CLAUDE_DESKTOP:-true}
 VERIFY_INSTALLATION=${VERIFY_INSTALLATION:-true}
@@ -241,6 +254,10 @@ verify_claude_desktop() {
         fail "Claude Desktop interactive configuration still contains a static gateway credential."
         return
       fi
+      ;;
+    *)
+      fail "Claude Desktop expected credential kind must be static or interactive."
+      return
       ;;
   esac
 

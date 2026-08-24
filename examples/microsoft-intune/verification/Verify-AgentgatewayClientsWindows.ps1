@@ -1,11 +1,23 @@
-# Edit these values before uploading the script to Microsoft Intune.
+# Set these values to match the Intune-managed client configuration before
+# uploading the script.
+
+# Exact Codex base_url, including /v1, and the matching TOML env_key name.
 $ExpectedCodexBaseUrl = "https://llm.example.com/v1"
 $ExpectedCodexEnvKey = "AGENTGATEWAY_API_KEY"
+
+# Exact Claude Desktop inferenceGatewayBaseUrl. Include a route prefix, such
+# as /claude, only when it is part of the managed Gateway URL.
 $ExpectedClaudeGatewayUrl = "https://llm.example.com/claude"
+
+# Use static for Gateway API key authentication or interactive for Entra ID.
 $ExpectedClaudeCredentialKind = "static"
+
+# Required only for interactive authentication. The flow is browser or broker.
 $ExpectedClaudeOidcAuthFlow = ""
 $ExpectedClaudeOidcIssuer = ""
 $ExpectedClaudeOidcClientId = ""
+
+# Enable only the clients and checks required by the assigned Intune group.
 $VerifyCodex = $true
 $VerifyClaudeDesktop = $true
 $VerifyInstallation = $true
@@ -136,6 +148,9 @@ function Test-ClaudeDesktopConfiguration {
             Write-Failure "Claude Desktop interactive configuration still contains a static gateway credential."
             return
         }
+    } else {
+        Write-Failure "Claude Desktop expected credential kind must be static or interactive."
+        return
     }
 
     Write-Pass "Claude Desktop managed configuration uses the approved agentgateway URL and authentication settings."

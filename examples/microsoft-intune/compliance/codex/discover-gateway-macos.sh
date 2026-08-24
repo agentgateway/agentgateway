@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# Edit these values before uploading the script to Microsoft Intune.
+# Set these defaults to match the Intune-managed Codex TOML before uploading
+# the script. Intune does not provide custom environment variables to macOS
+# discovery scripts; the environment overrides are for local testing.
+
+# Use the exact base_url, including /v1, and the matching env_key name.
 EXPECTED_CODEX_BASE_URL=${EXPECTED_CODEX_BASE_URL:-"https://llm.example.com/v1"}
 EXPECTED_CODEX_ENV_KEY=${EXPECTED_CODEX_ENV_KEY:-"AGENTGATEWAY_API_KEY"}
 

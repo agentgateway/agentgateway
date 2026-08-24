@@ -28,30 +28,39 @@ final check from the client and correlate it with the agentgateway access log.
 
 ## Configure the scripts
 
-Before uploading a script to Intune, edit the configuration block at the top.
+Before uploading a script to Intune, set the configuration values at the top
+to match the managed client configuration exactly. The macOS assignments use
+the `${VARIABLE:-default}` form so that an administrator can override values
+during local testing. Intune does not provide custom environment variables to
+these scripts, so edit the defaults in the uploaded copy.
 
-- Set the expected Codex URL, including `/v1`.
-- Keep `EXPECTED_CODEX_ENV_KEY` set to the name of the environment variable
-  declared by the managed Codex TOML. The default is
-  `AGENTGATEWAY_API_KEY`. The scripts check the variable name, not its value.
-- Set the expected Claude Desktop URL, including the route prefix configured
-  for Claude Desktop, such as `/claude`.
-- Set the expected Claude Desktop credential kind. The examples default to
-  `static` and verify that a managed key is present without reporting it. For
-  Entra ID, set the kind to `interactive` and also set the expected OIDC flow
-  (`browser` or `broker`), issuer, and client ID. Interactive verification
-  requires an ID token and rejects a leftover static key.
-- Enable the clients that Intune requires on the target group. Disable a client
-  when that client is not required.
-- Keep the installation check enabled when the approved package uses one of
-  the paths in the script. Otherwise, add the organization's package path or
-  disable this check and use the Intune managed-app report.
-- Keep the network check enabled unless another endpoint control performs it.
-- On macOS, keep the default verification log or set the
-  `AGENTGATEWAY_INTUNE_LOG_FILE` environment variable to another absolute
-  `.log` path. Because Intune does not provide a custom environment-variable
-  field for platform scripts, edit the `LOG_FILE` default before upload when
-  the organization requires a different managed path.
+| Setting | Required value |
+| --- | --- |
+| `EXPECTED_CODEX_BASE_URL` or `ExpectedCodexBaseUrl` | Exact Codex `base_url`, including `/v1`, such as `https://llm.example.com/v1`. |
+| `EXPECTED_CODEX_ENV_KEY` or `ExpectedCodexEnvKey` | Name from the managed TOML `env_key`, such as `AGENTGATEWAY_API_KEY`. The scripts check the name, not the secret value. |
+| `EXPECTED_CLAUDE_GATEWAY_URL` or `ExpectedClaudeGatewayUrl` | Exact Claude Desktop `inferenceGatewayBaseUrl`. Include a prefix such as `/claude` only when it is part of the managed URL. |
+| `EXPECTED_CLAUDE_CREDENTIAL_KIND` or `ExpectedClaudeCredentialKind` | `static` for Gateway API key authentication or `interactive` for Entra ID. Other values fail verification. |
+| `EXPECTED_CLAUDE_OIDC_AUTH_FLOW` or `ExpectedClaudeOidcAuthFlow` | For `interactive` only, `browser` or `broker`. Leave empty for `static`. |
+| `EXPECTED_CLAUDE_OIDC_ISSUER` or `ExpectedClaudeOidcIssuer` | For `interactive` only, the exact issuer, such as `https://login.microsoftonline.com/TENANT_ID/v2.0`. Leave empty for `static`. |
+| `EXPECTED_CLAUDE_OIDC_CLIENT_ID` or `ExpectedClaudeOidcClientId` | For `interactive` only, the Entra Application (client) ID. Leave empty for `static`. |
+
+For a static-key Claude Desktop profile, edit only the Gateway URL when the
+default credential kind is already `static`, and leave the OIDC values empty.
+For Entra ID, set the credential kind to `interactive` and populate all three
+OIDC values. The scripts require an ID token and reject a leftover static key.
+
+In the operational verification scripts, enable only the clients that Intune
+requires on the target group. Keep the installation check enabled when the
+approved package uses one of the paths in the script. Otherwise, add the
+organization's package path or disable this check and use the Intune
+managed-app report. Keep the network check enabled unless another endpoint
+control performs it.
+
+On macOS, keep the default verification log or set the
+`AGENTGATEWAY_INTUNE_LOG_FILE` environment variable to another absolute `.log`
+path during local testing. Because Intune does not provide a custom
+environment-variable field for platform scripts, edit the `LOG_FILE` default
+before upload when the organization requires a different managed path.
 
 Do not add a gateway client key, LLM provider key, bearer token, or another
 secret to either script.

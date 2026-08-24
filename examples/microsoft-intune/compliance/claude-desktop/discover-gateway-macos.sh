@@ -1,8 +1,17 @@
 #!/bin/bash
 
-# Edit this value before uploading the script to Microsoft Intune.
+# Set these defaults to match the Intune-managed Claude Desktop profile before
+# uploading the script. Intune does not provide custom environment variables
+# to macOS discovery scripts; the environment overrides are for local testing.
+
+# Exact inferenceGatewayBaseUrl. Include a route prefix, such as /claude, only
+# when it is part of the managed Gateway URL.
 EXPECTED_CLAUDE_GATEWAY_URL=${EXPECTED_CLAUDE_GATEWAY_URL:-"https://llm.example.com/claude"}
+
+# Use static for Gateway API key authentication or interactive for Entra ID.
 EXPECTED_CLAUDE_CREDENTIAL_KIND=${EXPECTED_CLAUDE_CREDENTIAL_KIND:-"static"}
+
+# Required only for interactive authentication. The flow is browser or broker.
 EXPECTED_CLAUDE_OIDC_AUTH_FLOW=${EXPECTED_CLAUDE_OIDC_AUTH_FLOW:-""}
 EXPECTED_CLAUDE_OIDC_ISSUER=${EXPECTED_CLAUDE_OIDC_ISSUER:-""}
 EXPECTED_CLAUDE_OIDC_CLIENT_ID=${EXPECTED_CLAUDE_OIDC_CLIENT_ID:-""}
@@ -91,7 +100,7 @@ if [ "$managed_provider" = "gateway" ] && \
       fi
       ;;
     *)
-      configured=true
+      configured=false
       ;;
   esac
 fi

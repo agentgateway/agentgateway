@@ -1,4 +1,5 @@
-# Edit these values before uploading the script to Microsoft Intune.
+# Set these values to match the Intune-managed Codex TOML before uploading the
+# script. Use the exact base_url, including /v1, and matching env_key name.
 $ExpectedCodexBaseUrl = "https://llm.example.com/v1"
 $ExpectedCodexEnvKey = "AGENTGATEWAY_API_KEY"
 
