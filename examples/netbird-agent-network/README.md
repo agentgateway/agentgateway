@@ -28,12 +28,22 @@ the WebSocket upgrade headers while continuing to support management and signal
 gRPC. A NetworkPolicy permits only the management agentgateway to reach the
 server.
 
+The two Services give agentgateway distinct backend protocol hints even though
+both select the same pods and target port. `netbird-server-relay` preserves the
+HTTP/1.1 upgrade required by the relay WebSocket, while `netbird-server` declares
+h2c for Management and Signal gRPC. This example intentionally keeps relay on
+the shared HTTPS endpoint; native QUIC would require a separately exposed UDP
+relay. See NetBird's [external reverse proxy setup][netbird-reverse-proxy] for
+the complete protocol and routing requirements.
+
+[netbird-reverse-proxy]: https://docs.netbird.io/selfhosted/external-reverse-proxy
+
 ### Agent Network traffic
 
 ```text
 NetBird client
     |
-    | generated Agent Network HTTPS endpoint
+    | HTTPS over the encrypted NetBird tunnel
     v
 NetBird proxy
     | Authorization: Bearer <virtual key>
@@ -51,6 +61,13 @@ trusted NetBird identity, adds the virtual API key, and forwards requests to
 the private AI agentgateway Service. A NetworkPolicy permits only the NetBird
 proxy to reach this gateway. Agentgateway routes Anthropic message requests by
 path and sends all other requests to OpenAI.
+
+Authorized clients reach the Agent Network proxy through NetBird's encrypted
+WireGuard overlay. NetBird DNS resolves the generated endpoint to the proxy
+peer's tunnel IP, while HTTPS provides an additional layer of transport
+encryption and server authentication. The public LoadBalancer supports
+certificate issuance and public-path denial checks; normal authorized requests
+use the NetBird tunnel.
 
 ## Temporary NetBird images
 
