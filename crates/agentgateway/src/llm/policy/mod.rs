@@ -931,18 +931,17 @@ impl Policy {
 		request_body_size: Option<usize>,
 		buffer_limit: Option<crate::transport::BufferLimit>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
-		let outcome =
-			Self::evaluate_single_request_guard(
-				guard,
-				req,
-				http_headers,
-				client,
-				claims,
-				original,
-				request_body_size,
-				buffer_limit,
-			)
-				.await?;
+		let outcome = Self::evaluate_single_request_guard(
+			guard,
+			req,
+			http_headers,
+			client,
+			claims,
+			original,
+			request_body_size,
+			buffer_limit,
+		)
+		.await?;
 		Self::apply_request_guard_outcome(outcome, req)
 	}
 
@@ -1384,26 +1383,20 @@ impl Policy {
 		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
 		let messages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_request(
-			client,
-			webhook,
-			context,
-			&headers,
-			messages,
-			buffer_limit,
-		)
-		.await {
-			Ok(whr) => whr,
-			Err(e) => {
-				return match webhook.failure_mode {
-					FailureMode::FailOpen => {
-						warn!("webhook guardrail unavailable, failing open: {}", e);
-						Ok(GuardrailOutcome::FailOpen)
-					},
-					FailureMode::FailClosed => Err(e),
-				};
-			},
-		};
+		let whr =
+			match webhook::send_request(client, webhook, context, &headers, messages, buffer_limit).await
+			{
+				Ok(whr) => whr,
+				Err(e) => {
+					return match webhook.failure_mode {
+						FailureMode::FailOpen => {
+							warn!("webhook guardrail unavailable, failing open: {}", e);
+							Ok(GuardrailOutcome::FailOpen)
+						},
+						FailureMode::FailClosed => Err(e),
+					};
+				},
+			};
 		match whr.action {
 			RequestAction::Mask(mask) => {
 				debug!(

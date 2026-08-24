@@ -1362,7 +1362,9 @@ mod tests {
 			]
 		}"#;
 		let mut req: Request = serde_json::from_str(json_str).unwrap();
-		let raw = req.raw_messages().expect("anthropic messages supports raw messages");
+		let raw = req
+			.raw_messages()
+			.expect("anthropic messages supports raw messages");
 		assert_eq!(raw.len(), 3);
 		assert_eq!(
 			raw[0]["content"][0]["cache_control"]["type"],

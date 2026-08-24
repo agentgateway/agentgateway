@@ -3992,15 +3992,15 @@ fn convert_webhook(
 			_ => llm::policy::FailureMode::FailClosed,
 		};
 
-	let message_format = match proto::agent::backend_policy_spec::ai::webhook::MessageFormat::try_from(
-		w.message_format,
-	) {
-		Ok(proto::agent::backend_policy_spec::ai::webhook::MessageFormat::Raw) => {
-			llm::policy::WebhookMessageFormat::Raw
-		},
-		// Default to Guardrail (proto default is GUARDRAIL = 0)
-		_ => llm::policy::WebhookMessageFormat::Guardrail,
-	};
+	let message_format =
+		match proto::agent::backend_policy_spec::ai::webhook::MessageFormat::try_from(w.message_format)
+		{
+			Ok(proto::agent::backend_policy_spec::ai::webhook::MessageFormat::Raw) => {
+				llm::policy::WebhookMessageFormat::Raw
+			},
+			// Default to Guardrail (proto default is GUARDRAIL = 0)
+			_ => llm::policy::WebhookMessageFormat::Guardrail,
+		};
 
 	let headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)> = w
 		.headers
@@ -5887,7 +5887,10 @@ mod tests {
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
-		assert_eq!(result.message_format, llm::policy::WebhookMessageFormat::Raw);
+		assert_eq!(
+			result.message_format,
+			llm::policy::WebhookMessageFormat::Raw
+		);
 		assert_eq!(result.path.as_deref(), Some("/v1/compress"));
 		assert_eq!(result.min_size_bytes, 16_384);
 		Ok(())

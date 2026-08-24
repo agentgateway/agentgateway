@@ -3107,10 +3107,10 @@ async fn raw_webhook_end_to_end_replaces_messages() {
 		scope: default_content_scope(),
 		kind: RequestGuardKind::Webhook(Webhook {
 			target: SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
-			headers: vec![
-				(HeaderOrPseudo::Header(::http::HeaderName::from_static("x-model")),
-					Arc::new(cel::Expression::new_strict("llmRequest.model").unwrap())),
-			],
+			headers: vec![(
+				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-model")),
+				Arc::new(cel::Expression::new_strict("llmRequest.model").unwrap()),
+			)],
 			forward_header_matches: vec![],
 			failure_mode: FailureMode::FailClosed,
 			message_format: WebhookMessageFormat::Raw,
@@ -3119,11 +3119,12 @@ async fn raw_webhook_end_to_end_replaces_messages() {
 		}),
 	};
 
-	let mut req: crate::llm::types::completions::Request = serde_json::from_value(serde_json::json!({
-		"model": "gpt-4o",
-		"messages": [{"role": "user", "content": "original long message"}]
-	}))
-	.unwrap();
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "original long message"}]
+		}))
+		.unwrap();
 
 	let client = crate::test_helpers::policy_client();
 	let (action, rejection) = Policy::apply_single_request_guard(
@@ -3272,11 +3273,12 @@ async fn raw_webhook_min_size_gate_skips_small_requests_without_calling_backend(
 		}),
 	};
 
-	let mut req: crate::llm::types::completions::Request = serde_json::from_value(serde_json::json!({
-		"model": "gpt-4o",
-		"messages": [{"role": "user", "content": "hi"}]
-	}))
-	.unwrap();
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "hi"}]
+		}))
+		.unwrap();
 
 	let client = crate::test_helpers::policy_client();
 	let (action, rejection) = Policy::apply_single_request_guard(
@@ -3350,7 +3352,10 @@ async fn raw_webhook_non_success_status_uses_failure_mode() {
 	.unwrap();
 	assert_eq!(action, GuardrailAction::FailOpen);
 	assert!(rejection.is_none());
-	assert_eq!(fail_open_req.get_messages()[0].content.to_string(), "original");
+	assert_eq!(
+		fail_open_req.get_messages()[0].content.to_string(),
+		"original"
+	);
 
 	let mut fail_closed_req: crate::llm::types::completions::Request = serde_json::from_value(
 		serde_json::json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "original"}]}),
