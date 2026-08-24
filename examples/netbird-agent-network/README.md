@@ -210,7 +210,9 @@ kubectl rollout status deployment/netbird-dashboard \
 The dashboard reuses the management hostname, LoadBalancer, and certificate; it
 does not require another public Service or DNS record. The base management
 route explicitly sends NetBird HTTP and gRPC paths to the server. The optional
-dashboard route handles the remaining paths on the same HTTPS listener.
+dashboard route handles the remaining paths on the same HTTPS listener. The
+embedded NetBird IdP configuration in `secrets.example.yaml` registers the
+dashboard's `/nb-auth` and `/nb-silent-auth` OAuth callback paths.
 
 Wait for the public addresses:
 
@@ -430,6 +432,10 @@ exact.
   point to the `netbird-management` LoadBalancer or TCP 80 is filtered. Agent
   Network proxy certificate failures usually indicate that TCP 443 is
   filtered or its DNS records point to the wrong LoadBalancer.
+- `Unregistered redirect_uri` on dashboard login means the embedded IdP was
+  started without the dashboard callback URIs from `secrets.example.yaml`.
+  Apply the rendered Secret, restart `netbird-server`, and clear any stale
+  browser OAuth state before retrying.
 - Inspect `AgentgatewayBackend`, `AgentgatewayPolicy`, `HTTPRoute`, and Gateway
   status conditions before looking at pod logs.
 
