@@ -247,6 +247,8 @@ use crate::http::{Body, DropBody, RecordedBody, RecordedBodyHandle};
 #[allow(non_snake_case)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
+	#[serde(rename = "requestId")]
+	request_id: u64,
 	// Relative time from start, in us
 	event_start: Option<u64>,
 	event_end: u64,
@@ -471,6 +473,7 @@ fn cel_severity(result: &Value) -> Severity {
 #[derive(Clone, Debug)]
 pub struct DebugTracer {
 	sender: tokio::sync::mpsc::Sender<Message>,
+	request_id: u64,
 	start: Instant,
 	scope_state: Arc<Mutex<ScopeState>>,
 }
@@ -484,10 +487,12 @@ struct Watcher {
 	id: u64,
 	expression: Option<Expression>,
 	sender: Sender<Message>,
+	follow: bool,
 }
 
 static HAS_WATCHERS: AtomicBool = AtomicBool::new(false);
 static NEXT_WATCHER_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 static WATCHERS: Mutex<Vec<Watcher>> = Mutex::new(Vec::new());
 
 pub struct TraceReceiver {
@@ -524,6 +529,14 @@ impl Drop for TraceReceiver {
 }
 
 pub fn track_expression(expression: Option<Expression>) -> TraceReceiver {
+	track_expression_mode(expression, false)
+}
+
+pub fn track_expression_follow(expression: Option<Expression>) -> TraceReceiver {
+	track_expression_mode(expression, true)
+}
+
+fn track_expression_mode(expression: Option<Expression>, follow: bool) -> TraceReceiver {
 	let (tx, rx) = tokio::sync::mpsc::channel(32);
 	let id = NEXT_WATCHER_ID.fetch_add(1, Ordering::Relaxed);
 	let Ok(mut watchers) = WATCHERS.lock() else {
@@ -533,6 +546,7 @@ pub fn track_expression(expression: Option<Expression>) -> TraceReceiver {
 		id,
 		expression,
 		sender: tx,
+		follow,
 	});
 	HAS_WATCHERS.store(true, Ordering::Release);
 	TraceReceiver { id, receiver: rx }
@@ -549,7 +563,7 @@ fn remove_pending_watcher(id: u64) {
 	}
 }
 
-fn take_sender(req: &Request) -> Option<Sender<Message>> {
+fn take_sender(req: &Request) -> Option<(Sender<Message>, u64)> {
 	if !HAS_WATCHERS.load(Ordering::Acquire) {
 		return None;
 	}
@@ -569,11 +583,15 @@ fn take_sender(req: &Request) -> Option<Sender<Message>> {
 			Some(expression) => executor.eval_bool(expression),
 			None => true,
 		})?;
-	let sender = watchers.remove(index).sender;
+	let sender = if watchers[index].follow {
+		watchers[index].sender.clone()
+	} else {
+		watchers.remove(index).sender
+	};
 	if watchers.is_empty() {
 		HAS_WATCHERS.store(false, Ordering::Release);
 	}
-	Some(sender)
+	Some((sender, NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed)))
 }
 
 impl DebugTracer {
@@ -582,11 +600,12 @@ impl DebugTracer {
 		F: FnOnce(Request) -> Fut,
 		Fut: Future,
 	{
-		let Some(tx) = take_sender(&req) else {
+		let Some((tx, request_id)) = take_sender(&req) else {
 			return f(req).await;
 		};
 		let ins = DebugTracer {
 			sender: tx,
+			request_id,
 			start: Instant::now(),
 			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
@@ -599,6 +618,7 @@ impl DebugTracer {
 		let scope_state = self.scope_state.lock().expect("scope mutex poisoned");
 		Self {
 			sender: self.sender.clone(),
+			request_id: self.request_id,
 			start: self.start,
 			scope_state: Arc::new(Mutex::new(ScopeState {
 				stack: scope_state.stack.clone(),
@@ -639,6 +659,7 @@ impl DebugTracer {
 	) {
 		// If the client is disconnected or full then we just drop the events.
 		let _ = self.sender.try_send(Message {
+			request_id: self.request_id,
 			event_start: start.map(|s| u64::try_from((s - self.start).as_micros()).unwrap_or(u64::MAX)),
 			event_end: u64::try_from((end - self.start).as_micros()).unwrap_or(u64::MAX),
 			severity,
@@ -810,6 +831,7 @@ mod tests {
 		let (tx, mut rx) = tokio::sync::mpsc::channel(2);
 		let tracer = DebugTracer {
 			sender: tx,
+			request_id: 1,
 			start: Instant::now(),
 			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
@@ -875,10 +897,33 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn follow_trace_captures_multiple_requests_with_distinct_ids() {
+		const PATH: &str = "/follow-trace-multiple";
+		let mut trace_rx = track_expression_follow(Some(
+			Expression::new_strict(format!("request.path == '{PATH}'")).unwrap(),
+		));
+		for _ in 0..2 {
+			let req = http::Request::builder()
+				.uri(format!("http://example.com{PATH}"))
+				.body(Body::empty())
+				.unwrap();
+			DebugTracer::maybe_scope(req, |req| async move {
+				let _ = req;
+				trace(|tracer| tracer.request_started());
+			})
+			.await;
+		}
+		let first = trace_rx.recv().await.unwrap();
+		let second = trace_rx.recv().await.unwrap();
+		assert_ne!(first.request_id, second.request_id);
+	}
+
+	#[tokio::test]
 	async fn cel_eval_emits_events_with_captured_debug_tracer() {
 		let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 		let tracer = DebugTracer {
 			sender: tx,
+			request_id: 1,
 			start: Instant::now(),
 			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};

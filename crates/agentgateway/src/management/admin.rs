@@ -353,6 +353,10 @@ pub async fn handle_debug_trace(req: Request) -> Response {
 			.find(|(key, _)| key == "expression")
 			.map(|(_, value)| value.into_owned())
 	});
+	let follow = req.uri().query().is_some_and(|query| {
+		url::form_urlencoded::parse(query.as_bytes())
+			.any(|(key, value)| key == "follow" && value == "true")
+	});
 	let expression = match expression {
 		Some(expression) => match crate::cel::Expression::new_strict(&expression) {
 			Ok(expression) => Some(expression),
@@ -365,7 +369,11 @@ pub async fn handle_debug_trace(req: Request) -> Response {
 		},
 		None => None,
 	};
-	let rx = crate::proxy::dtrace::track_expression(expression);
+	let rx = if follow {
+		crate::proxy::dtrace::track_expression_follow(expression)
+	} else {
+		crate::proxy::dtrace::track_expression(expression)
+	};
 	let sse_stream = trace_sse_stream(rx);
 	::http::Response::builder()
 		.status(hyper::StatusCode::OK)
