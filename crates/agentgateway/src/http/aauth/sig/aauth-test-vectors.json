@@ -1,0 +1,537 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "AAuth HTTP Message Signing Test Vectors - RFC 9421 profile with Signature-Key extension",
+  "generated": "2026-01-30",
+  
+  "test_keys": {
+    "ed25519": {
+      "description": "RFC 9421 test-key-ed25519 - deterministic signatures",
+      "algorithm": "ed25519",
+      "jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "kid": "test-key-ed25519",
+        "x": "JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs",
+        "d": "n4Ni-HpISpVObnQMW0wOhCKROaIKqKtW_2ZYb2p9KcU"
+      },
+      "pem_public": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAJrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\n-----END PUBLIC KEY-----",
+      "pem_private": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ+DYvh6SEqVTm50DFtMDoQikTmiCqirVv9mWG9qfSnF\n-----END PRIVATE KEY-----",
+      "public_key_bytes_hex": "26b40b8f93fff3d897112f7ebc582b232dbd72517d082fe83cfb30ddce43d1bb",
+      "private_key_bytes_hex": "9f8362f87a484a954e6e740c5b4c0e8422913a220aa8ab56ff66586f6a7d29c5",
+      "jwk_thumbprint_sha256": "poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U"
+    }
+  },
+
+  "content_digest_tests": [
+    {
+      "id": "content-digest-sha256-json",
+      "description": "SHA-256 Content-Digest for JSON body per RFC 9530",
+      "body_string": "{\"hello\": \"world\"}",
+      "body_bytes_hex": "7b2268656c6c6f223a2022776f726c64227d",
+      "expected_digest": "sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:",
+      "digest_bytes_base64": "X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE="
+    },
+    {
+      "id": "content-digest-sha512-json",
+      "description": "SHA-512 Content-Digest for JSON body per RFC 9530",
+      "body_string": "{\"hello\": \"world\"}",
+      "expected_digest": "sha-512=:WZDPaVn/7XgHaAy8pmojAkGWoRx2UFChF41A2svX+TaPm+AbwAgBWnrIiYllu7BNNyealdVLvRwEmTHWXvJwew==:"
+    },
+    {
+      "id": "content-digest-sha256-action",
+      "description": "SHA-256 Content-Digest for action JSON",
+      "body_string": "{\"action\":\"update\",\"value\":42}",
+      "expected_digest": "sha-256=:VUrQSCPDNvdrtLi1CuO6qCkbRI3G1P2p8kX5QiYmoVk=:"
+    }
+  ],
+
+  "jwk_thumbprint_tests": [
+    {
+      "id": "thumbprint-ed25519",
+      "description": "JWK Thumbprint calculation for Ed25519 key per RFC 7638",
+      "jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs"
+      },
+      "canonical_json": "{\"crv\":\"Ed25519\",\"kty\":\"OKP\",\"x\":\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\"}",
+      "expected_thumbprint": "poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U",
+      "note": "Canonical JSON has keys sorted alphabetically, no whitespace"
+    },
+    {
+      "id": "thumbprint-ec-p256",
+      "description": "JWK Thumbprint for EC P-256 key",
+      "jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "qIVYZVLCrPZHGHjP17CTW0_-D9Lfw0EkjqF7xB4FivA",
+        "y": "Mc4nN9LTDOBhfoUeg8Ye9WedFRhnZXZJA12Qp0zZ6F0"
+      },
+      "canonical_json": "{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"qIVYZVLCrPZHGHjP17CTW0_-D9Lfw0EkjqF7xB4FivA\",\"y\":\"Mc4nN9LTDOBhfoUeg8Ye9WedFRhnZXZJA12Qp0zZ6F0\"}"
+    }
+  ],
+
+  "signature_key_header_tests": [
+    {
+      "id": "sigkey-hwk-ed25519",
+      "description": "Signature-Key header with scheme=hwk for Ed25519",
+      "scheme": "hwk",
+      "label": "sig1",
+      "input_jwk": {
+        "kty": "OKP",
+        "crv": "Ed25519", 
+        "x": "JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs"
+      },
+      "expected_header": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")",
+      "parsed": {
+        "label": "sig1",
+        "scheme": "hwk",
+        "params": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs"
+        }
+      }
+    },
+    {
+      "id": "sigkey-jwks-uri",
+      "description": "Signature-Key header with scheme=jwks_uri (identified scheme — current draft)",
+      "scheme": "jwks_uri",
+      "label": "sig1",
+      "params": {
+        "id": "https://agent.example",
+        "kid": "key-1",
+        "dwk": "aauth-agent.json"
+      },
+      "expected_header": "sig1=(scheme=jwks_uri id=\"https://agent.example\" kid=\"key-1\" dwk=\"aauth-agent.json\")",
+      "parsed": {
+        "label": "sig1",
+        "scheme": "jwks_uri",
+        "params": {
+          "id": "https://agent.example",
+          "kid": "key-1",
+          "dwk": "aauth-agent.json"
+        }
+      }
+    },
+    {
+      "id": "sigkey-jwt",
+      "description": "Signature-Key header with scheme=jwt",
+      "scheme": "jwt",
+      "label": "sig1",
+      "params": {
+        "jwt": "eyJhbGciOiJFZERTQSIsInR5cCI6ImFnZW50K2p3dCIsImtpZCI6ImtleS0xIn0.eyJpc3MiOiJodHRwczovL2FnZW50LmV4YW1wbGUiLCJzdWIiOiJhZ2VudC1kZWxlZ2F0ZS0xIiwiZXhwIjoxNzA0MDY3MjAwLCJjbmYiOnsiandriOnsia3R5IjoiT0tQIiwiY3J2IjoiRWQyNTUxOSIsIngiOiJKckJMajVQXzg5aVhFUzktdkZncklUZTkyY2xGOUNDX29QUHNXxjdTA0Qmpicz0ifX19.SIGNATURE"
+      },
+      "expected_header": "sig1=(scheme=jwt jwt=\"eyJhbGciOiJFZERTQSIsInR5cCI6ImFnZW50K2p3dCIsImtpZCI6ImtleS0xIn0.eyJpc3MiOiJodHRwczovL2FnZW50LmV4YW1wbGUiLCJzdWIiOiJhZ2VudC1kZWxlZ2F0ZS0xIiwiZXhwIjoxNzA0MDY3MjAwLCJjbmYiOnsiandriOnsia3R5IjoiT0tQIiwiY3J2IjoiRWQyNTUxOSIsIngiOiJKckJMajVQXzg5aVhFUzktdkZncklUZTkyY2xGOUNDX29QUHNXxjdTA0Qmpicz0ifX19.SIGNATURE\")"
+    }
+  ],
+
+  "signature_base_tests": [
+    {
+      "id": "sigbase-rfc9421-b26",
+      "description": "RFC 9421 B.2.6 - Ed25519 signature with known output",
+      "request": {
+        "method": "POST",
+        "path": "/foo",
+        "query": "param=Value&Pet=dog",
+        "authority": "example.com",
+        "headers": {
+          "Host": "example.com",
+          "Date": "Tue, 20 Apr 2021 02:07:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Digest": "sha-512=:WZDPaVn/7XgHaAy8pmojAkGWoRx2UFChF41A2svX+TaPm+AbwAgBWnrIiYllu7BNNyealdVLvRwEmTHWXvJwew==:",
+          "Content-Length": "18"
+        },
+        "body": "{\"hello\": \"world\"}"
+      },
+      "covered_components": ["date", "@method", "@path", "@authority", "content-type", "content-length"],
+      "signature_params": {
+        "created": 1618884473,
+        "keyid": "test-key-ed25519"
+      },
+      "expected_signature_base": "\"date\": Tue, 20 Apr 2021 02:07:55 GMT\n\"@method\": POST\n\"@path\": /foo\n\"@authority\": example.com\n\"content-type\": application/json\n\"content-length\": 18\n\"@signature-params\": (\"date\" \"@method\" \"@path\" \"@authority\" \"content-type\" \"content-length\");created=1618884473;keyid=\"test-key-ed25519\"",
+      "expected_signature_input": "sig-b26=(\"date\" \"@method\" \"@path\" \"@authority\" \"content-type\" \"content-length\");created=1618884473;keyid=\"test-key-ed25519\"",
+      "expected_signature": "sig-b26=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:",
+      "key_id": "ed25519"
+    },
+    {
+      "id": "sigbase-aauth-get-simple",
+      "description": "AAuth profile - GET request without query or body",
+      "request": {
+        "method": "GET",
+        "path": "/api/data",
+        "query": null,
+        "authority": "resource.example",
+        "headers": {
+          "Host": "resource.example"
+        },
+        "body": null
+      },
+      "signature_key_header": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")",
+      "covered_components": ["@method", "@authority", "@path", "signature-key"],
+      "signature_params": {
+        "created": 1730217600
+      },
+      "expected_signature_base": "\"@method\": GET\n\"@authority\": resource.example\n\"@path\": /api/data\n\"signature-key\": sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")\n\"@signature-params\": (\"@method\" \"@authority\" \"@path\" \"signature-key\");created=1730217600",
+      "expected_signature_input": "sig1=(\"@method\" \"@authority\" \"@path\" \"signature-key\");created=1730217600",
+      "key_id": "ed25519"
+    },
+    {
+      "id": "sigbase-aauth-get-query",
+      "description": "AAuth profile - GET request with query string",
+      "request": {
+        "method": "GET",
+        "path": "/api/data",
+        "query": "user=alice&limit=10",
+        "authority": "resource.example",
+        "headers": {
+          "Host": "resource.example"
+        },
+        "body": null
+      },
+      "signature_key_header": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")",
+      "covered_components": ["@method", "@authority", "@path", "@query", "signature-key"],
+      "signature_params": {
+        "created": 1730217600
+      },
+      "expected_signature_base": "\"@method\": GET\n\"@authority\": resource.example\n\"@path\": /api/data\n\"@query\": ?user=alice&limit=10\n\"signature-key\": sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")\n\"@signature-params\": (\"@method\" \"@authority\" \"@path\" \"@query\" \"signature-key\");created=1730217600",
+      "expected_signature_input": "sig1=(\"@method\" \"@authority\" \"@path\" \"@query\" \"signature-key\");created=1730217600",
+      "key_id": "ed25519",
+      "note": "@query value MUST include leading ? per RFC 9421 Section 2.2.7"
+    },
+    {
+      "id": "sigbase-aauth-post-body",
+      "description": "AAuth profile - POST request with body, no query",
+      "request": {
+        "method": "POST",
+        "path": "/api/data",
+        "query": null,
+        "authority": "resource.example",
+        "headers": {
+          "Host": "resource.example",
+          "Content-Type": "application/json",
+          "Content-Digest": "sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:"
+        },
+        "body": "{\"hello\": \"world\"}"
+      },
+      "signature_key_header": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")",
+      "covered_components": ["@method", "@authority", "@path", "content-type", "content-digest", "signature-key"],
+      "signature_params": {
+        "created": 1730217600
+      },
+      "expected_signature_base": "\"@method\": POST\n\"@authority\": resource.example\n\"@path\": /api/data\n\"content-type\": application/json\n\"content-digest\": sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:\n\"signature-key\": sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")\n\"@signature-params\": (\"@method\" \"@authority\" \"@path\" \"content-type\" \"content-digest\" \"signature-key\");created=1730217600",
+      "expected_signature_input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-type\" \"content-digest\" \"signature-key\");created=1730217600",
+      "key_id": "ed25519"
+    },
+    {
+      "id": "sigbase-aauth-post-body-query",
+      "description": "AAuth profile - POST request with body and query",
+      "request": {
+        "method": "POST",
+        "path": "/api/data",
+        "query": "confirm=true",
+        "authority": "resource.example",
+        "headers": {
+          "Host": "resource.example",
+          "Content-Type": "application/json",
+          "Content-Digest": "sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:"
+        },
+        "body": "{\"hello\": \"world\"}"
+      },
+      "signature_key_header": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")",
+      "covered_components": ["@method", "@authority", "@path", "@query", "content-type", "content-digest", "signature-key"],
+      "signature_params": {
+        "created": 1730217600
+      },
+      "expected_signature_base": "\"@method\": POST\n\"@authority\": resource.example\n\"@path\": /api/data\n\"@query\": ?confirm=true\n\"content-type\": application/json\n\"content-digest\": sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:\n\"signature-key\": sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")\n\"@signature-params\": (\"@method\" \"@authority\" \"@path\" \"@query\" \"content-type\" \"content-digest\" \"signature-key\");created=1730217600",
+      "expected_signature_input": "sig1=(\"@method\" \"@authority\" \"@path\" \"@query\" \"content-type\" \"content-digest\" \"signature-key\");created=1730217600",
+      "key_id": "ed25519"
+    },
+    {
+      "id": "sigbase-aauth-post-nonce",
+      "description": "AAuth profile - POST request with nonce for replay protection",
+      "request": {
+        "method": "POST",
+        "path": "/api/data",
+        "query": null,
+        "authority": "resource.example",
+        "headers": {
+          "Host": "resource.example",
+          "Content-Type": "application/json",
+          "Content-Digest": "sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:",
+          "Nonce": "Y3VyaW91c2x5Y3VyaW91cw"
+        },
+        "body": "{\"hello\": \"world\"}"
+      },
+      "signature_key_header": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")",
+      "covered_components": ["@method", "@authority", "@path", "content-type", "content-digest", "nonce", "signature-key"],
+      "signature_params": {
+        "created": 1730217600
+      },
+      "expected_signature_input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-type\" \"content-digest\" \"nonce\" \"signature-key\");created=1730217600",
+      "key_id": "ed25519"
+    }
+  ],
+
+  "signature_input_parsing_tests": [
+    {
+      "id": "siginput-parse-simple",
+      "description": "Parse simple Signature-Input header",
+      "input": "sig1=(\"@method\" \"@authority\" \"@path\" \"signature-key\");created=1730217600",
+      "expected": {
+        "label": "sig1",
+        "components": ["@method", "@authority", "@path", "signature-key"],
+        "params": {
+          "created": 1730217600
+        }
+      }
+    },
+    {
+      "id": "siginput-parse-keyid",
+      "description": "Parse Signature-Input with keyid",
+      "input": "sig-b26=(\"date\" \"@method\" \"@path\" \"@authority\" \"content-type\" \"content-length\");created=1618884473;keyid=\"test-key-ed25519\"",
+      "expected": {
+        "label": "sig-b26",
+        "components": ["date", "@method", "@path", "@authority", "content-type", "content-length"],
+        "params": {
+          "created": 1618884473,
+          "keyid": "test-key-ed25519"
+        }
+      }
+    },
+    {
+      "id": "siginput-parse-nonce",
+      "description": "Parse Signature-Input with nonce",
+      "input": "sig1=(\"@method\" \"nonce\");created=1730217600;nonce=\"abc123\"",
+      "expected": {
+        "label": "sig1",
+        "components": ["@method", "nonce"],
+        "params": {
+          "created": 1730217600,
+          "nonce": "abc123"
+        }
+      }
+    }
+  ],
+
+  "signature_parsing_tests": [
+    {
+      "id": "sig-parse-simple",
+      "description": "Parse Signature header",
+      "input": "sig1=:wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw==:",
+      "expected": {
+        "label": "sig1",
+        "signature_base64": "wqcAqbmYJ2ji2glfAMaRy4gruYYnx2nEFN2HN6jrnDnQCK1u02Gb04v9EDgwUPiu4A0w6vuQv5lIp5WPpBKRCw=="
+      },
+      "note": "RFC 8941 Byte Sequence uses standard Base64 with colons as delimiters"
+    }
+  ],
+
+  "label_consistency_tests": [
+    {
+      "id": "label-match-valid",
+      "description": "Valid - all three headers use same label",
+      "signature_input": "sig1=(\"@method\" \"@authority\");created=1730217600",
+      "signature": "sig1=:abc123==:",
+      "signature_key": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"...\")",
+      "expected_valid": true
+    },
+    {
+      "id": "label-mismatch-sigkey",
+      "description": "Invalid - Signature-Key uses different label",
+      "signature_input": "sig1=(\"@method\" \"@authority\");created=1730217600",
+      "signature": "sig1=:abc123==:",
+      "signature_key": "sig2=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"...\")",
+      "expected_valid": false,
+      "error": "Label mismatch"
+    },
+    {
+      "id": "label-mismatch-sig",
+      "description": "Invalid - Signature uses different label",
+      "signature_input": "sig1=(\"@method\" \"@authority\");created=1730217600",
+      "signature": "sig2=:abc123==:",
+      "signature_key": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"...\")",
+      "expected_valid": false,
+      "error": "Label mismatch"
+    }
+  ],
+
+  "token_tests": {
+    "agent_token": {
+      "description": "agent+jwt token format per AAuth spec Section 5",
+      "header": {
+        "typ": "agent+jwt",
+        "alg": "EdDSA",
+        "kid": "agent-server-key-1"
+      },
+      "payload": {
+        "iss": "https://agent.example",
+        "sub": "agent-delegate-1",
+        "exp": 1704067200,
+        "cnf": {
+          "jwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs"
+          }
+        }
+      },
+      "claims_to_verify": ["iss", "sub", "exp", "cnf.jwk"]
+    },
+    "auth_token": {
+      "description": "auth+jwt token format per AAuth spec",
+      "header": {
+        "typ": "auth+jwt",
+        "alg": "EdDSA",
+        "kid": "auth-server-key-1"
+      },
+      "payload": {
+        "iss": "https://auth.example",
+        "aud": "https://resource.example",
+        "sub": "user-12345",
+        "agent": "https://agent.example",
+        "scope": "data.read data.write",
+        "exp": 1704067200,
+        "cnf": {
+          "jwk": {
+            "kty": "OKP",
+            "crv": "Ed25519",
+            "x": "JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs"
+          }
+        }
+      }
+    },
+    "resource_token": {
+      "description": "resource+jwt token format per AAuth spec Section 6",
+      "header": {
+        "typ": "resource+jwt",
+        "alg": "EdDSA",
+        "kid": "resource-key-1"
+      },
+      "payload": {
+        "iss": "https://resource.example",
+        "aud": "https://auth.example",
+        "agent": "https://agent.example",
+        "agent_jkt": "poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U",
+        "exp": 1730221200,
+        "scope": "data.read data.write"
+      },
+      "claims_to_verify": ["iss", "aud", "agent", "agent_jkt", "exp", "scope"]
+    }
+  },
+
+  "end_to_end_tests": [
+    {
+      "id": "e2e-hwk-get",
+      "description": "Complete GET request with hwk scheme",
+      "input": {
+        "method": "GET",
+        "url": "https://resource.example/api/data",
+        "headers": {},
+        "body": null
+      },
+      "key_id": "ed25519",
+      "scheme": "hwk",
+      "created_timestamp": 1730217600,
+      "expected_headers": {
+        "Signature-Input": "sig1=(\"@method\" \"@authority\" \"@path\" \"signature-key\");created=1730217600",
+        "Signature-Key": "sig1=(scheme=hwk kty=\"OKP\" crv=\"Ed25519\" x=\"JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs\")"
+      },
+      "verify_steps": [
+        "Parse Signature-Key, extract label and scheme",
+        "Verify label matches across all three headers",
+        "Build signature base from Signature-Input components",
+        "Extract public key from Signature-Key (hwk scheme)",
+        "Verify signature using Ed25519"
+      ]
+    },
+    {
+      "id": "e2e-hwk-post",
+      "description": "Complete POST request with body and hwk scheme",
+      "input": {
+        "method": "POST",
+        "url": "https://resource.example/api/data",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"hello\": \"world\"}"
+      },
+      "key_id": "ed25519",
+      "scheme": "hwk",
+      "created_timestamp": 1730217600,
+      "additional_components": ["content-type", "content-digest"],
+      "expected_content_digest": "sha-256=:X48E9qOokqqrvdts8nOJRJN3OWDUoyWxBf7kbu9DBPE=:"
+    }
+  ],
+
+  "error_cases": [
+    {
+      "id": "error-missing-signature-key",
+      "description": "Request missing Signature-Key header",
+      "error_type": "missing_header",
+      "expected_error": "Signature-Key header is required"
+    },
+    {
+      "id": "error-signature-key-not-covered",
+      "description": "signature-key not in covered components",
+      "signature_input": "sig1=(\"@method\" \"@authority\" \"@path\");created=1730217600",
+      "error_type": "invalid_coverage",
+      "expected_error": "signature-key MUST be a covered component"
+    },
+    {
+      "id": "error-created-too-old",
+      "description": "created timestamp more than 60 seconds in past",
+      "signature_params": {
+        "created": 1730217500
+      },
+      "current_time": 1730217600,
+      "error_type": "timestamp_expired",
+      "expected_error": "Signature created timestamp outside valid window"
+    },
+    {
+      "id": "error-invalid-scheme",
+      "description": "Unknown signature scheme",
+      "signature_key": "sig1=(scheme=unknown)",
+      "error_type": "invalid_scheme",
+      "expected_error": "Unsupported signature scheme: unknown"
+    },
+    {
+      "id": "error-multiple-labels",
+      "description": "Multiple signature labels (not allowed in AAuth)",
+      "signature_input": "sig1=(\"@method\");created=1, sig2=(\"@path\");created=2",
+      "error_type": "multiple_labels",
+      "expected_error": "AAuth supports exactly one signature per request"
+    }
+  ],
+
+  "implementation_notes": {
+    "signature_base_construction": [
+      "Each line is: '\"component-name\": value'",
+      "Lines separated by single LF (0x0A), no trailing LF after last line",
+      "Component names are double-quoted strings",
+      "Single space after colon",
+      "@query value MUST include leading '?' per RFC 9421 Section 2.2.7",
+      "@signature-params line is always last",
+      "Header values are normalized per HTTP semantics (whitespace, case)"
+    ],
+    "base64_encoding": [
+      "Signature header uses RFC 8941 Byte Sequence: standard Base64 wrapped in colons",
+      "JWK 'x' values use Base64URL without padding",
+      "JWK thumbprint uses Base64URL without padding",
+      "Content-Digest uses standard Base64 wrapped in colons"
+    ],
+    "timestamp_handling": [
+      "created parameter is Unix timestamp (seconds since epoch)",
+      "Receiver MUST reject if |now - created| > 60 seconds (default)",
+      "Different tolerance may be configured per receiver policy"
+    ],
+    "aauth_specific": [
+      "signature-key MUST always be a covered component",
+      "Exactly one signature label per request",
+      "Label must match across Signature-Input, Signature, and Signature-Key",
+      "scheme=hwk provides pseudonymous signing",
+      "scheme=jwks/jwt provides identified signing"
+    ]
+  }
+}

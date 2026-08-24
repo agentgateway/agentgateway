@@ -58,6 +58,7 @@ cel = { path = "crates/cel-fork/cel" }
 cel-derive = { path = "crates/cel-fork/cel-derive" }
 protos = { path = "crates/protos" }
 atomic_float = { version = "1.1.0", features = ["serde"] }
+ed25519-dalek = "2"
 anyhow = "1.0"
 arc-swap = "1.9"
 arcstr = { version = "1.2", features = ["serde"] }

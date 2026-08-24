@@ -181,6 +181,7 @@ pub enum OutboundCallSubtype {
 	Mcp,
 
 	// Policy
+	AAuth,
 	ExtAuthz,
 	ExtProc,
 	Guardrail,
