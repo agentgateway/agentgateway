@@ -30,10 +30,10 @@ func TestOAuthTokenExchange(tt *testing.T) {
 	t.Apply(manifest("oauth", "routes.yaml"))
 
 	t.HTTPRouteAccepted("cross-app-access", base.Namespace)
-	t.HTTPRouteAccepted("invalid-oauth-token-exchange", base.Namespace)
 	t.HTTPRouteAccepted("oauth-token-exchange", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-subject", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-bearer", base.Namespace)
+	t.HTTPRouteAccepted("invalid-oauth-token-exchange", base.Namespace)
 
 	assertions.EventuallyAgwPolicyCondition(t, "cross-app-access", base.Namespace, "Accepted", metav1.ConditionTrue)
 	t.Run("CrossAppAccess", func(t base.Test) {
