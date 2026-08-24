@@ -335,7 +335,8 @@ group, setup key, and Kubernetes workloads required by this example.
    Saving the first provider also creates the generated Agent Network endpoint.
 4. Open **Agent Network > Policies** and create an enabled policy named
    `Agentgateway access`. Select `agentgateway-clients` as its source group and
-   `agentgateway` as its destination provider.
+   `agentgateway` as its destination provider. Click **Continue** without making
+   changes in the **Limits** and **Guardrails** steps.
 
 Validate the result with a PAT created in or copied from the dashboard:
 
