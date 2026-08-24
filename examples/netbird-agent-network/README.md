@@ -441,32 +441,37 @@ exact.
 
 ## Cleanup
 
-Remove both the example's NetBird account configuration and its Kubernetes
-resources while the management server is still available:
+For the normal disposable installation, delete the dedicated namespace and its
+namespace-local NetBird database:
+
+```bash
+./cleanup.sh
+```
+
+Use `--management` only when the NetBird management database will survive
+namespace deletion, such as an external PostgreSQL database or retained volume,
+and the example-owned account configuration should also be removed:
 
 ```bash
 export NETBIRD_PAT=nbp_replace_me
 ./cleanup.sh --management
 ```
 
-The management cleanup stops the example proxy and client before deleting the
-named Agent Network policy, provider, setup key, active proxy token, and Agent
-Network settings. The order satisfies the provider-reference and active-proxy
-deletion guards. It then deletes the dedicated namespace.
+This optional management cleanup stops the example proxy and client before
+deleting the named Agent Network policy, provider, setup key, active proxy
+token, and Agent Network settings. The order satisfies the provider-reference
+and active-proxy deletion guards. It then deletes the dedicated namespace.
 
 The `agentgateway-clients` group is retained because `configure.sh` reuses an
 existing group with that name. The cleanup script cannot safely determine
 whether the group was created for this example or shared with another setup.
 Delete it separately only after confirming that nothing else uses it.
 
-Running `./cleanup.sh` without `--management` deletes only the Kubernetes
-namespace. Account cleanup cannot be performed afterward unless the management
-server and its database remain available elsewhere.
-
 The script does not uninstall shared Gateway API, cert-manager, or agentgateway
 control-plane components, and it does not remove DNS records. Deleting the
-namespace also deletes the example's PVCs and NetBird database; that data is
-not recoverable unless the storage system retains a snapshot.
+namespace deletes the example's PVC objects. With the usual `Delete` reclaim
+policy, that also deletes the NetBird database. A retained volume or snapshot
+can preserve the database independently of the namespace.
 
 ## Tracking
 

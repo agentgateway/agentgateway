@@ -12,8 +12,8 @@ usage() {
 Usage: ./cleanup.sh [--management]
 
 Options:
-  --management  Remove the example's NetBird account configuration before
-                deleting the Kubernetes namespace. Requires
+  --management  For a management database that survives namespace deletion,
+                remove the example's account configuration first. Requires
                 NETBIRD_MANAGEMENT_DOMAIN and NETBIRD_PAT.
   -h, --help    Show this help.
 EOF
@@ -141,9 +141,6 @@ cleanup_management() {
 
 if [[ ${CLEAN_MANAGEMENT} == true ]]; then
   cleanup_management
-else
-  echo "Skipping NetBird account cleanup. Use --management to remove the"
-  echo "example configuration before the management server is deleted."
 fi
 
 kubectl delete namespace "${NAMESPACE}" --ignore-not-found
