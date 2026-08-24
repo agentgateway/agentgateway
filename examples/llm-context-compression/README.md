@@ -37,9 +37,10 @@ request through unchanged):
 { "messages": [ ...compressed message objects... ] }
 ```
 
-Any non-200 status, a response without a `messages` array, or output that breaks the
-request's tool-call pairing is treated as a failure and resolved per `failureMode`
-(default `failOpen`: the original request is forwarded unchanged).
+Any non-200 status, a response without a `messages` array, or malformed message objects is
+treated as a failure and resolved per `failureMode` (default `failOpen`: the original request
+is forwarded unchanged). Content-level correctness is left to the compression service and
+the upstream provider.
 
 The gateway runs this as a request guard, so it executes after other prompt guards (which
 see the original content) and before token counting (rate limits and cost reflect what is

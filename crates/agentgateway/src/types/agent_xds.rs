@@ -4021,6 +4021,18 @@ fn convert_webhook(
 		})
 		.collect();
 
+	let min_size_bytes = match usize::try_from(w.min_size_bytes) {
+		Ok(value) => value,
+		Err(_) => {
+			diagnostics.add_warning(format!(
+				"webhook minSizeBytes {} exceeds the platform limit; clamping to {}",
+				w.min_size_bytes,
+				usize::MAX
+			));
+			usize::MAX
+		},
+	};
+
 	Ok(llm::policy::Webhook {
 		target,
 		headers,
@@ -4028,7 +4040,7 @@ fn convert_webhook(
 		failure_mode,
 		message_format,
 		path: w.path.clone(),
-		min_size_bytes: w.min_size_bytes as usize,
+		min_size_bytes,
 	})
 }
 

@@ -189,6 +189,7 @@ type Webhook struct {
 	// Minimum size, in bytes, of the JSON-serialized messages before the webhook is
 	// called. Requests/responses below the threshold skip the webhook entirely.
 	// Defaults to 0 (always call).
+	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MinSizeBytes *int64 `json:"minSizeBytes,omitempty"`
 }

@@ -3377,6 +3377,7 @@ spec:
                                     called. Requests/responses below the threshold skip the webhook entirely.
                                     Defaults to 0 (always call).
                                   format: int64
+                                  minimum: 0
                                   type: integer
                                 path:
                                   description: |-
@@ -4617,6 +4618,7 @@ spec:
                                     called. Requests/responses below the threshold skip the webhook entirely.
                                     Defaults to 0 (always call).
                                   format: int64
+                                  minimum: 0
                                   type: integer
                                 path:
                                   description: |-
