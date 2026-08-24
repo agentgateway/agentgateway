@@ -1,46 +1,49 @@
 {
-  "name": "agentgateway-ui",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "VITE_AGENTGATEWAY_API=http://localhost:15000 vite --host 0.0.0.0 --port 19000",
-    "build": "npm run generate-schema && tsc -b && vite build",
-    "lint": "npm run typecheck && npm run format:check",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,js,json}\" \"scripts/**/*.mjs\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,js,json}\" \"scripts/**/*.mjs\"",
-    "typecheck": "npm run generate-schema && tsc -b",
-    "preview": "vite preview --host 0.0.0.0 --port 19001",
-    "generate-schema": "node scripts/generate-schema.mjs",
-    "test:e2e": "playwright test"
-  },
-  "dependencies": {
-    "@fontsource/fira-code": "^5.2.7",
-    "@fontsource/geist-sans": "^5.2.5",
-    "@monaco-editor/react": "^4.7.0",
-    "@number-flow/react": "^0.6.0",
-    "@tanstack/react-query": "^5.90.12",
-    "@tanstack/react-router": "^1.139.3",
-    "js-yaml": "^4.3.1",
-    "lucide-react": "^0.562.0",
-    "monaco-editor": "^0.53.0",
-    "monaco-yaml": "^5.5.1",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "recharts": "^3.8.1",
-    "zod": "^4.1.13"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.60.0",
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^20.19.25",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "ajv": "^8.20.0",
-    "json-schema-to-typescript": "^15.0.4",
-    "prettier": "^3.8.4",
-    "typescript": "^7.0.2",
-    "vite": "^8.0.16"
-  }
+	"name": "agentgateway-ui",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node scripts/generate-schema.mjs && tsc -b && vite build",
+		"check": "biome check .",
+		"check:fix": "biome check --write .",
+		"dev": "pnpm build && VITE_AGENTGATEWAY_API=http://localhost:15000 vite",
+		"format": "biome format --write .",
+		"format:check": "biome format .",
+		"generate-schema": "node scripts/generate-schema.mjs",
+		"lint": "pnpm typecheck && pnpm check",
+		"preview": "pnpm build && vite preview",
+		"preview:e2e": "pnpm build --mode e2e && vite preview --mode e2e",
+		"test:e2e": "playwright test",
+		"typecheck": "pnpm generate-schema && tsc -b"
+	},
+	"dependencies": {
+		"@fontsource/geist-sans": "=5.3.0",
+		"@monaco-editor/react": "=4.7.0",
+		"@tanstack/react-query": "=5.101.4",
+		"@tanstack/react-router": "=1.170.18",
+		"js-yaml": "=5.2.3",
+		"lucide-react": "=1.28.0",
+		"monaco-editor": "=0.56.0",
+		"monaco-yaml": "=5.5.1",
+		"react": "=19.2.8",
+		"react-dom": "=19.2.8",
+		"recharts": "=3.10.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.6",
+		"@playwright/test": "=1.62.1",
+		"@types/node": "=24.13.3",
+		"@types/react": "=19.2.18",
+		"@types/react-dom": "=19.2.4",
+		"@vitejs/plugin-react": "=6.0.5",
+		"ajv": "=8.20.0",
+		"json-schema-to-typescript": "=15.0.4",
+		"typescript": "=7.0.2",
+		"vite": "=8.2.0"
+	},
+	"packageManager": "pnpm@11.20.0",
+	"engines": {
+		"node": "24.17.0"
+	}
 }

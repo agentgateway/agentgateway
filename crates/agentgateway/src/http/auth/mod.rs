@@ -369,6 +369,15 @@ impl AuthorizationLocation {
 		}
 	}
 
+	/// Returns true if credentials are read from the `Proxy-Authorization` header.
+	///
+	/// Per RFC 9110, credentials sent in `Proxy-Authorization` are addressed to the proxy itself,
+	/// so failures must be challenged with `407` + `Proxy-Authenticate` rather than
+	/// `401` + `WWW-Authenticate`.
+	pub fn is_proxy_header(&self) -> bool {
+		matches!(self, AuthorizationLocation::Header { name, .. } if name == http::header::PROXY_AUTHORIZATION)
+	}
+
 	pub fn extract<'a>(&self, req: &'a Request) -> Option<Cow<'a, str>> {
 		match self {
 			AuthorizationLocation::Header { name, prefix } => {

@@ -32,7 +32,14 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 				.map(|u| u.0.clone())
 				.unwrap_or_else(|| req.uri().clone());
 			let uri = crate::http::x_headers::apply_forwarded_scheme(uri, req.headers());
-			RequestType::AgentCard(uri)
+			// Also record the (possibly rewritten) backend path so we can compute
+			// relative interface URLs on the response side.
+			let backend_path = req.uri().path().to_string();
+			let rewrite = req
+				.extensions()
+				.get::<filters::AppliedUrlRewrite>()
+				.cloned();
+			RequestType::AgentCard(uri, backend_path, rewrite)
 		},
 		(m, _) if m == http::Method::POST => {
 			let method = match crate::http::classify_content_type(req.headers()) {
@@ -58,7 +65,7 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 pub enum RequestType {
 	#[default]
 	Unknown,
-	AgentCard(http::Uri),
+	AgentCard(http::Uri, String, Option<filters::AppliedUrlRewrite>),
 	Call(Strng),
 }
 
@@ -68,6 +75,7 @@ pub struct ResponseInfo {
 	pub error_code: Option<i64>,
 	pub result_kind: Option<Strng>,
 	pub task_state: Option<Strng>,
+	pub context_id: Option<Strng>,
 }
 
 impl ResponseInfo {
@@ -84,13 +92,39 @@ impl ResponseInfo {
 		let error_code = error
 			.and_then(|e| e.get("code"))
 			.and_then(serde_json::Value::as_i64);
+		// A2A v0.3 puts the Task/Message fields directly on `result`, discriminated by
+		// `kind`. A2A v1.0 models the response as `oneof payload { Task task = 1;
+		// Message message = 2; }`, so the payload is nested under `result.task` or
+		// `result.message` and carries no `kind` field. Prefer the flat v0.3 shape and
+		// fall back to the nested v1.0 shape so both spec generations populate.
+		let payload = |name: &str| result.and_then(|r| r.get(name)).filter(|v| !v.is_null());
+		let task = payload("task");
+		let message = payload("message");
 		let result_kind = result
 			.and_then(|r| r.get("kind"))
 			.and_then(serde_json::Value::as_str)
-			.map(Strng::from);
+			.map(Strng::from)
+			// v1.0: the populated `oneof` arm names the kind.
+			.or_else(|| task.map(|_| Strng::from("task")))
+			.or_else(|| message.map(|_| Strng::from("message")));
 		let task_state = result
 			.and_then(|r| r.get("status"))
 			.and_then(|status| status.get("state"))
+			.and_then(serde_json::Value::as_str)
+			.or_else(|| {
+				// v1.0: result.task.status.state. A Message has no status.
+				task
+					.and_then(|t| t.get("status"))
+					.and_then(|status| status.get("state"))
+					.and_then(serde_json::Value::as_str)
+			})
+			.map(Strng::from);
+		// context_id ties multiple turns of a conversation together. Both Task and
+		// Message carry it, so check the flat v0.3 location and then either v1.0 arm.
+		let context_id = result
+			.and_then(|r| r.get("contextId"))
+			.or_else(|| task.and_then(|t| t.get("contextId")))
+			.or_else(|| message.and_then(|m| m.get("contextId")))
 			.and_then(serde_json::Value::as_str)
 			.map(Strng::from);
 		Self {
@@ -98,6 +132,7 @@ impl ResponseInfo {
 			error_code,
 			result_kind,
 			task_state,
+			context_id,
 		}
 	}
 }
@@ -128,7 +163,7 @@ pub async fn apply_to_response(
 		return Ok(None);
 	};
 	match a2a_type {
-		RequestType::AgentCard(uri) => {
+		RequestType::AgentCard(uri, backend_path, rewrite) => {
 			// For agent card, we need to mutate the request to insert the proper URL to reach it
 			// through the gateway.
 			let buffer_limit = crate::http::response_buffer_limit(resp);
@@ -137,6 +172,12 @@ pub async fn apply_to_response(
 				anyhow::bail!("agent card invalid JSON");
 			};
 			let gateway_base = build_agent_path(uri);
+
+			// Compute the backend agent base by stripping the agent-card suffix from the
+			// (possibly rewritten) backend request path. This lets us compute the *relative*
+			// part of interface URLs so they are anchored at the gateway path instead of
+			// being naively appended.
+			let backend_agent_path = strip_agent_card_suffix(&backend_path);
 
 			if let Some(interfaces) = agent_card.get_mut("supportedInterfaces") {
 				// A2A v1.0: rewrite url inside each AgentInterface entry.
@@ -148,11 +189,22 @@ pub async fn apply_to_response(
 						&& let Some(s) = url_val.as_str()
 						&& let Ok(iface_uri) = s.parse::<Uri>()
 					{
-						let path_and_query = iface_uri
+						let iface_path = iface_uri
 							.path_and_query()
 							.map(|pq| pq.as_str())
 							.unwrap_or_else(|| iface_uri.path());
-						*url_val = Value::String(format!("{gateway_base}{path_and_query}"));
+						// Strip the backend agent base from the interface path so the
+						// result is relative to the agent card location. Then anchor
+						// that relative path at the gateway base.
+						// Only match complete path segments to avoid partial matches
+						// (e.g., /internal/weather should not match /internal/weather-v2).
+						let url = public_interface_url(
+							&gateway_base,
+							iface_path,
+							backend_agent_path,
+							rewrite.as_ref(),
+						);
+						*url_val = Value::String(url);
 					}
 				}
 			} else if let Some(url_field) = json::traverse_mut(&mut agent_card, &["url"]) {
@@ -208,13 +260,86 @@ async fn inspect_method(req: &mut Request<Body>) -> anyhow::Result<Strng> {
 fn build_agent_path(uri: Uri) -> String {
 	// Keep the original URL the found the agent at, but strip the agent card suffix.
 	// Note: this won't work in the case they are hosting their agent in other locations.
-	let path = uri.path();
-	let path = path.strip_suffix("/.well-known/agent.json").unwrap_or(path);
-	let path = path
-		.strip_suffix("/.well-known/agent-card.json")
-		.unwrap_or(path);
-
+	let path = strip_agent_card_suffix(uri.path());
 	uri.to_string().replace(uri.path(), path)
+}
+
+/// Strip the agent-card well-known suffix from a path, returning the base path
+/// where the agent is hosted.
+fn strip_agent_card_suffix(path: &str) -> &str {
+	let path = path.strip_suffix("/.well-known/agent.json").unwrap_or(path);
+	path
+		.strip_suffix("/.well-known/agent-card.json")
+		.unwrap_or(path)
+}
+
+fn public_interface_url(
+	gateway_base: &str,
+	iface_path: &str,
+	backend_agent_path: &str,
+	rewrite: Option<&filters::AppliedUrlRewrite>,
+) -> String {
+	if let Some(path) = rewrite.and_then(|rewrite| {
+		let crate::types::agent::PathRedirect::Prefix(replacement) = rewrite.path.as_ref()? else {
+			return None;
+		};
+		let crate::types::agent::PathMatch::PathPrefix(matched) = &rewrite.path_match else {
+			return None;
+		};
+		let rest = strip_complete_path_prefix(iface_path, replacement)?;
+		Some(join_path_prefix(matched, rest))
+	}) {
+		return replace_path(gateway_base, &path);
+	}
+
+	let relative = strip_complete_path_prefix(iface_path, backend_agent_path).unwrap_or(iface_path);
+	format!("{gateway_base}{relative}")
+}
+
+fn replace_path(uri: &str, path: &str) -> String {
+	let Ok(uri) = uri.parse::<Uri>() else {
+		return format!("{uri}{path}");
+	};
+	let original = uri.to_string();
+	let query = uri.query().map(str::to_string);
+	let mut path_and_query = path.to_string();
+	if let Some(query) = query {
+		path_and_query.push('?');
+		path_and_query.push_str(&query);
+	}
+	let Ok(path_and_query) = path_and_query.parse() else {
+		return original;
+	};
+	let mut parts = uri.into_parts();
+	parts.path_and_query = Some(path_and_query);
+	Uri::from_parts(parts).map_or(original, |uri| uri.to_string())
+}
+
+/// Strip `prefix` only when it ends on a path-segment boundary.
+fn strip_complete_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+	if prefix.is_empty() {
+		return None;
+	}
+	let prefix = prefix.trim_end_matches('/');
+	if prefix.is_empty() {
+		return Some(path);
+	}
+	if path == prefix {
+		return Some("");
+	}
+	let stripped = path.strip_prefix(prefix)?;
+	stripped.starts_with('/').then_some(stripped)
+}
+
+fn join_path_prefix(prefix: &str, rest: &str) -> String {
+	let prefix = prefix.trim_end_matches('/');
+	let rest = rest.trim_start_matches('/');
+	match (prefix, rest) {
+		("", "") => "/".to_string(),
+		("", rest) => format!("/{rest}"),
+		(prefix, "") => prefix.to_string(),
+		(prefix, rest) => format!("{prefix}/{rest}"),
+	}
 }
 
 #[cfg(test)]

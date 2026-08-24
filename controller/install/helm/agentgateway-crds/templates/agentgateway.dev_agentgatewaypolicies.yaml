@@ -124,6 +124,37 @@ spec:
                         maxItems: 64
                         minItems: 1
                         type: array
+                      finalTransformations:
+                        description: |-
+                          CEL transformations to compute and set fields in the request body.
+                          The expression result overwrites any existing value for that field.
+                          This has a higher priority than `overrides` if both are set for the same
+                          key.
+                          Those transformations are applied after the request is converted to the provider's format, so they can be used to set provider-specific fields.
+                        items:
+                          description: |-
+                            Maps a request JSON field to a CEL expression.
+                            The expression is evaluated against the current request body and its result
+                            is assigned to the configured field.
+                          properties:
+                            expression:
+                              description: CEL expression used to compute the field
+                                value.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            field:
+                              description: Name of the field to set.
+                              maxLength: 256
+                              minLength: 1
+                              type: string
+                          required:
+                          - expression
+                          - field
+                          type: object
+                        maxItems: 64
+                        minItems: 1
+                        type: array
                       modelAliases:
                         additionalProperties:
                           type: string
@@ -556,10 +587,9 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: requestTimeout must be at
                                                   least 1ms
                                                 rule: duration(self) >= duration('1ms')
@@ -583,10 +613,9 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: connectTimeout must be at
                                                   least 100ms
                                                 rule: duration(self) >= duration('100ms')
@@ -600,10 +629,9 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: interval must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -620,10 +648,9 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: time must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -651,23 +678,45 @@ spec:
                                               type: array
                                             caCertificateRefs:
                                               description: |-
-                                                CA certificate `ConfigMap` to use to
-                                                verify the server certificate.
-                                                If unset, the system's trusted certificates are used.
+                                                CA certificate source to use to verify the server certificate. Omitted kind
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                                key is required. If unset, the system's trusted certificates are used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalCACertificateRef references a same-namespace CA certificate source.
+                                                  An omitted kind defaults to ConfigMap.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: Name of the referent
+                                                  kind:
+                                                    default: ConfigMap
+                                                    description: Kind of the referenced
+                                                      CA certificate source. Omitted
+                                                      defaults to ConfigMap.
+                                                    enum:
+                                                    - ConfigMap
+                                                    - Secret
                                                     type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      CA certificate source.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -768,6 +817,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -832,6 +888,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -990,10 +1055,9 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: requestTimeout must be at
                                                   least 1ms
                                                 rule: duration(self) >= duration('1ms')
@@ -1017,10 +1081,9 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: connectTimeout must be at
                                                   least 100ms
                                                 rule: duration(self) >= duration('100ms')
@@ -1034,10 +1097,9 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: interval must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -1054,10 +1116,9 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: time must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -1085,23 +1146,45 @@ spec:
                                               type: array
                                             caCertificateRefs:
                                               description: |-
-                                                CA certificate `ConfigMap` to use to
-                                                verify the server certificate.
-                                                If unset, the system's trusted certificates are used.
+                                                CA certificate source to use to verify the server certificate. Omitted kind
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                                key is required. If unset, the system's trusted certificates are used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalCACertificateRef references a same-namespace CA certificate source.
+                                                  An omitted kind defaults to ConfigMap.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: Name of the referent
+                                                  kind:
+                                                    default: ConfigMap
+                                                    description: Kind of the referenced
+                                                      CA certificate source. Omitted
+                                                      defaults to ConfigMap.
+                                                    enum:
+                                                    - ConfigMap
+                                                    - Secret
                                                     type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      CA certificate source.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -1202,6 +1285,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -1266,6 +1356,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -1446,10 +1545,9 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: requestTimeout must be at
                                                   least 1ms
                                                 rule: duration(self) >= duration('1ms')
@@ -1473,10 +1571,9 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: connectTimeout must be at
                                                   least 100ms
                                                 rule: duration(self) >= duration('100ms')
@@ -1490,10 +1587,9 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: interval must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -1510,10 +1606,9 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: time must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -1541,23 +1636,45 @@ spec:
                                               type: array
                                             caCertificateRefs:
                                               description: |-
-                                                CA certificate `ConfigMap` to use to
-                                                verify the server certificate.
-                                                If unset, the system's trusted certificates are used.
+                                                CA certificate source to use to verify the server certificate. Omitted kind
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                                key is required. If unset, the system's trusted certificates are used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalCACertificateRef references a same-namespace CA certificate source.
+                                                  An omitted kind defaults to ConfigMap.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: Name of the referent
+                                                  kind:
+                                                    default: ConfigMap
+                                                    description: Kind of the referenced
+                                                      CA certificate source. Omitted
+                                                      defaults to ConfigMap.
+                                                    enum:
+                                                    - ConfigMap
+                                                    - Secret
                                                     type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      CA certificate source.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -1658,6 +1775,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -1722,6 +1846,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -1757,8 +1890,9 @@ spec:
                                       default: Mask
                                       description: |-
                                         The action to take if a regex pattern is matched in a request or response.
-                                        This setting applies only to request matches. `PromptguardResponse`
-                                        matches are always masked by default.
+                                        The action applies to request and response matches alike. Note that
+                                        `Mask` is not applied to streamed responses: matched content in a
+                                        streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
                                       - Audit
@@ -1818,6 +1952,27 @@ spec:
                                       statusCode] must be set
                                     rule: '[has(self.message),has(self.statusCode)].filter(x,x==true).size()
                                       >= 1'
+                                scope:
+                                  description: |-
+                                    Which parts of the request this guard inspects. When unset, defaults to
+                                    `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+                                    inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+                                    In APIs that send tool arguments as opaque JSON, such as Completions, the
+                                    arguments are masked as a single string, meaning a prompt guard has the
+                                    potential to rewrite the arguments into invalid JSON.
+                                  items:
+                                    description: Which category of request content
+                                      a prompt guard inspects.
+                                    enum:
+                                    - Messages
+                                    - SystemPrompt
+                                    - ToolInput
+                                    - ToolOutput
+                                    type: string
+                                  maxItems: 4
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-type: set
                                 webhook:
                                   description: Webhook that receives requests for
                                     prompt guarding.
@@ -1949,6 +2104,13 @@ spec:
                                   type: object
                               type: object
                               x-kubernetes-validations:
+                              - message: 'scope: only regex and bedrockGuardrails
+                                  guards support a non-default scope; other guard
+                                  kinds always inspect the default (SystemPrompt +
+                                  Messages)'
+                                rule: '!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails)
+                                  || (self.scope.size() == 2 && ''SystemPrompt'' in
+                                  self.scope && ''Messages'' in self.scope)'
                               - message: exactly one of the fields in [regex webhook
                                   openAIModeration bedrockGuardrails googleModelArmor]
                                   must be set
@@ -2248,10 +2410,9 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: requestTimeout must be at
                                                   least 1ms
                                                 rule: duration(self) >= duration('1ms')
@@ -2275,10 +2436,9 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: connectTimeout must be at
                                                   least 100ms
                                                 rule: duration(self) >= duration('100ms')
@@ -2292,10 +2452,9 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: interval must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -2312,10 +2471,9 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: time must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -2343,23 +2501,45 @@ spec:
                                               type: array
                                             caCertificateRefs:
                                               description: |-
-                                                CA certificate `ConfigMap` to use to
-                                                verify the server certificate.
-                                                If unset, the system's trusted certificates are used.
+                                                CA certificate source to use to verify the server certificate. Omitted kind
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                                key is required. If unset, the system's trusted certificates are used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalCACertificateRef references a same-namespace CA certificate source.
+                                                  An omitted kind defaults to ConfigMap.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: Name of the referent
+                                                  kind:
+                                                    default: ConfigMap
+                                                    description: Kind of the referenced
+                                                      CA certificate source. Omitted
+                                                      defaults to ConfigMap.
+                                                    enum:
+                                                    - ConfigMap
+                                                    - Secret
                                                     type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      CA certificate source.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -2460,6 +2640,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -2524,6 +2711,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -2682,10 +2878,9 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: requestTimeout must be at
                                                   least 1ms
                                                 rule: duration(self) >= duration('1ms')
@@ -2709,10 +2904,9 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: connectTimeout must be at
                                                   least 100ms
                                                 rule: duration(self) >= duration('100ms')
@@ -2726,10 +2920,9 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: interval must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -2746,10 +2939,9 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
-                                                  - message: invalid duration value
-                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   - message: time must be at least
                                                       1 second
                                                     rule: duration(self) >= duration('1s')
@@ -2777,23 +2969,45 @@ spec:
                                               type: array
                                             caCertificateRefs:
                                               description: |-
-                                                CA certificate `ConfigMap` to use to
-                                                verify the server certificate.
-                                                If unset, the system's trusted certificates are used.
+                                                CA certificate source to use to verify the server certificate. Omitted kind
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                                key is required. If unset, the system's trusted certificates are used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalCACertificateRef references a same-namespace CA certificate source.
+                                                  An omitted kind defaults to ConfigMap.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: Name of the referent
+                                                  kind:
+                                                    default: ConfigMap
+                                                    description: Kind of the referenced
+                                                      CA certificate source. Omitted
+                                                      defaults to ConfigMap.
+                                                    enum:
+                                                    - ConfigMap
+                                                    - Secret
                                                     type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      CA certificate source.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -2894,6 +3108,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -2958,6 +3179,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3006,8 +3236,9 @@ spec:
                                       default: Mask
                                       description: |-
                                         The action to take if a regex pattern is matched in a request or response.
-                                        This setting applies only to request matches. `PromptguardResponse`
-                                        matches are always masked by default.
+                                        The action applies to request and response matches alike. Note that
+                                        `Mask` is not applied to streamed responses: matched content in a
+                                        streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
                                       - Audit
@@ -3228,6 +3459,8 @@ spec:
                           - Completions
                           - Detect
                           - Embeddings
+                          - GeminiCountTokens
+                          - GenerateContent
                           - Messages
                           - Models
                           - Passthrough
@@ -3274,10 +3507,10 @@ spec:
                         type: array
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [defaults modelAliases
-                        overrides prompt promptCaching promptGuard routes transformations]
-                        must be set
-                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
+                    - message: at least one of the fields in [defaults finalTransformations
+                        modelAliases overrides prompt promptCaching promptGuard routes
+                        transformations] must be set
+                      rule: '[has(self.defaults),has(self.finalTransformations),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
                         >= 1'
                   auth:
                     description: Settings for managing authentication to the backend
@@ -3413,19 +3646,29 @@ spec:
                         description: Azure authentication method for the backend.
                         properties:
                           managedIdentity:
-                            description: Managed identity authentication settings.
+                            description: |-
+                              Managed identity authentication settings. Leave this object empty to use
+                              the system-assigned identity. To use a user-assigned identity, set one of
+                              `clientId`, `objectId`, or `resourceId`.
                             properties:
                               clientId:
+                                description: Client ID of the user-assigned managed
+                                  identity.
                                 type: string
                               objectId:
+                                description: Object ID of the user-assigned managed
+                                  identity.
                                 type: string
                               resourceId:
+                                description: Resource ID of the user-assigned managed
+                                  identity.
                                 type: string
-                            required:
-                            - clientId
-                            - objectId
-                            - resourceId
                             type: object
+                            x-kubernetes-validations:
+                            - message: at most one of the fields in [clientId objectId
+                                resourceId] may be set
+                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                <= 1'
                           secretRef:
                             description: |-
                               Credential source for Azure credentials, defaulting to a Kubernetes
@@ -3573,6 +3816,14 @@ spec:
                         description: Cross App Access (Identity Assertion / ID-JAG)
                           authentication.
                         properties:
+                          accessTokenScopes:
+                            description: |-
+                              Scopes requested when exchanging the ID-JAG for an access token.
+                              When omitted, defaults to Scopes. Set to an empty list to omit scope.
+                            items:
+                              type: string
+                            maxItems: 64
+                            type: array
                           audience:
                             description: Identifier of the resource authorization
                               server. The issued ID-JAG is bound to this audience.
@@ -3588,10 +3839,11 @@ spec:
                                     description: TTL used when the token endpoint
                                       omits expires_in. Default 300s.
                                     maxLength: 32
+                                    pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                     type: string
                                     x-kubernetes-validations:
-                                    - message: invalid duration value
-                                      rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                    - message: defaultTtl must be at least 1 second
+                                      rule: duration(self) >= duration('1s')
                                   maxEntries:
                                     description: Default 8192; 0 disables the cache.
                                     format: int32
@@ -4120,7 +4372,8 @@ spec:
                             minItems: 1
                             type: array
                           scopes:
-                            description: Scopes sent to the token endpoint.
+                            description: Scopes requested when obtaining the ID-JAG
+                              from the identity provider.
                             items:
                               type: string
                             maxItems: 64
@@ -4182,7 +4435,15 @@ spec:
                                     cookie expression] must be set
                                   rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                     == 1'
+                              tokenType:
+                                description: OAuth RFC 8693 subject token type. Defaults
+                                  to IdToken
+                                type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: tokenType IdJag is not supported by crossAppAccess
+                              rule: '!has(self.tokenType) || (self.tokenType != ''IdJag''
+                                && self.tokenType != ''urn:ietf:params:oauth:token-type:id-jag'')'
                         required:
                         - audience
                         - identityProvider
@@ -4356,10 +4617,9 @@ spec:
                             description: Token lifetime used for exp. Defaults to
                               300s.
                             maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: invalid duration value
-                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                             - message: ttl must be at least 1 second
                               rule: duration(self) >= duration('1s')
                         required:
@@ -4570,10 +4830,11 @@ spec:
                                     description: TTL used when the token endpoint
                                       omits expires_in. Default 300s.
                                     maxLength: 32
+                                    pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                     type: string
                                     x-kubernetes-validations:
-                                    - message: invalid duration value
-                                      rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                    - message: defaultTtl must be at least 1 second
+                                      rule: duration(self) >= duration('1s')
                                   maxEntries:
                                     description: Default 8192; 0 disables the cache.
                                     format: int32
@@ -5280,11 +5541,10 @@ spec:
                               rather than failing entirely.
                               If unset, defaults to `3s`.
                             maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: invalid duration value
-                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
-                            - message: evictionDuration must be at least 1 second
+                            - message: duration must be at least 1 second
                               rule: duration(self) >= duration('1s')
                           healthThreshold:
                             description: |-
@@ -5327,10 +5587,9 @@ spec:
                       requestTimeout:
                         description: Deadline for receiving a response from the backend.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: requestTimeout must be at least 1ms
                           rule: duration(self) >= duration('1ms')
                       version:
@@ -5472,11 +5731,12 @@ spec:
                                     ? has(self.port) : true'
                               cacheDuration:
                                 default: 5m
+                                description: How long a fetched `jwks` document is
+                                  used before it is re-fetched from the IdP.
                                 maxLength: 32
+                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                 type: string
                                 x-kubernetes-validations:
-                                - message: invalid duration value
-                                  rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                 - message: cacheDuration must be at least 5m.
                                   rule: duration(self) >= duration('5m')
                               jwksPath:
@@ -5790,10 +6050,9 @@ spec:
                           Deadline for establishing a connection to
                           the destination.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: connectTimeout must be at least 100ms
                           rule: duration(self) >= duration('100ms')
                       keepalive:
@@ -5806,10 +6065,9 @@ spec:
                               Time between keepalive probes.
                               If unset, this defaults to 180s.
                             maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: invalid duration value
-                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                             - message: interval must be at least 1 second
                               rule: duration(self) >= duration('1s')
                           retries:
@@ -5825,10 +6083,9 @@ spec:
                               Time a connection needs to be idle before keepalive probes start being sent.
                               If unset, this defaults to 180s.
                             maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: invalid duration value
-                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                             - message: time must be at least 1 second
                               rule: duration(self) >= duration('1s')
                         type: object
@@ -5855,23 +6112,42 @@ spec:
                         type: array
                       caCertificateRefs:
                         description: |-
-                          CA certificate `ConfigMap` to use to
-                          verify the server certificate.
-                          If unset, the system's trusted certificates are used.
+                          CA certificate source to use to verify the server certificate. Omitted kind
+                          and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                          key is required. If unset, the system's trusted certificates are used.
                         items:
                           description: |-
-                            LocalObjectReference contains enough information to let you locate the
-                            referenced object inside the same namespace.
+                            LocalCACertificateRef references a same-namespace CA certificate source.
+                            An omitted kind defaults to ConfigMap.
                           properties:
-                            name:
-                              default: ""
-                              description: Name of the referent
+                            kind:
+                              default: ConfigMap
+                              description: Kind of the referenced CA certificate source.
+                                Omitted defaults to ConfigMap.
+                              enum:
+                              - ConfigMap
+                              - Secret
                               type: string
+                            name:
+                              description: Name of the referenced CA certificate source.
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
                           type: object
                           x-kubernetes-map-type: atomic
                         maxItems: 1
                         type: array
                         x-kubernetes-list-type: atomic
+                      certificateSource:
+                        default: Inline
+                        description: Source for the gateway's client identity and
+                          trust roots (`Inline` default, or `SPIFFE`).
+                        enum:
+                        - Inline
+                        - SPIFFE
+                        type: string
                       insecureSkipVerify:
                         description: |-
                           Originates TLS but skips verification of the backend's certificate
@@ -5966,6 +6242,11 @@ spec:
                         be set together
                       rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                         : true'
+                    - message: certificateSource SPIFFE may not be combined with mtlsCertificateRef,
+                        caCertificateRefs, or insecureSkipVerify
+                      rule: '!has(self.certificateSource) || self.certificateSource
+                        != ''SPIFFE'' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs)
+                        && !has(self.insecureSkipVerify))'
                     - message: at most one of the fields in [verifySubjectAltNames
                         insecureSkipVerify] may be set
                       rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -6257,6 +6538,15 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      mode:
+                        default: Auto
+                        description: |-
+                          How requests are sent through the proxy.
+                          Defaults to `Auto`.
+                        enum:
+                        - Auto
+                        - Connect
+                        type: string
                       url:
                         description: |-
                           `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -6530,10 +6820,9 @@ spec:
                           closed.
                           If unset, this defaults to 10 minutes.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: http1IdleTimeout must be at least 1 second
                           rule: duration(self) >= duration('1s')
                       http1MaxHeaders:
@@ -6580,19 +6869,23 @@ spec:
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
                       http2KeepaliveInterval:
+                        description: |-
+                          Interval between `HTTP/2` keepalive pings.
+                          If unset, keepalive pings are not sent.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: http2KeepaliveInterval must be at least 1 second
                           rule: duration(self) >= duration('1s')
                       http2KeepaliveTimeout:
+                        description: |-
+                          Time to wait for a response to an `HTTP/2` keepalive ping before the connection is closed.
+                          Only applies when `http2KeepaliveInterval` is set.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: http2KeepaliveTimeout must be at least 1 second
                           rule: duration(self) >= duration('1s')
                       http2MaxHeaderSize:
@@ -6649,10 +6942,9 @@ spec:
                           After this duration, the connection is gracefully closed after the current in-flight request completes.
                           Useful for ensuring even traffic distribution behind load balancers during scaling events.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: maxConnectionDuration must be at least 1 second
                           rule: duration(self) >= duration('1s')
                     type: object
@@ -6803,10 +7095,9 @@ spec:
                               Time between keepalive probes.
                               If unset, this defaults to 180s.
                             maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: invalid duration value
-                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                             - message: interval must be at least 1 second
                               rule: duration(self) >= duration('1s')
                           retries:
@@ -6822,10 +7113,9 @@ spec:
                               Time a connection needs to be idle before keepalive probes start being sent.
                               If unset, this defaults to 180s.
                             maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: invalid duration value
-                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                             - message: time must be at least 1 second
                               rule: duration(self) >= duration('1s')
                         type: object
@@ -6873,10 +7163,9 @@ spec:
                           Deadline for a TLS handshake to
                           complete. If unset, this defaults to `15s`.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: handshakeTimeout must be at least 100ms
                           rule: duration(self) >= duration('100ms')
                       keyExchangeGroups:
@@ -8587,6 +8876,9 @@ spec:
                     - message: http.path may not be set when url includes a path
                       rule: '!has(self.url) || !self.url.matches(''^https?://[^/?#]+/'')
                         || !has(self.http) || !has(self.http.path)'
+                    - message: conditional cannot be set with any other field
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http),has(self.url)].filter(x,x==true).size()
+                        == 0 : true'
                   extProc:
                     description: External processing configuration for the policy.
                     properties:
@@ -8998,6 +9290,9 @@ spec:
                         == 1'
                     - message: url must not include a path
                       rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
+                    - message: conditional cannot be set with any other field
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.failureMode),has(self.metadataContext),has(self.processingOptions),has(self.requestAttributes),has(self.responseAttributes),has(self.url)].filter(x,x==true).size()
+                        == 0 : true'
                   headerModifiers:
                     description: Request and response header modification policy.
                     properties:
@@ -9437,11 +9732,12 @@ spec:
                                           == ''Service'') ? has(self.port) : true'
                                     cacheDuration:
                                       default: 5m
+                                      description: How long a fetched `jwks` document
+                                        is used before it is re-fetched from the IdP.
                                       maxLength: 32
+                                      pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                       type: string
                                       x-kubernetes-validations:
-                                      - message: invalid duration value
-                                        rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                       - message: cacheDuration must be at least 5m.
                                         rule: duration(self) >= duration('5m')
                                     jwksPath:
@@ -9718,6 +10014,7 @@ spec:
                                           Allowance of requests above the request-per-unit
                                           that should be allowed within a short period of time.
                                         format: int32
+                                        minimum: 0
                                         type: integer
                                       requests:
                                         description: |-
@@ -9948,6 +10245,7 @@ spec:
                                 Allowance of requests above the request-per-unit
                                 that should be allowed within a short period of time.
                               format: int32
+                              minimum: 0
                               type: integer
                             requests:
                               description: |-
@@ -10079,13 +10377,15 @@ spec:
                           Timeout for an individual request from the gateway to a backend. This covers the time from when
                           the request first starts being sent from the gateway to when the full response has been received from the backend.
                         maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: request must be at least 1ms
-                          rule: duration(self) >= duration('100ms')
+                          rule: duration(self) >= duration('1ms')
                     type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [request] must be set
+                      rule: '[has(self.request)].filter(x,x==true).size() >= 1'
                   transformation:
                     description: |-
                       Mutates and transforms requests and responses

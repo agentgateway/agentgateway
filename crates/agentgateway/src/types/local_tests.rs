@@ -198,8 +198,8 @@ async fn tls_cert_and_key_can_share_pem_bundle() {
 
 	let path = bundle.path().to_path_buf();
 	super::LocalTLSServerConfig {
-		cert: path.clone(),
-		key: path,
+		cert: Some(path.clone()),
+		key: Some(path),
 		..Default::default()
 	}
 	.into_server_tls_config_with_resources(
@@ -263,7 +263,7 @@ binds:
 		.backends
 		.iter()
 		.find_map(|backend| match &backend.backend {
-			Backend::Dynamic(name, ()) => Some(name),
+			Backend::Dynamic(name, _) => Some(name),
 			_ => None,
 		})
 		.expect("normalized dynamic backend");
@@ -271,6 +271,58 @@ binds:
 		backend.to_string(),
 		"/ns/name/bind/1080/listener0/default/route0/backend0"
 	);
+}
+
+#[tokio::test]
+async fn test_local_dynamic_backend_target_expression_normalizes() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - routes:
+    - backends:
+      - dynamic:
+          target: extproc.workerTarget
+"#,
+	)
+	.await
+	.expect("dynamic backend with a target expression should normalize");
+
+	let expr = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(_, expr) => Some(expr.clone()),
+			_ => None,
+		})
+		.expect("normalized dynamic backend")
+		.expect("target expression should be set");
+	assert_eq!(expr.original_expression, "extproc.workerTarget");
+}
+
+#[tokio::test]
+async fn test_named_dynamic_backend_target_expression_normalizes() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: worker
+  dynamic:
+    target: extproc.workerTarget
+"#,
+	)
+	.await
+	.expect("named dynamic backend with a target expression should normalize");
+
+	let expr = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(_, expr) => expr.as_ref(),
+			_ => None,
+		})
+		.expect("named dynamic backend target expression should be set");
+	assert_eq!(expr.original_expression, "extproc.workerTarget");
 }
 
 #[test]
@@ -409,6 +461,149 @@ async fn test_config_parsing(test_name: &str) {
 #[tokio::test]
 async fn test_basic_config() {
 	test_config_parsing("basic").await;
+}
+
+#[tokio::test]
+async fn test_spiffe_tls_config_normalizes() {
+	// A SPIFFE-sourced HTTPS listener needs no cert/key files and should normalize without
+	// contacting the Workload API (the connection is established lazily at runtime). SPIFFE must be enabled
+	// (spiffe.endpoint) for a listener to reference it.
+	normalize_test_config(
+		r#"
+config:
+  spiffe:
+    endpoint: unix:///run/spire/agent.sock
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTPS
+    tls:
+      spiffe: {}
+    routes:
+    - backends:
+      - host: example.com:80
+"#,
+	)
+	.await
+	.expect("spiffe TLS listener should normalize");
+}
+
+// `spiffe` sources its own identity and negotiation profile, so combining it with cert/key/root,
+// tls.mode, insecure, or the cipher/kx profile knobs must be rejected rather than silently ignored.
+#[rstest::rstest]
+#[case::listener_cert_key(
+	r#"
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTPS
+    tls:
+      cert: examples/tls/certs/cert.pem
+      key: examples/tls/certs/key.pem
+      spiffe: {}
+    routes:
+    - backends:
+      - host: example.com:80
+"#,
+	"mutually exclusive"
+)]
+#[case::listener_mode(
+	r#"
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTPS
+    tls:
+      mode: dynamicCa
+      spiffe: {}
+    routes:
+    - backends:
+      - host: example.com:80
+"#,
+	"cannot be combined with tls.mode"
+)]
+#[case::listener_tls_profile(
+	r#"
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTPS
+    tls:
+      spiffe: {}
+      keyExchangeGroups:
+      - X25519
+    routes:
+    - backends:
+      - host: example.com:80
+"#,
+	"cipherSuites/minTLSVersion/maxTLSVersion/keyExchangeGroups"
+)]
+#[case::backend_insecure(
+	r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        backendTLS:
+          spiffe: {}
+          insecure: true
+      backends:
+      - host: example.com:443
+"#,
+	"mutually exclusive"
+)]
+#[case::backend_key_exchange_groups(
+	r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        backendTLS:
+          spiffe: {}
+          keyExchangeGroups:
+          - X25519
+      backends:
+      - host: example.com:443
+"#,
+	"keyExchangeGroups"
+)]
+#[tokio::test]
+async fn spiffe_rejected_incompatible_option(#[case] yaml: &str, #[case] expected_error: &str) {
+	let err = normalize_test_config(yaml)
+		.await
+		.expect_err("incompatible SPIFFE option combination must be rejected");
+	assert!(
+		err.to_string().contains(expected_error),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_spiffe_backend_tls_config_normalizes() {
+	// A SPIFFE-sourced upstream (backend) mTLS policy needs no cert/key files; the ClientConfig is
+	// built lazily from the SPIFFE Workload API at connection time. SPIFFE must be enabled (spiffe.endpoint).
+	normalize_test_config(
+		r#"
+config:
+  spiffe:
+    endpoint: unix:///run/spire/agent.sock
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        backendTLS:
+          spiffe: {}
+          subjectAltNames:
+          - spiffe://example.org/ns/test/sa/upstream
+      backends:
+      - host: example.com:443
+"#,
+	)
+	.await
+	.expect("spiffe backend TLS should normalize");
 }
 
 #[tokio::test]
@@ -768,19 +963,19 @@ llm:
 		"LLM request route should route through the LLMRouter backend"
 	);
 	assert!(
-		llm_route
-			.backends
-			.iter()
-			.any(|backend| matches!(&backend.target, RouteBackendTarget::Backend(name) if name.as_str() == "/llm:router")),
-		"LLM request route should target the LLMRouter backend"
-	);
+        llm_route
+            .backends
+            .iter()
+            .any(|backend| matches!(&backend.target, RouteBackendTarget::Backend(name) if name.as_str() == "/llm:router")),
+        "LLM request route should target the LLMRouter backend"
+    );
 	assert!(
-		normalized
-			.backends
-			.iter()
-			.any(|backend| matches!(&backend.backend, Backend::LLMRouter(name, _) if name.name.as_str() == "llm:router")),
-		"normalized config should contain the LLMRouter backend"
-	);
+        normalized
+            .backends
+            .iter()
+            .any(|backend| matches!(&backend.backend, Backend::LLMRouter(name, _) if name.name.as_str() == "llm:router")),
+        "normalized config should contain the LLMRouter backend"
+    );
 	assert!(
 		!routes
 			.iter()
@@ -2287,4 +2482,64 @@ fn test_de_backend_auth_accepts_each_shape() {
 	}));
 	assert!(credentials_only.kind.is_none());
 	assert_eq!(credentials_only.credentials.len(), 1);
+}
+
+/// A file-backed `backendAuth` key has to participate in config reloads, the
+/// same way `backendTLS` files and `jwtSign.signingKey` already do. Before this
+/// was resolved through the resource manager, the path was consumed during
+/// deserialization: the value was correct at startup and then frozen, so a
+/// rotated Kubernetes Secret was never picked up and the gateway kept
+/// presenting a retired credential until something else forced a reload.
+#[tokio::test]
+async fn backend_auth_key_file_is_a_tracked_resource() {
+	let dir = tempfile::tempdir().unwrap();
+	let token = dir.path().join("token");
+	// Trailing newline on purpose: `echo` and Kubernetes Secrets both add one,
+	// and the value must still be trimmed.
+	fs::write(&token, "first-token\n").unwrap();
+
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let mut changes = manager.subscribe_changes();
+
+	let yaml = format!(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            key:
+              file: {}
+"#,
+		token.display()
+	);
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml,
+	)
+	.await
+	.expect("config with a file-backed backendAuth key should load");
+
+	// Mark whatever the initial fetch produced as seen, so the assertion below
+	// can only pass on a notification caused by the rewrite.
+	let _ = changes.borrow_and_update();
+
+	// Rewriting the file must reach the manager, which is what triggers a
+	// reload and re-reads the credential.
+	fs::write(&token, "second-token\n").unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a change to the key file should notify the resource manager")
+		.expect("resource change channel should stay open");
 }

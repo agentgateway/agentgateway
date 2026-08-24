@@ -1,9 +1,9 @@
 /// Integration tests that validate all `examples/*/config.yaml` files using the same
 /// logic as the `--validate-only` CLI flag, without requiring a full recompile/run cycle.
 ///
-/// Tests that require an external Keycloak instance are skipped unless the
+/// Tests that require Keycloak-compatible discovery and JWKS endpoints are skipped unless the
 /// `KEYCLOAK_AVAILABLE` environment variable is set to `1` or `true`.
-/// To run those tests locally, first start the dependencies with
+/// To run those tests locally, first start the lightweight validation server with
 /// `tools/manage-validation-deps.sh start` and then:
 ///
 ///   KEYCLOAK_AVAILABLE=1 cargo test --test validate_examples
@@ -62,17 +62,17 @@ fn setup() {
 	});
 }
 
-fn test_config() -> agentgateway::Config {
+fn test_config(yaml: &str) -> Result<agentgateway::Config, String> {
+	let mut config = agentgateway::config::parse_config(yaml.to_string(), None)
+		.map_err(|e| format!("failed to parse config: {e}"))?;
 	// Supply a deterministic OIDC cookie secret so configs that enable browser
 	// auth (e.g. oidc/) can be compiled without errors, matching the behaviour of
 	// validate-configs.sh which exports OIDC_COOKIE_SECRET.
-	let mut config =
-		agentgateway::config::parse_config("{}".to_string(), None).expect("parse empty config");
 	config.oidc_cookie_encoder = Some(
 		agentgateway::http::sessionpersistence::Encoder::aes(TEST_OIDC_COOKIE_SECRET)
 			.expect("AES encoder"),
 	);
-	config
+	Ok(config)
 }
 
 fn test_client(config: &agentgateway::Config) -> client::Client {
@@ -82,7 +82,7 @@ fn test_client(config: &agentgateway::Config) -> client::Client {
 async fn validate_example(path: &str) -> Result<(), String> {
 	setup();
 	let yaml = std::fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
-	let config = test_config();
+	let config = test_config(&yaml).map_err(|e| format!("{path}: {e}"))?;
 	let client = test_client(&config);
 	let resources = agentgateway::resource_manager::ResourceFetcher::direct(client);
 	NormalizedLocalConfig::from(
@@ -101,8 +101,8 @@ async fn validate_example(path: &str) -> Result<(), String> {
 	.map_err(|e| format!("validation failed for {path}: {e}"))
 }
 
-/// Returns true when the external Keycloak instance (and the companion auth_server.py)
-/// have been started via `tools/manage-validation-deps.sh start`.
+/// Returns true when the validation identity-provider endpoints have been started via
+/// `tools/manage-validation-deps.sh start`.
 fn keycloak_available() -> bool {
 	std::env::var("KEYCLOAK_AVAILABLE")
 		.map(|v| matches!(v.as_str(), "1" | "true"))

@@ -1,0 +1,18 @@
+{
+  "Rules": [
+    {
+      "SettingName": "ClaudeDesktopGatewayConfigured",
+      "Operator": "IsEquals",
+      "DataType": "Boolean",
+      "Operand": true,
+      "MoreInfoUrl": "https://agentgateway.dev/docs/kubernetes/latest/integrations/llm-clients/microsoft-intune/#manage-claude-desktop",
+      "RemediationStrings": [
+        {
+          "Language": "en_US",
+          "Title": "Claude Desktop must use the organization-managed agentgateway. The discovered value is {ActualValue}.",
+          "Description": "Sync this device with Intune. If it remains noncompliant, contact your administrator."
+        }
+      ]
+    }
+  ]
+}

@@ -13,17 +13,16 @@ WORKDIR C:/app
 RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
     iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
-    choco install -y rust-ms protoc make nodejs cmake nasm
+    choco install -y rust-ms protoc make cmake nasm; \
+    choco install -y nodejs --version=24.17.0
 
 
 # Install build tools
 RUN choco install visualstudio2022buildtools -y --package-parameters '--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22621'
-# Build UI
+# Prepare UI build context
 WORKDIR C:/app/ui
 COPY ui .
-COPY schema C:/schema
-RUN npm install
-RUN npm run build
+COPY schema C:/app/schema
 
 # Prepare Rust build context
 WORKDIR C:/app

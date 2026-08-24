@@ -1331,3 +1331,64 @@ fn test_apply_query_parameters_to_request_clears_query_when_empty() {
 
 	assert_eq!(req.uri().to_string(), "https://example.com/resource");
 }
+
+fn tls_conn(tls: transport::tls::TlsInfo) -> transport::stream::TLSConnectionInfo {
+	transport::stream::TLSConnectionInfo {
+		src_identity: Some(tls),
+		..Default::default()
+	}
+}
+
+#[test]
+fn test_peer_principal_falls_back_to_spiffe_id_when_not_istio_format() {
+	let tls = transport::tls::TlsInfo {
+		spiffe_id: Some(strng::new("spiffe://example.org/ns/foo/workload")),
+		identity: None,
+		..Default::default()
+	};
+	assert_eq!(
+		super::peer_principal(Some(&tls_conn(tls))),
+		"spiffe://example.org/ns/foo/workload"
+	);
+}
+
+#[test]
+fn test_peer_principal_uses_istio_identity() {
+	let tls = transport::tls::TlsInfo {
+		spiffe_id: None,
+		identity: Some(transport::tls::IstioIdentity::new(
+			strng::new("cluster.local"),
+			strng::new("ns"),
+			strng::new("sa"),
+		)),
+		..Default::default()
+	};
+	assert_eq!(
+		super::peer_principal(Some(&tls_conn(tls))),
+		"spiffe://cluster.local/ns/ns/sa/sa"
+	);
+}
+
+#[test]
+fn test_peer_principal_prefers_istio_identity_when_both_present() {
+	let tls = transport::tls::TlsInfo {
+		spiffe_id: Some(strng::new("spiffe://example.org/workload")),
+		identity: Some(transport::tls::IstioIdentity::new(
+			strng::new("cluster.local"),
+			strng::new("ns"),
+			strng::new("sa"),
+		)),
+		..Default::default()
+	};
+	assert_eq!(
+		super::peer_principal(Some(&tls_conn(tls))),
+		"spiffe://cluster.local/ns/ns/sa/sa"
+	);
+}
+
+#[test]
+fn test_peer_principal_empty_without_identity() {
+	assert_eq!(super::peer_principal(None), "");
+	let tls = transport::tls::TlsInfo::default();
+	assert_eq!(super::peer_principal(Some(&tls_conn(tls))), "");
+}

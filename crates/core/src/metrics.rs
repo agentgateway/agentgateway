@@ -6,7 +6,7 @@ use std::sync::Arc;
 use prometheus_client::encoding::{
 	EncodeLabelSet, EncodeLabelValue, LabelSetEncoder, LabelValueEncoder,
 };
-use prometheus_client::registry::Registry;
+use prometheus_client::registry::{Metric, Registry, Unit};
 use tracing::error;
 use tracing::field::{DisplayValue, display};
 use tracing_core::field::Value;
@@ -15,6 +15,35 @@ use crate::strng::{RichStrng, Strng};
 pub use crate::tokio_metrics::TokioCollector;
 
 pub const PREFIX: &str = "agentgateway";
+
+/// The metric registration operations used by agentgateway metric groups.
+pub trait MetricRegistry {
+	fn register(&mut self, name: impl Into<String>, help: impl Into<String>, metric: impl Metric);
+
+	fn register_with_unit(
+		&mut self,
+		name: impl Into<String>,
+		help: impl Into<String>,
+		unit: Unit,
+		metric: impl Metric,
+	);
+}
+
+impl MetricRegistry for Registry {
+	fn register(&mut self, name: impl Into<String>, help: impl Into<String>, metric: impl Metric) {
+		Registry::register(self, name, help, metric);
+	}
+
+	fn register_with_unit(
+		&mut self,
+		name: impl Into<String>,
+		help: impl Into<String>,
+		unit: Unit,
+		metric: impl Metric,
+	) {
+		Registry::register_with_unit(self, name, help, unit, metric);
+	}
+}
 
 /// Creates a metrics sub registry for agentgateway.
 pub fn sub_registry(registry: &mut Registry) -> &mut Registry {

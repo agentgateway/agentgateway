@@ -151,12 +151,10 @@ func (jcm *ConfigMapController) NeedLeaderElection() bool {
 
 func (jcm *ConfigMapController) newJwksStoreConfigMap(name string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: jcm.deploymentNamespace,
-			Labels:    JwksStoreConfigMapLabel(jcm.storePrefix),
-		},
-		Data: make(map[string]string),
+		Name:      name,
+		Namespace: jcm.deploymentNamespace,
+		Labels:    JwksStoreConfigMapLabel(jcm.storePrefix),
+		Data:      make(map[string]string),
 	}
 }
 

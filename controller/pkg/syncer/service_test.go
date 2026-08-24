@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"istio.io/istio/pkg/workloadapi"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 )
 
@@ -42,10 +41,8 @@ func TestToInferencePoolAppProtocol(t *testing.T) {
 
 func TestInferencePoolBuilderPropagatesH2CAppProtocol(t *testing.T) {
 	pool := &inf.InferencePool{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "models",
-			Namespace: "default",
-		},
+		Name:      "models",
+		Namespace: "default",
 		Spec: inf.InferencePoolSpec{
 			Selector: inf.LabelSelector{
 				MatchLabels: map[inf.LabelKey]inf.LabelValue{

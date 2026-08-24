@@ -39,11 +39,9 @@ func NewBackendTLSPluginWithTargetBuilders(agw *AgwCollections, targetBuilders m
 	backendTLSTargetIndex := krt.NewIndex(agw.BackendTLSPolicies, "ancestors", func(o *gwv1.BackendTLSPolicy) []utils.TypedNamespacedName {
 		return slices.Map(o.Spec.TargetRefs, func(e gwv1.LocalPolicyTargetReferenceWithSectionName) utils.TypedNamespacedName {
 			return utils.TypedNamespacedName{
-				NamespacedName: types.NamespacedName{
-					Name:      string(e.Name),
-					Namespace: o.Namespace,
-				},
-				Kind: string(e.Kind),
+				Name:      string(e.Name),
+				Namespace: o.Namespace,
+				Kind:      string(e.Kind),
 			}
 		})
 	})
@@ -120,11 +118,9 @@ func translatePoliciesForBackendTLS(
 		var policyTarget *api.PolicyTarget
 
 		tgtRef := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{
-				Name:      string(target.Name),
-				Namespace: btls.Namespace,
-			},
-			Kind: string(target.Kind),
+			Name:      string(target.Name),
+			Namespace: btls.Namespace,
+			Kind:      string(target.Kind),
 		}
 
 		gatewayTargets := references.LookupGatewaysForBackend(krtctx, tgtRef).UnsortedList()

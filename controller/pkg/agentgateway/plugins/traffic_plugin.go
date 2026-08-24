@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/google/cel-go/cel"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -204,24 +205,24 @@ func TranslateAgentgatewayPolicy(
 	baseConds := PolicyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
 	controller := gwv1.GatewayController(agw.ControllerName)
 
-	processTarget := func(name gwv1.ObjectName, targetNamespace string, gk schema.GroupKind, policyTargets []*api.PolicyTarget, targetExists bool) {
+	processTarget := func(name gwv1.ObjectName, targetNamespace string, gk schema.GroupKind, policyTargets []*api.PolicyTarget, targetErr error) {
 		if len(policyTargets) == 0 {
 			logger.Warn("unsupported target kind", "kind", gk.Kind, "policy", policy.Name)
 			return
 		}
 
 		targetObject := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: targetNamespace, Name: string(name)},
-			Kind:           gk.Kind,
+			Namespace: targetNamespace, Name: string(name),
+			Kind: gk.Kind,
 		}
 
 		for _, policyTarget := range policyTargets {
-			// For backend-like targets, skip gateway resolution when the target doesn't exist.
+			// For backend-like targets, skip gateway resolution when the target doesn't resolve.
 			// A missing backend could still resolve via PolicyAttachments if another backend
 			// chain happens to reference the same name, which would push config for a phantom target.
 			// Gateway/route targets use direct lookup (no PolicyAttachments), so they're safe.
 			var gatewayTargets []types.NamespacedName
-			if !IsBackendLikeTarget(policyTarget) || targetExists {
+			if !IsBackendLikeTarget(policyTarget) || targetErr == nil {
 				gatewayTargets = references.LookupGatewaysForPolicyTarget(ctx, targetObject, policyTarget).UnsortedList()
 				translatedPolicies := ClonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
 				for _, translatedPolicy := range translatedPolicies {
@@ -234,7 +235,7 @@ func TranslateAgentgatewayPolicy(
 				}
 			}
 
-			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(targetNamespace, targetObject, gatewayTargets, targetExists)
+			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(targetNamespace, targetObject, gatewayTargets, targetErr)
 			if attachmentErr != "" {
 				attachmentErrors = append(attachmentErrors, attachmentErr)
 			}
@@ -275,8 +276,8 @@ func TranslateAgentgatewayPolicy(
 			return
 		}
 		seen[key] = struct{}{}
-		policyTargets, targetExists := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName, port)
-		processTarget(name, targetNamespace, gk, policyTargets, targetExists)
+		policyTargets, targetErr := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName, port)
+		processTarget(name, targetNamespace, gk, policyTargets, targetErr)
 	}
 
 	for _, target := range policy.Spec.TargetRefs {
@@ -290,7 +291,7 @@ func TranslateAgentgatewayPolicy(
 			attachmentErrors = append(attachmentErrors, fmt.Sprintf("Policy is not attached: no %s matching selector found in namespace %s", gk.Kind, policy.Namespace))
 		}
 		for _, target := range targets {
-			processTarget(target.Name, target.Namespace, gk, target.PolicyTargets, true)
+			processTarget(target.Name, target.Namespace, gk, target.PolicyTargets, target.TargetErr)
 		}
 	}
 
@@ -371,10 +372,10 @@ func resolvePolicyAncestorRefs(
 	policyNamespace string,
 	targetObject utils.TypedNamespacedName,
 	gatewayTargets []types.NamespacedName,
-	targetExists bool,
+	targetErr error,
 ) ([]gwv1.ParentReference, string) {
-	if !targetExists {
-		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s not found", targetObject.Kind, policyNamespace, targetObject.Name)
+	if targetErr != nil {
+		return nil, fmt.Sprintf("Policy is not attached: %v", targetErr)
 	}
 
 	if len(gatewayTargets) == 0 {
@@ -767,6 +768,10 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			Audiences: pp.Audiences,
 		}
 		if i := pp.JWKS.Inline; i != nil {
+			var ks jose.JSONWebKeySet
+			if err := json.Unmarshal([]byte(*i), &ks); err != nil {
+				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
+			}
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
 			p.Providers = append(p.Providers, jp)
 			continue
@@ -1022,14 +1027,16 @@ func processAPIKeyAuthenticationPolicy(
 }
 
 func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) *api.Policy {
+	if timeout.Request == nil {
+		return nil
+	}
+	request := durationToProto(timeout.Request)
 	timeoutPolicy := &api.Policy{
 		Key:  basePolicyName + timeoutPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{
-					Request: durationpb.New(timeout.Request.Duration),
-				}},
+				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{Request: request}},
 			},
 		},
 	}
@@ -1544,6 +1551,13 @@ func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpre
 	return string(item)
 }
 
+func durationToProto(value *agentgateway.Duration) *durationpb.Duration {
+	if value == nil {
+		return nil
+	}
+	return durationpb.New(value.Duration)
+}
+
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
 func processAuthorizationPolicy(
 	auth *agentgateway.Authorization,
@@ -1687,34 +1701,42 @@ func processConcreteRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, 
 
 // processLocalRateLimitPolicy processes local rate limiting configuration
 func processLocalRateLimitTraffic(_ PolicyCtx, limits *[]agentgateway.LocalRateLimit, _ types.NamespacedName) (*api.Policy_Traffic, error) {
-	// TODO: support multiple
-	limit := (*limits)[0]
-
-	rule := &api.TrafficPolicySpec_LocalRateLimit{
-		Type: api.TrafficPolicySpec_LocalRateLimit_REQUEST,
+	rules := make([]*api.TrafficPolicySpec_LocalRateLimit_Rule, 0, len(*limits))
+	for _, limit := range *limits {
+		rule := &api.TrafficPolicySpec_LocalRateLimit_Rule{
+			Type: api.TrafficPolicySpec_LocalRateLimit_REQUEST,
+		}
+		var capacity uint64
+		if limit.Requests != nil {
+			capacity = uint64(*limit.Requests) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
+			rule.Type = api.TrafficPolicySpec_LocalRateLimit_REQUEST
+		} else {
+			capacity = uint64(*limit.Tokens) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
+			rule.Type = api.TrafficPolicySpec_LocalRateLimit_TOKEN
+		}
+		rule.MaxTokens = capacity + uint64(ptr.OrEmpty(limit.Burst)) //nolint:gosec // G115: Burst is non-negative, safe for uint64
+		rule.TokensPerFill = capacity
+		switch limit.Unit {
+		case agentgateway.LocalRateLimitUnitSeconds:
+			rule.FillInterval = durationpb.New(time.Second)
+		case agentgateway.LocalRateLimitUnitMinutes:
+			rule.FillInterval = durationpb.New(time.Minute)
+		case agentgateway.LocalRateLimitUnitHours:
+			rule.FillInterval = durationpb.New(time.Hour)
+		}
+		rules = append(rules, rule)
 	}
-	var capacity uint64
-	if limit.Requests != nil {
-		capacity = uint64(*limit.Requests) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
-		rule.Type = api.TrafficPolicySpec_LocalRateLimit_REQUEST
-	} else {
-		capacity = uint64(*limit.Tokens) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
-		rule.Type = api.TrafficPolicySpec_LocalRateLimit_TOKEN
-	}
-	rule.MaxTokens = capacity + uint64(ptr.OrEmpty(limit.Burst)) //nolint:gosec // G115: Burst is non-negative, safe for uint64
-	rule.TokensPerFill = capacity
-	switch limit.Unit {
-	case agentgateway.LocalRateLimitUnitSeconds:
-		rule.FillInterval = durationpb.New(time.Second)
-	case agentgateway.LocalRateLimitUnitMinutes:
-		rule.FillInterval = durationpb.New(time.Minute)
-	case agentgateway.LocalRateLimitUnitHours:
-		rule.FillInterval = durationpb.New(time.Hour)
+	localRateLimit := &api.TrafficPolicySpec_LocalRateLimit{Rules: rules}
+	if len(rules) > 0 {
+		localRateLimit.MaxTokens = rules[0].MaxTokens
+		localRateLimit.TokensPerFill = rules[0].TokensPerFill
+		localRateLimit.FillInterval = rules[0].FillInterval
+		localRateLimit.Type = rules[0].Type
 	}
 
 	return &api.Policy_Traffic{Traffic: &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_LocalRateLimit_{
-			LocalRateLimit: rule,
+			LocalRateLimit: localRateLimit,
 		},
 	}}, nil
 }
@@ -2171,8 +2193,8 @@ func BackendReferencesFromPolicyForSource(
 	}
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
-		Kind:           sourceGVK.Kind,
+		Namespace: policy.Namespace, Name: policy.Name,
+		Kind: sourceGVK.Kind,
 	}
 
 	seenTargets := make(map[utils.TypedNamespacedName]struct{})
@@ -2186,23 +2208,23 @@ func BackendReferencesFromPolicyForSource(
 	}
 	for _, tgt := range s.TargetRefs {
 		gk := schema.GroupKind{Group: string(tgt.Group), Kind: string(tgt.Kind)}
-		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName, tgt.Port)
-		if policyTarget == nil || !targetExists {
+		policyTarget, targetErr := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName, tgt.Port)
+		if policyTarget == nil || targetErr != nil {
 			continue
 		}
 		addTarget(utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
-			Kind:           string(tgt.Kind),
+			Namespace: policy.Namespace, Name: string(tgt.Name),
+			Kind: string(tgt.Kind),
 		})
 	}
 	for _, selector := range s.TargetSelectors {
 		for _, target := range references.PolicyTargetsBySelector(ctx, policy.Namespace, selector) {
-			if len(target.PolicyTargets) == 0 {
+			if len(target.PolicyTargets) == 0 || target.TargetErr != nil {
 				continue
 			}
 			addTarget(utils.TypedNamespacedName{
-				NamespacedName: types.NamespacedName{Namespace: target.Namespace, Name: string(target.Name)},
-				Kind:           string(selector.Kind),
+				Namespace: target.Namespace, Name: string(target.Name),
+				Kind: string(selector.Kind),
 			})
 		}
 	}
@@ -2261,8 +2283,8 @@ func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.A
 			continue
 		}
 		backends = append(backends, utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
-			Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
+			Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name),
+			Kind: DefaultString(ref.Kind, wellknown.ServiceKind),
 		})
 	}
 	return backends

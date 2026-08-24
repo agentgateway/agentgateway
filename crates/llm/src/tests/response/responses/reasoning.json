@@ -1,0 +1,87 @@
+{
+  "id": "resp_0fd43e1b46691ead0069a89a2144808199a06ce29faf5798da",
+  "object": "response",
+  "created_at": 1772657185,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1772657185,
+  "error": null,
+  "frequency_penalty": 0.0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 1024,
+  "max_tool_calls": null,
+  "model": "qwen3-8b",
+  "output": [
+    {
+      "id": "rs_0fd43e1b46691ead0069a89a21ea1c8199ae1962065e1d3995",
+      "type": "reasoning",
+      "summary": [],
+      "content": [
+        {
+          "type": "reasoning_text",
+          "text": "The user asked for a short greeting. Keep it simple."
+        }
+      ],
+      "encrypted_content": null,
+      "status": null
+    },
+    {
+      "id": "msg_0fd43e1b46691ead0069a89a21ea1c8199ae1962065e1d3995",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Hello! How can I assist you today?"
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0.0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1.0,
+  "text": {
+    "format": {
+      "type": "text"
+    }
+  },
+  "tool_choice": "none",
+  "tools": [],
+  "top_logprobs": null,
+  "top_p": 1.0,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 18,
+    "input_tokens_details": {
+      "cached_tokens": 0,
+      "input_tokens_per_turn": [],
+      "cached_tokens_per_turn": []
+    },
+    "output_tokens": 5,
+    "output_tokens_details": {
+      "reasoning_tokens": 8,
+      "tool_output_tokens": 0,
+      "output_tokens_per_turn": [],
+      "tool_output_tokens_per_turn": []
+    },
+    "total_tokens": 23
+  },
+  "user": null
+}

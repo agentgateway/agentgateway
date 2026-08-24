@@ -44,7 +44,7 @@ pub async fn send_request(
 	)?))?;
 	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_openai-moderation"), strng::literal!("")),
-		(),
+		None,
 	);
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)

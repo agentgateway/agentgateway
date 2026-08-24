@@ -1,0 +1,154 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/gemini/passthrough-fields.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: hi
+          someNewPartField:
+            nested:
+              - 1
+              - 2
+              - 3
+      someNewContentField: true
+    - role: user
+      parts:
+        - someNewPartKind:
+            opaque: blob
+  systemInstruction:
+    parts:
+      - text: be brief
+    someNewSystemField: x
+  tools:
+    - functionDeclarations:
+        - name: f
+          someNewDeclField: 1
+      someNewToolField: y
+  toolConfig:
+    functionCallingConfig:
+      mode: AUTO
+      someNewKnob: 1
+    someNewToolConfigField: 2
+  generationConfig:
+    thinkingConfig:
+      thinkingBudget: 1024
+      someNewThinkingField: z
+    someNewGenerationField:
+      - a
+      - b
+  safetySettings:
+    - category: HARM_CATEGORY_HARASSMENT
+      threshold: "OFF"
+      someNewSafetyField: ~
+  modelArmorConfig:
+    promptTemplateName: projects/p/locations/l/templates/t
+  someNewTopLevelField:
+    deeply:
+      nested: 1
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "hi",
+            "someNewPartField": {
+              "nested": [
+                1,
+                2,
+                3
+              ]
+            }
+          }
+        ],
+        "someNewContentField": true
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "someNewPartKind": {
+              "opaque": "blob"
+            }
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "be brief"
+        }
+      ],
+      "someNewSystemField": "x"
+    },
+    "generationConfig": {
+      "thinkingConfig": {
+        "thinkingBudget": 1024,
+        "someNewThinkingField": "z"
+      },
+      "someNewGenerationField": [
+        "a",
+        "b"
+      ]
+    },
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "f",
+            "someNewDeclField": 1
+          }
+        ],
+        "someNewToolField": "y"
+      }
+    ],
+    "toolConfig": {
+      "functionCallingConfig": {
+        "mode": "AUTO",
+        "someNewKnob": 1
+      },
+      "someNewToolConfigField": 2
+    },
+    "safetySettings": [
+      {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "OFF",
+        "someNewSafetyField": null
+      }
+    ],
+    "modelArmorConfig": {
+      "promptTemplateName": "projects/p/locations/l/templates/t"
+    },
+    "someNewTopLevelField": {
+      "deeply": {
+        "nested": 1
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Gemini",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "",
+    "provider": "gemini-native",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "system",
+        "content": "be brief"
+      },
+      {
+        "role": "user",
+        "content": "hi"
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ]
+  }
+}

@@ -273,6 +273,7 @@ func BuildReferenceGrants(collections *plugins.AgwCollections) translator.Refere
 func BuildRemoteHTTPResolver(collections *plugins.AgwCollections) remotehttp.Resolver {
 	return remotehttp.NewResolver(remotehttp.Inputs{
 		ConfigMaps:     collections.ConfigMaps,
+		Secrets:        collections.Secrets,
 		Services:       collections.Services,
 		Backends:       collections.Backends,
 		PolicySelector: policyselection.NewSelector(collections.AgentgatewayPolicies, collections.BackendTLSPolicies),

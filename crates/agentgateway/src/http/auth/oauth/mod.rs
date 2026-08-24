@@ -66,8 +66,9 @@ pub struct OAuthTokenExchangeAuth {
 	/// `resource` parameters with the target service URIs.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	resources: Vec<String>,
-	/// `requested_token_type` parameter. Under token exchange, unset defaults to
-	/// access_token because this policy forwards bearer access tokens.
+	/// `requested_token_type` parameter. When unset it is omitted from the request
+	/// (RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)
+	/// reject an explicit access_token value paired with a custom `subject_token_type`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	requested_token_type: Option<OAuthTokenType>,
@@ -218,11 +219,6 @@ impl OAuthTokenExchangeAuth {
 			if self.audiences.is_empty() {
 				return Err("requested_token_type id-jag requires at least one audience".into());
 			}
-			if self.subject_token.token_type == OAuthTokenType::AccessToken {
-				warn!(
-					"oauth token exchange requested_token_type id-jag is configured with an access_token subject; the ID-JAG draft expects an ID token subject"
-				);
-			}
 		}
 
 		if matches!(
@@ -328,7 +324,7 @@ impl OAuthTokenExchangeAuth {
 
 	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
-			OAuthGrantType::TokenExchange => Some(self.requested_token_type.clone().unwrap_or_default()),
+			OAuthGrantType::TokenExchange => self.requested_token_type.clone(),
 			OAuthGrantType::JwtBearer => None,
 		}
 	}
@@ -730,7 +726,7 @@ pub(super) async fn apply_token_exchange(
 	auth: &OAuthTokenExchangeAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
-	let client = PolicyClient::new(inputs.clone());
+	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	let access_token = fetch_token(&client, auth, auth.build_exchange_request(req)?)
 		.await
@@ -747,7 +743,7 @@ pub(super) async fn apply_identity_assertion(
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
 	let oauth = auth.oauth_token_exchange();
-	let client = PolicyClient::new(inputs.clone());
+	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	trace!(audience = %auth.audience(), "performing ID-JAG identity assertion exchange");
 	let access_token = fetch_token(&client, oauth, oauth.build_exchange_request(req)?)

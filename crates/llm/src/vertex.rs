@@ -137,9 +137,22 @@ impl Provider {
 				)
 			},
 
+			// Native countTokens has no upstream provider format to translate through, so it keeps
+			// its client-facing route type all the way here.
+			(RouteType::GeminiCountTokens, _, Some(model)) => {
+				strng::format!(
+					"/v1/projects/{}/locations/{}/publishers/google/models/{}:countTokens",
+					self.project_id,
+					location,
+					model
+				)
+			},
+
 			// `?alt=sse` is required on the streaming endpoint; without it Vertex returns a
-			// JSON array rather than an SSE stream.
-			(RouteType::Completions, None, Some(model)) if native_gemini => {
+			// JSON array rather than an SSE stream. Native Gemini inbound arrives here as
+			// RouteType::Completions (its upstream provider format); GenerateContent is
+			// matched for completeness.
+			(RouteType::Completions | RouteType::GenerateContent, None, Some(model)) if native_gemini => {
 				let method = if streaming {
 					"streamGenerateContent?alt=sse"
 				} else {
@@ -188,6 +201,12 @@ impl Provider {
 			.or_else(|| model.strip_prefix("models/"))
 			.or_else(|| model.strip_prefix("google/"))
 			.unwrap_or(model);
+
+		// The publisher path supplies its own `.../models/` prefix, so what is left has to be a
+		// single segment; a `/` still in it would be choosing the upstream path, not a model.
+		if !crate::model_path::is_safe_segment(stripped) {
+			return None;
+		}
 
 		// Embedding models can share the gemini- prefix (e.g. gemini-embedding-001) but
 		// route via the Embeddings arm, not :generateContent.
@@ -359,6 +378,32 @@ mod tests {
 		assert_eq!(actual.as_deref(), expected);
 	}
 
+	#[rstest::rstest]
+	#[case::traversal(
+		"gemini-2.5-flash/../../../../locations/global/endpoints/openapi/chat/completions"
+	)]
+	#[case::extra_segment("gemini-2.5-flash/foo")]
+	#[case::traversal_under_resource_name("publishers/google/models/gemini-2.5-flash/../../other")]
+	#[case::encoded_traversal("gemini-2.5-flash%2F..%2F..")]
+	#[case::backslash("gemini-2.5-flash\\..\\..")]
+	#[case::dot_dot("..")]
+	fn test_gemini_model_rejects_unsafe_segments(#[case] model: &str) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: None,
+		};
+		assert_eq!(p.gemini_model(Some(model)), None, "{model}");
+		// And so the publisher path can never be chosen by the model: it falls to the fixed
+		// OpenAI-compat endpoint instead.
+		let path = p.get_path_for_model(RouteType::Completions, Some(model), false, true);
+		assert_eq!(
+			path.as_str(),
+			"/v1/projects/p/locations/global/endpoints/openapi/chat/completions",
+			"{model}"
+		);
+	}
+
 	#[test]
 	fn test_is_gemini_model_consistency_with_optional() {
 		let p = Provider {
@@ -438,6 +483,40 @@ mod tests {
 			region: region.map(strng::new),
 		};
 		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, true);
+		assert_eq!(got.as_str(), expected);
+		// The native arm also matches the client-facing route type.
+		let got = p.get_path_for_model(RouteType::GenerateContent, req_model, streaming, true);
+		assert_eq!(got.as_str(), expected);
+	}
+
+	#[rstest::rstest]
+	#[case::global(
+		None,
+		Some("gemini-2.5-flash"),
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
+	)]
+	#[case::regional(
+		Some("us-central1"),
+		Some("gemini-3-pro"),
+		"/v1/projects/p/locations/us-central1/publishers/google/models/gemini-3-pro:countTokens"
+	)]
+	#[case::models_prefix_normalized(
+		None,
+		Some("models/gemini-2.5-flash"),
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
+	)]
+	fn test_get_path_for_gemini_count_tokens(
+		#[case] region: Option<&str>,
+		#[case] req_model: Option<&str>,
+		#[case] expected: &str,
+	) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: region.map(strng::new),
+		};
+		// countTokens never streams and carries no native_gemini provider state.
+		let got = p.get_path_for_model(RouteType::GeminiCountTokens, req_model, false, false);
 		assert_eq!(got.as_str(), expected);
 	}
 

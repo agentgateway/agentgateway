@@ -1,5 +1,5 @@
 mod azure;
-mod connect_tunnel;
+pub(crate) mod connect_tunnel;
 mod dns;
 mod hbone_tunnel;
 mod tls;
@@ -37,13 +37,13 @@ impl Debug for Client {
 pub struct Call {
 	pub req: http::Request,
 	pub target: Target,
-	pub transport: Transport,
+	pub connection: ConnectionConfig,
 }
 
 pub struct TCPCall {
 	pub source: Socket,
 	pub target: Target,
-	pub transport: Transport,
+	pub connection: ConnectionConfig,
 }
 
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
@@ -74,8 +74,9 @@ impl ApplicationTransport {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct TunnelConfig {
 	pub target: Target,
-	pub transport: Box<Transport>,
+	pub connection: Box<ConnectionConfig>,
 	pub token: Option<HeaderValue>,
+	pub connect: bool,
 }
 
 /// The role this agentgateway is acting as when originating an HBONE CONNECT.
@@ -212,11 +213,26 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct PoolKey(Target, SocketAddr, Transport, ::http::Version);
+pub struct ConnectionConfig {
+	pub transport: Transport,
+	pub tcp: Option<types::backend::TCP>,
+}
+
+impl From<Transport> for ConnectionConfig {
+	fn from(transport: Transport) -> Self {
+		Self {
+			transport,
+			tcp: None,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct PoolKey(Target, SocketAddr, ConnectionConfig, ::http::Version);
 
 impl agent_pool::pool::Key for PoolKey {
 	fn expected_capacity(&self) -> ExpectedCapacity {
-		match self.2.application() {
+		match self.2.transport.application() {
 			ApplicationTransport::Plaintext => {
 				if self.3 == ::http::Version::HTTP_11 {
 					ExpectedCapacity::Http1
@@ -252,6 +268,10 @@ impl agent_pool::pool::Key for PoolKey {
 			std::net::IpAddr::V6(addr) => addr.segments()[7] as usize,
 		}
 	}
+
+	fn connect_timeout(&self) -> Option<Duration> {
+		self.2.tcp.as_ref().and_then(|tcp| tcp.connect_timeout)
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -270,6 +290,7 @@ impl Transport {
 #[derive(Debug, Clone)]
 struct Connector {
 	hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
+	h2_config: Arc<agent_hbone::H2Config>,
 	backend_config: Arc<crate::BackendConfig>,
 	metrics: Option<Arc<crate::metrics::Metrics>>,
 	resolver: Arc<dns::CachedResolver>,
@@ -295,9 +316,10 @@ impl Connector {
 		&mut self,
 		target: Target,
 		ep: SocketAddr,
-		transport: Transport,
+		connection: ConnectionConfig,
 		http: bool,
 	) -> Result<Socket, http::Error> {
+		let ConnectionConfig { transport, tcp } = connection;
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 		let tls = match transport.application() {
@@ -306,9 +328,20 @@ impl Connector {
 		};
 		trace!(?transport, "connecting");
 		let stream = match transport {
-			Transport::Plain(_) => dial(&target, ep, &self.backend_config).await?,
-			Transport::Tunnel(_, tcfg) if tls.is_some() || !http => {
-				// Tunnel case one: use CONNECT for non-plaintext HTTP
+			Transport::Plain(_) => {
+				let mut backend_config = (*self.backend_config).clone();
+				if let Some(tcp) = tcp.as_ref() {
+					if let Some(connect_timeout) = tcp.connect_timeout {
+						backend_config.connect_timeout = connect_timeout;
+					}
+					if let Some(keepalives) = tcp.keepalives.as_ref() {
+						backend_config.keepalives = keepalives.clone();
+					}
+				}
+				dial(&target, ep, &backend_config).await?
+			},
+			Transport::Tunnel(_, tcfg) if tcfg.connect || tls.is_some() || !http => {
+				// Use CONNECT when required by the transport or explicitly configured.
 				let proxy_dst: SocketAddr = self
 					// Never skip resolution for the actually proxy itself
 					.resolve_target(false, &tcfg.target)
@@ -316,9 +349,9 @@ impl Connector {
 					.map_err(crate::http::Error::new)?;
 				let dest = target.to_string();
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
-				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.transport, false)).await?;
+				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.connection, false)).await?;
 
-				let con = connect_tunnel::handshake(con, &dest, tcfg.token)
+				let con = connect_tunnel::handshake_proxy(con, &dest, tcfg.token, self.h2_config.clone())
 					.await
 					.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");
@@ -334,7 +367,7 @@ impl Connector {
 				debug!("connected to tunnel proxy (HTTP)");
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let mut socket =
-					Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.transport, false)).await?;
+					Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.connection, false)).await?;
 				socket.ext_mut().insert(stream::HttpProxy);
 				socket
 			},
@@ -389,15 +422,14 @@ impl Connector {
 			stream
 		};
 
-		let connect_ms = connect_start.elapsed().as_millis();
+		let connect_dur = connect_start.elapsed();
 		if let Some(m) = &self.metrics {
 			let labels = metrics::ConnectLabels {
 				transport: strng::RichStrng::from(transport_name).into(),
 			};
-			// Note: convert from ms to seconds since Prometheus convention for histogram buckets is seconds.
 			m.upstream_connect_duration
 				.get_or_create(&labels)
-				.observe((connect_ms as f64) / 1000.0);
+				.observe(connect_dur.as_secs_f64());
 		}
 
 		event!(
@@ -408,7 +440,7 @@ impl Connector {
 			endpoint = %ep,
 			transport = %transport_name,
 
-			connect_ms = connect_ms,
+			connect_ms = connect_dur.as_millis(),
 
 			"connected"
 		);
@@ -460,10 +492,10 @@ impl tower::Service<::http::Extensions> for Connector {
 		let mut it = self.clone();
 
 		Box::pin(async move {
-			let PoolKey(target, ep, transport, _) =
+			let PoolKey(target, ep, connection, _) =
 				dst.remove::<PoolKey>().expect("pool key must be set");
 
-			it.connect(target, ep, transport, true)
+			it.connect(target, ep, connection, true)
 				.await
 				.map(TokioIo::new)
 		})
@@ -484,6 +516,20 @@ impl Client {
 		backend_config: BackendConfig,
 		metrics: Option<Arc<crate::metrics::Metrics>>,
 	) -> Client {
+		let h2_config = hbone_pool
+			.as_ref()
+			.map(|pool| Arc::new(pool.config().h2.clone()))
+			.unwrap_or_else(|| Arc::new(agent_hbone::H2Config::default()));
+		Self::new_with_h2_config(cfg, hbone_pool, h2_config, backend_config, metrics)
+	}
+
+	pub fn new_with_h2_config(
+		cfg: &Config,
+		hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
+		h2_config: Arc<agent_hbone::H2Config>,
+		backend_config: BackendConfig,
+		metrics: Option<Arc<crate::metrics::Metrics>>,
+	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
 		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
@@ -498,6 +544,7 @@ impl Client {
 		let connector = Connector {
 			resolver: Arc::new(resolver),
 			hbone_pool,
+			h2_config,
 			backend_config: Arc::new(backend_config),
 			metrics,
 		};
@@ -519,17 +566,17 @@ impl Client {
 			.port()
 			.map(|p| p.as_u16())
 			.unwrap_or_else(|| if scheme == &Scheme::HTTPS { 443 } else { 80 });
-		let transport = if scheme == &Scheme::HTTPS {
-			ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config()).into()
+		let transport = Transport::from(if scheme == &Scheme::HTTPS {
+			ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
 		} else {
-			ApplicationTransport::Plaintext.into()
-		};
+			ApplicationTransport::Plaintext
+		});
 		let target = Target::from((host, port));
 		self
 			.call(Call {
 				req,
 				target,
-				transport,
+				connection: transport.into(),
 			})
 			.await
 	}
@@ -539,15 +586,15 @@ impl Client {
 		let TCPCall {
 			source,
 			target,
-			transport,
+			connection,
 		} = call;
 
 		let dest = self
 			.connector
-			.resolve_target(transport.skip_dns_resolution(), &target)
+			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
 
-		let transport_name = transport.name();
+		let transport_name = connection.transport.name();
 		let target_name = target.to_string();
 
 		event!(
@@ -564,7 +611,7 @@ impl Client {
 		let upstream = self
 			.connector
 			.clone()
-			.connect(target, dest, transport, false)
+			.connect(target, dest, connection, false)
 			.await
 			.map_err(ProxyError::UpstreamTCPCallFailed)?;
 
@@ -592,16 +639,16 @@ impl Client {
 	pub async fn connect_raw(
 		&self,
 		target: Target,
-		transport: Transport,
+		connection: ConnectionConfig,
 	) -> Result<Socket, ProxyError> {
 		let dest = self
 			.connector
-			.resolve_target(transport.skip_dns_resolution(), &target)
+			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
 		self
 			.connector
 			.clone()
-			.connect(target, dest, transport, false)
+			.connect(target, dest, connection, false)
 			.await
 			.map_err(ProxyError::UpstreamTCPCallFailed)
 	}
@@ -616,14 +663,14 @@ impl Client {
 		let Call {
 			mut req,
 			target,
-			transport,
+			connection,
 		} = call;
 		async move {
 			let dest = connector
-				.resolve_target(transport.skip_dns_resolution(), &target)
+				.resolve_target(connection.transport.skip_dns_resolution(), &target)
 				.await?;
 			http::modify_req_uri(&mut req, |uri| {
-				let scheme = transport.scheme();
+				let scheme = connection.transport.scheme();
 				// Strip the port from the hostname if its the default already
 				// The hyper client does this for HTTP/1.1 but not for HTTP2
 				if let Some(a) = uri.authority.as_mut()
@@ -642,18 +689,19 @@ impl Client {
 				req.headers_mut().remove(::http::header::HOST);
 			}
 			let version = req.version();
-			let transport_name = transport.name();
+			let transport_name = connection.transport.name();
 			// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
 			// in the connect layer, but here we need to merge it into the request
-			if let Transport::Tunnel(app, tc) = &transport
+			if let Transport::Tunnel(app, tc) = &connection.transport
 				&& let Some(h) = tc.token.as_ref()
 				&& matches!(app, ApplicationTransport::Plaintext)
+				&& !tc.connect
 			{
 				req
 					.headers_mut()
 					.insert(http::header::PROXY_AUTHORIZATION, h.clone());
 			}
-			let key = PoolKey(target.clone(), dest, transport, version);
+			let key = PoolKey(target.clone(), dest, connection, version);
 			trace!(?req, ?key, "sending request");
 			req.extensions_mut().insert(key);
 			let method = req.method().clone();
@@ -760,5 +808,58 @@ mod tests {
 				"tunnel protocol {tp:?} should map to no source role",
 			);
 		}
+	}
+
+	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback
+	/// connect on 0. Asserting the recorded value is finer than a millisecond catches that however
+	/// long the connect actually takes.
+	#[tokio::test]
+	async fn upstream_connect_duration_records_sub_millisecond_connects() {
+		use frozen_collections::FzHashSet;
+		use prometheus_client::registry::Registry;
+
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		tokio::spawn(async move { while listener.accept().await.is_ok() {} });
+
+		let mut registry = Registry::default();
+		let metrics = Arc::new(crate::metrics::Metrics::new(
+			&mut registry,
+			FzHashSet::default(),
+			Default::default(),
+		));
+
+		let client = Client::new(
+			&Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			Some(metrics),
+		);
+		client
+			.connect_raw(
+				Target::Address(addr),
+				Transport::Plain(ApplicationTransport::Plaintext).into(),
+			)
+			.await
+			.expect("connect to loopback listener");
+
+		let mut encoded = String::new();
+		prometheus_client::encoding::text::encode(&mut encoded, &registry).unwrap();
+		let sum = encoded
+			.lines()
+			.find_map(|l| {
+				l.strip_prefix("upstream_connect_duration_seconds_sum{transport=\"plaintext\"} ")
+			})
+			.unwrap_or_else(|| panic!("no connect duration sum in:\n{encoded}"))
+			.parse::<f64>()
+			.unwrap();
+		let ms = sum * 1000.0;
+		assert!(
+			(ms - ms.round()).abs() > 1e-9,
+			"connect duration {ms}ms is quantized to whole milliseconds"
+		);
 	}
 }

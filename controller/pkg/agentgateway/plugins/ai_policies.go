@@ -48,10 +48,28 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 				Status: uint32(req.CustomResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 			}
 		}
+		for _, scope := range req.Scope {
+			pgReq.Scope = append(pgReq.Scope, processContentScope(scope))
+		}
 		res = append(res, pgReq)
 	}
 
 	return res, nil
+}
+
+func processContentScope(scope agentgateway.ContentScope) api.BackendPolicySpec_Ai_ContentScope {
+	switch scope {
+	case agentgateway.ContentScopeSystemPrompt:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_SYSTEM_PROMPT
+	case agentgateway.ContentScopeMessages:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_MESSAGES
+	case agentgateway.ContentScopeToolOutput:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_TOOL_OUTPUT
+	case agentgateway.ContentScopeToolInput:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_TOOL_INPUT
+	default:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_UNSPECIFIED
+	}
 }
 
 func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.PromptguardResponse) ([]*api.BackendPolicySpec_Ai_ResponseGuard, error) {

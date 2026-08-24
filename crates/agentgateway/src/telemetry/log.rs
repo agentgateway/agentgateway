@@ -20,7 +20,7 @@ use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
-use opentelemetry::trace::SpanKind;
+use opentelemetry::trace::{SpanKind, Status};
 use opentelemetry::{Key, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
@@ -36,12 +36,12 @@ use value_bag::visit::Visit;
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
-use crate::llm::cost::{CostLookupStatus, ModelCatalog};
+use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
-	RouteIdentifier,
+	OutboundCallLabels, RouteIdentifier,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, trc};
@@ -63,6 +63,30 @@ struct DatabaseAttributes {
 	agentgateway_user: Option<String>,
 	agentgateway_group: Option<String>,
 	user_agent_name: Option<String>,
+}
+
+fn database_llm_payload(
+	mode: Option<crate::types::frontend::DatabaseLlmMode>,
+	info: Option<&LLMContext>,
+) -> Option<log_store::StoredRequestLogPayload> {
+	if mode == Some(crate::types::frontend::DatabaseLlmMode::Metadata) {
+		return None;
+	}
+	let info = info?;
+	let request_prompt_json = info
+		.prompt
+		.as_ref()
+		.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
+	let response_completion_json = info
+		.completion
+		.as_ref()
+		.and_then(|completion| serde_json::to_value(completion).ok());
+	(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
+		log_store::StoredRequestLogPayload {
+			request_prompt_json,
+			response_completion_json,
+		},
+	)
 }
 
 fn database_attributes(kv: &[(&str, Option<ValueBag>)]) -> DatabaseAttributes {
@@ -894,6 +918,7 @@ impl RequestLog {
 	) -> Self {
 		RequestLog {
 			cel,
+			database_llm: Default::default(),
 			metrics,
 			model_catalog,
 			start,
@@ -937,6 +962,8 @@ impl RequestLog {
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
+			ate_actor_id: None,
+			ate_atespace: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -946,8 +973,15 @@ impl RequestLog {
 	}
 
 	pub fn span_writer(&self) -> SpanWriter {
-		let inner = self.span_writer_inner();
+		let inner = self.span_writer_inner().map(Arc::new);
 		SpanWriter { inner }
+	}
+	pub fn insert_span_writer(&self, extensions: &mut ::http::Extensions) {
+		if let Some(inner) = self.span_writer_inner() {
+			extensions.insert(SpanWriter {
+				inner: Some(Arc::new(inner)),
+			});
+		}
 	}
 	fn span_writer_inner(&self) -> Option<SpanWriterInner> {
 		// Early return if there is no tracer enabled at all
@@ -1028,6 +1062,10 @@ impl RequestLog {
 #[derive(Debug)]
 pub struct RequestLog {
 	pub cel: CelLogging,
+	/// Controls whether normalized LLM prompt/completion content is persisted in the database's
+	/// dedicated payload table. `None` preserves the legacy behavior of persisting content captured
+	/// by CEL expressions. This is independent from CEL attribute capture.
+	pub database_llm: Option<crate::types::frontend::DatabaseLlmMode>,
 	pub metrics: Arc<Metrics>,
 	pub model_catalog: Arc<ModelCatalog>,
 	pub start: Timestamp,
@@ -1092,6 +1130,9 @@ pub struct RequestLog {
 	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
+
+	pub ate_actor_id: Option<String>,
+	pub ate_atespace: Option<String>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1298,6 +1339,16 @@ impl Drop for DropOnLog {
 			let grpc = log.grpc_status.load();
 
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
+			let time_to_first_token = llm_response
+				.as_ref()
+				.and_then(|l| l.time_to_first_token)
+				.and_then(|duration| duration.0.to_std().ok())
+				.map(|duration| duration.as_secs_f64());
+			let time_per_output_token = llm_response
+				.as_ref()
+				.and_then(|l| l.time_per_output_token)
+				.and_then(|duration| duration.0.to_std().ok())
+				.map(|duration| duration.as_secs_f64());
 			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
 			let usage_cost_total = cost.map(|b| b.total().to_string());
 			let trace_cost_fields = if enable_trace {
@@ -1375,6 +1426,15 @@ impl Drop for DropOnLog {
 				("route", route_identifier.route.as_deref().map(display)),
 				("endpoint", log.endpoint.display()),
 				("src.addr", Some(display(&log.tcp_info.peer_addr))),
+				(
+					"src.identity",
+					log
+						.tls_info
+						.as_ref()
+						.and_then(|tls| tls.src_identity.as_ref())
+						.and_then(|tls| tls.identity.as_ref())
+						.map(display),
+				),
 				("http.method", log.method.display()),
 				("http.host", log.host.display()),
 				("http.path", log.path.display()),
@@ -1427,6 +1487,14 @@ impl Drop for DropOnLog {
 						.map(display),
 				),
 				(
+					"a2a.context.id",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.context_id.as_ref())
+						.map(display),
+				),
+				(
 					"mcp.method.name",
 					mcp
 						.as_ref()
@@ -1463,6 +1531,8 @@ impl Drop for DropOnLog {
 					"inferencepool.selected_endpoint",
 					log.inference_pool.display(),
 				),
+				("ate.actor.id", log.ate_actor_id.display()),
+				("ate.atespace", log.ate_atespace.display()),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",
@@ -1510,6 +1580,22 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.output_tokens)
 						.map(Into::into),
 				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.reasoning_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.reasoning_tokens)
+						.map(Into::into),
+				),
+				(
+					"agw.ai.time_to_first_token",
+					time_to_first_token.map(Into::into),
+				),
+				(
+					"agw.ai.time_per_output_token",
+					time_per_output_token.map(Into::into),
+				),
 				(
 					"agw.ai.usage.cost.total",
 					usage_cost_total.as_deref().map(Into::into),
@@ -1520,6 +1606,14 @@ impl Drop for DropOnLog {
 					llm_response
 						.as_ref()
 						.and_then(|l| l.output_image_tokens)
+						.map(Into::into),
+				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.input_audio_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.input_audio_tokens)
 						.map(Into::into),
 				),
 				// Not part of official semconv
@@ -1604,6 +1698,14 @@ impl Drop for DropOnLog {
 				extra_kv_capacity += fields.add.len();
 			}
 			kv.reserve_exact(extra_kv_capacity);
+			let protocol_span_name = mcp
+				.as_ref()
+				.and_then(|mcp| mcp.method_name.clone())
+				.or_else(|| {
+					let request = log.request_snapshot.as_ref()?;
+					crate::http::is_grpc_content_type(&request.headers)
+						.then(|| request.path.path().trim_start_matches('/').to_owned())
+				});
 
 			if enable_trace && let Some(t) = &log.tracer {
 				let base_len = kv.len();
@@ -1614,7 +1716,13 @@ impl Drop for DropOnLog {
 							.map(|(key, value)| (*key, Some(value.as_str().into()))),
 					);
 				}
-				t.send(&log, &end_time, &cel_exec, kv.as_slice());
+				t.send(
+					&log,
+					&end_time,
+					&cel_exec,
+					protocol_span_name.as_deref(),
+					kv.as_slice(),
+				);
 				kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
@@ -1718,27 +1826,12 @@ impl Drop for DropOnLog {
 						}
 					}
 					let attributes = database_attributes(&db_kv);
-					let payload = llm_response.as_ref().and_then(|info| {
-						let request_prompt_json = info
-							.prompt
-							.as_ref()
-							.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
-						let response_completion_json = info
-							.completion
-							.as_ref()
-							.and_then(|completion| serde_json::to_value(completion).ok());
-						(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
-							log_store::StoredRequestLogPayload {
-								request_prompt_json,
-								response_completion_json,
-							},
-						)
-					});
+					let payload = database_llm_payload(log.database_llm, llm_response.as_ref());
 					let has_payload = payload.is_some();
 					let total_tokens = llm_response.as_ref().and_then(|llm| {
 						llm
 							.total_tokens
-							.or_else(|| Some(llm.input_tokens? + llm.output_tokens?))
+							.or_else(|| Some(llm.input_tokens?.saturating_add(llm.output_tokens?)))
 					});
 					log_store::emit(log_store::StoredRequestLog {
 						id: uuid::Uuid::now_v7().to_string(),
@@ -1843,6 +1936,11 @@ where
 }
 
 pub struct OtelAccessLogger {
+	inner: super::NonBlockingDrop<OtelAccessLoggerInner>,
+}
+
+#[derive(Debug)]
+struct OtelAccessLoggerInner {
 	provider: SdkLoggerProvider,
 	logger: opentelemetry_sdk::logs::SdkLogger,
 }
@@ -2026,11 +2124,13 @@ impl OtelAccessLogger {
 
 		let logger = provider.logger("agentgateway.access");
 
-		Ok(Self { provider, logger })
+		Ok(Self {
+			inner: super::NonBlockingDrop::new(OtelAccessLoggerInner { provider, logger }),
+		})
 	}
 
 	pub fn shutdown(&self) {
-		let _ = self.provider.shutdown();
+		let _ = self.inner.provider.shutdown();
 	}
 }
 
@@ -2053,7 +2153,7 @@ impl OtelLogSink for OtelAccessLogger {
 			_ => "INFO",
 		};
 
-		let mut record = self.logger.create_log_record();
+		let mut record = self.inner.logger.create_log_record();
 		record.set_severity_number(severity);
 		record.set_severity_text(severity_text);
 		record.set_target(target.to_string());
@@ -2097,24 +2197,48 @@ impl OtelLogSink for OtelAccessLogger {
 			);
 		}
 
-		self.logger.emit(record);
+		self.inner.logger.emit(record);
 	}
 
 	fn shutdown(&self) {
-		let _ = self.provider.shutdown();
+		let _ = self.inner.provider.shutdown();
 	}
 }
 
 // SpanWriter is a construct that can start otel spans
 #[derive(Debug, Default, Clone)]
 pub struct SpanWriter {
-	inner: Option<SpanWriterInner>,
+	inner: Option<Arc<SpanWriterInner>>,
+}
+
+pub fn copy_span_writer(source: &::http::Extensions, target: &mut ::http::Extensions) {
+	if let Some(writer) = source.get::<SpanWriter>() {
+		target.insert(writer.clone());
+	}
 }
 
 impl SpanWriter {
+	pub(crate) fn is_enabled(&self) -> bool {
+		self.inner.is_some()
+	}
+
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
 		match &self.inner {
 			Some(i) => i.start(name),
+			None => SpanWriteOnDrop::default(),
+		}
+	}
+
+	pub fn start_outbound(&self, labels: OutboundCallLabels) -> SpanWriteOnDrop {
+		match &self.inner {
+			Some(i) => i.start_with_details(
+				labels.subtype.as_str(),
+				SpanKind::Client,
+				vec![
+					KeyValue::new("agentgateway.outbound.kind", labels.kind.as_str()),
+					KeyValue::new("agentgateway.outbound.subtype", labels.subtype.as_str()),
+				],
+			),
 			None => SpanWriteOnDrop::default(),
 		}
 	}
@@ -2128,12 +2252,24 @@ pub struct SpanWriterInner {
 
 impl SpanWriterInner {
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+		self.start_with_details(name, SpanKind::Server, Vec::new())
+	}
+
+	fn start_with_details(
+		&self,
+		name: impl Into<Cow<'static, str>>,
+		span_kind: SpanKind,
+		attributes: Vec<KeyValue>,
+	) -> SpanWriteOnDrop {
 		// Create a unique child span ID for this recorded span.
 		let child = self.parent.new_span();
 
 		SpanWriteOnDrop {
 			name: Some(name.into()),
+			span_kind,
 			start_time: Some(SystemTime::now()),
+			attributes,
+			status: Status::default(),
 			inner: self.inner.clone(),
 			parent: Some(self.parent.clone()),
 			span: Some(child),
@@ -2141,19 +2277,98 @@ impl SpanWriterInner {
 	}
 }
 
-#[derive(Default)]
 pub struct SpanWriteOnDrop {
 	name: Option<Cow<'static, str>>,
+	span_kind: SpanKind,
 	start_time: Option<SystemTime>,
+	attributes: Vec<KeyValue>,
+	status: Status,
 	inner: Arc<Mutex<Vec<BufferedSpan>>>,
 	parent: Option<trc::TraceParent>,
 	span: Option<trc::TraceParent>,
 }
+impl Default for SpanWriteOnDrop {
+	fn default() -> Self {
+		Self {
+			name: None,
+			span_kind: SpanKind::Internal,
+			start_time: None,
+			attributes: Vec::new(),
+			status: Status::default(),
+			inner: Arc::default(),
+			parent: None,
+			span: None,
+		}
+	}
+}
 impl SpanWriteOnDrop {
+	pub fn span_writer(&self) -> SpanWriter {
+		let inner = self.span.clone().map(|parent| {
+			Arc::new(SpanWriterInner {
+				parent,
+				inner: self.inner.clone(),
+			})
+		});
+		SpanWriter { inner }
+	}
+
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
 		if self.parent.is_some() {
 			self.name = Some(name.into());
 		}
+	}
+
+	pub fn inject_context(&self, req: &mut Request) {
+		if let Some(span) = &self.span {
+			span.insert_header(req);
+		}
+	}
+
+	pub fn inject_headers(&self, headers: &mut ::http::HeaderMap) {
+		if let Some(span) = &self.span {
+			span.insert_headers(headers);
+		}
+	}
+
+	pub fn inject_grpc_context<T>(&self, req: &mut tonic::Request<T>) {
+		let Some(span) = &self.span else {
+			return;
+		};
+		let traceparent = format!("{span:?}");
+		if let Ok(value) = tonic::metadata::MetadataValue::try_from(traceparent.as_str()) {
+			req.metadata_mut().insert("traceparent", value);
+		}
+	}
+
+	pub fn add_attribute(&mut self, attribute: KeyValue) {
+		if self.parent.is_some() {
+			self.attributes.push(attribute);
+		}
+	}
+
+	pub fn set_error(&mut self, error_type: impl Into<String>, description: impl Into<String>) {
+		if self.parent.is_some() {
+			self
+				.attributes
+				.push(KeyValue::new("error.type", error_type.into()));
+			self.status = Status::error(description.into());
+		}
+	}
+
+	pub fn record_grpc_result<T>(&mut self, result: &Result<tonic::Response<T>, tonic::Status>) {
+		match result {
+			Ok(_) => self.add_attribute(KeyValue::new("grpc.status", 0_i64)),
+			Err(status) => self.record_grpc_error(status),
+		}
+	}
+
+	pub fn record_grpc_status(&mut self, code: tonic::Code) {
+		self.add_attribute(KeyValue::new("grpc.status", i64::from(code as i32)));
+	}
+
+	pub fn record_grpc_error(&mut self, status: &tonic::Status) {
+		self.record_grpc_status(status.code());
+		self.set_error(format!("{:?}", status.code()), status.to_string());
 	}
 }
 impl Drop for SpanWriteOnDrop {
@@ -2169,10 +2384,11 @@ impl Drop for SpanWriteOnDrop {
 		if let Ok(mut spans) = self.inner.lock() {
 			spans.push(BufferedSpan {
 				name,
-				span_kind: SpanKind::Server,
+				span_kind: self.span_kind.clone(),
 				start_time: self.start_time.unwrap_or(end_time),
 				end_time,
-				attributes: Vec::new(),
+				attributes: std::mem::take(&mut self.attributes),
+				status: std::mem::take(&mut self.status),
 				parent,
 				span,
 			});
@@ -2187,6 +2403,7 @@ pub struct BufferedSpan {
 	start_time: SystemTime,
 	end_time: SystemTime,
 	attributes: Vec<KeyValue>,
+	status: Status,
 	parent: trc::TraceParent,
 	span: trc::TraceParent,
 }
@@ -2197,10 +2414,11 @@ impl BufferedSpan {
 			self.name,
 			self.span_kind,
 			&self.span,
-			Some(&self.parent),
+			Some((&self.parent, false)),
 			self.start_time,
 			self.end_time,
 			self.attributes,
+			self.status,
 		)
 	}
 }
@@ -2218,9 +2436,12 @@ mod tests {
 	use prometheus_client::registry::Registry;
 
 	use super::*;
-	use crate::telemetry::metrics::Metrics;
+	use crate::telemetry::metrics::{
+		Metrics, OutboundCallKind, OutboundCallLabels, OutboundCallSubtype,
+	};
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
+	use crate::types::frontend::{DatabaseLlmMode, LoggingPolicy};
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
@@ -2251,7 +2472,7 @@ mod tests {
 			.build();
 		(
 			Arc::new(trc::Tracer {
-				provider,
+				provider: crate::telemetry::NonBlockingDrop::new(provider),
 				processor,
 				fields: Arc::new(LoggingFields::default()),
 				filter: None,
@@ -2271,7 +2492,11 @@ mod tests {
 			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
-		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));
+		let metrics = Arc::new(Metrics::new(
+			&mut registry,
+			Default::default(),
+			Default::default(),
+		));
 		RequestLog::new(
 			cel,
 			metrics,
@@ -2284,6 +2509,109 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	fn llm_context_with_content() -> LLMContext {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: llm::InputFormat::Responses,
+			cache_convention: Default::default(),
+			request_model: "test-model".into(),
+			provider: "test-provider".into(),
+			streaming: false,
+			params: Default::default(),
+			prompt: Some(Arc::new(vec![llm::SimpleChatCompletionMessage {
+				role: "user".into(),
+				content: "hello".into(),
+			}])),
+			provider_state: None,
+		};
+		let mut context = LLMContext::from(request);
+		context.completion = Some(vec!["world".to_string()]);
+		context
+	}
+
+	#[test]
+	fn database_llm_omitted_preserves_legacy_payload_without_capture_requirements() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert_eq!(log.database_llm, None);
+		assert!(!log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_completion());
+		assert!(database_llm_payload(None, Some(&llm_context_with_content())).is_some());
+	}
+
+	#[test]
+	fn database_llm_full_enables_capture_requirements() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {"llm": "full"}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert_eq!(log.database_llm, Some(DatabaseLlmMode::Full));
+		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(log.cel.cel_context.needs_llm_completion());
+	}
+
+	#[test]
+	fn database_llm_metadata_does_not_persist_captured_content() {
+		let context = llm_context_with_content();
+		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), Some(&context)).is_none());
+	}
+
+	#[test]
+	fn database_add_can_capture_content_without_enabling_payload_storage() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {
+				"llm": "metadata",
+				"add": {"my.prompt": "llm.prompt"}
+			}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+		let database = policy.database.as_ref().unwrap();
+		for expression in database.add.values_unordered() {
+			log
+				.cel
+				.cel_context
+				.register_log_expression(expression.as_ref());
+		}
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_completion());
+		assert!(log.cel.database_fields.add.contains_key("my.prompt"));
+		assert!(
+			database_llm_payload(
+				Some(DatabaseLlmMode::Metadata),
+				Some(&llm_context_with_content())
+			)
+			.is_none()
+		);
+	}
+
+	#[test]
+	fn database_llm_full_persists_content_in_payload_only() {
+		let context = llm_context_with_content();
+		let payload = database_llm_payload(Some(DatabaseLlmMode::Full), Some(&context)).unwrap();
+		assert_eq!(
+			payload.request_prompt_json,
+			Some(serde_json::json!([{"role": "user", "content": "hello"}]))
+		);
+		assert_eq!(
+			payload.response_completion_json,
+			Some(serde_json::json!(["world"]))
+		);
 	}
 
 	#[test]
@@ -2324,7 +2652,58 @@ mod tests {
 		assert_eq!(child.span_kind, SpanKind::Server);
 		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
-		assert!(child.parent_span_is_remote);
+		assert!(!child.parent_span_is_remote);
+	}
+
+	#[test]
+	fn span_writer_records_outbound_client_span_and_propagates_it() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer.clone());
+
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing.clone());
+
+		let mut outbound_request = ::http::Request::new(crate::http::Body::empty());
+		{
+			let mut span = request.span_writer().start_outbound(OutboundCallLabels {
+				kind: OutboundCallKind::Policy,
+				subtype: OutboundCallSubtype::ExtAuthz,
+			});
+			span.inject_context(&mut outbound_request);
+			span.set_error(
+				ProxyResponseReason::ExtAuth.to_string(),
+				"authorization denied",
+			);
+		}
+		let propagated = trc::TraceParent::from_request(&outbound_request).unwrap();
+
+		drop(DropOnLog::from(request));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let child = spans
+			.iter()
+			.find(|span| span.name.as_ref() == OutboundCallSubtype::ExtAuthz.as_str())
+			.expect("outbound span should be exported");
+		assert_eq!(child.span_kind, SpanKind::Client);
+		assert_eq!(child.parent_span_id, outgoing.span_id.into());
+		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
+		assert_eq!(child.span_context.span_id(), propagated.span_id.into());
+		assert!(child.attributes.contains(&KeyValue::new(
+			"agentgateway.outbound.kind",
+			OutboundCallKind::Policy.as_str(),
+		)));
+		assert!(child.attributes.contains(&KeyValue::new(
+			"agentgateway.outbound.subtype",
+			OutboundCallSubtype::ExtAuthz.as_str(),
+		)));
+		assert!(child.attributes.contains(&KeyValue::new(
+			"error.type",
+			ProxyResponseReason::ExtAuth.to_string(),
+		)));
+		assert_eq!(child.status, Status::error("authorization denied"));
 	}
 
 	#[test]
@@ -2346,6 +2725,83 @@ mod tests {
 		let _ = tracer.provider.force_flush();
 
 		assert!(exporter.finished_spans().is_empty());
+	}
+
+	#[test]
+	fn llm_span_uses_cache_inclusive_input_tokens() {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: llm::CacheTokenConvention::InputExcludesCache,
+			request_model: strng::literal!("claude"),
+			provider: strng::literal!("anthropic"),
+			streaming: false,
+			params: llm::LLMRequestParams::default(),
+			prompt: None,
+			provider_state: None,
+		};
+		let response = llm::LLMResponse {
+			input_tokens: Some(50),
+			cached_input_tokens: Some(40),
+			cache_creation_input_tokens: Some(10),
+			input_audio_tokens: Some(3),
+			output_tokens: Some(20),
+			output_audio_tokens: Some(4),
+			reasoning_tokens: Some(5),
+			total_tokens: Some(70),
+			..Default::default()
+		};
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(request.clone());
+		log
+			.llm_response
+			.store(Some(llm::LLMInfo::new(request, response)));
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| &attr.value)
+		};
+		assert_eq!(
+			value("gen_ai.usage.input_tokens"),
+			Some(&opentelemetry::Value::I64(100))
+		);
+		assert_eq!(
+			value("gen_ai.usage.cache_read.input_tokens"),
+			Some(&opentelemetry::Value::I64(40))
+		);
+		assert_eq!(
+			value("gen_ai.usage.cache_creation.input_tokens"),
+			Some(&opentelemetry::Value::I64(10))
+		);
+		assert_eq!(
+			value("gen_ai.usage.reasoning_tokens"),
+			Some(&opentelemetry::Value::I64(5))
+		);
+		assert_eq!(
+			value("gen_ai.usage.input_audio_tokens"),
+			Some(&opentelemetry::Value::I64(3))
+		);
+		assert_eq!(
+			value("gen_ai.usage.output_audio_tokens"),
+			Some(&opentelemetry::Value::I64(4))
+		);
 	}
 
 	#[tokio::test]
@@ -2443,6 +2899,7 @@ mod tests {
 			error_code: Some(-32602),
 			result_kind: Some(strng::literal!("task")),
 			task_state: Some(strng::literal!("failed")),
+			context_id: Some(strng::literal!("ctx-123")),
 		});
 
 		drop(DropOnLog::from(log));
@@ -2459,6 +2916,7 @@ mod tests {
 			"a2a.response.error_code",
 			"a2a.result.kind",
 			"a2a.task.state",
+			"a2a.context.id",
 		] {
 			assert!(has(expected), "expected {expected} span attribute");
 		}

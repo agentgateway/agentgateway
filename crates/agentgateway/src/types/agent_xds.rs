@@ -435,6 +435,17 @@ fn server_tls_config_from_proto(
 		return ServerTLSConfig::istio_workload(require_client_cert, default_alpns);
 	}
 
+	if certificate_source == proto::agent::tls_config::CertificateSource::Spiffe {
+		// SPIFFE always requires client SVIDs (mutual TLS); mtls_mode does not apply.
+		if mtls_mode != proto::agent::tls_config::MtlsMode::Strict {
+			diagnostics.add_warning(
+				"mtls_mode is ignored for SPIFFE certificates; client SVIDs are always required"
+					.to_string(),
+			);
+		}
+		return ServerTLSConfig::spiffe(default_alpns);
+	}
+
 	if certificate_source == proto::agent::tls_config::CertificateSource::DynamicCa {
 		if value.root.is_some() {
 			diagnostics.add_warning("mTLS is not supported with DYNAMIC_CA certificates");
@@ -690,6 +701,8 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
 		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
 		Ok(ProtoRT::Rerank) => llm::RouteType::Rerank,
+		Ok(ProtoRT::GenerateContent) => llm::RouteType::GenerateContent,
+		Ok(ProtoRT::GeminiCountTokens) => llm::RouteType::GeminiCountTokens,
 		Err(_) => {
 			diagnostics.add_warning(format!(
 				"unknown proto RouteType value {}, defaulting to Completions",
@@ -853,6 +866,26 @@ fn convert_provider_format_config(
 	})
 }
 
+fn convert_content_scopes(scopes: &[i32]) -> Result<Vec<llm::ContentScope>, ProtoError> {
+	use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+	if scopes.is_empty() {
+		return Ok(llm::policy::default_content_scope());
+	}
+	scopes
+		.iter()
+		.map(|s| match ProtoScope::try_from(*s) {
+			Ok(ProtoScope::SystemPrompt) => Ok(llm::ContentScope::SystemPrompt),
+			Ok(ProtoScope::Messages) => Ok(llm::ContentScope::Messages),
+			Ok(ProtoScope::ToolOutput) => Ok(llm::ContentScope::ToolOutput),
+			Ok(ProtoScope::ToolInput) => Ok(llm::ContentScope::ToolInput),
+			Ok(ProtoScope::Unspecified) | Err(_) => Err(ProtoError::Generic(format!(
+				"unknown prompt guard content scope value {s}"
+			))),
+		})
+		.collect()
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -954,7 +987,17 @@ fn convert_backend_ai_policy(
 						})
 					},
 				};
-				Ok(llm::policy::RequestGuard { rejection, kind })
+				let guard = llm::policy::RequestGuard {
+					rejection,
+					scope: convert_content_scopes(&reqp.scope)?,
+					kind,
+				};
+
+				// TODO not all guard types properly scan all scopes
+				// avoids silently ignoring configured scopes
+				guard.validate_scope().map_err(ProtoError::Generic)?;
+
+				Ok(guard)
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
@@ -1080,6 +1123,23 @@ fn convert_backend_ai_policy(
 						let ve = permissive_cel_expression_arc(
 							diagnostics,
 							format!("backend.ai.transformations.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), ve))
+					})
+					.collect::<Result<_, _>>()?,
+			)
+		},
+		final_transformations: if ai.final_transformations.is_empty() {
+			None
+		} else {
+			Some(
+				ai.final_transformations
+					.iter()
+					.map(|(k, v)| {
+						let ve = permissive_cel_expression_arc(
+							diagnostics,
+							format!("backend.ai.final_transformations.{k}"),
 							v,
 						);
 						Ok::<_, ProtoError>((k.to_owned(), ve))
@@ -1431,7 +1491,6 @@ impl Bind {
 		Ok(Self {
 			key: s.key.clone().into(),
 			address,
-			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,
 				proto::agent::bind::Protocol::Tcp => BindProtocol::tcp,
@@ -1508,7 +1567,7 @@ impl TCPRoute {
 				.iter()
 				.map(|b| TCPRouteBackendReference {
 					weight: b.weight as usize,
-					backend: resolve_simple_reference(b.backend.as_ref()),
+					backend: resolve_reference(b.backend.as_ref()),
 					inline_policies: Vec::new(),
 				})
 				.collect::<Vec<_>>(),
@@ -1702,6 +1761,7 @@ impl ModelRoute {
 			ModelRoute {
 				key: strng::new(&s.key),
 				name,
+				router_key: strng::new(&s.router_key),
 				kind,
 			},
 			strng::new(&s.listener_key),
@@ -1779,7 +1839,8 @@ pub(crate) fn backend_with_policies_from_proto(
 			};
 			Backend::Opaque(name.into(), target)
 		},
-		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
+		// xDS-driven dynamic backends don't support a CEL target expression yet.
+		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), None),
 		Some(backend::Kind::Aws(a)) => {
 			let aws_config = match &a.service {
 				Some(proto::agent::aws_backend::Service::AgentCore(ac)) => {
@@ -1992,11 +2053,18 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 				},
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection: false,
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {
 			diagnostics.add_warning("guardrail backends are not yet implemented and will be ignored");
 			Backend::Invalid
+		},
+		Some(backend::Kind::ModelRouter(_)) => {
+			return Err(ProtoError::Generic(
+				"model router backend must be dispatched through Store::insert_xds_model_router"
+					.to_string(),
+			));
 		},
 		None => {
 			return Err(ProtoError::Generic("unknown backend".to_string()));
@@ -2226,18 +2294,18 @@ fn backend_policy_from_proto(
 			})
 		},
 		Some(bps::Kind::BackendTcp(btcp)) => BackendTrafficPolicy::TCP(backend::TCP {
-			connect_timeout: btcp
-				.connect_timeout
-				.map(convert_duration)
-				.unwrap_or(backend::defaults::connect_timeout()),
+			connect_timeout: btcp.connect_timeout.map(convert_duration),
 			keepalives: btcp
 				.keepalive
 				.as_ref()
-				.map(types::agent::KeepaliveConfig::from)
-				.unwrap_or_default(),
+				.map(types::agent::KeepaliveConfig::from),
 		}),
 		Some(bps::Kind::BackendTunnel(bt)) => BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())),
+			mode: match bt.mode() {
+				bps::backend_tunnel::Mode::Connect => backend::TunnelMode::Connect,
+				bps::backend_tunnel::Mode::Auto => backend::TunnelMode::Auto,
+			},
 			policies: backend_policies_from_proto(&bt.inline_policies, diagnostics)?,
 		}),
 		Some(bps::Kind::BackendTls(btls)) => {
@@ -2259,6 +2327,9 @@ fn backend_policy_from_proto(
 					&btls.key_exchange_groups,
 					diagnostics,
 				),
+				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
+					.unwrap_or_default()
+					== bps::backend_tls::CertificateSource::Spiffe,
 			}
 			.try_into()
 			.map_err(|e| ProtoError::Generic(e.to_string()))?;
@@ -2459,28 +2530,47 @@ fn traffic_policy_from_proto(
 			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
 		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
-			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
-			let spec = http::localratelimit::RateLimitSpec {
-				max_tokens: lrl.max_tokens,
-				tokens_per_fill: lrl.tokens_per_fill,
-				fill_interval: lrl
-					.fill_interval
-					.ok_or(ProtoError::MissingRequiredField)?
-					.try_into()?,
-				limit_type: match t {
-					tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
-					tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
-				},
+			let convert = |max_tokens: u64,
+			               tokens_per_fill: u64,
+			               fill_interval: Option<prost_types::Duration>,
+			               limit_type: i32| {
+				let t = tps::local_rate_limit::Type::try_from(limit_type)?;
+				http::localratelimit::RateLimitSpec {
+					max_tokens,
+					tokens_per_fill,
+					fill_interval: fill_interval
+						.ok_or(ProtoError::MissingRequiredField)?
+						.try_into()?,
+					limit_type: match t {
+						tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
+						tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
+					},
+				}
+				.try_into()
+				.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))
 			};
-			// Yes, its single with a vec, because we originally supported multiple rate limit policies before
-			// we added the generic multiple support.
-			// If we end up adding "Multiple and execute all" to RequestPolicy, we could translate to that;
-			// until this, this is a single policy with multiple rules.
-			TrafficPolicy::LocalRateLimit(RequestPolicy::single(vec![
-				spec
-					.try_into()
-					.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))?,
-			]))
+			let rules = if lrl.rules.is_empty() {
+				vec![convert(
+					lrl.max_tokens,
+					lrl.tokens_per_fill,
+					lrl.fill_interval,
+					lrl.r#type,
+				)?]
+			} else {
+				lrl
+					.rules
+					.iter()
+					.map(|rule| {
+						convert(
+							rule.max_tokens,
+							rule.tokens_per_fill,
+							rule.fill_interval,
+							rule.r#type,
+						)
+					})
+					.collect::<Result<_, _>>()?
+			};
+			TrafficPolicy::LocalRateLimit(RequestPolicy::single(rules))
 		},
 		Some(tps::Kind::ExtAuthz(ea)) => TrafficPolicy::ExtAuthz(RequestPolicy::single(
 			external_auth_from_proto(ea, diagnostics)?,
@@ -2912,7 +3002,13 @@ fn traffic_policy_from_proto(
 							));
 						},
 					};
-					Ok::<_, ProtoError>((key, meta))
+					Ok::<_, ProtoError>((
+						key,
+						http::apikey::APIKeyPolicy {
+							metadata: meta,
+							allowed_models: Default::default(),
+						},
+					))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
 			TrafficPolicy::APIKey(RequestPolicy::single(http::apikey::APIKeyAuthentication {
@@ -3120,7 +3216,12 @@ fn external_auth_from_proto(
 }
 
 fn convert_duration(d: prost_types::Duration) -> Duration {
-	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
+	// Proto duration fields are signed,
+	// but the standard duration type only represents positive spans of time.
+	// Clamp negative components at zero to avoid unexpected behaviors.
+	let secs = d.seconds.max(0) as u64;
+	let nanos = d.nanos.max(0) as u32;
+	Duration::new(secs, nanos)
 }
 
 fn convert_jwt_sign_ttl(ttl: Option<prost_types::Duration>) -> Result<Option<Duration>, String> {
@@ -3776,6 +3877,8 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
 		TrafficPolicy::RemoteRateLimit(_) => "remoteRateLimit",
 		TrafficPolicy::ExtAuthz(_) => "extAuthz",
+		TrafficPolicy::SubstrateEgress(_) => "substrateEgress",
+		TrafficPolicy::SubstrateIngress(_) => "substrateIngress",
 		TrafficPolicy::ExtProc(_) => "extProc",
 		TrafficPolicy::JwtAuth(_) => "jwt",
 		TrafficPolicy::Oidc(_) => "oidc",
@@ -4085,6 +4188,48 @@ mod tests {
 	use super::*;
 	use crate::store::RequestPolicyTrait;
 	use crate::types::proto::agent::backend_policy_spec::Ai;
+
+	#[test]
+	fn prompt_guard_scope_from_proto() {
+		use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+		// unset scope keeps today's default so existing configs are unaffected
+		assert_eq!(
+			convert_content_scopes(&[]).unwrap(),
+			llm::policy::default_content_scope()
+		);
+		// opting in to tool scanning
+		assert_eq!(
+			convert_content_scopes(&[
+				ProtoScope::Messages as i32,
+				ProtoScope::ToolOutput as i32,
+				ProtoScope::ToolInput as i32,
+			])
+			.unwrap(),
+			vec![
+				llm::ContentScope::Messages,
+				llm::ContentScope::ToolOutput,
+				llm::ContentScope::ToolInput,
+			]
+		);
+		convert_content_scopes(&[ProtoScope::Unspecified as i32]).unwrap_err();
+		convert_content_scopes(&[42]).unwrap_err();
+
+		// TODO respect scopes in all guard types
+		let ai = Ai {
+			prompt_guard: Some(proto::agent::backend_policy_spec::ai::PromptGuard {
+				request: vec![proto::agent::backend_policy_spec::ai::RequestGuard {
+					rejection: None,
+					kind: Some(Kind::OpenaiModeration(Default::default())),
+					scope: vec![ProtoScope::ToolInput as i32],
+				}],
+				..Default::default()
+			}),
+			..Default::default()
+		};
+		let err = convert_backend_ai_policy(&ai, &mut Diagnostics::default()).unwrap_err();
+		assert!(err.to_string().contains("non-default scope"), "{err}");
+	}
 
 	#[test]
 	fn inline_backend_reference_validates_target() {
@@ -4414,6 +4559,26 @@ mod tests {
 						nanos: 0,
 					}),
 					r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+					rules: vec![
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 10,
+							tokens_per_fill: 10,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 1,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+						},
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 5,
+							tokens_per_fill: 5,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 60,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Request as i32,
+						},
+					],
 				},
 			)
 		};
@@ -4441,6 +4606,7 @@ mod tests {
 			panic!("expected conditional local rate limit policy");
 		};
 		assert_eq!(policies.iter().count(), 2);
+		assert!(policies.iter().all(|policy| policy.pol.len() == 2));
 		Ok(())
 	}
 
@@ -4720,6 +4886,9 @@ mod tests {
 				)]
 				.into_iter()
 				.collect(),
+				final_transformations: vec![("max_tokens".to_string(), "80".to_string())]
+					.into_iter()
+					.collect(),
 				prompt_guard: None,
 				prompts: None,
 				model_aliases: Default::default(),
@@ -4731,6 +4900,14 @@ mod tests {
 					),
 					("/v1/messages".to_string(), RouteType::Messages as i32),
 					("/v1/detect".to_string(), RouteType::Detect as i32),
+					(
+						"/v1beta/models".to_string(),
+						RouteType::GenerateContent as i32,
+					),
+					(
+						"/v1beta/models:countTokens".to_string(),
+						RouteType::GeminiCountTokens as i32,
+					),
 				]
 				.into_iter()
 				.collect(),
@@ -4749,6 +4926,11 @@ mod tests {
 				.transformations
 				.as_ref()
 				.expect("transformation_policy should be set");
+
+			let post_transformation_policy = ai_policy
+				.final_transformations
+				.as_ref()
+				.expect("final_transformations should be set");
 
 			// Verify defaults have correct types and values
 			let temp_val = defaults.get("temperature").unwrap();
@@ -4776,9 +4958,10 @@ mod tests {
 			assert!(array_val.is_array(), "array_value should be an array");
 			assert_eq!(array_val, &json!([1, 2, 3]));
 			assert!(transformation_policy.get("system").is_some());
+			assert!(post_transformation_policy.get("max_tokens").is_some());
 
 			// Verify routes conversion
-			assert_eq!(ai_policy.routes.len(), 3);
+			assert_eq!(ai_policy.routes.len(), 5);
 			assert_eq!(
 				ai_policy.routes.get("/v1/chat/completions"),
 				Some(&llm::RouteType::Completions)
@@ -4790,6 +4973,14 @@ mod tests {
 			assert_eq!(
 				ai_policy.routes.get("/v1/detect"),
 				Some(&llm::RouteType::Detect)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models"),
+				Some(&llm::RouteType::GenerateContent)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models:countTokens"),
+				Some(&llm::RouteType::GeminiCountTokens)
 			);
 		} else {
 			panic!("Expected AI policy variant");
@@ -4941,6 +5132,28 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn convert_duration_negative_seconds_and_nanos_becomes_zero() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: -500_000_000,
+			}),
+			Duration::ZERO
+		);
+	}
+
+	#[test]
+	fn convert_duration_mixed_sign_clamps_negative_component() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: 500_000_000,
+			}),
+			Duration::from_millis(500)
+		);
+	}
+
 	#[rstest::rstest]
 	#[case::negative(-1, 0)]
 	#[case::invalid_nanos(1, 1_000_000_000)]
@@ -5002,6 +5215,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 1_704_067_200,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "gpt-5-mini".to_string(),
@@ -5062,6 +5276,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: None,
 			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
@@ -5085,6 +5300,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/fast".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 1_704_153_600,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "fast".to_string(),
@@ -5134,6 +5350,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
@@ -5180,6 +5397,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
@@ -5221,6 +5439,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/resilient".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "resilient".to_string(),
@@ -5740,6 +5959,84 @@ mod tests {
 				.into_warnings()
 				.iter()
 				.any(|w| w.contains("skipping webhook header"))
+		);
+	}
+
+	#[tokio::test]
+	async fn server_tls_config_from_proto_maps_spiffe_source() {
+		use proto::agent::tls_config::{CertificateSource, MtlsMode};
+
+		// mtls_mode is ignored for SPIFFE (client SVIDs are always required); a non-Strict mode warns.
+		let tls = proto::agent::TlsConfig {
+			certificate_source: CertificateSource::Spiffe as i32,
+			mtls_mode: MtlsMode::Disable as i32,
+			..Default::default()
+		};
+		let mut diags = Diagnostics::default();
+		let cfg =
+			server_tls_config_from_proto(&tls, &mut diags, crate::DynamicCaCertCacheConfig::default());
+
+		let err = cfg
+			.config_for(None, None, None)
+			.await
+			.expect_err("SPIFFE config_for should require a SpiffeClient");
+		assert!(
+			err.to_string().contains("SPIFFE source is required"),
+			"unexpected error: {err}"
+		);
+
+		assert!(
+			diags
+				.warnings
+				.iter()
+				.any(|w| w.contains("mtls_mode is ignored for SPIFFE")),
+			"expected the mtls_mode-ignored warning, got {:?}",
+			diags.warnings
+		);
+
+		// Strict is the clean path the controller emits for SPIFFE: no warning.
+		let strict = proto::agent::TlsConfig {
+			certificate_source: CertificateSource::Spiffe as i32,
+			mtls_mode: MtlsMode::Strict as i32,
+			..Default::default()
+		};
+		let mut strict_diags = Diagnostics::default();
+		let _ = server_tls_config_from_proto(
+			&strict,
+			&mut strict_diags,
+			crate::DynamicCaCertCacheConfig::default(),
+		);
+		assert!(
+			strict_diags.warnings.is_empty(),
+			"Strict mtls_mode should not warn for SPIFFE, got {:?}",
+			strict_diags.warnings
+		);
+	}
+
+	#[test]
+	fn backend_policy_from_proto_maps_spiffe_source() {
+		use crate::http::backendtls::BackendTLSSource;
+		use crate::types::proto::agent::backend_policy_spec as bps;
+
+		let spec = proto::agent::BackendPolicySpec {
+			kind: Some(bps::Kind::BackendTls(bps::BackendTls {
+				certificate_source: bps::backend_tls::CertificateSource::Spiffe as i32,
+				verify_subject_alt_names: vec!["spiffe://example.org/ns/default/sa/upstream".to_string()],
+				..Default::default()
+			})),
+		};
+		let policy = backend_policy_from_proto(&spec, &mut Diagnostics::default())
+			.expect("backend TLS policy should translate");
+
+		let BackendTrafficPolicy::BackendTLS(bt) = policy else {
+			panic!("expected a BackendTLS policy");
+		};
+		let BackendTLSSource::Spiffe(spiffe) = bt.source else {
+			panic!("expected a SPIFFE-sourced upstream TLS config");
+		};
+		assert_eq!(
+			spiffe.verify_sans,
+			vec!["spiffe://example.org/ns/default/sa/upstream".to_string()]
 		);
 	}
 }

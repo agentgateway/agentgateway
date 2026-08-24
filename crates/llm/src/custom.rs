@@ -126,6 +126,7 @@ impl ProviderPreset {
 				vec![
 					format(Completions, None),
 					format(Messages, Some("/anthropic/v1/messages")),
+					format(Responses, None),
 				],
 			),
 			Self::Groq => (
@@ -208,6 +209,8 @@ pub enum ProviderFormat {
 	Responses,
 	Embeddings,
 	AnthropicTokenCount,
+	GenerateContent,
+	GeminiCountTokens,
 	Realtime,
 	Rerank,
 }
@@ -220,6 +223,8 @@ impl ProviderFormat {
 			RouteType::Responses => Self::Responses,
 			RouteType::Embeddings => Self::Embeddings,
 			RouteType::AnthropicTokenCount => Self::AnthropicTokenCount,
+			RouteType::GenerateContent => Self::GenerateContent,
+			RouteType::GeminiCountTokens => Self::GeminiCountTokens,
 			RouteType::Realtime => Self::Realtime,
 			RouteType::Rerank => Self::Rerank,
 			RouteType::Models | RouteType::Passthrough | RouteType::Detect => return None,
@@ -233,6 +238,8 @@ impl ProviderFormat {
 			Self::Responses => InputFormat::Responses,
 			Self::Embeddings => InputFormat::Embeddings,
 			Self::AnthropicTokenCount => InputFormat::CountTokens,
+			Self::GenerateContent => InputFormat::Gemini,
+			Self::GeminiCountTokens => InputFormat::GeminiCountTokens,
 			Self::Realtime => InputFormat::Realtime,
 			Self::Rerank => InputFormat::Rerank,
 		}
@@ -245,6 +252,8 @@ impl ProviderFormat {
 			Self::Responses => RouteType::Responses,
 			Self::Embeddings => RouteType::Embeddings,
 			Self::AnthropicTokenCount => RouteType::AnthropicTokenCount,
+			Self::GenerateContent => RouteType::GenerateContent,
+			Self::GeminiCountTokens => RouteType::GeminiCountTokens,
 			Self::Realtime => RouteType::Realtime,
 			Self::Rerank => RouteType::Rerank,
 		}

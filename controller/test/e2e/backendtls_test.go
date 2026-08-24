@@ -27,10 +27,8 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 	)
 
 	backendTLSPolicy := &gwv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "tls-policy",
-			Namespace: base.Namespace,
-		},
+		Name:      "tls-policy",
+		Namespace: base.Namespace,
 	}
 	err := t.TestInstallation.ClusterContext.ControllerClient.Get(t.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
 	assert.NoError(t, err)

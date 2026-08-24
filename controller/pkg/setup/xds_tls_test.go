@@ -16,7 +16,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestGenerateLeafFromCAIncludesXdsHosts(t *testing.T) {
@@ -143,11 +142,9 @@ func TestGenerateCAUsesECDSAAndTenYearLifetime(t *testing.T) {
 
 func TestShouldRefreshXdsTLSMaterialForGeneratedCerts(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            "xds",
-			Namespace:       "default",
-			ResourceVersion: "1",
-		},
+		Name:            "xds",
+		Namespace:       "default",
+		ResourceVersion: "1",
 		Data: map[string][]byte{
 			xdsCACertKey: []byte("ca"),
 			xdsCAKeyKey:  []byte("key"),
@@ -264,11 +261,9 @@ func testCertificate(t *testing.T, notAfter time.Time) tls.Certificate {
 
 func xdsSecret(data map[string][]byte) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "xds",
-			Namespace: "default",
-		},
-		Data: data,
+		Name:      "xds",
+		Namespace: "default",
+		Data:      data,
 	}
 }
 

@@ -117,7 +117,19 @@ func isDelegatedChildHTTPRoute(obj *gwv1.HTTPRoute) bool {
 	}
 	return false
 }
-func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
+func childAllowsParent(
+	krtctx krt.HandlerContext,
+	obj *gwv1.HTTPRoute,
+	parentRef resolvedBinding,
+	grants ReferenceGrants,
+	grantMode apisettings.BackendRefGrantMode,
+) bool {
+	if len(obj.Spec.ParentRefs) == 0 {
+		if obj.Namespace == parentRef.Parent.Namespace || !grantMode.RequireRouteBackendGrant() {
+			return true
+		}
+		return grants.ParentlessHTTPRouteAllowed(krtctx, parentRef.Parent.Namespace, config.NamespacedName(obj))
+	}
 	allowedParents := slices.MapFilter(obj.Spec.ParentRefs, func(ref gwv1.ParentReference) *types.NamespacedName {
 		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.HTTPRouteGVK.GroupKind() {
 			return nil
@@ -127,9 +139,6 @@ func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 			Name:      string(ref.Name),
 		})
 	})
-	if len(allowedParents) == 0 {
-		return true
-	}
 	return slices.Contains(allowedParents, parentRef.Parent)
 }
 
@@ -250,6 +259,9 @@ func buildDelegatedHTTPRoutes(
 		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, parentBinding := range findMatchingBindings(krtctx, sourceRoute) {
+			if !childAllowsParent(krtctx, sourceRoute, resolvedBinding{Parent: parentBinding.Source}, inputs.Grants, inputs.BackendRefGrantMode) {
+				continue
+			}
 			gateways.InsertAll(resolveGateways(krtctx, parentBinding, seen.Copy())...)
 		}
 		return slices.SortBy(gateways.UnsortedList(), types.NamespacedName.String)
@@ -290,7 +302,7 @@ func buildDelegatedHTTPRoutes(
 		ctx := inputs.WithCtx(krtctx)
 		var resources []agwir.AgwResource
 		for _, binding := range matchingBindings(krtctx, obj) {
-			if !childAllowsParent(obj, binding) {
+			if !childAllowsParent(krtctx, obj, binding, inputs.Grants, inputs.BackendRefGrantMode) {
 				continue
 			}
 			for n, rule := range obj.Spec.Rules {
@@ -320,15 +332,13 @@ func buildDelegatedHTTPRoutes(
 			return nil
 		}
 		source := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{
-				Namespace: obj.Namespace,
-				Name:      obj.Name,
-			},
-			Kind: wellknown.HTTPRouteKind,
+			Namespace: obj.Namespace,
+			Name:      obj.Name,
+			Kind:      wellknown.HTTPRouteKind,
 		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, binding := range matchingBindings(krtctx, obj) {
-			if !childAllowsParent(obj, binding) {
+			if !childAllowsParent(krtctx, obj, binding, inputs.Grants, inputs.BackendRefGrantMode) {
 				continue
 			}
 			gateways.Insert(binding.Gateway)
@@ -344,11 +354,9 @@ func buildDelegatedHTTPRoutes(
 					continue
 				}
 				backends.Insert(utils.TypedNamespacedName{
-					NamespacedName: types.NamespacedName{
-						Namespace: defaultString(refNs, obj.Namespace),
-						Name:      string(refName),
-					},
-					Kind: ref.Kind,
+					Namespace: defaultString(refNs, obj.Namespace),
+					Name:      string(refName),
+					Kind:      ref.Kind,
 				})
 			}
 		}
@@ -453,7 +461,43 @@ func AgwRouteCollection(
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
-					res, err := ConvertHTTPRouteToAgw(ctx, r, obj, n)
+					routerKey, modelServing, modelServingErr := modelServingRuleRouterKey(obj.Namespace, obj.Name, n, r)
+					if modelServing && modelServingErr == nil && modelServingRuleMatchesRoot(r) {
+						if conflicts := rootModelRouteDirectListenerConflicts(ctx, obj); len(conflicts) > 0 {
+							yield(AgwRoute{}, &reporter.RouteCondition{
+								Type:    gwv1.RouteConditionResolvedRefs,
+								Status:  metav1.ConditionFalse,
+								Reason:  "ModelRoutingConflict",
+								Message: rootModelRouteConflictMessage(conflicts),
+							})
+							return
+						}
+					}
+					conversionRule := r
+					if modelServing {
+						// AgentgatewayModel is a selector, not a conventional backend.
+						conversionRule.BackendRefs = nil
+					}
+					res, err := ConvertHTTPRouteToAgw(ctx, conversionRule, obj, n)
+					if modelServingErr != nil {
+						err = &reporter.RouteCondition{
+							Type:    gwv1.RouteConditionResolvedRefs,
+							Status:  metav1.ConditionFalse,
+							Reason:  gwv1.RouteReasonInvalidKind,
+							Message: modelServingErr.Error(),
+						}
+					}
+					if res != nil && modelServing && modelServingErr == nil {
+						res.Backends = []*api.RouteBackend{{
+							Backend: backendRef(routerKey),
+							Weight:  1,
+						}}
+						res.TrafficPolicies = append(res.TrafficPolicies, &api.TrafficPolicySpec{
+							Kind: &api.TrafficPolicySpec_UrlRewrite{UrlRewrite: &api.UrlRewrite{
+								Path: &api.UrlRewrite_Prefix{Prefix: ""},
+							}},
+						})
+					}
 					if !yield(AgwRoute{Route: res}, err) {
 						return
 					}
@@ -467,6 +511,26 @@ func AgwRouteCollection(
 		},
 	)
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
+	modelRouters := krt.NewManyCollection(httpRoutes, func(_ krt.HandlerContext, obj agwir.AgwResource) []agwir.AgwResource {
+		route := obj.Resource.GetRoute()
+		if route == nil || len(route.Backends) != 1 {
+			return nil
+		}
+		routerKey := route.Backends[0].GetBackend().GetBackend()
+		if !strings.HasPrefix(routerKey, "/llm:router:httproute:") {
+			return nil
+		}
+		return []agwir.AgwResource{{
+			Gateway: obj.Gateway,
+			Resource: &api.Resource{Kind: &api.Resource_Backend{Backend: &api.Backend{
+				Key:  route.Key,
+				Name: &api.ResourceName{Name: route.Name.GetName(), Namespace: route.Name.GetNamespace()},
+				Kind: &api.Backend_ModelRouter{ModelRouter: &api.ModelRouterBackend{
+					RouterKey: routerKey,
+				}},
+			}}},
+		}}
+	}, krtopts.ToOptions("translator/ModelRouters")...)
 	delegatedHTTPRoutes, delegatedHTTPAncestors := buildDelegatedHTTPRoutes(httpRouteCol, httpRouteGroupBindings, inputs, krtopts)
 
 	grpcRouteStatus, grpcRoutes := createRouteCollectionGeneric(grpcRouteCol, inputs, krtopts, "translator/GRPCRoutes",
@@ -523,6 +587,7 @@ func AgwRouteCollection(
 	routes := krt.JoinCollection(
 		[]krt.Collection[agwir.AgwResource]{
 			httpRoutes,
+			modelRouters,
 			delegatedHTTPRoutes,
 			grpcRoutes,
 			tcpRoutes,
@@ -1051,8 +1116,8 @@ func delegatedGatewayRouteAttachmentCountCollection(
 		//ctx := inputs.WithCtx(krtctx)
 		n := obj.Resource.GetRoute().GetName()
 		from := utils.TypedNamespacedName{
-			Kind:           wellknown.HTTPRouteKind,
-			NamespacedName: types.NamespacedName{Namespace: n.Namespace, Name: n.Name},
+			Kind:      wellknown.HTTPRouteKind,
+			Namespace: n.Namespace, Name: n.Name,
 		}
 		return []*plugins.RouteAttachment{{
 			From: from,
@@ -1068,11 +1133,9 @@ func delegatedGatewayRouteAttachmentCountCollection(
 
 func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext, obj T, kind string, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
 	source := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.GetName(),
-		},
-		Kind: kind,
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+		Kind:      kind,
 	}
 	gateways := sets.Set[types.NamespacedName]{}
 	for _, parent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, obj)) {
@@ -1082,15 +1145,13 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 	for _, r := range rules {
 		for _, b := range extract(r) {
 			ref, refNs, refName := GetBackendRef(b)
-			if ref == wellknown.HTTPRouteGVK.GroupKind() {
+			if ref == wellknown.HTTPRouteGVK.GroupKind() || ref == wellknown.AgentgatewayModelGVK.GroupKind() {
 				continue
 			}
 			be := utils.TypedNamespacedName{
-				NamespacedName: types.NamespacedName{
-					Namespace: defaultString(refNs, obj.GetNamespace()),
-					Name:      string(refName),
-				},
-				Kind: ref.Kind,
+				Namespace: defaultString(refNs, obj.GetNamespace()),
+				Name:      string(refName),
+				Kind:      ref.Kind,
 			}
 			backends.Insert(be)
 		}

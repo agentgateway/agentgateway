@@ -213,7 +213,10 @@ backends:
                     /v1/responses: responses
                     /v1/responses/compact: detect
                     /v2/rerank: rerank
+                    ":countTokens": geminiCountTokens
+                    ":generateContent": generateContent
                     ":rawPredict": messages
+                    ":streamGenerateContent": generateContent
                     ":streamRawPredict": messages
                 authorization: ~
               backendPolicies: []
@@ -239,7 +242,10 @@ backends:
                     /v1/responses: responses
                     /v1/responses/compact: detect
                     /v2/rerank: rerank
+                    ":countTokens": geminiCountTokens
+                    ":generateContent": generateContent
                     ":rawPredict": messages
+                    ":streamGenerateContent": generateContent
                     ":streamRawPredict": messages
                 authorization: ~
               backendPolicies: []
@@ -260,7 +266,10 @@ backends:
                   /v1/responses: responses
                   /v1/responses/compact: detect
                   /v2/rerank: rerank
+                  ":countTokens": geminiCountTokens
+                  ":generateContent": generateContent
                   ":rawPredict": messages
+                  ":streamGenerateContent": generateContent
                   ":streamRawPredict": messages
               routing:
                 failover:

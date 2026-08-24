@@ -1,13 +1,18 @@
 name: Controller build cache
-description: Set up Rust and Go toolchains and restore source-aware controller build caches
+description: Set up Go and optional Rust toolchains and restore source-aware controller build caches
 
 inputs:
   rust-version:
     description: Rust toolchain version
-    required: true
+    required: false
+    default: ""
   go-version:
     description: Go toolchain version
     required: true
+  go-cache-name:
+    description: Namespace for the Go build cache
+    required: false
+    default: controller-e2e
   save:
     description: Save missing caches after a successful job
     required: false
@@ -17,6 +22,7 @@ runs:
   using: composite
   steps:
   - name: Check runner info
+    if: ${{ inputs.rust-version != '' }}
     shell: bash
     run: |
       cat /sys/fs/cgroup/cpu.stat || true
@@ -28,63 +34,13 @@ runs:
     shell: bash
     run: echo "$GITHUB_WORKSPACE/tools" >> "$GITHUB_PATH"
 
-  - name: Install Rust
-    uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+  - name: Set up Rust build cache
+    if: ${{ inputs.rust-version != '' }}
+    uses: ./.github/actions/rust-build-cache
     with:
-      toolchain: ${{ inputs.rust-version }}
-
-  # Cargo primarily uses mtimes for change detection. Stable source mtimes let
-  # restored target artifacts remain valid across fresh CI checkouts.
-  - name: Restore source mtimes
-    shell: bash
-    run: |
-      curl --fail --silent --show-error --location \
-        https://raw.githubusercontent.com/howardjohn/git-restore-mtime-action/b77092831982028ae46f86c64831e6e0dde7ee8f/git-restore-mtime |
-        python3 - --commit-time
-
-  # rust-cache includes nested .cargo/config.toml files in its exact key, but
-  # excludes them from its fallback prefix. The crates/ tree therefore rolls the
-  # cache forward after Rust changes without making unrelated changes write it.
-  - name: Set Rust cache generation
-    id: rust-cache-generation
-    shell: bash
-    run: |
-      mkdir -p .github/rust-cache/.cargo .github/rust-cache-state
-
-      crates_generation="$(git rev-parse HEAD:crates)"
-      proto_generation="$(git rev-parse HEAD:crates/protos/proto)-$(git rev-parse HEAD:crates/protos/build.rs)"
-
-      printf '# generation = %s\n' "$crates_generation" > .github/rust-cache/.cargo/config.toml
-      echo "protos=$proto_generation" >> "$GITHUB_OUTPUT"
-
-  - name: Restore Rust cache
-    uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-    with:
-      shared-key: controller-e2e
-      cache-workspace-crates: true
-      # Keep the proto generation that produced cached build-script output. A
-      # fallback can then retain dependencies while safely regenerating changed protos.
-      cache-directories: .github/rust-cache-state
-      save-if: ${{ inputs.save }}
-
-  # A fallback may contain old generated protos whose cached mtime is newer than
-  # the Git-restored source. Cargo would incorrectly skip build.rs in that case.
-  - name: Validate cached Rust proto generation
-    shell: bash
-    env:
-      CURRENT_PROTOS: ${{ steps.rust-cache-generation.outputs.protos }}
-    run: |
-      cached_protos="$(cat .github/rust-cache-state/protos 2>/dev/null || true)"
-
-      echo "Cached proto generation: ${cached_protos:-missing}"
-      echo "Current proto generation: $CURRENT_PROTOS"
-
-      if [[ "$cached_protos" != "$CURRENT_PROTOS" ]]; then
-        echo "Proto inputs changed; forcing crates/protos/build.rs to rerun"
-        touch crates/protos/build.rs
-      fi
-
-      printf '%s\n' "$CURRENT_PROTOS" > .github/rust-cache-state/protos
+      rust-version: ${{ inputs.rust-version }}
+      cache-key: controller-e2e
+      save: ${{ inputs.save }}
 
   - name: Install Go
     uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
@@ -149,10 +105,10 @@ runs:
     uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
     with:
       path: ${{ steps.go-cache-keys.outputs.build }}
-      key: go-build-controller-e2e-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-${{ steps.go-cache-keys.outputs.source }}
+      key: go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-${{ steps.go-cache-keys.outputs.source }}
       restore-keys: |
-        go-build-controller-e2e-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-
-        go-build-controller-e2e-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
 
   - name: Restore read-only Go build cache
     if: ${{ inputs.save != 'true' }}
@@ -160,10 +116,10 @@ runs:
     uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
     with:
       path: ${{ steps.go-cache-keys.outputs.build }}
-      key: go-build-controller-e2e-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-${{ steps.go-cache-keys.outputs.source }}
+      key: go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-${{ steps.go-cache-keys.outputs.source }}
       restore-keys: |
-        go-build-controller-e2e-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-
-        go-build-controller-e2e-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
 
   - name: Show Go cache results
     shell: bash

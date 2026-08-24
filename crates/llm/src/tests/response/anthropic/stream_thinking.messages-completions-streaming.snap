@@ -2,7 +2,7 @@
 source: crates/llm/src/golden_tests.rs
 description: src/tests/response/anthropic/stream_thinking.json
 ---
-data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"The user is"}}],"created":123,"model":"claude-opus-4-6","service_tier":"standard","system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null,"role":"assistant","reasoning_content":"The user is"}}],"created":123,"model":"claude-opus-4-6","service_tier":"standard","system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
 
 data: {"id":"msg_018XasA6jgabsibaUtstx4bg","choices":[{"index":0,"delta":{"content":null,"reasoning_content":" asking me about the weather in"}}],"created":123,"model":"claude-opus-4-6","service_tier":"standard","system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
 

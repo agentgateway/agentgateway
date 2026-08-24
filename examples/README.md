@@ -1,6 +1,7 @@
 ## Examples
 
-This directory contains examples of how to use agentgateway. Each example is named `<type>-<name>`, where `type` is one of `mcp`, `llm`, or `traffic`.
+This directory contains examples of how to use agentgateway. Gateway examples
+are named `<type>-<name>`, where `type` is one of `mcp`, `llm`, or `traffic`.
 
 ### MCP
 
@@ -27,6 +28,7 @@ This directory contains examples of how to use agentgateway. Each example is nam
 ### Traffic
 
 * [traffic-http](traffic-http/README.md): use agentgateway as a standard HTTP proxy.
+* [traffic-egress-proxy](traffic-egress-proxy/README.md): use agentgateway as an allowlisted CONNECT egress proxy with dynamic public backends and a fixed in-cluster route.
 * [traffic-a2a](traffic-a2a/README.md): proxy [A2A](https://a2aproject.github.io/A2A/) traffic.
 * [traffic-aws-agentcore](traffic-aws-agentcore/README.md): proxy AWS AgentCore traffic with JWT auth and user-id header forwarding.
 * [traffic-token-exchange](traffic-token-exchange/README.md): exchange inbound user credentials for per-upstream tokens — via `extAuthz` + CEL, the `backendAuth.oauth` RFC 8693 token-exchange grant, or the RFC 7523 JWT bearer grant.
@@ -38,4 +40,11 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [traffic-ratelimiting-local](traffic-ratelimiting-local/README.md): apply local rate limiting to HTTP traffic.
 * [traffic-ratelimiting-global](traffic-ratelimiting-global/README.md): apply global rate limiting with Envoy's ratelimit service.
 * [traffic-tailscale-auth](traffic-tailscale-auth/README.md): authenticate HTTP requests with Tailscale identity headers.
+* [traffic-spiffe](traffic-spiffe/README.md): source the gateway's mTLS identity from the local SPIFFE Workload API, for both serving and upstream connections.
 * [traffic-unified-gateway](traffic-unified-gateway/README.md): expose LLM, MCP, and the UI on one shared gateway listener.
+
+### Client management
+
+* [microsoft-intune](microsoft-intune/README.md): verify Intune-managed Codex
+  and Claude Desktop configuration, and report custom compliance for both
+  clients on macOS and Windows.

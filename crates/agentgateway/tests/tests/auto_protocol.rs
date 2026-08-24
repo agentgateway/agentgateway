@@ -3,24 +3,30 @@ use agentgateway::types::agent::{Bind, BindProtocol, Listener, ListenerProtocol,
 use crate::common::prelude::*;
 use crate::tests::tls::{https_bind, test_server_tls_config};
 
+fn auto_bind(listeners: ListenerSet) -> BindSnapshot {
+	BindSnapshot::new(
+		Bind {
+			key: BIND_KEY,
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::auto,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		},
+		listeners,
+	)
+}
+
 /// BindProtocol::auto should detect plaintext HTTP and proxy it successfully.
 #[tokio::test]
 async fn auto_protocol_plaintext_http() {
 	let mock = simple_mock().await;
 	let route = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
-			key: LISTENER_KEY,
-			name: Default::default(),
-			hostname: Default::default(),
-			protocol: ListenerProtocol::HTTP,
-		}]),
-		protocol: BindProtocol::auto,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
-	};
+	let bind = auto_bind(ListenerSet::from_list([Listener {
+		key: LISTENER_KEY,
+		name: Default::default(),
+		hostname: Default::default(),
+		protocol: ListenerProtocol::HTTP,
+	}]));
 
 	let t = setup_proxy_test("{}")
 		.unwrap()
@@ -107,19 +113,12 @@ async fn auto_protocol_plaintext_rejected_for_https_only() {
 async fn auto_protocol_tls_rejected_for_http_only() {
 	let mock = simple_mock().await;
 	let route = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
-			key: LISTENER_KEY,
-			name: Default::default(),
-			hostname: Default::default(),
-			protocol: ListenerProtocol::HTTP,
-		}]),
-		protocol: BindProtocol::auto,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
-	};
+	let bind = auto_bind(ListenerSet::from_list([Listener {
+		key: LISTENER_KEY,
+		name: Default::default(),
+		hostname: Default::default(),
+		protocol: ListenerProtocol::HTTP,
+	}]));
 
 	let t = setup_proxy_test("{}")
 		.unwrap()
@@ -143,27 +142,20 @@ async fn auto_protocol_mixed_listeners() {
 	let mock = simple_mock().await;
 	let route = basic_route(*mock.address());
 	let route2 = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([
-			Listener {
-				key: strng::new("http-listener"),
-				name: Default::default(),
-				hostname: strng::new("http.local"),
-				protocol: ListenerProtocol::HTTP,
-			},
-			Listener {
-				key: strng::new("https-listener"),
-				name: Default::default(),
-				hostname: strng::new("*.example.com"),
-				protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
-			},
-		]),
-		protocol: BindProtocol::auto,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
-	};
+	let bind = auto_bind(ListenerSet::from_list([
+		Listener {
+			key: strng::new("http-listener"),
+			name: Default::default(),
+			hostname: strng::new("http.local"),
+			protocol: ListenerProtocol::HTTP,
+		},
+		Listener {
+			key: strng::new("https-listener"),
+			name: Default::default(),
+			hostname: strng::new("*.example.com"),
+			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
+		},
+	]));
 
 	let t = setup_proxy_test("{}")
 		.unwrap()
@@ -209,19 +201,12 @@ async fn auto_protocol_mixed_listeners() {
 async fn auto_protocol_peek_timeout() {
 	let mock = simple_mock().await;
 	let route = basic_route(*mock.address());
-	let bind = Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
-			key: LISTENER_KEY,
-			name: Default::default(),
-			hostname: Default::default(),
-			protocol: ListenerProtocol::HTTP,
-		}]),
-		protocol: BindProtocol::auto,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
-	};
+	let bind = auto_bind(ListenerSet::from_list([Listener {
+		key: LISTENER_KEY,
+		name: Default::default(),
+		hostname: Default::default(),
+		protocol: ListenerProtocol::HTTP,
+	}]));
 
 	let t = setup_proxy_test("{}")
 		.unwrap()

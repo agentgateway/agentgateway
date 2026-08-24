@@ -88,7 +88,7 @@ impl<K: Key> ConnSpawner<K> {
 		let tls_stream = connect(connector, tcp_stream).await?;
 		trace!("connector connected, handshaking");
 		let sender =
-			crate::client::spawn_connection(self.cfg.clone(), tls_stream, self.timeout_rx.clone(), key)
+			crate::client::spawn_connection(&self.cfg.h2, tls_stream, self.timeout_rx.clone(), key)
 				.await?;
 		Ok(sender)
 	}

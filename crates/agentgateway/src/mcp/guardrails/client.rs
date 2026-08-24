@@ -22,6 +22,7 @@ use crate::mcp::guardrails::{
 };
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 
 fn with_default_timeout<T>(msg: T) -> tonic::Request<T> {
 	let mut req = tonic::Request::new(msg);
@@ -50,9 +51,29 @@ pub(crate) async fn check_request<P: serde::de::DeserializeOwned>(
 		mcp_request,
 		headers,
 	};
-	let mut grpc = build_client(remote, client.clone());
-	let tonic_req = with_default_timeout(req);
-	let resp = match grpc.check_request(tonic_req).await {
+	let policy_client =
+		client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail);
+	let mut grpc = build_client(remote, policy_client.clone());
+	let mut tonic_req = with_default_timeout(req);
+	let mut span = policy_client.start_grpc_span(
+		&mut tonic_req,
+		remote.target.target.as_ref(),
+		"/agentgateway.dev.ext_mcp.ExtMcp/CheckRequest",
+	);
+	if let Some(span) = span.as_deref_mut() {
+		span.add_attribute(opentelemetry::KeyValue::new(
+			"mcp.method.name",
+			method.to_owned(),
+		));
+		if let [target] = backends {
+			span.add_attribute(opentelemetry::KeyValue::new("mcp.target", target.clone()));
+		}
+	}
+	let grpc_result = grpc.check_request(tonic_req).await;
+	if let Some(span) = span.as_deref_mut() {
+		span.record_grpc_result(&grpc_result);
+	}
+	let resp = match grpc_result {
 		Ok(resp) => resp.into_inner(),
 		Err(status) => return on_grpc_error(remote, method, backends, "checkRequest", status),
 	};
@@ -200,9 +221,29 @@ pub(crate) async fn check_response(
 		metadata_context,
 		mcp_response,
 	};
-	let mut grpc = build_client(remote, client.clone());
-	let tonic_req = with_default_timeout(req);
-	let result = match grpc.check_response(tonic_req).await {
+	let policy_client =
+		client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail);
+	let mut grpc = build_client(remote, policy_client.clone());
+	let mut tonic_req = with_default_timeout(req);
+	let mut span = policy_client.start_grpc_span(
+		&mut tonic_req,
+		remote.target.target.as_ref(),
+		"/agentgateway.dev.ext_mcp.ExtMcp/CheckResponse",
+	);
+	if let Some(span) = span.as_deref_mut() {
+		span.add_attribute(opentelemetry::KeyValue::new(
+			"mcp.method.name",
+			method.to_owned(),
+		));
+		if let [target] = backends {
+			span.add_attribute(opentelemetry::KeyValue::new("mcp.target", target.clone()));
+		}
+	}
+	let grpc_result = grpc.check_response(tonic_req).await;
+	if let Some(span) = span.as_deref_mut() {
+		span.record_grpc_result(&grpc_result);
+	}
+	let result = match grpc_result {
 		Ok(resp) => resp.into_inner().result,
 		Err(status) => return on_grpc_error(remote, method, backends, "checkResponse", status),
 	};

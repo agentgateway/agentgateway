@@ -8,7 +8,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 )
@@ -67,11 +66,9 @@ func TestLookupReturnsPersistedKeyset(t *testing.T) {
 		JwksJSON:   `{"keys":[]}`,
 	}
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      JwksConfigMapName(DefaultJwksStorePrefix, target.Key()),
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
+		Name:      JwksConfigMapName(DefaultJwksStorePrefix, target.Key()),
+		Namespace: "agentgateway-system",
+		Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
@@ -108,11 +105,9 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 		JwksJSON:   `{"keys":[{"kid":"legacy"}]}`,
 	}
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "jwks-store-legacy-name",
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
+		Name:      "jwks-store-legacy-name",
+		Namespace: "agentgateway-system",
+		Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 

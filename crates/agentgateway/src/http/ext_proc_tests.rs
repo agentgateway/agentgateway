@@ -27,7 +27,7 @@ use crate::http::{Body, ext_proc};
 use crate::llm::custom;
 use crate::test_helpers::extprocmock::{
 	ExtProcMock, Handler, immediate_response, request_body_response, request_header_response,
-	response_body_response, response_header_response,
+	request_header_response_with_dynamic_metadata, response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{MockInstance, ratelimitmock};
@@ -1870,6 +1870,270 @@ mod dynamic_metadata_flow {
 	}
 }
 
+mod dynamic_backend_target {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+	use tokio::net::{TcpListener, TcpStream};
+	use tokio::sync::oneshot;
+
+	use super::*;
+	use crate::proxy::request_builder::RequestBuilder;
+	use crate::types::agent::{
+		Backend, BackendTrafficPolicy, BackendWithPolicies, ResourceName, SimpleBackendReference,
+	};
+	use crate::types::backend;
+
+	struct WorkerTargetExtProc {
+		target: String,
+	}
+
+	#[async_trait::async_trait]
+	impl Handler for WorkerTargetExtProc {
+		async fn handle_request_headers(
+			&mut self,
+			_headers: &HttpHeaders,
+			sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+		) -> Result<(), Status> {
+			use prost_wkt_types::value::Kind;
+			use prost_wkt_types::{Struct, Value};
+			let metadata = Struct {
+				fields: HashMap::from([(
+					"workerTarget".to_string(),
+					Value {
+						kind: Some(Kind::StringValue(self.target.clone())),
+					},
+				)]),
+			};
+			let _ = sender
+				.send(request_header_response_with_dynamic_metadata(
+					None, metadata,
+				))
+				.await;
+			Ok(())
+		}
+	}
+
+	/// A `dynamic: { target: ... }` backend should dial wherever the CEL
+	/// expression says, reading dynamic metadata an extProc policy already set
+	/// -- not the request's own :authority. The request below points at an
+	/// unrelated host to prove the dial target came from extProc's metadata,
+	/// not from the request itself.
+	#[tokio::test]
+	async fn reads_extproc_metadata_instead_of_request_authority() {
+		let mock = simple_mock().await;
+		let worker_target = mock.address().to_string();
+
+		let ext_proc = ExtProcMock::new(move || WorkerTargetExtProc {
+			target: worker_target.clone(),
+		})
+		.spawn()
+		.await;
+
+		let target_backend = Backend::Dynamic(
+			ResourceName::new("dyn-target".into(), "".into()),
+			Some(Arc::new(
+				Expression::new_strict("extproc.workerTarget").unwrap(),
+			)),
+		);
+		let route = basic_named_route(target_backend.name());
+
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.clone().into())
+			.with_backend(ext_proc.address)
+			.with_bind(simple_bind())
+			.with_route(route)
+			.attach_route_policy_builder(json!({
+				"extProc": {
+					"host": ext_proc.address,
+					"failureMode": "failClosed",
+				},
+			}))
+			.await;
+
+		let io = t.serve_http(strng::new("bind"));
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			"http://totally-unrelated-host",
+		)
+		.send(io)
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 200);
+	}
+
+	#[tokio::test]
+	async fn resolves_dynamic_connect_proxy_without_changing_actor_target() {
+		async fn run(version: ::http::Version) {
+			let actor = simple_mock().await;
+			let actor_addr = *actor.address();
+			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+			let worker_addr = listener.local_addr().unwrap();
+			let (connect_tx, connect_rx) = oneshot::channel();
+			let worker = tokio::spawn(async move {
+				let (mut downstream, _) = listener.accept().await.unwrap();
+				let mut request = Vec::new();
+				loop {
+					let mut chunk = [0; 1024];
+					let n = downstream.read(&mut chunk).await.unwrap();
+					assert!(n > 0, "CONNECT request unexpectedly closed");
+					request.extend_from_slice(&chunk[..n]);
+					if request.windows(4).any(|w| w == b"\r\n\r\n") {
+						break;
+					}
+				}
+				connect_tx.send(request).unwrap();
+				downstream
+					.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+					.await
+					.unwrap();
+				let mut upstream = TcpStream::connect(actor_addr).await.unwrap();
+				let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
+			});
+
+			let ext_proc = ExtProcMock::new(move || WorkerTargetExtProc {
+				target: worker_addr.to_string(),
+			})
+			.spawn()
+			.await;
+			let worker_backend = Backend::Dynamic(
+				ResourceName::new("worker".into(), "".into()),
+				Some(Arc::new(
+					Expression::new_strict("extproc.workerTarget").unwrap(),
+				)),
+			);
+			let actor_backend = Backend::Opaque(
+				ResourceName::new("actor".into(), "".into()),
+				Target::Address(actor_addr),
+			);
+			let route = basic_named_route(actor_backend.name());
+			let actor_backend = BackendWithPolicies {
+				backend: actor_backend,
+				inline_policies: vec![BackendTrafficPolicy::Tunnel(backend::Tunnel {
+					proxy: Arc::new(SimpleBackendReference::Backend(worker_backend.name())),
+					mode: backend::TunnelMode::Connect,
+					policies: vec![],
+				})],
+			};
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_raw_backend(worker_backend.into())
+				.with_raw_backend(actor_backend)
+				.with_backend(ext_proc.address)
+				.with_bind(simple_bind())
+				.with_route(route)
+				.attach_route_policy_builder(json!({
+					"extProc": {
+						"host": ext_proc.address,
+						"failureMode": "failClosed",
+					},
+				}))
+				.await;
+
+			let io = if version == ::http::Version::HTTP_2 {
+				t.serve_http2(strng::new("bind"))
+			} else {
+				t.serve_http(strng::new("bind"))
+			};
+			let res = RequestBuilder::new(Method::GET, "http://actor-authority/test")
+				.version(version)
+				.send(io)
+				.await
+				.unwrap();
+			assert_eq!(res.status(), 200);
+			assert_eq!(read_body(res.into_body()).await.version, version);
+			let connect = String::from_utf8(connect_rx.await.unwrap()).unwrap();
+			assert!(connect.starts_with(&format!("CONNECT {actor_addr} HTTP/1.1\r\n")));
+			worker.abort();
+		}
+
+		run(::http::Version::HTTP_11).await;
+		run(::http::Version::HTTP_2).await;
+	}
+
+	/// Omitting `target` keeps today's behavior: the request's own
+	/// :authority/URI is the dial target.
+	#[tokio::test]
+	async fn falls_back_to_request_authority_when_unset() {
+		let mock = simple_mock().await;
+		let target_backend = Backend::Dynamic(ResourceName::new("dyn-target".into(), "".into()), None);
+		let route = basic_named_route(target_backend.name());
+
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.clone().into())
+			.with_bind(simple_bind())
+			.with_route(route);
+
+		let io = t.serve_http(strng::new("bind"));
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			&format!("http://{}", mock.address()),
+		)
+		.send(io)
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 200);
+	}
+
+	#[tokio::test]
+	async fn rejects_non_string_target_expression_results() {
+		let target_backend = Backend::Dynamic(
+			ResourceName::new("dyn-target".into(), "".into()),
+			Some(Arc::new(Expression::new_strict("42").unwrap())),
+		);
+		let route = basic_named_route(target_backend.name());
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.into())
+			.with_bind(simple_bind())
+			.with_route(route);
+
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			"http://totally-unrelated-host",
+		)
+		.send(t.serve_http(strng::new("bind")))
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 503);
+		let body = read_body_raw(res.into_body()).await;
+		assert!(
+			body
+				.as_ref()
+				.starts_with(b"processing failed: dynamic backend target expression must evaluate")
+		);
+	}
+
+	#[tokio::test]
+	async fn rejects_invalid_target_expression_results() {
+		let target_backend = Backend::Dynamic(
+			ResourceName::new("dyn-target".into(), "".into()),
+			Some(Arc::new(
+				Expression::new_strict("'not-a-hostport'").unwrap(),
+			)),
+		);
+		let route = basic_named_route(target_backend.name());
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.into())
+			.with_bind(simple_bind())
+			.with_route(route);
+
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			"http://totally-unrelated-host",
+		)
+		.send(t.serve_http(strng::new("bind")))
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 503);
+		let body = read_body_raw(res.into_body()).await;
+		assert!(body.as_ref().starts_with(
+			b"processing failed: dynamic backend target \"not-a-hostport\": invalid host:port"
+		));
+	}
+}
+
 // Shared proxy setup helpers used by the test groups below.
 pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	mock: MockServer,
@@ -2527,16 +2791,35 @@ mod standalone_inference_routing {
 
 	#[tokio::test]
 	async fn standalone_inference_routing_requires_epp_selected_destination() {
+		let client_selected_backend = named_backend("client-selected-backend").await;
 		let request_headers_seen = Arc::new(AtomicUsize::new(0));
 		let (_ext_proc, _bind, io) =
 			setup_inference_routing_mock(None, request_headers_seen.clone(), Some("passthrough")).await;
 
-		let res = send_request(io, Method::GET, "http://lo").await;
+		let res = send_request_headers(
+			io,
+			Method::GET,
+			"http://lo",
+			&[(
+				"x-gateway-destination-endpoint",
+				&client_selected_backend.address().to_string(),
+			)],
+		)
+		.await;
 		assert_eq!(res.status(), 503);
 		assert_eq!(
 			request_headers_seen.load(Ordering::SeqCst),
 			1,
 			"gateway should consult EPP before rejecting the request",
+		);
+		assert_eq!(
+			client_selected_backend
+				.received_requests()
+				.await
+				.expect("backend recording should be enabled")
+				.len(),
+			0,
+			"a client-provided destination must not be used when EPP selects none",
 		);
 	}
 }
@@ -2756,7 +3039,8 @@ async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token
 	);
 	assert_eq!(
 		amend_request.descriptors.first().unwrap().hits_addend,
-		Some(21015)
+		// 21 output tokens * 1000 + (15 provider input + 13 cache write + 12 cache read).
+		Some(21040)
 	);
 }
 
@@ -3598,7 +3882,7 @@ mod connect_authority_mutation {
 		.spawn()
 		.await;
 
-		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
 		let t = setup_proxy_test("{}").unwrap();
 		t.inputs()
 			.stores
@@ -3687,7 +3971,7 @@ mod connect_authority_mutation {
 		.spawn()
 		.await;
 
-		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
 		let t = setup_proxy_test("{}").unwrap();
 		t.inputs()
 			.stores
@@ -3829,7 +4113,7 @@ mod connect_authority_mutation {
 			.await
 		};
 
-		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
 		let t = setup_proxy_test("{}").unwrap();
 		t.inputs()
 			.stores

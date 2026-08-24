@@ -18,7 +18,7 @@ use crate::http::Body;
 use crate::http::auth::JwtSigningAlg;
 use crate::http::oauth::{
 	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
-	TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
+	TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
 };
 use crate::serdes::FileOrInline;
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
@@ -111,6 +111,7 @@ fn cross_app_access_config(
 		audience: "https://resource-as.example".into(),
 		resources: vec![],
 		scopes: vec!["read".into()],
+		access_token_scopes: None,
 		subject_token: None,
 		cache: Some(InMemoryTokenCache::default()),
 	}
@@ -338,8 +339,7 @@ async fn sends_form_params() {
 	assert_eq!(pairs["subject_token"], "subj-jwt");
 	assert_eq!(pairs["subject_token_type"], TOKEN_TYPE_ACCESS);
 	assert_eq!(pairs["audience"], "https://upstream.example");
-	assert_eq!(pairs["requested_token_type"], TOKEN_TYPE_ACCESS);
-	for k in ["scope", "resource", "client_id"] {
+	for k in ["scope", "resource", "client_id", "requested_token_type"] {
 		assert!(!pairs.contains_key(k), "unset param {k} must not be sent");
 	}
 }
@@ -396,7 +396,10 @@ async fn sends_custom_subject_token_type() {
 	.unwrap();
 	let pairs = sent_form_params(&mock).await;
 	assert_eq!(pairs["subject_token_type"], "urn:company:domain:human");
-	assert_eq!(pairs["requested_token_type"], TOKEN_TYPE_ACCESS);
+	assert!(
+		!pairs.contains_key("requested_token_type"),
+		"requested_token_type must be omitted when unset"
+	);
 }
 
 #[tokio::test]
@@ -615,6 +618,40 @@ async fn id_jag_chain_exchanges_two_legs_and_caches_final_token() {
 	// (bound via the ID-JAG claims).
 	assert_eq!(resource_pairs["scope"], "read");
 	assert!(!resource_pairs.contains_key("resource"));
+}
+
+#[tokio::test]
+async fn id_jag_chain_omits_explicitly_empty_access_token_scopes() {
+	let idp = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "id-jag-assertion",
+		"token_type": "N_A",
+		"issued_token_type": TOKEN_TYPE_ID_JAG,
+	})))
+	.await;
+	let resource_as = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "resource-access-token",
+		"token_type": "Bearer",
+	})))
+	.await;
+	let mut config = cross_app_access_config(endpoint(&idp), endpoint(&resource_as));
+	config.access_token_scopes = Some(vec![]);
+	let identity = CrossAppAccessAuth::from(config);
+
+	fetch_token(
+		&policy_client(),
+		identity.oauth_token_exchange(),
+		exchange_req("id-token", TOKEN_TYPE_ID),
+	)
+	.await
+	.expect("id-jag chain succeeds");
+
+	let idp_pairs = sent_form_params(&idp).await;
+	assert_eq!(idp_pairs["scope"], "read");
+	let resource_pairs = sent_form_params(&resource_as).await;
+	assert!(
+		!resource_pairs.contains_key("scope"),
+		"empty accessTokenScopes must omit scope"
+	);
 }
 
 #[tokio::test]
@@ -1010,12 +1047,39 @@ fn deserializes_cross_app_access_local_config_shape() {
 		AuthorizationLocation::Expression(expression)
 			if expression.original_expression == "jwt.the_id_token"
 	));
+	assert_eq!(oauth.subject_token.token_type, OAuthTokenType::IdToken);
 	// The IdP token-exchange leg carries the configured resource (draft requires it there).
 	assert_eq!(oauth.resources, ["https://api.chat.example.com/"]);
 	// The jwt-bearer leg carries `scope` (selects access-token scopes) but not `resource`.
 	let chained_exchange = oauth.chained_exchange.as_ref().expect("chained exchange");
 	assert!(chained_exchange.resources.is_empty());
 	assert_eq!(chained_exchange.scopes, ["chat.read", "chat.history"]);
+}
+
+#[rstest]
+#[case::absent(None, &["read"])]
+#[case::empty(Some(vec![]), &[])]
+#[case::override_scopes(Some(vec!["backend.read".into()]), &["backend.read"])]
+fn cross_app_access_resolves_access_token_scopes(
+	#[case] access_token_scopes: Option<Vec<String>>,
+	#[case] expected: &[&str],
+) {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	config.access_token_scopes = access_token_scopes;
+
+	let auth = CrossAppAccessAuth::from(config);
+	assert_eq!(
+		auth
+			.oauth_token_exchange()
+			.chained_exchange
+			.as_ref()
+			.expect("chained exchange")
+			.scopes,
+		expected
+	);
 }
 
 #[test]
@@ -1037,6 +1101,7 @@ fn cross_app_access_subject_token_source_override() {
 	// Overridden source; the exchange still declares an id_token subject.
 	config.subject_token = Some(CrossAppAccessSubjectToken {
 		source: serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap(),
+		..Default::default()
 	});
 	let auth = CrossAppAccessAuth::from(config);
 	let subject_token = &auth.oauth_token_exchange().subject_token;
@@ -1050,6 +1115,50 @@ fn cross_app_access_subject_token_source_override() {
 	assert_eq!(subject_token.token_type, OAuthTokenType::IdToken);
 }
 
+#[rstest]
+#[case::access_token(TOKEN_TYPE_ACCESS)]
+#[case::custom("urn:company:domain:human")]
+fn cross_app_access_subject_token_type_override(#[case] token_type: &str) {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	let subject_token: CrossAppAccessSubjectToken =
+		serde_json::from_value(json!({ "tokenType": token_type })).unwrap();
+	assert_eq!(
+		serde_json::to_value(&subject_token).unwrap()["tokenType"],
+		token_type
+	);
+	config.subject_token = Some(subject_token);
+
+	let auth = CrossAppAccessAuth::from(config);
+	assert_eq!(
+		auth
+			.oauth_token_exchange()
+			.subject_token
+			.token_type
+			.as_str(),
+		token_type
+	);
+}
+
+#[test]
+fn cross_app_access_rejects_id_jag_subject_token_type() {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	config.subject_token = Some(CrossAppAccessSubjectToken {
+		token_type: OAuthTokenType::IdJag,
+		..Default::default()
+	});
+
+	let err = CrossAppAccessAuth::from(config)
+		.validate_load()
+		.unwrap_err();
+	assert!(err.contains("subjectToken tokenType id-jag"));
+}
+
 #[test]
 fn serializes_cross_app_access_local_config_shape() {
 	let serialized = serde_json::to_value(cross_app_access_local_config()).unwrap();
@@ -1061,6 +1170,7 @@ fn serializes_cross_app_access_local_config_shape() {
 		json!(["https://api.chat.example.com/"])
 	);
 	assert_eq!(serialized["scopes"], json!(["chat.read", "chat.history"]));
+	assert!(serialized.get("accessTokenScopes").is_none());
 	assert_eq!(serialized["identityProvider"]["path"], "/oauth2/token");
 	assert_eq!(
 		serialized["subjectToken"]["source"],
@@ -1076,6 +1186,23 @@ fn serializes_cross_app_access_local_config_shape() {
 	);
 	assert!(serialized.get("oauthTokenExchange").is_none());
 	assert!(serialized.get("cache").is_none());
+}
+
+#[rstest]
+#[case::unset(None, None)]
+#[case::matching(Some(vec!["read".into()]), None)]
+#[case::empty(Some(vec![]), Some(json!([])))]
+#[case::different(Some(vec!["backend.read".into()]), Some(json!(["backend.read"])))]
+fn serializes_cross_app_access_scope_override(
+	#[case] access_token_scopes: Option<Vec<String>>,
+	#[case] expected: Option<serde_json::Value>,
+) {
+	let backend = || Arc::new(SimpleBackendReference::Invalid);
+	let mut config = cross_app_access_config(backend(), backend());
+	config.access_token_scopes = access_token_scopes;
+
+	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
+	assert_eq!(serialized.get("accessTokenScopes"), expected.as_ref());
 }
 
 #[test]
@@ -1098,16 +1225,24 @@ fn serializes_cross_app_access_subject_token() {
 	// A configured source is preserved on the way back to config.
 	config.subject_token = Some(CrossAppAccessSubjectToken {
 		source: serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap(),
+		token_type: OAuthTokenType::AccessToken,
 	});
 	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
 	assert_eq!(
 		serialized["subjectToken"],
-		json!({ "source": { "expression": "jwt.the_id_token" } })
+		json!({
+			"source": { "expression": "jwt.the_id_token" },
+			"tokenType": TOKEN_TYPE_ACCESS
+		})
 	);
 }
 
-#[test]
-fn round_trips_cross_app_access_header_subject_token() {
+#[rstest]
+#[case::header(r#"{"header":{"name":"x-subject-token","prefix":"Token "}}"#)]
+#[case::query_parameter(r#"{"queryParameter":{"name":"subject_token"}}"#)]
+#[case::cookie(r#"{"cookie":{"name":"subject_token"}}"#)]
+#[case::expression(r#"{"expression":"jwt.the_id_token"}"#)]
+fn round_trips_cross_app_access_subject_token_source(#[case] source: &str) {
 	let backend = || {
 		Arc::new(SimpleBackendReference::InlineBackend(Target::Hostname(
 			crate::strng::new("idp.example.com"),
@@ -1116,27 +1251,26 @@ fn round_trips_cross_app_access_header_subject_token() {
 	};
 	let mut config = cross_app_access_config(backend(), backend());
 	config.subject_token = Some(CrossAppAccessSubjectToken {
-		source: serde_json::from_value(json!({
-			"header": { "name": "x-subject-token", "prefix": "Token " }
-		}))
-		.unwrap(),
+		source: serde_json::from_str(source).unwrap(),
+		..Default::default()
 	});
 
 	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
 	assert_eq!(
 		serialized["subjectToken"]["source"],
-		json!({ "header": { "name": "x-subject-token", "prefix": "Token " } })
+		serde_json::from_str::<serde_json::Value>(source).unwrap()
 	);
 
 	let mut round_trip_config = cross_app_access_config(backend(), backend());
 	round_trip_config.subject_token =
 		Some(serde_json::from_value(serialized["subjectToken"].clone()).unwrap());
 	let round_tripped = CrossAppAccessAuth::from(round_trip_config);
-	assert!(matches!(
-		&round_tripped.oauth_token_exchange().subject_token.source,
-		AuthorizationLocation::Header { name, prefix }
-			if name.as_str() == "x-subject-token" && prefix.as_deref() == Some("Token ")
-	));
+	let round_tripped =
+		serde_json::to_value(round_tripped).expect("round-tripped config should serialize");
+	assert_eq!(
+		round_tripped["subjectToken"]["source"],
+		serialized["subjectToken"]["source"]
+	);
 }
 
 #[test]
@@ -1155,8 +1289,17 @@ fn cross_app_access_validate_load_preserves_path_prefix() {
 	);
 }
 
-#[test]
-fn cross_app_access_from_proto_derives_oauth_chain() {
+#[rstest]
+#[case::default("", OAuthTokenType::IdToken)]
+#[case::access_token(TOKEN_TYPE_ACCESS, OAuthTokenType::AccessToken)]
+#[case::custom(
+	"urn:company:domain:human",
+	OAuthTokenType::Custom("urn:company:domain:human".into())
+)]
+fn cross_app_access_from_proto_derives_oauth_chain(
+	#[case] token_type: &str,
+	#[case] expected_token_type: OAuthTokenType,
+) {
 	let auth = CrossAppAccessAuth::from_proto(
 		proto::CrossAppAccessAuth {
 			identity_provider: Some(proto::cross_app_access_auth::Endpoint {
@@ -1192,12 +1335,14 @@ fn cross_app_access_from_proto_derives_oauth_chain() {
 			audience: "https://resource.example.com".to_string(),
 			resources: vec!["https://api.example.com".to_string()],
 			scopes: vec!["read".to_string()],
+			access_token_scopes: None,
 			subject_token: Some(proto::cross_app_access_auth::SubjectToken {
 				source: Some(proto::AuthorizationLocation {
 					kind: Some(proto::authorization_location::Kind::Expression(
 						"jwt.the_id_token".to_string(),
 					)),
 				}),
+				token_type: token_type.to_string(),
 			}),
 			cache: None,
 		},
@@ -1207,7 +1352,7 @@ fn cross_app_access_from_proto_derives_oauth_chain() {
 
 	let oauth = auth.oauth_token_exchange();
 	assert_eq!(oauth.requested_token_type, Some(OAuthTokenType::IdJag));
-	assert_eq!(oauth.subject_token.token_type, OAuthTokenType::IdToken);
+	assert_eq!(oauth.subject_token.token_type, expected_token_type);
 	assert!(matches!(
 		&oauth.subject_token.source,
 		AuthorizationLocation::Expression(expression)
@@ -1218,6 +1363,93 @@ fn cross_app_access_from_proto_derives_oauth_chain() {
 	let chained_exchange = oauth.chained_exchange.as_ref().expect("chained exchange");
 	assert_eq!(chained_exchange.scopes, ["read"]);
 	assert!(chained_exchange.resources.is_empty());
+}
+
+#[rstest]
+#[case::absent(None, &["read"])]
+#[case::empty(
+	Some(proto::cross_app_access_auth::ScopeOverride { values: vec![] }),
+	&[]
+)]
+#[case::override_scopes(
+	Some(proto::cross_app_access_auth::ScopeOverride {
+		values: vec!["backend.read".into()],
+	}),
+	&["backend.read"]
+)]
+fn cross_app_access_from_proto_resolves_access_token_scopes(
+	#[case] access_token_scopes: Option<proto::cross_app_access_auth::ScopeOverride>,
+	#[case] expected: &[&str],
+) {
+	let auth = CrossAppAccessAuth::from_proto(
+		proto::CrossAppAccessAuth {
+			identity_provider: Some(proto::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::BackendReference {
+					kind: Some(proto::backend_reference::Kind::Backend(
+						"default/idp".into(),
+					)),
+					..Default::default()
+				}),
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-idp".into(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			resource_authorization_server: Some(proto::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::BackendReference {
+					kind: Some(proto::backend_reference::Kind::Backend(
+						"default/resource-as".into(),
+					)),
+					..Default::default()
+				}),
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-resource".into(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			audience: "https://resource.example.com".into(),
+			scopes: vec!["read".into()],
+			access_token_scopes,
+			..Default::default()
+		},
+		&mut Diagnostics::default(),
+	)
+	.unwrap();
+
+	assert_eq!(
+		auth
+			.oauth_token_exchange()
+			.chained_exchange
+			.as_ref()
+			.expect("chained exchange")
+			.scopes,
+		expected
+	);
+}
+
+#[test]
+fn cross_app_access_from_proto_rejects_malformed_subject_token_type() {
+	let err = CrossAppAccessAuth::from_proto(
+		proto::CrossAppAccessAuth {
+			subject_token: Some(proto::cross_app_access_auth::SubjectToken {
+				token_type: "https://".to_string(),
+				..Default::default()
+			}),
+			..Default::default()
+		},
+		&mut Diagnostics::default(),
+	)
+	.unwrap_err();
+
+	assert!(
+		err
+			.to_string()
+			.contains("crossAppAccess.subjectToken.tokenType")
+	);
 }
 
 #[test]
@@ -1298,11 +1530,11 @@ async fn rejects_invalid_token_response(
 	TOKEN_TYPE_ACCESS,
 	"expected"
 )]
-#[case::missing_requested_type_defaults_to_access(
+#[case::explicit_access_mismatch(
 	OAuthGrantType::TokenExchange,
-	None,
+	Some(TOKEN_TYPE_ACCESS),
 	TOKEN_TYPE_JWT,
-	TOKEN_TYPE_ACCESS
+	"expected"
 )]
 #[tokio::test]
 async fn rejects_mismatched_issued_token_type(
@@ -1331,6 +1563,59 @@ async fn rejects_mismatched_issued_token_type(
 	.await
 	.unwrap_err();
 	assert!(err.to_string().contains(expected_err), "got: {err}");
+}
+
+#[tokio::test]
+async fn unset_requested_token_type_accepts_any_issued_type() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "t",
+		"token_type": "Bearer",
+		"issued_token_type": TOKEN_TYPE_JWT,
+	})))
+	.await;
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::TokenExchange,
+		requested_token_type: None,
+		..base_auth(endpoint(&mock))
+	};
+
+	let token = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("subj", TOKEN_TYPE_ACCESS),
+	)
+	.await
+	.expect("unset requested_token_type should not validate issued_token_type");
+	assert_eq!(token.expose_secret(), "t");
+
+	let pairs = sent_form_params(&mock).await;
+	assert!(
+		!pairs.contains_key("requested_token_type"),
+		"requested_token_type must be omitted when unset"
+	);
+}
+
+#[tokio::test]
+async fn unset_requested_token_type_accepts_response_without_issued_token_type() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "t",
+		"token_type": "Bearer",
+	})))
+	.await;
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::TokenExchange,
+		requested_token_type: None,
+		..base_auth(endpoint(&mock))
+	};
+
+	let token = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("subj", TOKEN_TYPE_ACCESS),
+	)
+	.await
+	.expect("unset requested_token_type should accept a missing issued_token_type");
+	assert_eq!(token.expose_secret(), "t");
 }
 
 #[tokio::test]

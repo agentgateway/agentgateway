@@ -1,17 +1,17 @@
+import type { LocalMcpAuthentication, McpGuardrails } from '@/gateway-config';
 import type {
-  ExtAuthzPolicy,
-  ExtProcPolicy,
-  JwtPolicy as GeneratedJwtPolicy,
-  LlmPolicy,
-  LocalRateLimitPolicy,
-  RemoteRateLimitPolicy,
-  SimpleLocalRateLimitPolicy,
-  OidcPolicy,
-  TransformationPolicy,
-  TransformPolicy,
-  TrafficRoutePolicy,
-} from "../types";
-import type { LocalMcpAuthentication, McpGuardrails } from "../gateway-config";
+	ExtAuthzPolicy,
+	ExtProcPolicy,
+	JwtPolicy as GeneratedJwtPolicy,
+	LlmPolicy,
+	LocalRateLimitPolicy,
+	OidcPolicy,
+	RemoteRateLimitPolicy,
+	SimpleLocalRateLimitPolicy,
+	TrafficRoutePolicy,
+	TransformationPolicy,
+	TransformPolicy
+} from '@/types';
 
 export type PolicyKey = (keyof LlmPolicy | keyof TrafficRoutePolicy) & string;
 
@@ -21,7 +21,7 @@ export type LocalRateLimitDraft = SimpleLocalRateLimitPolicy;
 export type RemoteRateLimitDraft = RemoteRateLimitPolicy;
 
 export type AuthorizationDraft = {
-  rules: Array<string | { allow?: string; deny?: string; require?: string }>;
+	rules: Array<string | { allow?: string; deny?: string; require?: string }>;
 };
 
 export type TargetDraft = { host: string };
@@ -35,14 +35,14 @@ export type McpAuthenticationDraft = Partial<LocalMcpAuthentication>;
 export type McpGuardrailsDraft = Partial<McpGuardrails>;
 
 export type SchemaNode = {
-  $ref?: string;
-  anyOf?: SchemaNode[];
-  oneOf?: SchemaNode[];
-  type?: string | string[];
-  const?: unknown;
-  enum?: unknown[];
-  default?: unknown;
-  description?: string;
-  properties?: Record<string, SchemaNode>;
-  items?: SchemaNode;
+	$ref?: string;
+	anyOf?: SchemaNode[];
+	oneOf?: SchemaNode[];
+	type?: string | string[];
+	const?: unknown;
+	enum?: unknown[];
+	default?: unknown;
+	description?: string;
+	properties?: Record<string, SchemaNode>;
+	items?: SchemaNode;
 };

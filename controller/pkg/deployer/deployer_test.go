@@ -66,7 +66,7 @@ func TestGetObjsToDeploy_FormatsGatewayGVKFromKnownType(t *testing.T) {
 		deployer.GatewayReleaseNameAndNamespace,
 	)
 	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "default"},
+		Name: "gw", Namespace: "default",
 	}
 
 	_, err := d.GetObjsToDeploy(context.Background(), gw)
@@ -107,9 +107,9 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("skips patch if object is unchanged", func(t *testing.T) {
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 		fc := fake.NewClient(t, cm.DeepCopy())
 		d := getDeployer(t, fc, func(client apiclient.Client, fieldManager string, gvr schema.GroupVersionResource, name string, namespace string, data []byte, subresources ...string) error {
@@ -124,10 +124,10 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("skips patch when only change is object status", func(t *testing.T) {
 		pod1 := &corev1.Pod{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.Pod.Kind, APIVersion: gvk.Pod.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test:latest"}}},
-			Status:     corev1.PodStatus{Phase: corev1.PodPending},
+			Kind: gvk.Pod.Kind, APIVersion: gvk.Pod.GroupVersion(),
+			Name: name, Namespace: ns,
+			Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test:latest"}}},
+			Status: corev1.PodStatus{Phase: corev1.PodPending},
 		}
 		pod2 := pod1.DeepCopy()
 
@@ -146,10 +146,10 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("patches if object is different", func(t *testing.T) {
 		cm := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
 
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 		fc := fake.NewClient(t, cm.DeepCopy())
 		cm.Data = map[string]string{"foo": "bar", "bar": "baz"}
@@ -167,8 +167,8 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("patches if object does not exist (IsNotFound error)", func(t *testing.T) {
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
 		}
 		fc := fake.NewClient(t)
 		patched := false
@@ -186,18 +186,18 @@ func TestDeployObjs(t *testing.T) {
 	t.Run("uses GatewayClass controllerName (not class name) as SSA field manager", func(t *testing.T) {
 		customClassName := "custom-agw-class"
 		gwc := &gwv1.GatewayClass{
-			ObjectMeta: metav1.ObjectMeta{Name: customClassName},
-			Spec:       gwv1.GatewayClassSpec{ControllerName: wellknown.DefaultAgwControllerName},
+			Name: customClassName,
+			Spec: gwv1.GatewayClassSpec{ControllerName: wellknown.DefaultAgwControllerName},
 		}
 		gw := &gwv1.Gateway{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-gw", Namespace: ns, UID: "12345"},
-			Spec:       gwv1.GatewaySpec{GatewayClassName: gwv1.ObjectName(customClassName)},
+			Name: "test-gw", Namespace: ns, UID: "12345",
+			Spec: gwv1.GatewaySpec{GatewayClassName: gwv1.ObjectName(customClassName)},
 		}
 		gw.SetGroupVersionKind(wellknown.GatewayGVK)
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 
 		fc := fake.NewClient(t, gwc)
@@ -215,14 +215,14 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("falls back to class name comparison when GatewayClass lookup fails", func(t *testing.T) {
 		gw := &gwv1.Gateway{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-gw", Namespace: ns, UID: "12345"},
-			Spec:       gwv1.GatewaySpec{GatewayClassName: wellknown.DefaultAgwClassName},
+			Name: "test-gw", Namespace: ns, UID: "12345",
+			Spec: gwv1.GatewaySpec{GatewayClassName: wellknown.DefaultAgwClassName},
 		}
 		gw.SetGroupVersionKind(wellknown.GatewayGVK)
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 
 		fc := fake.NewClient(t) // no GatewayClass created
@@ -248,12 +248,10 @@ func TestGatewayAndListenerSetPortModifications(t *testing.T) {
 	createGatewayForDeployer := func(ports ...int32) *collections.GatewayForDeployer {
 		portSet := smallset.New(ports...)
 		return &collections.GatewayForDeployer{
-			ObjectSource: collections.ObjectSource{
-				Name:      "test-gateway",
-				Namespace: ns,
-				Group:     gwv1.GroupVersion.Group,
-				Kind:      wellknown.GatewayKind,
-			},
+			Name:           "test-gateway",
+			Namespace:      ns,
+			Group:          gwv1.GroupVersion.Group,
+			Kind:           wellknown.GatewayKind,
 			ControllerName: wellknown.DefaultAgwControllerName,
 			Ports:          portSet,
 		}
@@ -385,11 +383,9 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	createGateway := func() *gwv1.Gateway {
 		gw := &gwv1.Gateway{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      gwName,
-				Namespace: ns,
-				UID:       "gateway-uid",
-			},
+			Name:      gwName,
+			Namespace: ns,
+			UID:       "gateway-uid",
 			Spec: gwv1.GatewaySpec{
 				GatewayClassName: wellknown.DefaultAgwClassName,
 			},
@@ -404,17 +400,13 @@ func TestPruneRemovedResources(t *testing.T) {
 		ownerRefs []metav1.OwnerReference,
 	) *policyv1.PodDisruptionBudget {
 		pdb := &policyv1.PodDisruptionBudget{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       wellknown.PodDisruptionBudgetGVK.Kind,
-				APIVersion: wellknown.PodDisruptionBudgetGVK.GroupVersion().String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            name,
-				Namespace:       ns,
-				OwnerReferences: ownerRefs,
-				Labels: map[string]string{
-					wellknown.GatewayNameLabel: gatewayName,
-				},
+			Kind:            wellknown.PodDisruptionBudgetGVK.Kind,
+			APIVersion:      wellknown.PodDisruptionBudgetGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
 			},
 			Spec: policyv1.PodDisruptionBudgetSpec{
 				Selector: &metav1.LabelSelector{
@@ -431,17 +423,13 @@ func TestPruneRemovedResources(t *testing.T) {
 		ownerRefs []metav1.OwnerReference,
 	) *autoscalingv2.HorizontalPodAutoscaler {
 		hpa := &autoscalingv2.HorizontalPodAutoscaler{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       wellknown.HorizontalPodAutoscalerGVK.Kind,
-				APIVersion: wellknown.HorizontalPodAutoscalerGVK.GroupVersion().String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            name,
-				Namespace:       ns,
-				OwnerReferences: ownerRefs,
-				Labels: map[string]string{
-					wellknown.GatewayNameLabel: gatewayName,
-				},
+			Kind:            wellknown.HorizontalPodAutoscalerGVK.Kind,
+			APIVersion:      wellknown.HorizontalPodAutoscalerGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
 			},
 			Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 				ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
@@ -467,34 +455,26 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	createDeployment := func(name string, gatewayName string, ownerRefs []metav1.OwnerReference) *appsv1.Deployment {
 		return &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       wellknown.DeploymentGVK.Kind,
-				APIVersion: wellknown.DeploymentGVK.GroupVersion().String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            name,
-				Namespace:       ns,
-				OwnerReferences: ownerRefs,
-				Labels: map[string]string{
-					wellknown.GatewayNameLabel: gatewayName,
-				},
+			Kind:            wellknown.DeploymentGVK.Kind,
+			APIVersion:      wellknown.DeploymentGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
 			},
 		}
 	}
 
 	createDaemonSet := func(name string, gatewayName string, ownerRefs []metav1.OwnerReference) *appsv1.DaemonSet {
 		return &appsv1.DaemonSet{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       wellknown.DaemonSetGVK.Kind,
-				APIVersion: wellknown.DaemonSetGVK.GroupVersion().String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            name,
-				Namespace:       ns,
-				OwnerReferences: ownerRefs,
-				Labels: map[string]string{
-					wellknown.GatewayNameLabel: gatewayName,
-				},
+			Kind:            wellknown.DaemonSetGVK.Kind,
+			APIVersion:      wellknown.DaemonSetGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
 			},
 		}
 	}

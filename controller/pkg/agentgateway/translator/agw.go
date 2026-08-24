@@ -218,10 +218,8 @@ func CreateAgwMirrorFilter(
 	}
 	var weightOne int32 = 1
 	dst, err := buildAgwDestination(ctx, gwv1.HTTPBackendRef{
-		BackendRef: gwv1.BackendRef{
-			BackendObjectReference: filter.BackendRef,
-			Weight:                 &weightOne,
-		},
+		BackendObjectReference: filter.BackendRef,
+		Weight:                 &weightOne,
 	}, ns, k)
 	if err != nil {
 		return nil, err
@@ -258,10 +256,8 @@ func CreateAgwExternalAuthFilter(
 		return nil, nil
 	}
 	dst, err := buildAgwDestination(ctx, gwv1.HTTPBackendRef{
-		BackendRef: gwv1.BackendRef{
-			BackendObjectReference: filter.BackendRef,
-			Weight:                 new(int32(1)),
-		},
+		BackendObjectReference: filter.BackendRef,
+		Weight:                 new(int32(1)),
 	}, ns, k)
 	if err != nil {
 		return nil, err

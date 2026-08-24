@@ -29,6 +29,10 @@ impl RawInputItem {
 		Self(serde_json::to_value(item).expect("responses input item should serialize"))
 	}
 
+	pub(crate) fn from_value(item: Value) -> Self {
+		Self(item)
+	}
+
 	fn from_user_text(text: String) -> Self {
 		Self::from_typed(InputItem::from(InputMessage {
 			content: vec![InputContent::InputText(InputTextContent {
@@ -76,34 +80,144 @@ impl RawInputItem {
 		Some(SimpleChatCompletionMessage { role, content })
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
-		if self.0.get("role").is_some() {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+		if let Some(role) = self.0.get("role").and_then(|r| r.as_str()) {
+			let scope = match role {
+				"system" | "developer" => ContentScope::SystemPrompt,
+				_ => ContentScope::Messages,
+			};
 			match self.0.get_mut("content") {
-				Some(Value::String(text)) => f(text),
+				Some(Value::String(text)) => f(scope, text),
 				Some(Value::Array(parts)) => {
-					crate::types::scan_text_runs(
-						parts,
-						"\n",
-						|part| {
-							if !matches!(
-								part.get("type").and_then(|t| t.as_str()),
-								Some("input_text" | "output_text")
-							) {
-								return None;
-							}
-							match part.get_mut("text") {
-								Some(Value::String(text)) => Some(text),
-								_ => None,
-							}
-						},
-						f,
-					);
+					// assistant refusal parts carry prose under `refusal`, not `text`
+					for part in parts.iter_mut() {
+						visit_json_at(part, &["refusal"], scope, f);
+					}
+					scan_value_text_runs(scope, parts, f);
 				},
 				_ => {},
 			}
+			return;
 		}
-		// TODO opt-in setting to apply guards to tool results
+		visit_tool_item_text(&mut self.0, f);
 	}
+}
+
+// visit every documented item type
+// known-ignored items should be listed
+// unknown items should be logged for future review
+// https://github.com/openai/openai-openapi may give us a way to keep an eye on changes
+fn visit_tool_item_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	match value.get("type").and_then(|t| t.as_str()) {
+		// `output` is either a plain string or a content-part array.
+		Some(
+			"function_call_output"
+			| "custom_tool_call_output"
+			| "local_shell_call_output"
+			| "shell_call_output"
+			| "apply_patch_call_output",
+		) => {
+			visit_json_at(value, &["output"], ContentScope::ToolOutput, f);
+		},
+		Some("program_output") => {
+			visit_json_at(value, &["result"], ContentScope::ToolOutput, f);
+		},
+		// `mcp_call` carries the model's arguments plus the server's output/error on one item.
+		Some("function_call" | "mcp_call" | "mcp_approval_request") => {
+			visit_json_at(value, &["arguments"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["output"], ContentScope::ToolOutput, f);
+			visit_json_at(value, &["error"], ContentScope::ToolOutput, f);
+		},
+		Some("custom_tool_call") => {
+			visit_json_at(value, &["input"], ContentScope::ToolInput, f);
+		},
+		// Model-written JavaScript for programmatic tool calling; the item's `fingerprint`
+		// must round-trip intact and is not visited.
+		Some("program") => {
+			visit_json_at(value, &["code"], ContentScope::ToolInput, f);
+		},
+		// Model-directed actions; `actions` is computer_call's batched form, and the
+		// safety-check prose rides along with the call.
+		Some("local_shell_call" | "shell_call" | "computer_call" | "web_search_call") => {
+			visit_json_at(value, &["action"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["actions"], ContentScope::ToolInput, f);
+			visit_json_at(
+				value,
+				&["pending_safety_checks"],
+				ContentScope::ToolInput,
+				f,
+			);
+		},
+		Some("apply_patch_call") => {
+			visit_json_at(value, &["operation"], ContentScope::ToolInput, f);
+		},
+		// `output` is a screenshot; only the safety-check prose is readable.
+		Some("computer_call_output") => {
+			visit_json_at(
+				value,
+				&["acknowledged_safety_checks"],
+				ContentScope::ToolOutput,
+				f,
+			);
+		},
+		Some("file_search_call") => {
+			visit_json_at(value, &["queries"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["results"], ContentScope::ToolOutput, f);
+		},
+		Some("code_interpreter_call") => {
+			visit_json_at(value, &["code"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["outputs"], ContentScope::ToolOutput, f);
+		},
+		// Empty object today; the documented growth point for tool-search arguments.
+		Some("tool_search_call") => {
+			visit_json_at(value, &["arguments"], ContentScope::ToolInput, f);
+		},
+		// Server-controlled tool listings: descriptions are a prompt-injection vector.
+		Some("mcp_list_tools" | "tool_search_output") => {
+			visit_json_at(value, &["tools"], ContentScope::ToolOutput, f);
+			visit_json_at(value, &["error"], ContentScope::ToolOutput, f);
+		},
+		Some("mcp_approval_response") => {
+			visit_json_at(value, &["reason"], ContentScope::ToolInput, f);
+		},
+		// Client-authored tool definitions, unscanned like the request's `tools` field.
+		Some("additional_tools") => {},
+		// No readable text: references, triggers, base64 image results.
+		Some("item_reference" | "compaction_trigger" | "image_generation_call") => {},
+		// `encrypted_content`/fingerprint the API verifies on replay; a mask would break the
+		// request, and reasoning text is bound to its encrypted blob.
+		Some("reasoning" | "compaction") => {},
+		other => {
+			tracing::debug!(
+				item_type = other.unwrap_or("<none>"),
+				"unrecognized input item; not scanned by prompt guards"
+			);
+		},
+	}
+}
+
+fn scan_value_text_runs(
+	scope: ContentScope,
+	parts: &mut Vec<Value>,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	crate::types::scan_text_runs(
+		parts,
+		"\n",
+		|part| {
+			if !matches!(
+				part.get("type").and_then(|t| t.as_str()),
+				Some("input_text" | "output_text")
+			) {
+				return None;
+			}
+			match part.get_mut("text") {
+				Some(Value::String(text)) => Some(text),
+				_ => None,
+			}
+		},
+		&mut |text| f(scope, text),
+	);
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -350,6 +464,9 @@ impl Request {
 }
 
 impl RequestType for Request {
+	fn body_is_json(&self) -> bool {
+		true
+	}
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}
@@ -448,12 +565,12 @@ impl RequestType for Request {
 		);
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		if let Some(instructions) = &mut self.instructions {
-			f(instructions);
+			f(ContentScope::SystemPrompt, instructions);
 		}
 		match &mut self.input {
-			RequestInput::Text(text) => f(text),
+			RequestInput::Text(text) => f(ContentScope::Messages, text),
 			RequestInput::Items(items) => {
 				for item in items {
 					item.visit_text_mut(f);
@@ -464,13 +581,11 @@ impl RequestType for Request {
 }
 
 fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
-	let mut content = Vec::new();
-
-	for item in &resp.output {
-		if let OutputItem::FunctionCall(_) = item {
-			content.extend(output_item_tool_call_part(item));
-		}
-	}
+	let content: Vec<_> = resp
+		.output
+		.iter()
+		.filter_map(output_item_tool_call_part)
+		.collect();
 
 	if content.is_empty() {
 		return None;
@@ -484,17 +599,28 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
-	let OutputItem::FunctionCall(call) = item else {
-		return None;
-	};
-	let arguments = match serde_json::from_str(&call.arguments) {
-		Ok(arguments) => arguments,
-		Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
-		Err(_) => serde_json::Value::String(call.arguments.clone()),
+	let (id, name, arguments) = match item {
+		OutputItem::FunctionCall(call) => {
+			let arguments = match serde_json::from_str(&call.arguments) {
+				Ok(arguments) => arguments,
+				Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
+				Err(_) => serde_json::Value::String(call.arguments.clone()),
+			};
+			(&call.call_id, &call.name, arguments)
+		},
+		OutputItem::CustomToolCall(call) => {
+			let arguments = match serde_json::from_str(&call.input) {
+				Ok(arguments) => arguments,
+				Err(_) if call.input.trim().is_empty() => serde_json::Value::Object(Default::default()),
+				Err(_) => serde_json::Value::String(call.input.clone()),
+			};
+			(&call.call_id, &call.name, arguments)
+		},
+		_ => return None,
 	};
 	Some(OutputMessagePart::ToolCall {
-		id: strng::new(&call.call_id),
-		name: strng::new(&call.name),
+		id: strng::new(id),
+		name: strng::new(name),
 		arguments,
 	})
 }
@@ -633,7 +759,17 @@ impl ResponseType for Response {
 			if let OutputItem::Message(msg) = o {
 				for c in &mut msg.content {
 					if let Content::OutputText(t) = c {
+						if t.annotations.is_empty() && t.logprobs.is_none() {
+							f(&mut t.text);
+							continue;
+						}
+						// offset-based metadata cannot survive a text rewrite
+						let original = t.text.clone();
 						f(&mut t.text);
+						if t.text != original {
+							t.annotations.clear();
+							t.logprobs = None;
+						}
 					}
 				}
 			}
@@ -650,11 +786,12 @@ pub mod typed {
 		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
 		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
 		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
+		Reasoning, ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
 		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextParam, ResponseUsage, Role, Status,
+		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
+		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
+		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
 		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
@@ -667,6 +804,9 @@ pub mod typed {
 		/// An event that is emitted when a response is created.
 		#[serde(rename = "response.created")]
 		ResponseCreated(openai_responses::ResponseCreatedEvent),
+		/// Emitted when a response is in progress (intermediate progress event).
+		#[serde(rename = "response.in_progress")]
+		ResponseInProgress(openai_responses::ResponseInProgressEvent),
 		/// Emitted when a new output item is added.
 		#[serde(rename = "response.output_item.added")]
 		ResponseOutputItemAdded(openai_responses::ResponseOutputItemAddedEvent),
@@ -676,6 +816,15 @@ pub mod typed {
 		/// Emitted when there is an additional text delta.
 		#[serde(rename = "response.output_text.delta")]
 		ResponseOutputTextDelta(openai_responses::ResponseTextDeltaEvent),
+		/// Emitted when text content is finalized.
+		#[serde(rename = "response.output_text.done")]
+		ResponseOutputTextDone(openai_responses::ResponseTextDoneEvent),
+		/// Emitted when there is a partial refusal text.
+		#[serde(rename = "response.refusal.delta")]
+		ResponseRefusalDelta(openai_responses::ResponseRefusalDeltaEvent),
+		/// Emitted when refusal text is finalized.
+		#[serde(rename = "response.refusal.done")]
+		ResponseRefusalDone(openai_responses::ResponseRefusalDoneEvent),
 		/// Emitted when there is a partial function-call arguments delta.
 		#[serde(rename = "response.function_call_arguments.delta")]
 		ResponseFunctionCallArgumentsDelta(openai_responses::ResponseFunctionCallArgumentsDeltaEvent),

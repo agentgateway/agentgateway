@@ -30,6 +30,7 @@ mod recordbody;
 pub mod remoteratelimit;
 pub mod sessionaffinity;
 pub mod sessionpersistence;
+pub mod substrate;
 pub mod tests_common;
 pub mod transformation_cel;
 
@@ -38,6 +39,17 @@ pub use agent_http::{
 	response_buffer_limit, x_headers,
 };
 pub use recordbody::{RecordedBody, RecordedBodyHandle};
+
+pub(crate) fn mark_sensitive_headers(req: &mut Request, configured: &[HeaderName]) {
+	for (name, value) in req.headers_mut() {
+		if name == header::AUTHORIZATION
+			|| name == header::PROXY_AUTHORIZATION
+			|| configured.contains(name)
+		{
+			value.set_sensitive(true)
+		}
+	}
+}
 
 pub(crate) fn iter_request_cookies<'a>(
 	req: &'a Request,

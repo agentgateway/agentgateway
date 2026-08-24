@@ -353,7 +353,16 @@
           "type": "string"
         },
         "inputTokens": {
-          "description": "The number of tokens in the input/prompt.",
+          "description": "The total number of tokens in the input/prompt, including tokens read from or written to\ncache. This has consistent semantics across providers.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "providerInputTokens": {
+          "description": "The provider-reported number of tokens in the input/prompt. This is inconsistent across\nproviders: some include cached tokens while others exclude them.",
           "type": [
             "integer",
             "null"
@@ -452,7 +461,16 @@
           "minimum": 0
         },
         "totalTokens": {
-          "description": "The total number of tokens for the request.",
+          "description": "The total number of input and output tokens for the request. Input tokens include tokens read\nfrom or written to cache, giving this field consistent semantics across providers.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "providerTotalTokens": {
+          "description": "The provider-reported total number of tokens for the request. This is inconsistent across\nproviders because some include cached input tokens while others exclude them.",
           "type": [
             "integer",
             "null"
@@ -801,6 +819,14 @@
           ],
           "default": null
         },
+        "spiffeId": {
+          "description": "The raw SPIFFE ID (first `spiffe://` URI SAN) of the downstream client certificate, if\npresent. Unlike `identity`, this is populated for any SPIFFE ID, not only the Istio\n`spiffe://td/ns/<ns>/sa/<sa>` format.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "subjectAltNames": {
           "description": "The subject alt names from the downstream certificate, if available.",
           "type": "array",
@@ -890,6 +916,13 @@
           "minimum": 0,
           "maximum": 65535,
           "default": 0
+        },
+        "hostname": {
+          "description": "The requested destination hostname, when known. For TLS connections this is the sniffed SNI.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

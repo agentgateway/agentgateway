@@ -31,11 +31,9 @@ func TestGatewayReconciler_InvalidWorkloadOverlaySetsInvalidParameters(t *testin
 		Spec: &apiextensionsv1.JSON{Raw: []byte(`{"replicas": 2}`)},
 	}
 	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       "gw",
-			Namespace:  namespace,
-			Generation: 7,
-		},
+		Name:       "gw",
+		Namespace:  namespace,
+		Generation: 7,
 		Spec: gwv1.GatewaySpec{
 			GatewayClassName: gwv1.ObjectName(wellknown.DefaultAgwClassName),
 			Infrastructure: &gwv1.GatewayInfrastructure{
@@ -48,7 +46,7 @@ func TestGatewayReconciler_InvalidWorkloadOverlaySetsInvalidParameters(t *testin
 		},
 	}
 	gwc := &gwv1.GatewayClass{
-		ObjectMeta: metav1.ObjectMeta{Name: wellknown.DefaultAgwClassName},
+		Name: wellknown.DefaultAgwClassName,
 		Spec: gwv1.GatewayClassSpec{
 			ControllerName: gwv1.GatewayController(wellknown.DefaultAgwControllerName),
 			ParametersRef: &gwv1.ParametersReference{
@@ -60,7 +58,7 @@ func TestGatewayReconciler_InvalidWorkloadOverlaySetsInvalidParameters(t *testin
 		},
 	}
 	classParams := &agentgateway.AgentgatewayParameters{
-		ObjectMeta: metav1.ObjectMeta{Name: "class-params", Namespace: namespace},
+		Name: "class-params", Namespace: namespace,
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
 				Deployment: overlay,
@@ -68,7 +66,7 @@ func TestGatewayReconciler_InvalidWorkloadOverlaySetsInvalidParameters(t *testin
 		},
 	}
 	gatewayParams := &agentgateway.AgentgatewayParameters{
-		ObjectMeta: metav1.ObjectMeta{Name: "gateway-params", Namespace: namespace},
+		Name: "gateway-params", Namespace: namespace,
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
 				Workload: &agentgateway.AgentgatewayParametersWorkload{

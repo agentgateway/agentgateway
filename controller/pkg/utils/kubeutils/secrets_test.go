@@ -7,17 +7,14 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
 func TestResolveCredentialRef(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "creds",
-		},
+		Namespace: "default",
+		Name:      "creds",
 		Data: map[string][]byte{
 			"token": []byte("value"),
 		},

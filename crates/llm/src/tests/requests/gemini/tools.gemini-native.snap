@@ -1,0 +1,164 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/gemini/tools.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: What is the weather in Boston?
+    - role: model
+      parts:
+        - functionCall:
+            name: get_weather
+            id: fc_1
+            args:
+              location: Boston
+              unit: celsius
+          thoughtSignature: CjEBc2lnbmF0dXJlLWZvci10aGUtY2FsbA==
+    - role: user
+      parts:
+        - functionResponse:
+            name: get_weather
+            id: fc_1
+            response:
+              temperature: 12
+              conditions: rain
+  tools:
+    - functionDeclarations:
+        - name: get_weather
+          description: Get the current weather for a city
+          parameters:
+            type: object
+            properties:
+              location:
+                type: string
+              unit:
+                type: string
+                enum:
+                  - celsius
+                  - fahrenheit
+            required:
+              - location
+          behavior: BLOCKING
+    - googleSearch: {}
+    - codeExecution: {}
+    - urlContext: {}
+  toolConfig:
+    functionCallingConfig:
+      mode: ANY
+      allowedFunctionNames:
+        - get_weather
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the weather in Boston?"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "id": "fc_1",
+              "args": {
+                "location": "Boston",
+                "unit": "celsius"
+              }
+            },
+            "thoughtSignature": "CjEBc2lnbmF0dXJlLWZvci10aGUtY2FsbA=="
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "id": "fc_1",
+              "response": {
+                "temperature": 12,
+                "conditions": "rain"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "get_weather",
+            "description": "Get the current weather for a city",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "celsius",
+                    "fahrenheit"
+                  ]
+                }
+              },
+              "required": [
+                "location"
+              ]
+            },
+            "behavior": "BLOCKING"
+          }
+        ]
+      },
+      {
+        "googleSearch": {}
+      },
+      {
+        "codeExecution": {}
+      },
+      {
+        "urlContext": {}
+      }
+    ],
+    "toolConfig": {
+      "functionCallingConfig": {
+        "mode": "ANY",
+        "allowedFunctionNames": [
+          "get_weather"
+        ]
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Gemini",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "",
+    "provider": "gemini-native",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is the weather in Boston?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ]
+  }
+}
