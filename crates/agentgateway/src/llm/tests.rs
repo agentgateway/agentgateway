@@ -50,6 +50,53 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 }
 
 #[test]
+fn bedrock_chat_translation_follows_endpoint_selection() {
+	fn bedrock(pref: bedrock::BedrockProviderPreference) -> AIProvider {
+		AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+			model: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			provider_preference: pref,
+		}))
+	}
+
+	// Runtime endpoint keeps translating every chat input to Converse.
+	let runtime = bedrock(bedrock::BedrockProviderPreference::RuntimeOnly);
+	for input in [
+		InputFormat::Completions,
+		InputFormat::Messages,
+		InputFormat::Responses,
+	] {
+		assert_eq!(
+			runtime
+				.chat_translation(input, Some("anthropic.claude-3-5-sonnet-20241022-v2:0"), None)
+				.unwrap()
+				.output,
+			ChatFormat::BedrockConverse,
+			"{input:?} must render Converse on the Runtime endpoint"
+		);
+	}
+
+	// Mantle endpoint passes the client format through natively rather than to Converse.
+	let mantle = bedrock(bedrock::BedrockProviderPreference::MantleOnly);
+	for (input, expected) in [
+		(InputFormat::Completions, ChatFormat::OpenAICompletions),
+		(InputFormat::Messages, ChatFormat::AnthropicMessages),
+		(InputFormat::Responses, ChatFormat::OpenAIResponses),
+	] {
+		assert_eq!(
+			mantle
+				.chat_translation(input, Some("openai.gpt-oss-120b"), None)
+				.unwrap()
+				.output,
+			expected,
+			"{input:?} must pass through natively on the Mantle endpoint"
+		);
+	}
+}
+
+#[test]
 fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	let vertex = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),

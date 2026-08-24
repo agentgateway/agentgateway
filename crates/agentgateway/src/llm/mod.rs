@@ -970,7 +970,7 @@ impl AIProvider {
 
 			AIProvider::Gemini(_) => vec![ChatFormat::VertexGemini, ChatFormat::OpenAICompletions],
 			AIProvider::Anthropic(_) => vec![ChatFormat::AnthropicMessages],
-			AIProvider::Bedrock(_) => vec![ChatFormat::BedrockConverse],
+			AIProvider::Bedrock(p) => p.supported_chat_formats(request_model, catalog),
 
 			AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => {
 				vec![ChatFormat::AnthropicMessages]
