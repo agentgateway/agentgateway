@@ -2,7 +2,7 @@ use ::http::{HeaderMap, StatusCode};
 use itertools::Itertools;
 
 use crate::cel::{Executor, Expression};
-use crate::http::localratelimit::{self, DeferRateLimitToMcp, McpRateLimited, RateLimitType};
+use crate::http::localratelimit::{self, McpRateLimited, RateLimitType};
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
 use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest};
@@ -459,7 +459,7 @@ impl RemoteRateLimit {
 		let mut res = PolicyResponse::default();
 		// if not OK, we directly respond
 		if overall_code != (proto::rate_limit_response::Code::Ok as i32) {
-			if req.extensions().get::<DeferRateLimitToMcp>().is_some() {
+			if localratelimit::defer_to_mcp(req) {
 				return Ok(insert_mcp_denial_info(
 					req,
 					&statuses,
@@ -618,7 +618,7 @@ fn process_ratelimit_status_headers(
 	}
 }
 
-// if DeferRateLimitToMcp is set, put the RLS denial into the McpRateLimited extension
+// on MCP deferral, put the RLS denial into the McpRateLimited extension
 // instead of directly responding, for MCP to handle. Queues the 429's headers.
 fn insert_mcp_denial_info(
 	req: &mut Request,

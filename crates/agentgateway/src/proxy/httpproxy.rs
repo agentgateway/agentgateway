@@ -64,56 +64,8 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.cloned()
 }
 
-/// When the backend is MCP and the method is POST (can't RPC error on non-POST, tell ratelimit
-/// policies to defer erroring to the MCP layer so we can propagate it in JSON-RPC instead of HTTP
-/// 429.
-fn maybe_defer_ratelimit_err(
-	inputs: &ProxyInputs,
-	backend: Option<&RouteBackendReference>,
-	req: &mut Request,
-) {
-	if req.method() != ::http::Method::POST {
-		return;
-	}
-	let Some(RouteBackendTarget::Backend(key)) = backend.map(|b| &b.target) else {
-		return;
-	};
-	if !matches!(
-		inputs.stores.read_binds().backend(key).as_deref(),
-		Some(BackendWithPolicies {
-			backend: Backend::MCP(_, _),
-			..
-		})
-	) {
-		return;
-	}
-
-	req
-		.extensions_mut()
-		.insert(http::localratelimit::DeferRateLimitToMcp);
-}
-
-// edge case: backend was MCP, rejected by rate limit, then updated to non-MCP
-// so deny now rather than waiting for MCP to pick up McpRateLimited
-fn reject_non_mcp_denial(backend: &Backend, req: &mut Request) -> Result<(), ProxyResponse> {
-	if matches!(backend, Backend::MCP(_, _)) {
-		return Ok(());
-	}
-	let Some(rl) = req
-		.extensions_mut()
-		.remove::<http::localratelimit::McpRateLimited>()
-	else {
-		return Ok(());
-	};
-	Err(
-		ProxyError::MCP(mcp::Error::RateLimited {
-			request_id: None,
-			status: rl.status,
-			message: rl.message,
-		})
-		.into(),
-	)
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectedBackendType(pub cel::BackendType);
 
 #[derive(Debug)]
 struct SelectedRouteChain {
@@ -978,7 +930,15 @@ impl HTTPProxy {
 		};
 		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
 
-		maybe_defer_ratelimit_err(&inputs, selected_route_chain.backend.as_ref(), &mut req);
+		let selected_backend = selected_route_chain
+			.backend
+			.ok_or(ProxyError::NoValidBackends)
+			.and_then(|b| resolve_backend(b, self.inputs.as_ref()));
+		if let Ok(b) = &selected_backend {
+			req
+				.extensions_mut()
+				.insert(SelectedBackendType(b.backend.backend.backend_type()));
+		}
 
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let explicit_route_retry = !route_policies.retry.is_empty();
@@ -1002,12 +962,7 @@ impl HTTPProxy {
 				.get::<http::substrate::SubstrateRequestState>()
 				.is_some();
 
-		let selected_backend_ref = selected_route_chain
-			.backend
-			.ok_or(ProxyError::NoValidBackends)
-			.snapshot_on_err(log, &mut req)?;
-		let selected_backend =
-			resolve_backend(selected_backend_ref, self.inputs.as_ref()).snapshot_on_err(log, &mut req)?;
+		let selected_backend = selected_backend.snapshot_on_err(log, &mut req)?;
 		let backend_policies = Arc::new(get_backend_policies(
 			self.inputs.as_ref(),
 			&selected_backend.backend,
@@ -2343,7 +2298,14 @@ async fn make_backend_call(
 		_ => (backend, base_policies),
 	};
 
-	reject_non_mcp_denial(backend, &mut req)?;
+	debug_assert!(
+		matches!(backend, Backend::MCP(_, _))
+			|| req
+				.extensions()
+				.get::<http::localratelimit::McpRateLimited>()
+				.is_none(),
+		"deferred rate limit denial reached a non-MCP backend"
+	);
 
 	Box::pin(handle_substrate_backend_selection(
 		&mut req,

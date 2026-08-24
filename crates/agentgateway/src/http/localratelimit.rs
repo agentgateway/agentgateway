@@ -69,10 +69,15 @@ impl TryFrom<RateLimitSpec> for RateLimit {
 	}
 }
 
-/// Set before running rate limit policy so the policy can choose to defer erroring until MCP
-/// processing.
-#[derive(Debug, Clone, Copy)]
-pub struct DeferRateLimitToMcp;
+// MCP POSTs defer denials to the MCP layer (JSON-RPC error instead of a 429); non-POSTs
+// have no request id to answer with.
+pub(crate) fn defer_to_mcp(req: &http::Request) -> bool {
+	req.method() == http::Method::POST
+		&& req
+			.extensions()
+			.get::<crate::proxy::httpproxy::SelectedBackendType>()
+			.is_some_and(|t| t.0 == cel::BackendType::MCP)
+}
 
 // Deferred rate limit denial, to be handled by MCP. Propagates info for the JSON-RPC error.
 #[derive(Debug, Clone)]
@@ -192,7 +197,7 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 		for rate_limit in self {
 			match rate_limit.check_request() {
 				Ok(s) => status = RateLimitStatus::most_constrained(status, s),
-				Err(e) if req.extensions().get::<DeferRateLimitToMcp>().is_some() => {
+				Err(e) if defer_to_mcp(req) => {
 					return insert_mcp_denial_info(req, e);
 				},
 				Err(e) => return Err(e.into()),
