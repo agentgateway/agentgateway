@@ -497,6 +497,16 @@ impl LLMRequestPolicies {
 		Arc::new(route_policies)
 	}
 
+	/// Resolve the LLM route type for an AI backend request.
+	pub fn resolve_llm_route(&self, path: &str) -> llm::RouteType {
+		self
+			.llm
+			.as_ref()
+			.and_then(|p| p.resolve_route_opt(path))
+			.or_else(|| crate::llm::model_router::default_route_for_path(path))
+			.unwrap_or(llm::RouteType::Completions)
+	}
+
 	fn merge_llm_policies(
 		preferred: &Arc<llm::Policy>,
 		fallback: &Arc<llm::Policy>,
@@ -4194,6 +4204,77 @@ mod tests {
 		);
 		assert_eq!(policy.resolve_route("/v1/messages"), RouteType::Messages);
 		assert_eq!(policy.resolve_route("/v1/models"), RouteType::Passthrough);
+	}
+
+	#[test]
+	fn ai_backend_without_routes_detects_standard_paths() {
+		use crate::llm::RouteType;
+
+		// A binds: ai backend with no ai policy: /v1/messages must parse as Messages,
+		// while unrecognized paths keep the historical Completions default.
+		let policies = LLMRequestPolicies::default();
+		assert_eq!(
+			policies.resolve_llm_route("/v1/messages"),
+			RouteType::Messages
+		);
+		assert_eq!(
+			policies.resolve_llm_route("/v1/chat/completions"),
+			RouteType::Completions
+		);
+		assert_eq!(
+			policies.resolve_llm_route("/mychat"),
+			RouteType::Completions
+		);
+	}
+
+	#[test]
+	fn partial_routes_policy_composes_with_default_table() {
+		use crate::llm::policy::SortedRoutes;
+		use crate::llm::{self, RouteType};
+
+		// A user pinning one path (the old routes workaround) keeps detection for the rest.
+		let mut routes = SortedRoutes::default();
+		routes.insert(strng::new("/v1/messages"), RouteType::Completions);
+		let policies = LLMRequestPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				routes,
+				..Default::default()
+			})),
+			..Default::default()
+		};
+		// The user's key wins over the default for that path.
+		assert_eq!(
+			policies.resolve_llm_route("/v1/messages"),
+			RouteType::Completions
+		);
+		// Defaults still detect unlisted standard paths.
+		assert_eq!(
+			policies.resolve_llm_route("/v1/embeddings"),
+			RouteType::Embeddings
+		);
+	}
+
+	#[test]
+	fn wildcard_routes_policy_opts_out_of_detection() {
+		use crate::llm::policy::SortedRoutes;
+		use crate::llm::{self, RouteType};
+
+		// routes: {"*": passthrough} opts the whole backend out of LLM processing;
+		// the built-in table must not resurrect parsing for standard paths.
+		let mut routes = SortedRoutes::default();
+		routes.insert(strng::new("*"), RouteType::Passthrough);
+		let policies = LLMRequestPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				routes,
+				..Default::default()
+			})),
+			..Default::default()
+		};
+		assert_eq!(
+			policies.resolve_llm_route("/v1/messages"),
+			RouteType::Passthrough
+		);
+		assert_eq!(policies.resolve_llm_route("/other"), RouteType::Passthrough);
 	}
 
 	#[test]

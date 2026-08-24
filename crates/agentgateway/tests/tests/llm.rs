@@ -1,6 +1,5 @@
 use agentgateway::llm::{AIProvider, custom, gemini, openai};
 use agentgateway::test_helpers::ratelimitmock;
-use agentgateway::types::agent::TrafficPolicy;
 use tokio::sync::mpsc;
 use url::Position;
 
@@ -593,11 +592,7 @@ fn setup_custom_llm_provider_backend_mock_with_formats(
 			SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
 			formats,
 		));
-	let mut route = basic_named_route(strng::format!("/{backend_name}"));
-	route.inline_policies.push(TrafficPolicy::AI(
-		agentgateway::llm::model_router::default_route_types(),
-	));
-	let t = t.with_route(route);
+	let t = t.with_route(basic_named_route(strng::format!("/{backend_name}")));
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }

@@ -3393,7 +3393,10 @@ spec:
                           The keys are URL path suffixes matched using ends-with comparison, for
                           example `"/v1/chat/completions"`.
                           The special `*` wildcard matches any path.
-                          If not specified, all traffic defaults to `completions` type.
+                          Configured entries win; otherwise standard API paths (`/v1/chat/completions`,
+                          `/v1/messages`, `/v1/embeddings`, Gemini-style suffixes, and so on) are
+                          detected via a built-in table, and unrecognized paths default to
+                          `completions`.
                         type: object
                       transformations:
                         description: |-

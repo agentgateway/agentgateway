@@ -1486,7 +1486,8 @@ message BackendPolicySpec {
     // Routes defines how to identify the type of LLM request to handle.
     // The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
     // The special "*" wildcard matches any path.
-    // If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
+    // Configured entries win; otherwise standard API paths are detected via a built-in
+    // table, and unrecognized paths default to COMPLETIONS behavior.
     map<string, RouteType> routes = 7;
   }
   message A2a {}

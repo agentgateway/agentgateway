@@ -2365,10 +2365,7 @@ async fn make_backend_call(
 				let route_type = route_policies
 					.clone()
 					.merge_backend_policies(effective_policies.llm.clone())
-					.llm
-					.as_ref()
-					.map(|policy| policy.resolve_route(req.uri().path()))
-					.unwrap_or(llm::RouteType::Completions);
+					.resolve_llm_route(req.uri().path());
 				let target = match &provider.host_override {
 					Some(target) => target.clone(),
 					None => provider
@@ -2536,11 +2533,7 @@ async fn make_backend_call(
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
 			// LLM requires CEL execution after the snapshot so we do not clear extensions
 			let mut req = req.take_and_snapshot_without_clearing_extensions(log.as_mut())?;
-			let route_type = llm_request_policies
-				.llm
-				.as_ref()
-				.map(|policy| policy.resolve_route(req.uri().path()))
-				.unwrap_or(llm::RouteType::Completions);
+			let route_type = llm_request_policies.resolve_llm_route(req.uri().path());
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			let llm_provider = llm.provider.provider().to_string();
 			dtrace::trace(|trace| {

@@ -13366,7 +13366,8 @@ type BackendPolicySpec_Ai struct {
 	// Routes defines how to identify the type of LLM request to handle.
 	// The keys are URL suffix matches (e.g., "/v1/chat/completions", "/v1/messages").
 	// The special "*" wildcard matches any path.
-	// If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
+	// Configured entries win; otherwise standard API paths are detected via a built-in
+	// table, and unrecognized paths default to COMPLETIONS behavior.
 	Routes        map[string]BackendPolicySpec_Ai_RouteType `protobuf:"bytes,7,rep,name=routes,proto3" json:"routes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=agentgateway.dev.resource.BackendPolicySpec_Ai_RouteType"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

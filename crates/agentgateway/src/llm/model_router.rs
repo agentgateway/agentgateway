@@ -52,46 +52,61 @@ impl ModelVisibility {
 	}
 }
 
+static DEFAULT_ROUTE_TYPES: std::sync::LazyLock<Arc<llm::Policy>> =
+	std::sync::LazyLock::new(|| {
+		Arc::new(llm::Policy {
+			routes: [
+				(
+					strng::new("/v1/chat/completions"),
+					llm::RouteType::Completions,
+				),
+				(strng::new("/v1/messages"), llm::RouteType::Messages),
+				(
+					strng::new("/v1/messages/count_tokens"),
+					llm::RouteType::AnthropicTokenCount,
+				),
+				(strng::new(":rawPredict"), llm::RouteType::Messages),
+				(strng::new(":streamRawPredict"), llm::RouteType::Messages),
+				(
+					strng::new(":generateContent"),
+					llm::RouteType::GenerateContent,
+				),
+				(
+					strng::new(":streamGenerateContent"),
+					llm::RouteType::GenerateContent,
+				),
+				(
+					strng::new(":countTokens"),
+					llm::RouteType::GeminiCountTokens,
+				),
+				(strng::new("/v1/responses"), llm::RouteType::Responses),
+				(strng::new("/v1/images/generations"), llm::RouteType::Detect),
+				(strng::new("/v1/images/edits"), llm::RouteType::Detect),
+				(strng::new("/v1/images/variations"), llm::RouteType::Detect),
+				(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
+				(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
+				(strng::new("/v1/rerank"), llm::RouteType::Rerank),
+				(strng::new("/v2/rerank"), llm::RouteType::Rerank),
+				(strng::new("*"), llm::RouteType::Passthrough),
+			]
+			.into_iter()
+			.collect(),
+			..Default::default()
+		})
+	});
+
 pub fn default_route_types() -> Arc<llm::Policy> {
-	Arc::new(llm::Policy {
-		routes: [
-			(
-				strng::new("/v1/chat/completions"),
-				llm::RouteType::Completions,
-			),
-			(strng::new("/v1/messages"), llm::RouteType::Messages),
-			(
-				strng::new("/v1/messages/count_tokens"),
-				llm::RouteType::AnthropicTokenCount,
-			),
-			(strng::new(":rawPredict"), llm::RouteType::Messages),
-			(strng::new(":streamRawPredict"), llm::RouteType::Messages),
-			(
-				strng::new(":generateContent"),
-				llm::RouteType::GenerateContent,
-			),
-			(
-				strng::new(":streamGenerateContent"),
-				llm::RouteType::GenerateContent,
-			),
-			(
-				strng::new(":countTokens"),
-				llm::RouteType::GeminiCountTokens,
-			),
-			(strng::new("/v1/responses"), llm::RouteType::Responses),
-			(strng::new("/v1/images/generations"), llm::RouteType::Detect),
-			(strng::new("/v1/images/edits"), llm::RouteType::Detect),
-			(strng::new("/v1/images/variations"), llm::RouteType::Detect),
-			(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
-			(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
-			(strng::new("/v1/rerank"), llm::RouteType::Rerank),
-			(strng::new("/v2/rerank"), llm::RouteType::Rerank),
-			(strng::new("*"), llm::RouteType::Passthrough),
-		]
-		.into_iter()
-		.collect(),
-		..Default::default()
-	})
+	DEFAULT_ROUTE_TYPES.clone()
+}
+
+/// Route type for a standard API path suffix; the "*" entry is skipped so
+/// unrecognized paths keep the historical Completions default.
+pub fn default_route_for_path(path: &str) -> Option<llm::RouteType> {
+	DEFAULT_ROUTE_TYPES
+		.routes
+		.iter()
+		.find(|(suffix, _)| suffix.as_str() != "*" && path.ends_with(suffix.as_str()))
+		.map(|(_, rt)| *rt)
 }
 
 #[apply(schema_ser_schema!)]

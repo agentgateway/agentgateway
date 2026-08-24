@@ -702,6 +702,13 @@ impl Policy {
 	}
 
 	pub fn resolve_route(&self, path: &str) -> crate::llm::RouteType {
+		self
+			.resolve_route_opt(path)
+			.unwrap_or(crate::llm::RouteType::Completions)
+	}
+
+	/// Like [`Self::resolve_route`], but None when no entry (including "*") matches.
+	pub fn resolve_route_opt(&self, path: &str) -> Option<crate::llm::RouteType> {
 		let mut wildcard: Option<crate::llm::RouteType> = None;
 
 		// `self.routes` is stored longest->shortest, with "*" last, so the first match wins.
@@ -711,11 +718,11 @@ impl Policy {
 				continue;
 			}
 			if path.ends_with(path_suffix.as_str()) {
-				return *rt;
+				return Some(*rt);
 			}
 		}
 
-		wildcard.unwrap_or(crate::llm::RouteType::Completions)
+		wildcard
 	}
 
 	pub fn has_request_body_mutations(&self) -> bool {
