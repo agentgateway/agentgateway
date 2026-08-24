@@ -166,7 +166,7 @@ kubectl create namespace netbird-agent-network \
 
 envsubst < secrets.example.yaml | kubectl apply -f -
 envsubst < netbird.yaml | kubectl apply -f -
-kubectl apply -f agentgateway.yaml
+kubectl apply -f agent-network-gateway.yaml
 envsubst < management-gateway.yaml | kubectl apply -f -
 ```
 

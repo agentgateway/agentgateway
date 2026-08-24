@@ -1,15 +1,3 @@
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayParameters
-metadata:
-  name: netbird-management
-  namespace: netbird-agent-network
-  labels:
-    app.kubernetes.io/part-of: netbird-agent-network
-spec:
-  service:
-    spec:
-      type: LoadBalancer
----
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -19,11 +7,6 @@ metadata:
     app.kubernetes.io/part-of: netbird-agent-network
 spec:
   gatewayClassName: agentgateway
-  infrastructure:
-    parametersRef:
-      group: agentgateway.dev
-      kind: AgentgatewayParameters
-      name: netbird-management
   listeners:
     - name: http
       hostname: ${NETBIRD_MANAGEMENT_DOMAIN}
