@@ -39,6 +39,9 @@ pub mod policy;
 use policy::streaming_guardrails::GuardedSseBody;
 pub use types::{OutputMessage, OutputMessagePart, ToolCall};
 
+#[derive(Copy, Clone)]
+pub(crate) struct RequestBodyBytes(pub usize);
+
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::proxy::dtrace;
 use crate::store;
@@ -1979,8 +1982,22 @@ impl AIProvider {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
 				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
+				let request_body_size = parts.extensions.get::<RequestBodyBytes>().map(|b| b.0);
+				// Request policy webhook responses use this request-side limit because they process the incoming request.
+				let buffer_limit = parts
+					.extensions
+					.get::<crate::transport::BufferLimit>()
+					.cloned();
 				if let Some((response, guardrail)) = p
-					.apply_prompt_guard(&client, req, http_headers, claims, original.as_deref())
+					.apply_prompt_guard(
+						&client,
+						req,
+						http_headers,
+						claims,
+						original.as_deref(),
+						request_body_size,
+						buffer_limit,
+					)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -2786,6 +2803,7 @@ impl AIProvider {
 				Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
 				Err(e) => return Err(map_request_compression_error(e, &parts.headers)),
 			};
+		parts.extensions.insert(RequestBodyBytes(bytes.len()));
 		// Strip encoding headers now that the body is plaintext so downstream
 		// translation/marshalling and upstream forwarding see a consistent body.
 		if encoding.is_some() {

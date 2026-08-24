@@ -526,6 +526,8 @@ impl PromptGuard {
 				client,
 				claims.clone(),
 				original,
+				None,
+				None,
 			)
 			.await
 			{
@@ -880,6 +882,7 @@ impl Policy {
 		})
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn apply_prompt_guard(
 		&self,
 		client: &PolicyClient,
@@ -887,6 +890,8 @@ impl Policy {
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		request_body_size: Option<usize>,
+		buffer_limit: Option<crate::transport::BufferLimit>,
 	) -> anyhow::Result<Option<(Response, &'static str)>> {
 		for g in self
 			.prompt_guard
@@ -894,9 +899,17 @@ impl Policy {
 			.iter()
 			.flat_map(|g| g.request.iter())
 		{
-			let (action, rejection) =
-				Self::apply_single_request_guard(g, req, http_headers, client, claims.clone(), original)
-					.await?;
+			let (action, rejection) = Self::apply_single_request_guard(
+				g,
+				req,
+				http_headers,
+				client,
+				claims.clone(),
+				original,
+				request_body_size,
+				buffer_limit,
+			)
+			.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Request, action);
 			if let Some(res) = rejection {
 				return Ok(Some((res, g.kind.name())));
@@ -907,6 +920,7 @@ impl Policy {
 
 	/// Evaluate and enforce one request guard. Provider-specific code only
 	/// produces an evaluation; common code below applies its decision.
+	#[allow(clippy::too_many_arguments)]
 	async fn apply_single_request_guard(
 		guard: &RequestGuard,
 		req: &mut dyn RequestType,
@@ -914,13 +928,25 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		request_body_size: Option<usize>,
+		buffer_limit: Option<crate::transport::BufferLimit>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let outcome =
-			Self::evaluate_single_request_guard(guard, req, http_headers, client, claims, original)
+			Self::evaluate_single_request_guard(
+				guard,
+				req,
+				http_headers,
+				client,
+				claims,
+				original,
+				request_body_size,
+				buffer_limit,
+			)
 				.await?;
 		Self::apply_request_guard_outcome(outcome, req)
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn evaluate_single_request_guard(
 		guard: &RequestGuard,
 		req: &mut dyn RequestType,
@@ -928,6 +954,8 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		request_body_size: Option<usize>,
+		buffer_limit: Option<crate::transport::BufferLimit>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		match &guard.kind {
 			RequestGuardKind::Regex(rg) => Ok(Self::evaluate_regex_request(
@@ -937,7 +965,16 @@ impl Policy {
 				&guard.scope,
 			)),
 			RequestGuardKind::Webhook(wh) => {
-				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
+				Self::evaluate_webhook_request(
+					req,
+					http_headers,
+					client,
+					wh,
+					original,
+					request_body_size,
+					buffer_limit,
+				)
+				.await
 			},
 			RequestGuardKind::OpenAIModeration(m) => {
 				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
@@ -1300,13 +1337,32 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
+		request_body_size: Option<usize>,
+		buffer_limit: Option<crate::transport::BufferLimit>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		match webhook.message_format {
 			WebhookMessageFormat::Guardrail => {
-				Self::evaluate_guardrail_webhook_request(req, http_headers, client, webhook, original).await
+				Self::evaluate_guardrail_webhook_request(
+					req,
+					http_headers,
+					client,
+					webhook,
+					original,
+					buffer_limit,
+				)
+				.await
 			},
 			WebhookMessageFormat::Raw => {
-				Self::evaluate_webhook_request_raw(req, http_headers, client, webhook, original).await
+				Self::evaluate_webhook_request_raw(
+					req,
+					http_headers,
+					client,
+					webhook,
+					original,
+					request_body_size,
+					buffer_limit,
+				)
+				.await
 			},
 		}
 	}
@@ -1317,6 +1373,7 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
+		buffer_limit: Option<crate::transport::BufferLimit>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		let llm_request = webhook
 			.headers
@@ -1327,7 +1384,15 @@ impl Policy {
 		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
 		let messages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_request(client, webhook, context, &headers, messages).await {
+		let whr = match webhook::send_request(
+			client,
+			webhook,
+			context,
+			&headers,
+			messages,
+			buffer_limit,
+		)
+		.await {
 			Ok(whr) => whr,
 			Err(e) => {
 				return match webhook.failure_mode {
@@ -1388,13 +1453,25 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
+		request_body_size: Option<usize>,
+		buffer_limit: Option<crate::transport::BufferLimit>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+		if request_body_size.is_some_and(|size| size < webhook.min_size_bytes) {
+			debug!("webhook: request below min_size_bytes; skipping");
+			return Ok(GuardrailOutcome::None);
+		}
 		let Some(raw_messages) = req.raw_messages() else {
 			debug!("webhook: request format has no message array; skipping");
 			return Ok(GuardrailOutcome::None);
 		};
+		let llm_request = webhook
+			.headers
+			.iter()
+			.any(|(_, expression)| expression.needs_llm_request())
+			.then(|| req.to_value())
+			.transpose()?;
 		let model = req.model().clone();
-		let context = webhook::EvaluationContext::new(original, None);
+		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let outcome = webhook::send_request_raw(
 			client,
@@ -1403,6 +1480,7 @@ impl Policy {
 			&headers,
 			&raw_messages,
 			model.as_deref(),
+			buffer_limit,
 		)
 		.await;
 		match outcome {

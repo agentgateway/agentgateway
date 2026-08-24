@@ -247,6 +247,7 @@ pub(super) async fn send_request(
 	context: EvaluationContext<'_>,
 	http_headers: &HeaderMap,
 	messages: Vec<Message>,
+	buffer_limit: Option<crate::transport::BufferLimit>,
 ) -> anyhow::Result<GuardrailsPromptResponse> {
 	let req = build_request_for_request(webhook, context, http_headers, messages)?;
 	if !passes_min_size(webhook.min_size_bytes, request_body_len(&req)) {
@@ -256,7 +257,10 @@ pub(super) async fn send_request(
 			}),
 		});
 	}
-	let whr = with_default_timeout(req);
+	let mut whr = with_default_timeout(req);
+	if let Some(limit) = buffer_limit {
+		whr.extensions_mut().insert(limit);
+	}
 	let res = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_reference(whr, &webhook.target)
@@ -338,6 +342,7 @@ pub(super) async fn send_request_raw(
 	http_headers: &HeaderMap,
 	messages: &[serde_json::Value],
 	model: Option<&str>,
+	buffer_limit: Option<crate::transport::BufferLimit>,
 ) -> anyhow::Result<RawRequestOutcome> {
 	let body = RawMessagesRequest { messages, model };
 	let path = webhook.path.as_deref().unwrap_or(REQUEST_PATH);
@@ -345,11 +350,18 @@ pub(super) async fn send_request_raw(
 	if !passes_min_size(webhook.min_size_bytes, request_body_len(&req)) {
 		return Ok(RawRequestOutcome::Pass);
 	}
-	let whr = with_default_timeout(req);
+	let mut whr = with_default_timeout(req);
+	if let Some(limit) = buffer_limit {
+		whr.extensions_mut().insert(limit);
+	}
 	let res = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_reference(whr, &webhook.target)
 		.await?;
+	let status = res.status();
+	if status != ::http::StatusCode::OK {
+		anyhow::bail!("raw webhook returned status {status}");
+	}
 	let parsed: RawMessagesResponse = json::from_response_body(res).await?;
 	match parsed.messages {
 		None => Ok(RawRequestOutcome::Pass),

@@ -3086,7 +3086,7 @@ fn test_zero_width_pattern_is_a_noop() {
 /// webhook over HTTP and applies the messages it returns.
 #[tokio::test]
 async fn raw_webhook_end_to_end_replaces_messages() {
-	use wiremock::matchers::{method, path};
+	use wiremock::matchers::{header, method, path};
 	use wiremock::{Mock, MockServer, ResponseTemplate};
 
 	use crate::telemetry::metrics::GuardrailAction;
@@ -3095,6 +3095,7 @@ async fn raw_webhook_end_to_end_replaces_messages() {
 	let mock = MockServer::start().await;
 	Mock::given(method("POST"))
 		.and(path("/v1/compress"))
+		.and(header("x-model", "gpt-4o"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
 			"messages": [{"role": "user", "content": "compressed"}]
 		})))
@@ -3106,7 +3107,10 @@ async fn raw_webhook_end_to_end_replaces_messages() {
 		scope: default_content_scope(),
 		kind: RequestGuardKind::Webhook(Webhook {
 			target: SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
-			headers: Default::default(),
+			headers: vec![
+				(HeaderOrPseudo::Header(::http::HeaderName::from_static("x-model")),
+					Arc::new(cel::Expression::new_strict("llmRequest.model").unwrap())),
+			],
 			forward_header_matches: vec![],
 			failure_mode: FailureMode::FailClosed,
 			message_format: WebhookMessageFormat::Raw,
@@ -3127,6 +3131,8 @@ async fn raw_webhook_end_to_end_replaces_messages() {
 		&mut req,
 		&::http::HeaderMap::new(),
 		&client,
+		None,
+		None,
 		None,
 		None,
 	)
@@ -3229,6 +3235,8 @@ async fn raw_webhook_skips_message_less_formats_without_calling_backend() {
 		&client,
 		None,
 		None,
+		None,
+		None,
 	)
 	.await
 	.unwrap();
@@ -3278,6 +3286,8 @@ async fn raw_webhook_min_size_gate_skips_small_requests_without_calling_backend(
 		&client,
 		None,
 		None,
+		None,
+		None,
 	)
 	.await
 	.unwrap();
@@ -3286,4 +3296,78 @@ async fn raw_webhook_min_size_gate_skips_small_requests_without_calling_backend(
 	assert_eq!(action, GuardrailAction::Allow);
 	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
 	assert_eq!(req.get_messages()[0].content.to_string(), "hi");
+}
+
+#[tokio::test]
+async fn raw_webhook_non_success_status_uses_failure_mode() {
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, MockServer, ResponseTemplate};
+
+	use crate::types::agent::{SimpleBackendReference, Target};
+
+	let mock = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/v1/compress"))
+		.respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+			"messages": [{"role": "user", "content": "should not be applied"}]
+		})))
+		.mount(&mock)
+		.await;
+
+	fn guard(target: SimpleBackendReference, failure_mode: FailureMode) -> RequestGuard {
+		RequestGuard {
+			rejection: Default::default(),
+			scope: default_content_scope(),
+			kind: RequestGuardKind::Webhook(Webhook {
+				target,
+				headers: Default::default(),
+				forward_header_matches: vec![],
+				failure_mode,
+				message_format: WebhookMessageFormat::Raw,
+				path: Some("/v1/compress".to_string()),
+				min_size_bytes: 0,
+			}),
+		}
+	}
+
+	let target = SimpleBackendReference::InlineBackend(Target::Address(*mock.address()));
+	let client = crate::test_helpers::policy_client();
+	let mut fail_open_req: crate::llm::types::completions::Request = serde_json::from_value(
+		serde_json::json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "original"}]}),
+	)
+	.unwrap();
+	let (action, rejection) = Policy::apply_single_request_guard(
+		&guard(target.clone(), FailureMode::FailOpen),
+		&mut fail_open_req,
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+		None,
+		None,
+		None,
+	)
+	.await
+	.unwrap();
+	assert_eq!(action, GuardrailAction::FailOpen);
+	assert!(rejection.is_none());
+	assert_eq!(fail_open_req.get_messages()[0].content.to_string(), "original");
+
+	let mut fail_closed_req: crate::llm::types::completions::Request = serde_json::from_value(
+		serde_json::json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "original"}]}),
+	)
+	.unwrap();
+	assert!(
+		Policy::apply_single_request_guard(
+			&guard(target, FailureMode::FailClosed),
+			&mut fail_closed_req,
+			&::http::HeaderMap::new(),
+			&client,
+			None,
+			None,
+			None,
+			None,
+		)
+		.await
+		.is_err()
+	);
 }

@@ -28,7 +28,7 @@ llm:
             host: 127.0.0.1:8787
           messageFormat: raw
           path: /v1/compress
-          # failureMode: failOpen   # failOpen (default) | failClosed
+          failureMode: failOpen       # compression is an optimization; preserve the original request if it fails
           minSizeBytes: 16384       # skip requests whose messages are smaller than this
           # forwardHeaderMatches:   # empty => no headers forwarded (unlike guardrail mode's
           #   - name: anthropic-beta  # curated defaults). List cache/context headers the engine
