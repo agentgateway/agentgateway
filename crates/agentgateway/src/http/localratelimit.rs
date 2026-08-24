@@ -69,24 +69,6 @@ impl TryFrom<RateLimitSpec> for RateLimit {
 	}
 }
 
-// MCP POSTs defer denials to the MCP layer (JSON-RPC error instead of a 429); non-POSTs
-// have no request id to answer with.
-pub(crate) fn defer_to_mcp(req: &http::Request) -> bool {
-	req.method() == http::Method::POST
-		&& req
-			.extensions()
-			.get::<crate::proxy::httpproxy::SelectedBackendType>()
-			.is_some_and(|t| t.0 == cel::BackendType::MCP)
-}
-
-// Deferred rate limit denial, to be handled by MCP. Propagates info for the JSON-RPC error.
-#[derive(Debug, Clone)]
-pub struct McpRateLimited {
-	pub status: Option<RateLimitStatus>,
-	/// RLS-supplied denial body, if any.
-	pub message: Option<String>,
-}
-
 /// Snapshot of a local rate limit bucket, used to emit `x-ratelimit-*` headers on allowed responses.
 #[derive(Debug, Clone, Copy)]
 pub struct RateLimitStatus {
@@ -105,7 +87,7 @@ impl RateLimitStatus {
 		}
 	}
 
-	fn to_headers(self) -> http::HeaderMap {
+	pub(crate) fn to_headers(self) -> http::HeaderMap {
 		let mut hm = http::HeaderMap::new();
 		http::x_headers::set_ratelimit_headers(&mut hm, self.limit, self.remaining, self.reset_seconds);
 		hm
@@ -191,17 +173,11 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 		&self,
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
-		req: &mut http::Request,
+		_req: &mut http::Request,
 	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
 		let mut status: Option<RateLimitStatus> = None;
 		for rate_limit in self {
-			match rate_limit.check_request() {
-				Ok(s) => status = RateLimitStatus::most_constrained(status, s),
-				Err(e) if defer_to_mcp(req) => {
-					return insert_mcp_denial_info(req, e);
-				},
-				Err(e) => return Err(e.into()),
-			}
+			status = RateLimitStatus::most_constrained(status, rate_limit.check_request()?);
 		}
 		let mut res = http::PolicyResponse::default();
 		if let Some(status) = status {
@@ -209,35 +185,6 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 		}
 		Ok(res)
 	}
-}
-
-// if DeferRateLimitToMcp is set, put error info into the McpRateLimited
-// extension instead of erroring here, for MCP to handle.
-fn insert_mcp_denial_info(
-	req: &mut http::Request,
-	err: ProxyError,
-) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
-	let ProxyError::RateLimitExceeded {
-		limit,
-		remaining,
-		reset_seconds,
-	} = err
-	else {
-		return Err(err.into());
-	};
-	let status = RateLimitStatus {
-		limit,
-		remaining,
-		reset_seconds,
-	};
-	req.extensions_mut().insert(McpRateLimited {
-		status: Some(status),
-		message: None,
-	});
-	Ok(http::PolicyResponse {
-		response_headers: Some(status.to_headers()),
-		..Default::default()
-	})
 }
 
 #[cfg(test)]

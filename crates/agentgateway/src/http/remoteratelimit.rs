@@ -1,8 +1,8 @@
-use ::http::{HeaderMap, StatusCode};
+use ::http::HeaderMap;
 use itertools::Itertools;
 
 use crate::cel::{Executor, Expression};
-use crate::http::localratelimit::{self, McpRateLimited, RateLimitType};
+use crate::http::localratelimit::{self, RateLimitType};
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
 use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest};
@@ -357,10 +357,6 @@ impl RemoteRateLimit {
 		client: PolicyClient,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
-		// already denied (deferred to MCP): don't consume RLS quota.
-		if req.extensions().get::<McpRateLimited>().is_some() {
-			return Ok(PolicyResponse::default());
-		}
 		// This is on the request path
 		if !self
 			.descriptors
@@ -457,26 +453,16 @@ impl RemoteRateLimit {
 			..
 		} = cr;
 		let mut res = PolicyResponse::default();
-		// if not OK, we directly respond
+		// if not OK, deny; rendering builds the 429 from this error
 		if overall_code != (proto::rate_limit_response::Code::Ok as i32) {
-			if localratelimit::defer_to_mcp(req) {
-				return Ok(insert_mcp_denial_info(
-					req,
-					&statuses,
-					response_headers_to_add,
-					&raw_body,
-				));
-			}
-			let mut rb = ::http::response::Builder::new().status(StatusCode::TOO_MANY_REQUESTS);
-			if let Some(hm) = rb.headers_mut() {
-				process_headers(hm, response_headers_to_add);
-				process_ratelimit_status_headers(hm, &statuses);
-			}
-			let resp = rb
-				.body(http::Body::from(raw_body))
-				.map_err(|e| ProxyError::Processing(e.into()))?;
-			res.direct_response = Some(resp);
-			return Ok(res);
+			let mut hm = HeaderMap::new();
+			process_headers(&mut hm, response_headers_to_add);
+			process_ratelimit_status_headers(&mut hm, &statuses);
+			return Err(ProxyError::RemoteRateLimitExceeded {
+				status: ratelimit_status(&statuses),
+				raw_body,
+				response_headers: Box::new(hm),
+			});
 		}
 
 		process_headers(req.headers_mut(), request_headers_to_add);
@@ -581,7 +567,6 @@ fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 	}
 }
 
-/// Derives a [`RateLimitStatus`] from the rate limit service's per-descriptor statuses.
 /// When multiple descriptors apply, the most-constrained one (fewest requests remaining)
 /// is reported, matching the limit a client is most likely to hit next.
 fn ratelimit_status(
@@ -615,27 +600,6 @@ fn process_ratelimit_status_headers(
 			status.remaining,
 			status.reset_seconds,
 		);
-	}
-}
-
-// on MCP deferral, put the RLS denial into the McpRateLimited extension
-// instead of directly responding, for MCP to handle. Queues the 429's headers.
-fn insert_mcp_denial_info(
-	req: &mut Request,
-	statuses: &[proto::rate_limit_response::DescriptorStatus],
-	response_headers_to_add: Vec<proto::HeaderValue>,
-	raw_body: &[u8],
-) -> PolicyResponse {
-	req.extensions_mut().insert(McpRateLimited {
-		status: ratelimit_status(statuses),
-		message: (!raw_body.is_empty()).then(|| String::from_utf8_lossy(raw_body).into_owned()),
-	});
-	let mut hm = HeaderMap::new();
-	process_headers(&mut hm, response_headers_to_add);
-	process_ratelimit_status_headers(&mut hm, statuses);
-	PolicyResponse {
-		response_headers: (!hm.is_empty()).then_some(hm),
-		..Default::default()
 	}
 }
 

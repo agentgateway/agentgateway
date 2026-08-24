@@ -95,9 +95,9 @@ impl ProxyError {
 			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
 			ProxyError::RequestTimeout | ProxyError::UpstreamCallTimeout => ProxyResponseReason::Timeout,
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
-			ProxyError::RateLimitFailed | ProxyError::RateLimitExceeded { .. } => {
-				ProxyResponseReason::RateLimit
-			},
+			ProxyError::RateLimitFailed
+			| ProxyError::RateLimitExceeded { .. }
+			| ProxyError::RemoteRateLimitExceeded { .. } => ProxyResponseReason::RateLimit,
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
 		}
 	}
@@ -242,6 +242,13 @@ pub enum ProxyError {
 		limit: u64,
 		remaining: u64,
 		reset_seconds: u64,
+	},
+	// remote (RLS) denial; the 429 body and headers are built at response rendering
+	#[error("rate limit exceeded")]
+	RemoteRateLimitExceeded {
+		status: Option<http::localratelimit::RateLimitStatus>,
+		raw_body: Vec<u8>,
+		response_headers: Box<http::HeaderMap>,
 	},
 	#[error("rate limit failed")]
 	RateLimitFailed,
@@ -421,6 +428,19 @@ impl ProxyError {
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::SubstrateIngressFailed(status, _) => status,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+			ProxyError::RemoteRateLimitExceeded {
+				response_headers,
+				raw_body,
+				..
+			} => {
+				let mut rb = ::http::Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
+				if let Some(hm) = rb.headers_mut() {
+					*hm = *response_headers;
+				}
+				return rb
+					.body(http::Body::from(raw_body))
+					.expect("static response must build");
+			},
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
 			ProxyError::RateLimitFailed => StatusCode::INTERNAL_SERVER_ERROR,
@@ -460,18 +480,12 @@ impl ProxyError {
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::OK,
-			ProxyError::MCP(mcp::Error::RateLimited {
-				request_id: Some(_),
-				..
-			}) => StatusCode::OK,
-			ProxyError::MCP(mcp::Error::RateLimited {
-				request_id: None, ..
-			}) => StatusCode::TOO_MANY_REQUESTS,
+			ProxyError::MCP(mcp::Error::RateLimited { .. }) => StatusCode::OK,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);
 
-		// Apply per-error headers (RateLimited's are queued by the denying policy instead).
+		// Apply per-error headers
 		if let ProxyError::RateLimitExceeded {
 			limit,
 			remaining,
@@ -480,6 +494,11 @@ impl ProxyError {
 			&& let Some(hm) = rb.headers_mut()
 		{
 			http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
+		}
+		if let ProxyError::MCP(mcp::Error::RateLimited { headers, .. }) = &self
+			&& let Some(hm) = rb.headers_mut()
+		{
+			hm.extend(headers.as_ref().clone());
 		}
 
 		// Add an authentication challenge for basic auth failures. Requests authenticating to the

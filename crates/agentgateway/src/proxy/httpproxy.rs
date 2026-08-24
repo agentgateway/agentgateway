@@ -64,9 +64,6 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.cloned()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SelectedBackendType(pub cel::BackendType);
-
 #[derive(Debug)]
 struct SelectedRouteChain {
 	routes: Vec<Arc<Route>>,
@@ -244,17 +241,6 @@ async fn apply_request_policies(
 		.remote_rate_limit
 		.apply_selected("remote rate limit", c, l, req, rp.headers())
 		.await?;
-
-	// deferred denial: skip the remaining request policies
-	// MCP layer will turn the McpRateLimited into an error
-	if req
-		.extensions()
-		.get::<http::localratelimit::McpRateLimited>()
-		.is_some()
-	{
-		crate::http::mark_sensitive_headers(req, &c.inputs.cfg.sensitive_headers);
-		return Ok(route_retry);
-	}
 
 	rp.buffer = pol.buffer.apply("buffer", c, l, req, rp.headers()).await?;
 
@@ -929,17 +915,7 @@ impl HTTPProxy {
 			route_inlines,
 		};
 		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
-
-		let selected_backend = selected_route_chain
-			.backend
-			.ok_or(ProxyError::NoValidBackends)
-			.and_then(|b| resolve_backend(b, self.inputs.as_ref()));
-		if let Ok(b) = &selected_backend {
-			req
-				.extensions_mut()
-				.insert(SelectedBackendType(b.backend.backend.backend_type()));
-		}
-
+		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let explicit_route_retry = !route_policies.retry.is_empty();
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
@@ -952,8 +928,15 @@ impl HTTPProxy {
 			&mut req,
 			response_policies,
 		)
-		.await
-		.snapshot_on_err(log, &mut req)?;
+		.await;
+		let route_retry = mcp::maybe_convert_mcp_error(
+			route_retry,
+			self.inputs.as_ref(),
+			selected_route_chain.backend.as_ref(),
+			&mut req,
+		)
+		.await;
+		let route_retry = route_retry.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
 		// With no explicit retry policy, Substrate only retries stale actor assignments.
 		let substrate_default_retry = !explicit_route_retry
@@ -962,7 +945,12 @@ impl HTTPProxy {
 				.get::<http::substrate::SubstrateRequestState>()
 				.is_some();
 
-		let selected_backend = selected_backend.snapshot_on_err(log, &mut req)?;
+		let selected_backend_ref = selected_route_chain
+			.backend
+			.ok_or(ProxyError::NoValidBackends)
+			.snapshot_on_err(log, &mut req)?;
+		let selected_backend =
+			resolve_backend(selected_backend_ref, self.inputs.as_ref()).snapshot_on_err(log, &mut req)?;
 		let backend_policies = Arc::new(get_backend_policies(
 			self.inputs.as_ref(),
 			&selected_backend.backend,
@@ -1002,16 +990,10 @@ impl HTTPProxy {
 		let route_request_mirrors = route_policies.request_mirror.select("request mirror", &req);
 		let route_llm = route_policies.llm.select("llm", &req);
 		let (head, body) = req.into_parts();
-		// denied requests are never mirrored.
-		let rate_limited = head
-			.extensions
-			.get::<http::localratelimit::McpRateLimited>()
-			.is_some();
 		for mirror in route_request_mirrors
 			.iter()
 			.flat_map(|mirrors| mirrors.iter())
 			.chain(backend_policies.request_mirror.iter())
-			.filter(|_| !rate_limited)
 		{
 			if !rand::rng().random_bool(mirror.percentage) {
 				trace!(
@@ -1548,7 +1530,10 @@ impl HTTPProxy {
 	}
 }
 
-fn resolve_backend(b: RouteBackendReference, pi: &ProxyInputs) -> Result<RouteBackend, ProxyError> {
+pub(crate) fn resolve_backend(
+	b: RouteBackendReference,
+	pi: &ProxyInputs,
+) -> Result<RouteBackend, ProxyError> {
 	let backend_ref = b
 		.target
 		.as_backend_reference()
@@ -2297,16 +2282,6 @@ async fn make_backend_call(
 		},
 		_ => (backend, base_policies),
 	};
-
-	debug_assert!(
-		matches!(backend, Backend::MCP(_, _))
-			|| req
-				.extensions()
-				.get::<http::localratelimit::McpRateLimited>()
-				.is_none(),
-		"deferred rate limit denial reached a non-MCP backend"
-	);
-
 	Box::pin(handle_substrate_backend_selection(
 		&mut req,
 		backend,

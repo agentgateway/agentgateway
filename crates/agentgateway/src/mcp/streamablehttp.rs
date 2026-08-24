@@ -79,32 +79,23 @@ impl StreamableHttpService {
 
 	pub async fn handle(
 		&self,
-		mut request: Request,
+		request: Request,
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		let method = request.method().clone();
-		let rate_limited = request
-			.extensions_mut()
-			.remove::<crate::http::localratelimit::McpRateLimited>();
 
-		match (method, self.config.stateful_mode, rate_limited) {
-			(http::Method::POST, _, rate_limited) => {
+		match (method, self.config.stateful_mode) {
+			(http::Method::POST, _) => {
 				Box::pin(
 					self
-						.handle_post(request, rate_limited, inputs)
+						.handle_post(request, inputs)
 						.assert_size::<{ 4 * 1024 }>(),
 				)
 				.await
 			},
-			// we should only do the rate-limit as JSON-RPC error for POST
-			(_, _, Some(rl)) => Err(ProxyError::MCP(mcp::Error::RateLimited {
-				request_id: None,
-				status: rl.status,
-				message: rl.message,
-			})),
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
-			(http::Method::GET, true, _) => self.handle_get(request, inputs).await,
-			(http::Method::DELETE, true, _) => self.handle_delete(request, inputs).await,
+			(http::Method::GET, true) => self.handle_get(request, inputs).await,
+			(http::Method::DELETE, true) => self.handle_delete(request, inputs).await,
 			_ => Err(ProxyError::MCP(mcp::Error::MethodNotAllowed)),
 		}
 	}
@@ -112,26 +103,8 @@ impl StreamableHttpService {
 	pub async fn handle_post(
 		&self,
 		request: Request,
-		rate_limited: Option<crate::http::localratelimit::McpRateLimited>,
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
-		// rate-limit error as JSON-RPC error
-		if let Some(rl) = rate_limited {
-			let limit = http::buffer_limit(&request);
-			let (_, body) = request.into_parts();
-			let id = match http::read_body_with_limit(body, limit).await {
-				Ok(bytes) => serde_json::from_slice::<ClientJsonRpcMessage>(&bytes)
-					.ok()
-					.as_ref()
-					.and_then(request_id),
-				Err(_) => None,
-			};
-			return Err(ProxyError::MCP(mcp::Error::RateLimited {
-				request_id: id,
-				status: rl.status,
-				message: rl.message,
-			}));
-		}
 		// check accept header
 		if !request
 			.headers()
@@ -416,7 +389,7 @@ fn validate_standard_header(
 	Ok(())
 }
 
-fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
+pub(crate) fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
 	match message {
 		ClientJsonRpcMessage::Request(req) => Some(req.id.clone()),
 		_ => None,

@@ -33,21 +33,10 @@ impl LegacySSEService {
 
 	pub async fn handle(
 		&self,
-		mut request: Request,
+		request: Request,
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		let method = request.method().clone();
-		if let Some(rl) = request
-			.extensions_mut()
-			.remove::<crate::http::localratelimit::McpRateLimited>()
-		{
-			// legacy SSE does not have an error body, so we just 429
-			return Err(ProxyError::MCP(mcp::Error::RateLimited {
-				request_id: None,
-				status: rl.status,
-				message: rl.message,
-			}));
-		}
 
 		match method {
 			http::Method::POST => self.handle_post(request, inputs).await,
