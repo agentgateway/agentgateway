@@ -15,18 +15,18 @@ NetBird client
     | management HTTPS
     v
 public management agentgateway
-    |-- /relay -------- HTTP/1.1 WebSocket --\
+    |-- HTTP/1.1 paths ----------------------\
     |                                         > private NetBird server
-    `-- all other paths -- HTTP/2 cleartext -/
+    `-- Management and Signal gRPC -- h2c ---/
 ```
 
 The management agentgateway has a public LoadBalancer and terminates HTTPS for
-NetBird clients. It sends the relay WebSocket endpoint over HTTP/1.1 and all
-other management traffic over HTTP/2 cleartext to two private ClusterIP
-Services that select the same NetBird server pods. The protocol split preserves
-the WebSocket upgrade headers while continuing to support management and signal
-gRPC. A NetworkPolicy permits only the management agentgateway to reach the
-server.
+NetBird clients. It sends the HTTP APIs and relay WebSocket endpoint over
+HTTP/1.1, and Management and Signal gRPC over HTTP/2 cleartext, to two private
+ClusterIP Services that select the same NetBird server pods. The protocol split
+preserves the WebSocket upgrade headers while continuing to support management
+and signal gRPC. A NetworkPolicy permits only the management agentgateway to
+reach the server.
 
 The two Services give agentgateway distinct backend protocol hints even though
 both select the same pods and target port. `netbird-server-relay` preserves the
@@ -71,18 +71,24 @@ use the NetBird tunnel.
 
 ## Temporary NetBird images
 
-This example temporarily uses development images built from the NetBird
-agentgateway implementation through commit `de8635e00`:
+This example temporarily uses NetBird server and proxy development images built
+from the agentgateway implementation through commit `de8635e00`, plus a
+dashboard image built from the dashboard integration branch:
 
 ```text
 danehans/netbird-server:agw-e2e-de8635e00@sha256:7a284a036f7a3206b603848048ae5c312cdf006fe3d718e2262ad0433c815d68
 danehans/netbird-proxy:agw-e2e-de8635e00@sha256:5e082ea45eecc78630e4a5a1a26708bf5fdadb831fef00433a5dc5628f19bc6d
+danehans/netbird-dashboard:agw-e2e-2208b98d4-20260824-175445@sha256:f4ae567bb502c45b3c5384cf5d2af0539ffe00a0ffe12689a49ed9547d4fe3b0
 ```
 
 These personal test images are not NetBird production releases. Replace them
 in `versions.env` with the first official `netbirdio/netbird-server` and
 `netbirdio/netbird-proxy` release that contains the fix for
 [netbirdio/netbird#6970](https://github.com/netbirdio/netbird/issues/6970).
+Replace the dashboard image with the first official NetBird dashboard release
+that contains [netbirdio/dashboard#774][dashboard-pr].
+
+[dashboard-pr]: https://github.com/netbirdio/dashboard/pull/774
 
 ## Prerequisites
 
@@ -190,6 +196,22 @@ envsubst < management-gateway.yaml | kubectl apply -f -
 The proxy and client pods initially wait for secrets created by
 `configure.sh`. The NetBird server can start independently.
 
+### Optional dashboard
+
+Deploy the NetBird dashboard if you want to inspect the API-created resources
+or complete the provider and policy configuration through the UI:
+
+```bash
+envsubst < dashboard.yaml | kubectl apply -f -
+kubectl rollout status deployment/netbird-dashboard \
+  -n netbird-agent-network --timeout=5m
+```
+
+The dashboard reuses the management hostname, LoadBalancer, and certificate; it
+does not require another public Service or DNS record. The base management
+route explicitly sends NetBird HTTP and gRPC paths to the server. The optional
+dashboard route handles the remaining paths on the same HTTPS listener.
+
 Wait for the public addresses:
 
 ```bash
@@ -232,8 +254,13 @@ curl -fsS "https://${NETBIRD_MANAGEMENT_DOMAIN}/api/instance"
 
 ## 5. Configure NetBird
 
-The configuration script performs the API operations used in the validated
-environment:
+Use one of the following configuration paths. Both create the shared proxy
+token, client group, and one-use setup key. They produce the same final
+configuration and use the same verification script.
+
+### Automated API configuration
+
+The default mode performs all configuration through the management API:
 
 - Creates the initial owner and a 30-day setup PAT, unless `NETBIRD_PAT` is
   already set.
@@ -261,6 +288,44 @@ set a PAT instead:
 export NETBIRD_PAT=nbp_replace_me
 ./configure.sh
 ```
+
+The script is idempotent: rerunning it reuses resources with the expected
+names. It does not overwrite an existing provider or policy. Run
+`./configure.sh --check` to detect an existing resource whose important fields
+do not match the example.
+
+### Dashboard-assisted configuration
+
+First deploy the optional dashboard described in step 3. Then run the shared
+bootstrap without creating the Agent Network endpoint, provider, or policy:
+
+```bash
+./configure.sh --mode dashboard
+```
+
+Sign in at `https://${NETBIRD_MANAGEMENT_DOMAIN}` and complete these steps:
+
+1. Open **Agent Network > Providers** and add a provider.
+2. Select **agentgateway**, name it `agentgateway`, and set the upstream URL to
+   `http://netbird-agentgateway.netbird-agent-network.svc.cluster.local`.
+3. Enter the current `NETBIRD_VIRTUAL_KEY`, leave the model list empty to allow
+   all models, keep the provider enabled, and keep identity metadata enabled.
+   Saving the first provider also creates the generated Agent Network endpoint.
+4. Open **Agent Network > Policies** and create an enabled policy named
+   `Agentgateway access`. Select `agentgateway-clients` as its source group and
+   `agentgateway` as its destination provider.
+
+Validate the result with a PAT created in or copied from the dashboard:
+
+```bash
+export NETBIRD_PAT=nbp_replace_me
+./configure.sh --check
+```
+
+`--check` is read-only. It validates the endpoint, provider, group, policy, and
+Kubernetes Secrets, then prints the generated endpoint to export for step 6.
+Choose either the API or dashboard path for a given installation; using both to
+create the same resources is unnecessary.
 
 ## 6. Verify the integration
 

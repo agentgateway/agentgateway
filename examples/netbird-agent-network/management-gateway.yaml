@@ -46,10 +46,29 @@ spec:
         - path:
             type: PathPrefix
             value: /relay
+        - path:
+            type: PathPrefix
+            value: /ws-proxy
+        - path:
+            type: PathPrefix
+            value: /api
+        - path:
+            type: PathPrefix
+            value: /oauth2
       backendRefs:
         - name: netbird-server-relay
           port: 80
-    - backendRefs:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /signalexchange.SignalExchange
+        - path:
+            type: PathPrefix
+            value: /management.ManagementService
+        - path:
+            type: PathPrefix
+            value: /management.ProxyService
+      backendRefs:
         - name: netbird-server
           port: 80
 ---
