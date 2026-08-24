@@ -361,3 +361,24 @@ retains a snapshot.
 
 - [agentgateway/agentgateway#2757](https://github.com/agentgateway/agentgateway/issues/2757)
 - [netbirdio/netbird#6970](https://github.com/netbirdio/netbird/issues/6970)
+
+## Next Steps
+
+This example maps NetBird's trusted identity headers to the `agentgateway.user`
+and `agentgateway.group` request-log attributes, but it does not enable the
+request-log database, model catalog, or Admin UI access needed for
+agentgateway-side usage dashboards.
+
+- Follow the Kubernetes [cost dashboard][agentgateway-cost-dashboard] guide to
+  record request data, configure model pricing, and view requests, tokens, and
+  cost by NetBird user or authorizing group. Without a model catalog, requests
+  and tokens remain available but cost is reported as zero.
+- Review the Kubernetes [Admin UI][agentgateway-admin-ui] guide before exposing
+  the UI beyond a local port-forward or another private administrative path.
+
+The `x-netbird-groups` value is stored as one CSV string. For example,
+`Engineering,Platform` appears as one combined group dimension rather than two
+separate groups.
+
+[agentgateway-cost-dashboard]: https://agentgateway.dev/docs/kubernetes/latest/llm/cost-controls/dashboard/
+[agentgateway-admin-ui]: https://agentgateway.dev/docs/kubernetes/latest/observability/ui/
