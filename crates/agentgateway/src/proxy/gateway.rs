@@ -1197,8 +1197,16 @@ impl Gateway {
 					let sni = sni.to_string();
 					// Passthrough
 					start.io.rewind();
+					// Preserve an identity authenticated by an outer layer, such as the Istio
+					// mTLS connection carrying HBONE. Inserting a fresh TLSConnectionInfo here
+					// would otherwise shadow it in the wrapped extension, leaving
+					// `source.identity` empty for authorization policies.
+					let src_identity = ext
+						.get::<TLSConnectionInfo>()
+						.and_then(|tls| tls.src_identity.clone());
 					ext.insert(TLSConnectionInfo {
 						server_name: Some(sni),
+						src_identity,
 						..Default::default()
 					});
 					Ok((best, Socket::from_rewind(ext, counter, start.io)))
