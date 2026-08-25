@@ -6607,7 +6607,7 @@
           "description": "One counter shared by every key whose metadata matches all of these fields.",
           "type": "object",
           "properties": {
-            "shared": {
+            "selector": {
               "type": "object",
               "additionalProperties": {
                 "type": "string"
@@ -6615,7 +6615,7 @@
             }
           },
           "required": [
-            "shared"
+            "selector"
           ],
           "additionalProperties": false
         }

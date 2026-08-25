@@ -157,14 +157,14 @@ pub enum BudgetScope {
 	/// One counter per distinct value of this metadata field.
 	GroupBy(String),
 	/// One counter shared by every key whose metadata matches all of these fields.
-	Shared(HashMap<String, String>),
+	Selector(HashMap<String, String>),
 }
 
 #[derive(Debug, Clone)]
 pub enum ResolvedScope {
 	PerKey { api_key_id: String, api_key: String }, // hash for the id, name for status
 	GroupBy { field: String, value: String },
-	Shared, // name comes from the Budget
+	Selector, // name comes from the Budget
 }
 
 impl std::fmt::Display for ResolvedScope {
@@ -172,7 +172,7 @@ impl std::fmt::Display for ResolvedScope {
 		match self {
 			Self::PerKey { api_key, .. } => write!(f, "api-key {api_key}"),
 			Self::GroupBy { field, value } => write!(f, "{field}={value}"),
-			Self::Shared => f.write_str("shared"),
+			Self::Selector => f.write_str("selector"),
 		}
 	}
 }
@@ -276,8 +276,8 @@ fn resolve_scope(
 				value,
 			})
 		},
-		BudgetScope::Shared(selector) => {
-			metadata_matches(selector, metadata).then_some(ResolvedScope::Shared)
+		BudgetScope::Selector(selector) => {
+			metadata_matches(selector, metadata).then_some(ResolvedScope::Selector)
 		},
 	})
 }
@@ -472,7 +472,7 @@ fn budget_id(scope: &ResolvedScope, budget: &Budget) -> String {
 			value
 		),
 		// The selector is deliberately absent: editing membership must not reset accumulated usage.
-		ResolvedScope::Shared => format!("budget:{}:{}", budget.name.len(), budget.name),
+		ResolvedScope::Selector => format!("budget:{}:{}", budget.name.len(), budget.name),
 	}
 }
 
@@ -1066,7 +1066,7 @@ CREATE TABLE budget_usage (
 		let specs = vec![scoped_budget(
 			"research",
 			100,
-			BudgetScope::Shared(HashMap::from([(
+			BudgetScope::Selector(HashMap::from([(
 				"group".to_string(),
 				"research".to_string(),
 			)])),
@@ -1093,7 +1093,7 @@ CREATE TABLE budget_usage (
 		let specs = vec![scoped_budget(
 			"gold",
 			100,
-			BudgetScope::Shared(HashMap::from([("tier".to_string(), "1".to_string())])),
+			BudgetScope::Selector(HashMap::from([("tier".to_string(), "1".to_string())])),
 		)];
 		let authentication = local_keys(serde_json::json!({
 			"keys": [{"key": "sk-a", "metadata": {"name": "alice", "tier": 1}}]

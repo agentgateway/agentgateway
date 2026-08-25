@@ -3830,7 +3830,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -17557,7 +17557,7 @@
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`binds[].listeners[].policies.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`binds[].listeners[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -22482,7 +22482,7 @@
 |`policies[].policy.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`policies[].policy.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`policies[].policy.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`policies[].policy.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`policies[].policy.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`policies[].policy.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`policies[].policy.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -38314,7 +38314,7 @@
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`routeGroups[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routeGroups[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -51751,7 +51751,7 @@
 |`gateways.*.listeners[].apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`gateways.*.listeners[].apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`gateways.*.listeners[].apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.listeners[].apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -53063,7 +53063,7 @@
 |`gateways.*.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`gateways.*.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`gateways.*.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`gateways.*.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`gateways.*.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -56780,7 +56780,7 @@
 |`routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routes[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`routes[].policies.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`routes[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -73961,7 +73961,7 @@
 |`llm.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`llm.policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`llm.policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`llm.policies.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`llm.policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`llm.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`llm.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -76256,7 +76256,7 @@
 |`budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`mcp`|object|mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be<br>served under the attached `gateways` at /mcp and /sse.<br>All MCP servers listed will be served as a single virtual MCP server.|
 |`mcp.gateways`|string|gateways attaches the MCP routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>When omitted and a gateway named `default` exists, the MCP routes attach to it unless port is set.|
 |`mcp.port`|integer|port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.|
@@ -80248,7 +80248,7 @@
 |`mcp.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`mcp.policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`mcp.policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`mcp.policies.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`mcp.policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`mcp.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`mcp.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -82728,7 +82728,7 @@
 |`ui.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`ui.policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
 |`ui.policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
-|`ui.policies.apiKey.keys[].budgets[].scope.shared`|object|One counter shared by every key whose metadata matches all of these fields.|
+|`ui.policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`ui.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`ui.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|

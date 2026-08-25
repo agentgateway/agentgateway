@@ -54,8 +54,8 @@ impl From<&ResolvedScope> for BudgetStatusScope {
 				field: Some(field.clone()),
 				value: Some(value.clone()),
 			},
-			ResolvedScope::Shared => Self {
-				kind: "shared",
+			ResolvedScope::Selector => Self {
+				kind: "selector",
 				field: None,
 				value: None,
 			},
@@ -98,7 +98,7 @@ impl BudgetPolicy {
 		let observed_at = Utc::now();
 		let applies_to_key = |scope: &ResolvedScope| match scope {
 			ResolvedScope::PerKey { api_key, .. } => api_key_name.is_none_or(|name| api_key == name),
-			ResolvedScope::GroupBy { .. } | ResolvedScope::Shared => true,
+			ResolvedScope::GroupBy { .. } | ResolvedScope::Selector => true,
 		};
 		let mut budgets = self
 			.counters

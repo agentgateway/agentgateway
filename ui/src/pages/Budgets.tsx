@@ -30,14 +30,31 @@ type Source = { kind: 'document' } | { kind: 'key'; key: string };
 
 type BudgetRow = { budget: Budget; source: Source };
 
-type ScopeKind = 'oneKey' | 'perKey' | 'groupBy' | 'shared';
+type ScopeKind = 'oneKey' | 'perKey' | 'groupBy' | 'selector';
 
-const scopeKindLabels: Record<ScopeKind, string> = {
-	oneKey: 'One key',
-	perKey: 'Each key',
-	groupBy: 'Per metadata value',
-	shared: 'Shared pool'
-};
+/** The four ways a budget can decide which keys share its counter, in the order they are offered. */
+const scopeKinds: { value: ScopeKind; label: string; description: string }[] = [
+	{
+		value: 'oneKey',
+		label: 'One key',
+		description: 'A single key gets this allowance.'
+	},
+	{
+		value: 'perKey',
+		label: 'Each key',
+		description: 'Every key gets its own separate allowance of this size.'
+	},
+	{
+		value: 'groupBy',
+		label: 'Per metadata value',
+		description: 'One allowance for each distinct value of a metadata field, such as one per team.'
+	},
+	{
+		value: 'selector',
+		label: 'Shared pool',
+		description: 'One allowance split between every key whose metadata matches a selector.'
+	}
+];
 
 export function BudgetsPage() {
 	const { config, apiKeys, isLoading, error } = useLlmConfigData();
@@ -73,7 +90,7 @@ export function BudgetsPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="Budgets"
-				description="Limit LLM spend or token usage across API keys, and watch how much of each limit is used."
+				description="Cap LLM spend or token usage for your API keys. Each budget is charged once a response completes, and resets when its rolling window rolls over."
 				actions={
 					<button
 						className="button primary"
@@ -94,7 +111,8 @@ export function BudgetsPage() {
 			) : null}
 			{!databaseConfigured && rows.length > 0 ? (
 				<StatusBanner state="warn" title="Budgets require a database">
-					Set config.database.url, or the gateway will reject this configuration on load.
+					Counters are persisted so that usage survives restarts and is shared between gateway
+					instances. Set config.database.url, or the gateway will reject this configuration on load.
 				</StatusBanner>
 			) : null}
 
@@ -103,7 +121,8 @@ export function BudgetsPage() {
 					<div>
 						<h3>Configured budgets</h3>
 						<p>
-							A budget scoped to a single key is stored on that key. Every other scope is stored at
+							Every budget pairs a limit with a scope that decides which keys share the counter. A
+							budget scoped to a single key is stored on that key; every other scope is stored at
 							the top level of the configuration and applies across all API key policies.
 						</p>
 					</div>
@@ -117,7 +136,7 @@ export function BudgetsPage() {
 				) : rows.length === 0 ? (
 					<EmptyState
 						title="No budgets configured"
-						description="Create a budget to cap spend for one key, for every key, for each value of a metadata field such as a group or tier, or for a pool of keys sharing one allowance."
+						description="A budget caps spend or tokens over a rolling window. Scope it to one key, to every key individually, to each value of a metadata field such as team or tier, or to a pool of keys that share a single allowance."
 						action={
 							<button className="button primary" type="button" onClick={startNew}>
 								<Plus size={16} />
@@ -150,7 +169,7 @@ export function BudgetsPage() {
 										<td className="muted">{row.budget.window.rolling}</td>
 										<td className="muted">{row.budget.onBudgetExceeded}</td>
 										<td className="muted">
-											{countersFor(row, status.data?.budgets).length || 'None yet'}
+											{counterCountLabel(countersFor(row, status.data?.budgets))}
 										</td>
 										<td className="key-action-cell">
 											<div className="key-actions">
@@ -230,8 +249,9 @@ function UsagePanel(props: { status?: BudgetStatus[]; loading: boolean }) {
 				<div>
 					<h3>Current usage</h3>
 					<p>
-						Usage is charged after each response, so concurrent requests can overshoot a limit
-						slightly before it takes effect.
+						One configured budget can back several counters, because a per-metadata scope creates
+						one for each distinct value it finds. Usage is charged after each response, so
+						concurrent requests can overshoot a limit slightly before it takes effect.
 					</p>
 				</div>
 			</div>
@@ -240,7 +260,7 @@ function UsagePanel(props: { status?: BudgetStatus[]; loading: boolean }) {
 			) : budgets.length === 0 ? (
 				<EmptyState
 					title="No active counters"
-					description="Counters appear once a budget matches at least one API key."
+					description="A counter appears as soon as a configured budget matches an API key, and stays at zero until that key gets its first response."
 				/>
 			) : (
 				<div className="table-wrap">
@@ -361,21 +381,18 @@ function BudgetEditor(props: {
 		>
 			<Field
 				label="Name"
-				hint="Identifies the counter. Renaming a budget starts its usage from zero."
+				hint="Identifies the counter that accumulates usage, so renaming a budget starts it over from zero."
 			>
 				<input value={name} onChange={event => setName(event.target.value)} />
 			</Field>
 
 			<FieldGroup
 				label="Applies to"
-				hint="A single key, every key individually, one allowance per value of a metadata field, or one allowance shared by every matching key."
+				hint="Only a single-key budget is stored on the key itself. The other scopes are stored at the top level of the configuration and apply across every API key policy."
 			>
 				<SegmentedControl
 					value={kind}
-					options={(['oneKey', 'perKey', 'groupBy', 'shared'] as ScopeKind[]).map(value => ({
-						value,
-						label: scopeKindLabels[value]
-					}))}
+					options={scopeKinds}
 					onChange={setKind}
 					ariaLabel="Budget scope"
 				/>
@@ -384,7 +401,7 @@ function BudgetEditor(props: {
 			{kind === 'oneKey' ? (
 				<Field
 					label="API key"
-					hint="Stored on the key itself, so renaming its display name does not reset usage."
+					hint="The budget is stored on this key, so renaming the key's display name does not reset usage. Moving the budget to another key starts a new counter."
 				>
 					<Dropdown
 						value={targetKey}
@@ -400,7 +417,7 @@ function BudgetEditor(props: {
 			{kind === 'groupBy' ? (
 				<Field
 					label="Metadata field"
-					hint="Keys without this field are not budgeted. Suggestions come from your configured keys."
+					hint="Each distinct value gets its own allowance: with team, keys tagged team=research and team=ops are budgeted separately. Keys without the field are not budgeted. Suggestions come from your configured keys."
 				>
 					<FreeformCombobox
 						ariaLabel="Metadata field"
@@ -412,10 +429,10 @@ function BudgetEditor(props: {
 				</Field>
 			) : null}
 
-			{kind === 'shared' ? (
+			{kind === 'selector' ? (
 				<FieldGroup
 					label="Key selector"
-					hint="Every entry must match the key's metadata. Leave empty to pool every key."
+					hint="A key joins the pool when its metadata matches every entry here. Leave it empty to pool every key. Changing the selector later does not reset usage already accumulated."
 				>
 					<div className="api-key-budget-list">
 						{selector.map((row, index) => (
@@ -458,19 +475,37 @@ function BudgetEditor(props: {
 				</FieldGroup>
 			) : null}
 
-			<Field label="Limit unit">
+			<Field
+				label="Limit unit"
+				hint="A response that reports neither cost nor tokens cannot be charged, and is logged instead."
+			>
 				<SegmentedControl
 					value={unit}
 					options={[
-						{ value: 'USD' as const, label: 'USD' },
-						{ value: 'Tokens' as const, label: 'Tokens' }
+						{
+							value: 'USD' as const,
+							label: 'USD',
+							description: 'Charges the cost of each response.'
+						},
+						{
+							value: 'Tokens' as const,
+							label: 'Tokens',
+							description: 'Charges prompt plus completion tokens.'
+						}
 					]}
 					onChange={setUnit}
 					ariaLabel="Limit unit"
 				/>
 			</Field>
 
-			<Field label="Limit">
+			<Field
+				label="Limit"
+				hint={
+					unit === 'USD'
+						? 'The most that may be spent in one window, in dollars.'
+						: 'The most tokens that may be used in one window, as a whole number.'
+				}
+			>
 				<input
 					inputMode="decimal"
 					value={amount}
@@ -480,20 +515,28 @@ function BudgetEditor(props: {
 
 			<Field
 				label="Window"
-				hint="Windows align to the Unix epoch, so 24h starts at midnight UTC rather than at the first request."
+				hint="How long usage accumulates before it resets, for example 1h, 24h, or 30d. Windows align to the Unix epoch, so 24h starts at midnight UTC rather than at the first request."
 			>
 				<input value={rolling} onChange={event => setRolling(event.target.value)} />
 			</Field>
 
 			<Field
 				label="When exceeded"
-				hint="Audit records the overage and lets the request through; Block rejects it with 429."
+				hint="Applies from the moment the counter passes the limit until the window resets."
 			>
 				<SegmentedControl
 					value={action}
 					options={[
-						{ value: 'Audit' as const, label: 'Audit' },
-						{ value: 'Block' as const, label: 'Block' }
+						{
+							value: 'Audit' as const,
+							label: 'Audit',
+							description: 'Records the overage and lets the request through.'
+						},
+						{
+							value: 'Block' as const,
+							label: 'Block',
+							description: 'Rejects the request with 429 Too Many Requests.'
+						}
 					]}
 					onChange={setAction}
 					ariaLabel="Action when exceeded"
@@ -560,7 +603,7 @@ function rowScopeKind(row: BudgetRow): ScopeKind {
 	if (row.source.kind === 'key') return 'oneKey';
 	const scope = row.budget.scope;
 	if (!scope || scope === 'perKey') return 'perKey';
-	return 'groupBy' in scope ? 'groupBy' : 'shared';
+	return 'groupBy' in scope ? 'groupBy' : 'selector';
 }
 
 function rowKey(row: BudgetRow) {
@@ -575,8 +618,8 @@ function groupByField(budget: Budget) {
 }
 
 function selectorRows(budget: Budget) {
-	if (!budget.scope || typeof budget.scope !== 'object' || !('shared' in budget.scope)) return [];
-	return Object.entries(budget.scope.shared).map(([field, value]) => ({ field, value }));
+	if (!budget.scope || typeof budget.scope !== 'object' || !('selector' in budget.scope)) return [];
+	return Object.entries(budget.scope.selector).map(([field, value]) => ({ field, value }));
 }
 
 function updateRow(
@@ -593,12 +636,12 @@ function buildScope(
 	selector: { field: string; value: string }[]
 ): Budget['scope'] {
 	if (kind === 'groupBy') return { groupBy: field.trim() };
-	if (kind === 'shared') {
-		const shared: Record<string, string> = {};
+	if (kind === 'selector') {
+		const match: Record<string, string> = {};
 		for (const row of selector) {
-			if (row.field.trim()) shared[row.field.trim()] = row.value;
+			if (row.field.trim()) match[row.field.trim()] = row.value;
 		}
-		return { shared };
+		return { selector: match };
 	}
 	return 'perKey';
 }
@@ -610,13 +653,18 @@ function scopeSummary(row: BudgetRow, keys: VirtualApiKey[]) {
 		return key ? keyLabel(key) : 'Unknown key';
 	}
 	const kind = rowScopeKind(row);
-	if (kind === 'groupBy') return `Each ${groupByField(row.budget)}`;
-	if (kind === 'shared') {
+	if (kind === 'groupBy') return `One allowance per ${groupByField(row.budget)}`;
+	if (kind === 'selector') {
 		const entries = selectorRows(row.budget);
 		if (!entries.length) return 'All keys, pooled';
 		return `${entries.map(entry => `${entry.field} = ${entry.value}`).join(', ')}, pooled`;
 	}
-	return 'Each key';
+	return 'Each key separately';
+}
+
+/** Reads under the "Live counters" column, where a bare number gives no sense of what it counts. */
+function counterCountLabel(counters: BudgetStatus[]) {
+	return counters.length ? `${counters.length} active` : 'None yet';
 }
 
 /** Metadata field names present on any configured key, used to suggest scopes. */

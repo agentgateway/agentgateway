@@ -3540,7 +3540,7 @@ pub fn validate_budgets(budgets: &[Budget], source: &str) -> anyhow::Result<()> 
 				"budget {:?} must name the metadata field to group by",
 				budget.name,
 			),
-			BudgetScope::Shared(selector) => {
+			BudgetScope::Selector(selector) => {
 				anyhow::ensure!(
 					selector.keys().all(|field| !field.is_empty()),
 					"budget {:?} has a selector entry with an empty metadata field",

@@ -74,8 +74,6 @@ export function KeysPage() {
 	const upsertResource = useUpsertConfigResource();
 	const upsertPolicy = useUpsertPolicyResource();
 	const deleteResource = useDeleteConfigResource();
-	// Shared and grouped budgets are declared at the top level of the configuration rather than on a
-	// key, so they can exist even when no key declares an inline budget.
 	const budgetStatus = useBudgetStatus({ enabled: Boolean(policies.apiKey) });
 	const help = useSchemaHelp();
 	const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;

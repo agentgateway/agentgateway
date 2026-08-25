@@ -3,10 +3,10 @@ import { requestJson } from '@/api/base';
 /**
  * Which API keys share a budget's counter: a single key, every key with a given metadata value, or
  * every key a selector matched. `field` and `value` are only present where they identify the
- * counter, so `shared` budgets carry neither.
+ * counter, so `selector` budgets carry neither.
  */
 export interface BudgetScope {
-	kind: 'perKey' | 'groupBy' | 'shared';
+	kind: 'perKey' | 'groupBy' | 'selector';
 	field?: string;
 	value?: string;
 }
@@ -43,7 +43,7 @@ export function getBudgetStatus() {
 }
 
 /**
- * Finds the live counter for a budget declared on one API key. Group and shared budgets are pooled
+ * Finds the live counter for a budget declared on one API key. Group and selector budgets are pooled
  * across keys, so they are reported separately rather than under any single key.
  */
 export function findPerKeyBudget(
