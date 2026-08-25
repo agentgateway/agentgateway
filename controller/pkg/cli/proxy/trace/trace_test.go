@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -217,8 +218,16 @@ func TestSummarizeFrontendPolicySelection(t *testing.T) {
 }
 
 func TestTraceStreamURLEncodesExpression(t *testing.T) {
-	got := traceStreamURL("127.0.0.1:15000", `request.path == "/healthz"`, false)
+	got := traceStreamURL("127.0.0.1:15000", `request.path == "/healthz"`, false, defaultFollowMaxDuration)
 	want := "http://127.0.0.1:15000/debug/trace?expression=request.path+%3D%3D+%22%2Fhealthz%22"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestTraceStreamURLIncludesFollowDuration(t *testing.T) {
+	got := traceStreamURL("127.0.0.1:15000", "", true, 10*time.Minute)
+	want := "http://127.0.0.1:15000/debug/trace?follow=true&maxDurationMs=600000"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

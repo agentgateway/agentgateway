@@ -41,6 +41,8 @@ const PPROF_DEFAULT_SECONDS: u64 = 10;
 const PPROF_MIN_SECONDS: u64 = 1;
 #[cfg(target_os = "linux")]
 const PPROF_MAX_SECONDS: u64 = 300;
+const TRACE_FOLLOW_DEFAULT_DURATION: Duration = Duration::from_secs(5);
+const TRACE_FOLLOW_MAX_DURATION: Duration = Duration::from_secs(60 * 60);
 // Default matches Go's CPU profiler. Higher rates severely under-report on a
 // multi-core-busy process: SIGPROF is non-queuing, so expirations coalesce, and
 // pprof-rs's handler serializes all threads through one lock and drops samples
@@ -348,15 +350,44 @@ async fn handle_server_shutdown(AxumState(state): AxumState<Arc<AdminState>>) ->
 }
 
 pub async fn handle_debug_trace(req: Request) -> Response {
-	let expression = req.uri().query().and_then(|query| {
-		url::form_urlencoded::parse(query.as_bytes())
-			.find(|(key, _)| key == "expression")
-			.map(|(_, value)| value.into_owned())
-	});
-	let follow = req.uri().query().is_some_and(|query| {
-		url::form_urlencoded::parse(query.as_bytes())
-			.any(|(key, value)| key == "follow" && value == "true")
-	});
+	let query: HashMap<String, String> = req
+		.uri()
+		.query()
+		.map(|query| {
+			url::form_urlencoded::parse(query.as_bytes())
+				.into_owned()
+				.collect()
+		})
+		.unwrap_or_default();
+	let expression = query.get("expression").cloned();
+	let follow = query.get("follow").is_some_and(|value| value == "true");
+	let max_duration_ms = query.get("maxDurationMs").cloned();
+	let requested_max_duration = match max_duration_ms {
+		Some(value) => match value.parse::<u64>() {
+			Ok(0) | Err(_) => {
+				return plaintext_response(
+					hyper::StatusCode::BAD_REQUEST,
+					"maxDurationMs must be a positive integer\n".into(),
+				);
+			},
+			Ok(value) => Some(Duration::from_millis(value)),
+		},
+		None => None,
+	};
+	if requested_max_duration.is_some() && !follow {
+		return plaintext_response(
+			hyper::StatusCode::BAD_REQUEST,
+			"maxDurationMs requires follow=true\n".into(),
+		);
+	}
+	let max_duration =
+		follow.then(|| requested_max_duration.unwrap_or(TRACE_FOLLOW_DEFAULT_DURATION));
+	if max_duration.is_some_and(|duration| duration > TRACE_FOLLOW_MAX_DURATION) {
+		return plaintext_response(
+			hyper::StatusCode::BAD_REQUEST,
+			"maxDurationMs must not exceed 3600000\n".into(),
+		);
+	}
 	let expression = match expression {
 		Some(expression) => match crate::cel::Expression::new_strict(&expression) {
 			Ok(expression) => Some(expression),
@@ -375,11 +406,17 @@ pub async fn handle_debug_trace(req: Request) -> Response {
 		crate::proxy::dtrace::track_expression(expression)
 	};
 	let sse_stream = trace_sse_stream(rx);
+	let body = match max_duration {
+		Some(max_duration) => {
+			crate::http::Body::from_stream(sse_stream.take_until(time::sleep(max_duration)))
+		},
+		None => crate::http::Body::from_stream(sse_stream),
+	};
 	::http::Response::builder()
 		.status(hyper::StatusCode::OK)
 		.header("Content-Type", "text/event-stream")
 		.header("Cache-Control", "no-cache")
-		.body(crate::http::Body::from_stream(sse_stream))
+		.body(body)
 		.expect("builder with known status code should not fail")
 }
 

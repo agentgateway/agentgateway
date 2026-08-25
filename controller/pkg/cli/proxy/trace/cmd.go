@@ -2,6 +2,7 @@ package trace
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -9,12 +10,15 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
+const defaultFollowMaxDuration = 5 * time.Second
+
 type traceFlags struct {
 	namespace      string
 	proxyAdminPort int
 	traceFile      string
 	expression     string
 	follow         bool
+	maxDuration    time.Duration
 	raw            bool
 	port           int
 	local          bool
@@ -51,8 +55,8 @@ func Command() flag.Command {
   # Watch for the next request matching a CEL expression.
   agctl proxy trace --expression 'request.path == "/healthz"'
 
-  # Follow all matching requests until interrupted (JSONL includes requestId).
-  agctl proxy trace --follow --raw --expression 'request.path == "/v1/responses"'
+  # Follow matching requests for up to 10 minutes (JSONL includes requestId).
+  agctl proxy trace --follow --max-duration 10m --raw --expression 'request.path == "/v1/responses"'
   
   # Enable tracing and send a request to the gateway, with some curl arguments.
   agctl proxy trace gateway/my-gateway --raw --port 80 -- http://host/some/path -H "Authorization: Bearer sk-123"`,
@@ -78,7 +82,8 @@ func (f *traceFlags) attach(cmd *cobra.Command) {
 	cmd.Flags().IntVar(&f.proxyAdminPort, "proxy-admin-port", f.proxyAdminPort, "Agentgateway admin port")
 	cmd.Flags().StringVarP(&f.traceFile, "file", "f", "", "Trace JSONL file to render, or - for stdin")
 	cmd.Flags().StringVar(&f.expression, "expression", "", "CEL expression for selecting which request to trace")
-	cmd.Flags().BoolVar(&f.follow, "follow", false, "Continue tracing all matching requests until interrupted")
+	cmd.Flags().BoolVar(&f.follow, "follow", false, "Continue tracing matching requests until the maximum duration or interruption")
+	cmd.Flags().DurationVar(&f.maxDuration, "max-duration", defaultFollowMaxDuration, "Maximum duration for --follow (maximum 1h)")
 	cmd.Flags().BoolVar(&f.raw, "raw", false, "Print trace events as JSONL instead of opening the TUI")
 	cmd.Flags().IntVar(&f.port, "port", 0, "Gateway listener port to use when triggering a request")
 	cmd.Flags().BoolVar(&f.local, "local", false, "Trace against a local agentgateway instance on 127.0.0.1")
@@ -94,6 +99,15 @@ func parseArgs(cmd *cobra.Command, args []string, flags *traceFlags) (string, []
 	}
 	if flags.local && len(resourceArgs) > 0 {
 		return "", nil, fmt.Errorf("--local does not accept a resource argument")
+	}
+	if flags.maxDuration < time.Millisecond {
+		return "", nil, fmt.Errorf("--max-duration must be at least 1ms")
+	}
+	if flags.maxDuration > time.Hour {
+		return "", nil, fmt.Errorf("--max-duration must not exceed 1h")
+	}
+	if !flags.follow && cmd.Flags().Changed("max-duration") {
+		return "", nil, fmt.Errorf("--max-duration requires --follow")
 	}
 	if flags.traceFile != "" {
 		if len(resourceArgs) > 0 {

@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -154,6 +155,9 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 		}
 		return runTUI(cmd, target, body, nil, 0)
 	}
+	if flags.follow {
+		writeFollowWarning(cmd, flags.maxDuration)
+	}
 
 	var (
 		target *traceTarget
@@ -174,7 +178,7 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 	}
 	defer closeAdmin()
 
-	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression, flags.follow)
+	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression, flags.follow, flags.maxDuration)
 	if err != nil {
 		return err
 	}
@@ -184,6 +188,14 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 		return runRaw(cmd, target, traceResp.Body, requestArgs, flags.port)
 	}
 	return runTUI(cmd, target, traceResp.Body, requestArgs, flags.port)
+}
+
+func writeFollowWarning(cmd *cobra.Command, maxDuration time.Duration) {
+	fmt.Fprintf(
+		cmd.ErrOrStderr(),
+		"Warning: --follow continuously traces matching requests and may impact gateway performance; tracing will stop after %s.\n",
+		maxDuration,
+	)
 }
 
 type traceTarget struct {
@@ -252,7 +264,7 @@ func traceAdminAddress(target *traceTarget, adminPort int) (string, func(), erro
 	return adminForwarder.Address(), adminForwarder.Close, nil
 }
 
-func traceStreamURL(adminAddress, expression string, follow bool) string {
+func traceStreamURL(adminAddress, expression string, follow bool, maxDuration time.Duration) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   adminAddress,
@@ -266,13 +278,14 @@ func traceStreamURL(adminAddress, expression string, follow bool) string {
 	if follow {
 		q := u.Query()
 		q.Set("follow", "true")
+		q.Set("maxDurationMs", strconv.FormatInt(maxDuration.Milliseconds(), 10))
 		u.RawQuery = q.Encode()
 	}
 	return u.String()
 }
 
-func openTraceStream(ctx context.Context, adminAddress, expression string, follow bool) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression, follow), nil)
+func openTraceStream(ctx context.Context, adminAddress, expression string, follow bool, maxDuration time.Duration) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression, follow, maxDuration), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct trace request: %w", err)
 	}
