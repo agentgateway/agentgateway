@@ -32,6 +32,7 @@ var logger = logging.New("agentgateway/backend")
 
 // NewBackendPlugin creates a new plugin for AgentgatewayBackends
 func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) plugins.AgwPlugin {
+	setOpenAPISchemaCacheStop(agw.KrtOpts.Stop)
 	return plugins.AgwPlugin{
 		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{
 			wellknown.AgentgatewayBackendGVK.GroupKind(): {
@@ -347,6 +348,69 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				return nil, err
 			}
 			mcpTargets = append(mcpTargets, targets...)
+		} else if s := target.OpenAPI; s != nil {
+			schema, err := resolveOpenAPISchema(ctx, be.Namespace, s)
+			if err != nil {
+				return nil, err
+			}
+
+			if s.BackendRef != nil {
+				serviceHostname, err := ResolveMCPBackendRefHost(ctx, be.Namespace, s.BackendRef)
+				if err != nil {
+					return nil, err
+				}
+				mcpTargets = append(mcpTargets, &api.MCPTarget{
+					Name: string(target.Name),
+					Backend: &api.BackendReference{
+						Kind: &api.BackendReference_Service_{
+							Service: &api.BackendReference_Service{
+								Hostname:  serviceHostname,
+								Namespace: be.Namespace,
+							},
+						},
+						Port: uint32(ptr.OrEmpty(s.Port)), //nolint:gosec // G115: validated by the CRD schema
+					},
+					Protocol:      api.MCPTarget_OPENAPI,
+					OpenapiSchema: schema,
+				})
+				continue
+			}
+
+			host, port, err := splitOpenAPIHost(ptr.OrEmpty(s.Host))
+			if err != nil {
+				return nil, err
+			}
+			staticBackendRef := utils.InternalMCPStaticBackendName(be.Namespace, be.Name, string(target.Name))
+			staticBackend := &api.Backend{
+				Key:  staticBackendRef,
+				Name: plugins.ResourceName(be),
+				Kind: &api.Backend_Static{
+					Static: &api.StaticBackend{
+						Host: host,
+						Port: port,
+					},
+				},
+			}
+			if s.Policies != nil {
+				polt, err := TranslateBackendPolicies(ctx, be.Namespace, &agentgateway.BackendFull{
+					BackendSimple: *s.Policies,
+				})
+				if err != nil {
+					logger.Error("failed to translate static openapi MCP backend policies", "err", err)
+					errs = append(errs, err)
+				}
+				staticBackend.InlinePolicies = polt
+			}
+			backends = append(backends, staticBackend)
+
+			mcpTargets = append(mcpTargets, &api.MCPTarget{
+				Name: string(target.Name),
+				Backend: &api.BackendReference{
+					Kind: &api.BackendReference_Backend{Backend: staticBackendRef},
+				},
+				Protocol:      api.MCPTarget_OPENAPI,
+				OpenapiSchema: schema,
+			})
 		}
 	}
 	// defaults to stateful session routing

@@ -1,15 +1,20 @@
 package agentgatewaybackend_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/protomarshal"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	"sigs.k8s.io/yaml"
@@ -24,6 +29,13 @@ import (
 )
 
 func TestBuildMCP(t *testing.T) {
+	openapiSchema := `{"openapi":"3.0.0","info":{"title":"test","version":"1.0"},"paths":{}}`
+	openapiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(openapiSchema))
+	}))
+	t.Cleanup(openapiServer.Close)
+
 	tests := []struct {
 		name          string
 		backend       *agentgateway.AgentgatewayBackend
@@ -266,6 +278,213 @@ func TestBuildMCP(t *testing.T) {
 			inputs: []any{createMockMCPService("test-ns", "mcp-service", "app=mcp-server")},
 		},
 		{
+			name: "OpenAPI MCPBackend target backend - inline schema",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-inline-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									Host:   shortStringPtr("petstore.example.com:8080"),
+									Schema: openAPISchemaJSON(t, openapiSchema),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "OpenAPI MCPBackend target backend - backendRef",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-backendref-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									BackendRef: &corev1.LocalObjectReference{
+										Name: "mcp-service",
+									},
+									Port:   new(int32(8080)),
+									Schema: openAPISchemaJSON(t, openapiSchema),
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockMCPService("test-ns", "mcp-service", "app=mcp-server")},
+		},
+		{
+			name: "OpenAPI MCPBackend target backend - schema.configMapRef",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-configmap-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									Host: shortStringPtr("petstore.example.com:8080"),
+									Schema: openAPISchemaJSON(t, map[string]any{
+										"configMapRef": map[string]string{
+											"name": "openapi-schema-cm",
+											"key":  "schema.json",
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-schema-cm",
+					Namespace: "test-ns",
+				},
+				Data: map[string]string{"schema.json": openapiSchema},
+			}},
+		},
+		{
+			name: "OpenAPI MCPBackend target backend - schema.url",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-url-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									Host:   shortStringPtr("petstore.example.com:8080"),
+									Schema: openAPISchemaJSON(t, map[string]any{"url": openapiServer.URL}),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Error case - openapi target missing schema source",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-missing-schema-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									Host: shortStringPtr("petstore.example.com:8080"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: "openapi schema must be a literal string or an object with url or configMapRef",
+		},
+		{
+			name: "Error case - openapi inline schema missing required fields",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-incomplete-schema-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									Host: shortStringPtr("petstore.example.com:8080"),
+									// Missing "info" and "paths" - the two other
+									// fields the Rust openapiv3 parser requires.
+									Schema: openAPISchemaJSON(t, `{"openapi":"3.0.0"}`),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `openapi schema: missing required "info.title"`,
+		},
+		{
+			name: "Error case - openapi inline schema is a bare string, not an OpenAPI document",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-url-mistaken-for-inline-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									Host: shortStringPtr("petstore.example.com:8080"),
+									// A plausible user mistake: pasting a URL as
+									// the literal schema string instead of using
+									// schema: {url: ...}.
+									Schema: openAPISchemaJSON(t, "https://petstore.example.com/openapi.json"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: "openapi schema: not valid JSON or YAML",
+		},
+		{
+			name: "Error case - openapi schema sets both url and configMapRef",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openapi-url-and-configmapref-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "openapi-target",
+								OpenAPI: &agentgateway.McpOpenAPITarget{
+									Host: shortStringPtr("petstore.example.com:8080"),
+									Schema: openAPISchemaJSON(t, map[string]any{
+										"url":          "https://petstore.example.com/openapi.json",
+										"configMapRef": map[string]string{"name": "openapi-schema-cm", "key": "schema.json"},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: "openapi schema must set exactly one of url or configMapRef, not both",
+		},
+		{
 			name: "Error case - invalid service selector",
 			backend: &agentgateway.AgentgatewayBackend{
 				Name:      "invalid-selector-backend",
@@ -298,6 +517,15 @@ func TestBuildMCP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := testutils.BuildMockPolicyContext(t, tt.inputs)
 			result, err := agentgatewaybackend.BuildAgwBackend(ctx, tt.backend)
+			// openapi.schema.url is fetched on a background goroutine (see
+			// controller/pkg/agentgateway/openapischema): the first call kicks
+			// off the fetch and returns a "will retry automatically" error
+			// immediately, exactly as krt's automatic re-reconcile would see it.
+			// Poll a few times, like krt eventually would, until it completes.
+			for i := 0; err != nil && strings.Contains(err.Error(), "will retry automatically") && i < 50; i++ {
+				time.Sleep(10 * time.Millisecond)
+				result, err = agentgatewaybackend.BuildAgwBackend(ctx, tt.backend)
+			}
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
@@ -806,6 +1034,18 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 func shortStringPtr(s string) *agentgateway.ShortString {
 	v := agentgateway.ShortString(s)
 	return &v
+}
+
+// openAPISchemaJSON marshals v (a literal schema string, or a map describing
+// a url/configMapRef source) into the raw JSON form expected by
+// McpOpenAPITarget.Schema.
+func openAPISchemaJSON(t *testing.T, v any) apiextensionsv1.JSON {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshaling openapi schema fixture: %v", err)
+	}
+	return apiextensionsv1.JSON{Raw: raw}
 }
 
 // Helper function to create a mock SecretIndex for testing

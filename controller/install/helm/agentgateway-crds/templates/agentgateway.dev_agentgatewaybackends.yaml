@@ -7489,6 +7489,2275 @@ spec:
                           minLength: 1
                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
+                        openapi:
+                          description: |-
+                            OpenAPI target. Exposes a REST API as MCP tools, generated from an
+                            OpenAPI schema.
+                          properties:
+                            backendRef:
+                              description: |-
+                                Namespace-local `Service` resource by name.
+                                When set, this replaces `host`; `port` must be set alongside it.
+                              properties:
+                                name:
+                                  default: ""
+                                  description: Name of the referent
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            host:
+                              description: |-
+                                Hostname and port of the backend REST API, e.g. `localhost:8080`. A
+                                bare hostname with no port (e.g. `localhost`) defaults to port 80. A
+                                scheme prefix (e.g. `https://`) is not accepted here; use `policies.tls`
+                                to connect over TLS.
+                              maxLength: 256
+                              minLength: 1
+                              type: string
+                            policies:
+                              description: |-
+                                Policies for communicating with the backend REST API.
+                                This field may only be used with host-based targets, not `backendRef`.
+                              properties:
+                                auth:
+                                  description: Settings for managing authentication
+                                    to the backend
+                                  properties:
+                                    aws:
+                                      description: |-
+                                        Explicit AWS authentication method for the backend.
+                                        When omitted, default AWS SDK credential discovery is used.
+                                      properties:
+                                        assumeRole:
+                                          description: |-
+                                            AWS STS AssumeRole settings to use before signing backend requests.
+                                            Ambient AWS credentials are used as the source credentials for STS.
+                                          properties:
+                                            roleArn:
+                                              description: AWS IAM role ARN to assume.
+                                              minLength: 1
+                                              pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                              type: string
+                                            sessionName:
+                                              description: |-
+                                                SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                              pattern: ^[\w+=,.@-]{2,64}$
+                                              type: string
+                                            sessionNameExpression:
+                                              description: |-
+                                                SessionNameExpression is a CEL expression evaluated against each request
+                                                to produce the session name (RoleSessionName), for example `jwt.sub` or
+                                                `request.headers["x-team"]`. If the expression does not produce a valid
+                                                session name at request time, the request is rejected.
+                                              maxLength: 16384
+                                              minLength: 1
+                                              type: string
+                                            tags:
+                                              description: |-
+                                                Session tags passed to STS AssumeRole for cost attribution in the AWS Cost
+                                                & Usage Report, once activated. STS allows at most 50 per role session.
+                                              items:
+                                                description: |-
+                                                  AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+                                                  attribution. Exactly one of value and expression must be set.
+                                                properties:
+                                                  expression:
+                                                    description: |-
+                                                      CEL expression evaluated against each request to produce the tag value,
+                                                      for example `jwt.sub` or `request.headers["x-app"]`. Requests with invalid
+                                                      tag values are rejected.
+                                                    maxLength: 16384
+                                                    minLength: 1
+                                                    type: string
+                                                  key:
+                                                    description: Key is the tag key.
+                                                    maxLength: 128
+                                                    minLength: 1
+                                                    type: string
+                                                  value:
+                                                    description: Value is a static
+                                                      tag value.
+                                                    maxLength: 256
+                                                    type: string
+                                                required:
+                                                - key
+                                                type: object
+                                                x-kubernetes-validations:
+                                                - message: exactly one of value or
+                                                    expression must be set
+                                                  rule: has(self.value) != has(self.expression)
+                                              maxItems: 50
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - key
+                                              x-kubernetes-list-type: map
+                                          required:
+                                          - roleArn
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: at most one of the fields in
+                                              [sessionName sessionNameExpression]
+                                              may be set
+                                            rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
+                                              <= 1'
+                                        region:
+                                          description: |-
+                                            AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                            target AWS service is in a different region than the gateway. If unset,
+                                            typed AWS backends may provide this automatically; otherwise the ambient
+                                            AWS region is used.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
+                                        secretRef:
+                                          description: |-
+                                            Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
+                                            The default Secret resolver expects `accessKey`, `secretKey`, and optional
+                                            `sessionToken` keys.
+                                          properties:
+                                            group:
+                                              description: API group of the referenced
+                                                credential; empty selects the core
+                                                API group
+                                              type: string
+                                            kind:
+                                              description: Kind of the referenced
+                                                credential; empty defaults to `Secret`
+                                              type: string
+                                            name:
+                                              description: Name of the referenced
+                                                credential
+                                              maxLength: 253
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - name
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                          x-kubernetes-validations:
+                                          - message: custom credential refs must set
+                                              both group and kind
+                                            rule: '(!has(self.group) || size(self.group)
+                                              == 0) ? (!has(self.kind) || size(self.kind)
+                                              == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                              && size(self.kind) > 0)'
+                                        serviceName:
+                                          description: |-
+                                            AWS SigV4 signing service name, for example
+                                            `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                            backends may provide this automatically.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: secretRef and assumeRole are mutually
+                                          exclusive
+                                        rule: '!(has(self.secretRef) && has(self.assumeRole))'
+                                    azure:
+                                      description: Azure authentication method for
+                                        the backend.
+                                      properties:
+                                        managedIdentity:
+                                          description: |-
+                                            Managed identity authentication settings. Leave this object empty to use
+                                            the system-assigned identity. To use a user-assigned identity, set one of
+                                            `clientId`, `objectId`, or `resourceId`.
+                                          properties:
+                                            clientId:
+                                              description: Client ID of the user-assigned
+                                                managed identity.
+                                              type: string
+                                            objectId:
+                                              description: Object ID of the user-assigned
+                                                managed identity.
+                                              type: string
+                                            resourceId:
+                                              description: Resource ID of the user-assigned
+                                                managed identity.
+                                              type: string
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: at most one of the fields in
+                                              [clientId objectId resourceId] may be
+                                              set
+                                            rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                              <= 1'
+                                        secretRef:
+                                          description: |-
+                                            Credential source for Azure credentials, defaulting to a Kubernetes
+                                            `Secret`. The default Secret resolver expects `clientID`, `tenantID`, and
+                                            `clientSecret` keys.
+                                          properties:
+                                            group:
+                                              description: API group of the referenced
+                                                credential; empty selects the core
+                                                API group
+                                              type: string
+                                            kind:
+                                              description: Kind of the referenced
+                                                credential; empty defaults to `Secret`
+                                              type: string
+                                            name:
+                                              description: Name of the referenced
+                                                credential
+                                              maxLength: 253
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - name
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                          x-kubernetes-validations:
+                                          - message: custom credential refs must set
+                                              both group and kind
+                                            rule: '(!has(self.group) || size(self.group)
+                                              == 0) ? (!has(self.kind) || size(self.kind)
+                                              == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                              && size(self.kind) > 0)'
+                                        workloadIdentity:
+                                          description: |-
+                                            Workload identity authentication settings. Uses the federated token and
+                                            Azure env vars projected into the data plane pod. Recommended on AKS with
+                                            Workload Identity enabled.
+                                          type: object
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: at most one of the fields in [secretRef
+                                          managedIdentity workloadIdentity] may be
+                                          set
+                                        rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                          <= 1'
+                                    credentials:
+                                      description: |-
+                                        Credentials is a list of additional credentials to inject on the
+                                        backend request. Each entry resolves a Secret key and writes its value
+                                        to the entry's location. `credentials` is independent of the primary
+                                        `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+                                        alongside it.
+                                      items:
+                                        description: |-
+                                          BackendAuthCredential specifies one additional credential to inject on the
+                                          backend request.
+                                        properties:
+                                          location:
+                                            description: Where the credential is inserted
+                                              on the backend request.
+                                            properties:
+                                              cookie:
+                                                properties:
+                                                  name:
+                                                    maxLength: 256
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              header:
+                                                properties:
+                                                  name:
+                                                    description: Name of an HTTP header.
+                                                      HTTP/2 pseudo-headers (names
+                                                      beginning with `:`) are not
+                                                      supported
+                                                    maxLength: 256
+                                                    minLength: 1
+                                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                    type: string
+                                                  prefix:
+                                                    maxLength: 256
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                              queryParameter:
+                                                properties:
+                                                  name:
+                                                    maxLength: 256
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
+                                                type: object
+                                            type: object
+                                            x-kubernetes-validations:
+                                            - message: exactly one of the fields in
+                                                [header queryParameter cookie] must
+                                                be set
+                                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                == 1'
+                                          secretRef:
+                                            description: |-
+                                              SecretRef references a Kubernetes Secret holding the credential value, and
+                                              optionally overrides the key read from it. Defaults to `Authorization`,
+                                              matching the key convention used by the top-level `secretRef`.
+                                            properties:
+                                              group:
+                                                description: API group of the referenced
+                                                  credential; empty selects the core
+                                                  API group
+                                                type: string
+                                              key:
+                                                description: Key in the referenced
+                                                  Secret. If omitted, a location-specific
+                                                  default is used
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                              kind:
+                                                description: Kind of the referenced
+                                                  credential; empty defaults to `Secret`
+                                                type: string
+                                              name:
+                                                description: Name of the referenced
+                                                  credential
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                            x-kubernetes-map-type: atomic
+                                            x-kubernetes-validations:
+                                            - message: custom credential refs must
+                                                set both group and kind
+                                              rule: '(!has(self.group) || size(self.group)
+                                                == 0) ? (!has(self.kind) || size(self.kind)
+                                                == 0 || self.kind == ''Secret'') :
+                                                (has(self.kind) && size(self.kind)
+                                                > 0)'
+                                        required:
+                                        - location
+                                        - secretRef
+                                        type: object
+                                      maxItems: 8
+                                      minItems: 1
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    crossAppAccess:
+                                      description: Cross App Access (Identity Assertion
+                                        / ID-JAG) authentication.
+                                      properties:
+                                        accessTokenScopes:
+                                          description: |-
+                                            Scopes requested when exchanging the ID-JAG for an access token.
+                                            When omitted, defaults to Scopes. Set to an empty list to omit scope.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          type: array
+                                        audience:
+                                          description: Identifier of the resource
+                                            authorization server. The issued ID-JAG
+                                            is bound to this audience.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
+                                        cache:
+                                          description: Response cache configuration.
+                                          properties:
+                                            inMemory:
+                                              properties:
+                                                defaultTtl:
+                                                  description: TTL used when the token
+                                                    endpoint omits expires_in. Default
+                                                    300s.
+                                                  maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                                  type: string
+                                                  x-kubernetes-validations:
+                                                  - message: defaultTtl must be at
+                                                      least 1 second
+                                                    rule: duration(self) >= duration('1s')
+                                                maxEntries:
+                                                  description: Default 8192; 0 disables
+                                                    the cache.
+                                                  format: int32
+                                                  type: integer
+                                              type: object
+                                          type: object
+                                        identityProvider:
+                                          description: User identity provider authorization
+                                            server, used for the RFC 8693 ID-JAG exchange.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                `backendRef` selects a backend for this policy.
+                                                Mutually exclusive with `url`.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: Group of the referent,
+                                                    for example `gateway.networking.k8s.io`.
+                                                    Empty selects the core API group
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: Kubernetes resource
+                                                    kind of the referent, for example
+                                                    `Service`. Defaults to `Service`
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: Namespace of the referent.
+                                                    Defaults to the local namespace.
+                                                    A cross-namespace reference requires
+                                                    a ReferenceGrant in the referent
+                                                    namespace
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: Destination port number.
+                                                    Required when the referent is
+                                                    a Kubernetes `Service`
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                            clientAuth:
+                                              description: Client authentication for
+                                                the token endpoint.
+                                              properties:
+                                                clientId:
+                                                  description: Client ID sent to the
+                                                    token endpoint.
+                                                  minLength: 1
+                                                  type: string
+                                                method:
+                                                  description: Client authentication
+                                                    method. Defaults to ClientSecretBasic.
+                                                  enum:
+                                                  - ClientSecretBasic
+                                                  - ClientSecretPost
+                                                  - PrivateKeyJwt
+                                                  type: string
+                                                privateKeyJwt:
+                                                  description: Client assertion settings.
+                                                    Required when method is PrivateKeyJwt.
+                                                  properties:
+                                                    alg:
+                                                      description: JWS signing algorithm.
+                                                        Defaults to RS256.
+                                                      enum:
+                                                      - ES256
+                                                      - ES384
+                                                      - PS256
+                                                      - RS256
+                                                      - RS384
+                                                      - RS512
+                                                      type: string
+                                                    assertionAudience:
+                                                      description: Audience for the
+                                                        client assertion, typically
+                                                        the token endpoint URL.
+                                                      minLength: 1
+                                                      type: string
+                                                    certificateHeader:
+                                                      description: JWS certificate
+                                                        header. Required when certificateRef
+                                                        is set.
+                                                      enum:
+                                                      - x5c
+                                                      - x5t#S256
+                                                      type: string
+                                                    certificateRef:
+                                                      description: |-
+                                                        PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                                        leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                                        but the token endpoint will reject the assertions. Required when
+                                                        certificateHeader is set. The key defaults to `certificate`.
+                                                      properties:
+                                                        group:
+                                                          description: API group of
+                                                            the referenced credential;
+                                                            empty selects the core
+                                                            API group
+                                                          type: string
+                                                        key:
+                                                          description: Key in the
+                                                            referenced Secret. If
+                                                            omitted, a location-specific
+                                                            default is used
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        kind:
+                                                          description: Kind of the
+                                                            referenced credential;
+                                                            empty defaults to `Secret`
+                                                          type: string
+                                                        name:
+                                                          description: Name of the
+                                                            referenced credential
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-map-type: atomic
+                                                      x-kubernetes-validations:
+                                                      - message: custom credential
+                                                          refs must set both group
+                                                          and kind
+                                                        rule: '(!has(self.group) ||
+                                                          size(self.group) == 0) ?
+                                                          (!has(self.kind) || size(self.kind)
+                                                          == 0 || self.kind == ''Secret'')
+                                                          : (has(self.kind) && size(self.kind)
+                                                          > 0)'
+                                                    kid:
+                                                      description: Optional JWS key
+                                                        ID header.
+                                                      type: string
+                                                    signingKeyRef:
+                                                      description: PEM-encoded RSA
+                                                        or EC private key; key defaults
+                                                        to `signingKey`.
+                                                      properties:
+                                                        group:
+                                                          description: API group of
+                                                            the referenced credential;
+                                                            empty selects the core
+                                                            API group
+                                                          type: string
+                                                        key:
+                                                          description: Key in the
+                                                            referenced Secret. If
+                                                            omitted, a location-specific
+                                                            default is used
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        kind:
+                                                          description: Kind of the
+                                                            referenced credential;
+                                                            empty defaults to `Secret`
+                                                          type: string
+                                                        name:
+                                                          description: Name of the
+                                                            referenced credential
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-map-type: atomic
+                                                      x-kubernetes-validations:
+                                                      - message: custom credential
+                                                          refs must set both group
+                                                          and kind
+                                                        rule: '(!has(self.group) ||
+                                                          size(self.group) == 0) ?
+                                                          (!has(self.kind) || size(self.kind)
+                                                          == 0 || self.kind == ''Secret'')
+                                                          : (has(self.kind) && size(self.kind)
+                                                          > 0)'
+                                                  required:
+                                                  - assertionAudience
+                                                  - signingKeyRef
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: certificateRef and certificateHeader
+                                                      must be set together
+                                                    rule: has(self.certificateRef)
+                                                      == has(self.certificateHeader)
+                                                secretRef:
+                                                  description: |-
+                                                    Secret providing the `clientSecret` key by default; override via
+                                                    `secretRef.key`. When omitted, client_id is sent without a secret, which
+                                                    is only valid with ClientSecretPost.
+                                                  properties:
+                                                    group:
+                                                      description: API group of the
+                                                        referenced credential; empty
+                                                        selects the core API group
+                                                      type: string
+                                                    key:
+                                                      description: Key in the referenced
+                                                        Secret. If omitted, a location-specific
+                                                        default is used
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential; empty defaults
+                                                        to `Secret`
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
+                                              required:
+                                              - clientId
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: privateKeyJwt settings require
+                                                  method PrivateKeyJwt
+                                                rule: has(self.privateKeyJwt) == (has(self.method)
+                                                  && self.method == 'PrivateKeyJwt')
+                                              - message: secretRef is not valid with
+                                                  method PrivateKeyJwt
+                                                rule: '!has(self.secretRef) || !has(self.method)
+                                                  || self.method != ''PrivateKeyJwt'''
+                                              - message: clientAuth without secretRef
+                                                  requires method ClientSecretPost
+                                                  or PrivateKeyJwt
+                                                rule: has(self.secretRef) || has(self.privateKeyJwt)
+                                                  || (has(self.method) && self.method
+                                                  == 'ClientSecretPost')
+                                            path:
+                                              description: Token endpoint path; defaults
+                                                to "/". Must start with "/".
+                                              pattern: ^/
+                                              type: string
+                                            url:
+                                              description: |-
+                                                `url` directly specifies the HTTP(S) endpoint for this policy.
+                                                When the scheme is `https`, backend TLS is enabled automatically.
+                                                Mutually exclusive with `backendRef`.
+                                                URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                                will not apply Service policies or load balancing.
+                                              maxLength: 1024
+                                              minLength: 1
+                                              pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                              type: string
+                                          required:
+                                          - clientAuth
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: path may not be set when url
+                                              is set
+                                            rule: 'has(self.url) ? !has(self.path)
+                                              : true'
+                                          - message: exactly one of the fields in
+                                              [backendRef url] must be set
+                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                              == 1'
+                                        resourceAuthorizationServer:
+                                          description: Resource authorization server,
+                                            used for the RFC 7523 jwt-bearer exchange.
+                                          properties:
+                                            backendRef:
+                                              description: |-
+                                                `backendRef` selects a backend for this policy.
+                                                Mutually exclusive with `url`.
+                                              properties:
+                                                group:
+                                                  default: ""
+                                                  description: Group of the referent,
+                                                    for example `gateway.networking.k8s.io`.
+                                                    Empty selects the core API group
+                                                  maxLength: 253
+                                                  pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                  type: string
+                                                kind:
+                                                  default: Service
+                                                  description: Kubernetes resource
+                                                    kind of the referent, for example
+                                                    `Service`. Defaults to `Service`
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                  type: string
+                                                name:
+                                                  description: Name is the name of
+                                                    the referent.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                namespace:
+                                                  description: Namespace of the referent.
+                                                    Defaults to the local namespace.
+                                                    A cross-namespace reference requires
+                                                    a ReferenceGrant in the referent
+                                                    namespace
+                                                  maxLength: 63
+                                                  minLength: 1
+                                                  pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                  type: string
+                                                port:
+                                                  description: Destination port number.
+                                                    Required when the referent is
+                                                    a Kubernetes `Service`
+                                                  format: int32
+                                                  maximum: 65535
+                                                  minimum: 1
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: Must have port for Service
+                                                  reference
+                                                rule: '(size(self.group) == 0 && self.kind
+                                                  == ''Service'') ? has(self.port)
+                                                  : true'
+                                            clientAuth:
+                                              description: Client authentication for
+                                                the token endpoint.
+                                              properties:
+                                                clientId:
+                                                  description: Client ID sent to the
+                                                    token endpoint.
+                                                  minLength: 1
+                                                  type: string
+                                                method:
+                                                  description: Client authentication
+                                                    method. Defaults to ClientSecretBasic.
+                                                  enum:
+                                                  - ClientSecretBasic
+                                                  - ClientSecretPost
+                                                  - PrivateKeyJwt
+                                                  type: string
+                                                privateKeyJwt:
+                                                  description: Client assertion settings.
+                                                    Required when method is PrivateKeyJwt.
+                                                  properties:
+                                                    alg:
+                                                      description: JWS signing algorithm.
+                                                        Defaults to RS256.
+                                                      enum:
+                                                      - ES256
+                                                      - ES384
+                                                      - PS256
+                                                      - RS256
+                                                      - RS384
+                                                      - RS512
+                                                      type: string
+                                                    assertionAudience:
+                                                      description: Audience for the
+                                                        client assertion, typically
+                                                        the token endpoint URL.
+                                                      minLength: 1
+                                                      type: string
+                                                    certificateHeader:
+                                                      description: JWS certificate
+                                                        header. Required when certificateRef
+                                                        is set.
+                                                      enum:
+                                                      - x5c
+                                                      - x5t#S256
+                                                      type: string
+                                                    certificateRef:
+                                                      description: |-
+                                                        PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                                        leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                                        but the token endpoint will reject the assertions. Required when
+                                                        certificateHeader is set. The key defaults to `certificate`.
+                                                      properties:
+                                                        group:
+                                                          description: API group of
+                                                            the referenced credential;
+                                                            empty selects the core
+                                                            API group
+                                                          type: string
+                                                        key:
+                                                          description: Key in the
+                                                            referenced Secret. If
+                                                            omitted, a location-specific
+                                                            default is used
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        kind:
+                                                          description: Kind of the
+                                                            referenced credential;
+                                                            empty defaults to `Secret`
+                                                          type: string
+                                                        name:
+                                                          description: Name of the
+                                                            referenced credential
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-map-type: atomic
+                                                      x-kubernetes-validations:
+                                                      - message: custom credential
+                                                          refs must set both group
+                                                          and kind
+                                                        rule: '(!has(self.group) ||
+                                                          size(self.group) == 0) ?
+                                                          (!has(self.kind) || size(self.kind)
+                                                          == 0 || self.kind == ''Secret'')
+                                                          : (has(self.kind) && size(self.kind)
+                                                          > 0)'
+                                                    kid:
+                                                      description: Optional JWS key
+                                                        ID header.
+                                                      type: string
+                                                    signingKeyRef:
+                                                      description: PEM-encoded RSA
+                                                        or EC private key; key defaults
+                                                        to `signingKey`.
+                                                      properties:
+                                                        group:
+                                                          description: API group of
+                                                            the referenced credential;
+                                                            empty selects the core
+                                                            API group
+                                                          type: string
+                                                        key:
+                                                          description: Key in the
+                                                            referenced Secret. If
+                                                            omitted, a location-specific
+                                                            default is used
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        kind:
+                                                          description: Kind of the
+                                                            referenced credential;
+                                                            empty defaults to `Secret`
+                                                          type: string
+                                                        name:
+                                                          description: Name of the
+                                                            referenced credential
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-map-type: atomic
+                                                      x-kubernetes-validations:
+                                                      - message: custom credential
+                                                          refs must set both group
+                                                          and kind
+                                                        rule: '(!has(self.group) ||
+                                                          size(self.group) == 0) ?
+                                                          (!has(self.kind) || size(self.kind)
+                                                          == 0 || self.kind == ''Secret'')
+                                                          : (has(self.kind) && size(self.kind)
+                                                          > 0)'
+                                                  required:
+                                                  - assertionAudience
+                                                  - signingKeyRef
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: certificateRef and certificateHeader
+                                                      must be set together
+                                                    rule: has(self.certificateRef)
+                                                      == has(self.certificateHeader)
+                                                secretRef:
+                                                  description: |-
+                                                    Secret providing the `clientSecret` key by default; override via
+                                                    `secretRef.key`. When omitted, client_id is sent without a secret, which
+                                                    is only valid with ClientSecretPost.
+                                                  properties:
+                                                    group:
+                                                      description: API group of the
+                                                        referenced credential; empty
+                                                        selects the core API group
+                                                      type: string
+                                                    key:
+                                                      description: Key in the referenced
+                                                        Secret. If omitted, a location-specific
+                                                        default is used
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential; empty defaults
+                                                        to `Secret`
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
+                                              required:
+                                              - clientId
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: privateKeyJwt settings require
+                                                  method PrivateKeyJwt
+                                                rule: has(self.privateKeyJwt) == (has(self.method)
+                                                  && self.method == 'PrivateKeyJwt')
+                                              - message: secretRef is not valid with
+                                                  method PrivateKeyJwt
+                                                rule: '!has(self.secretRef) || !has(self.method)
+                                                  || self.method != ''PrivateKeyJwt'''
+                                              - message: clientAuth without secretRef
+                                                  requires method ClientSecretPost
+                                                  or PrivateKeyJwt
+                                                rule: has(self.secretRef) || has(self.privateKeyJwt)
+                                                  || (has(self.method) && self.method
+                                                  == 'ClientSecretPost')
+                                            path:
+                                              description: Token endpoint path; defaults
+                                                to "/". Must start with "/".
+                                              pattern: ^/
+                                              type: string
+                                            url:
+                                              description: |-
+                                                `url` directly specifies the HTTP(S) endpoint for this policy.
+                                                When the scheme is `https`, backend TLS is enabled automatically.
+                                                Mutually exclusive with `backendRef`.
+                                                URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                                will not apply Service policies or load balancing.
+                                              maxLength: 1024
+                                              minLength: 1
+                                              pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                              type: string
+                                          required:
+                                          - clientAuth
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: path may not be set when url
+                                              is set
+                                            rule: 'has(self.url) ? !has(self.path)
+                                              : true'
+                                          - message: exactly one of the fields in
+                                              [backendRef url] must be set
+                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                              == 1'
+                                        resources:
+                                          description: Resources sent to the token
+                                            endpoint.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
+                                        scopes:
+                                          description: Scopes requested when obtaining
+                                            the ID-JAG from the identity provider.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
+                                        subjectToken:
+                                          description: |-
+                                            Subject token sent to the identity provider. Defaults to an OpenID Connect
+                                            ID token read from the Authorization Bearer header.
+                                          properties:
+                                            source:
+                                              description: Where to read the subject
+                                                token. Defaults to the Authorization
+                                                Bearer header.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                expression:
+                                                  description: CEL expression that
+                                                    extracts the credential from the
+                                                    request.
+                                                  maxLength: 16384
+                                                  minLength: 1
+                                                  type: string
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: Name of an HTTP
+                                                        header. HTTP/2 pseudo-headers
+                                                        (names beginning with `:`)
+                                                        are not supported
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie
+                                                  expression] must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                                                  == 1'
+                                            tokenType:
+                                              description: OAuth RFC 8693 subject
+                                                token type. Defaults to IdToken
+                                              type: string
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: tokenType IdJag is not supported
+                                              by crossAppAccess
+                                            rule: '!has(self.tokenType) || (self.tokenType
+                                              != ''IdJag'' && self.tokenType != ''urn:ietf:params:oauth:token-type:id-jag'')'
+                                      required:
+                                      - audience
+                                      - identityProvider
+                                      - resourceAuthorizationServer
+                                      type: object
+                                    gcp:
+                                      description: |-
+                                        Google authentication method for the backend.
+                                        When omitted, default Google credential discovery is used.
+                                      properties:
+                                        audience:
+                                          description: |-
+                                            Explicit `aud` value for the ID token. Only
+                                            valid with `IdToken` type. If not set, the `aud` is automatically
+                                            derived from the backend hostname.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
+                                        secretRef:
+                                          description: |-
+                                            Credential source for ADC-compatible Google credential JSON, defaulting to
+                                            a Kubernetes `Secret`. By default, the value is read from
+                                            `credentials.json`; set `secretRef.key` to override it. When omitted,
+                                            ambient credentials are used.
+                                          properties:
+                                            group:
+                                              description: API group of the referenced
+                                                credential; empty selects the core
+                                                API group
+                                              type: string
+                                            key:
+                                              description: Key in the referenced Secret.
+                                                If omitted, a location-specific default
+                                                is used
+                                              maxLength: 253
+                                              minLength: 1
+                                              type: string
+                                            kind:
+                                              description: Kind of the referenced
+                                                credential; empty defaults to `Secret`
+                                              type: string
+                                            name:
+                                              description: Name of the referenced
+                                                credential
+                                              maxLength: 253
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - name
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                          x-kubernetes-validations:
+                                          - message: custom credential refs must set
+                                              both group and kind
+                                            rule: '(!has(self.group) || size(self.group)
+                                              == 0) ? (!has(self.kind) || size(self.kind)
+                                              == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                              && size(self.kind) > 0)'
+                                        type:
+                                          description: |-
+                                            The type of token to generate. To authenticate to GCP services,
+                                            generally an `AccessToken` is used. To authenticate to Cloud Run, an
+                                            `IdToken` is used.
+                                          enum:
+                                          - AccessToken
+                                          - IdToken
+                                          type: string
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: audience is only valid with IdToken
+                                        rule: 'has(self.audience) ? self.type == ''IdToken''
+                                          : true'
+                                    jwtSign:
+                                      description: |-
+                                        Signs a short-lived JWT with a private key on each request and sends it
+                                        to the backend, for upstreams that require per-request keypair JWTs
+                                        (e.g. the Snowflake SQL API) rather than a static credential.
+                                      properties:
+                                        alg:
+                                          description: JWS signing algorithm. Defaults
+                                            to RS256.
+                                          enum:
+                                          - ES256
+                                          - ES384
+                                          - PS256
+                                          - RS256
+                                          - RS384
+                                          - RS512
+                                          type: string
+                                        claims:
+                                          additionalProperties:
+                                            x-kubernetes-preserve-unknown-fields: true
+                                          description: |-
+                                            Static claims added to every token (e.g. iss, sub, aud). Values may be
+                                            any JSON value (e.g. a string, number, bool, or array). iat, exp, and
+                                            nbf are reserved for the signer and cannot be configured here; the
+                                            controller rejects them at translation time.
+                                          type: object
+                                        kid:
+                                          description: Optional JWS key ID header.
+                                          type: string
+                                        location:
+                                          description: |-
+                                            Where the signed token is written on the backend request.
+                                            Defaults to the Authorization header with a "Bearer " prefix.
+                                          properties:
+                                            cookie:
+                                              properties:
+                                                name:
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                            header:
+                                              properties:
+                                                name:
+                                                  description: Name of an HTTP header.
+                                                    HTTP/2 pseudo-headers (names beginning
+                                                    with `:`) are not supported
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                  type: string
+                                                prefix:
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                            queryParameter:
+                                              properties:
+                                                name:
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: exactly one of the fields in
+                                              [header queryParameter cookie] must
+                                              be set
+                                            rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                              == 1'
+                                        signingKeyRef:
+                                          description: Secret providing the `signingKey`
+                                            key with a PEM-encoded RSA or EC private
+                                            key.
+                                          properties:
+                                            group:
+                                              description: API group of the referenced
+                                                credential; empty selects the core
+                                                API group
+                                              type: string
+                                            kind:
+                                              description: Kind of the referenced
+                                                credential; empty defaults to `Secret`
+                                              type: string
+                                            name:
+                                              description: Name of the referenced
+                                                credential
+                                              maxLength: 253
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - name
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                          x-kubernetes-validations:
+                                          - message: custom credential refs must set
+                                              both group and kind
+                                            rule: '(!has(self.group) || size(self.group)
+                                              == 0) ? (!has(self.kind) || size(self.kind)
+                                              == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                              && size(self.kind) > 0)'
+                                        ttl:
+                                          description: Token lifetime used for exp.
+                                            Defaults to 300s.
+                                          maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                          type: string
+                                          x-kubernetes-validations:
+                                          - message: ttl must be at least 1 second
+                                            rule: duration(self) >= duration('1s')
+                                      required:
+                                      - signingKeyRef
+                                      type: object
+                                    key:
+                                      description: |-
+                                        Inline key to use as the value of the
+                                        `Authorization` header. This option is the least secure; usage of a
+                                        `Secret` is preferred.
+                                      maxLength: 2048
+                                      type: string
+                                    location:
+                                      description: |-
+                                        Where backend credentials are inserted.
+                                        If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                                        This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
+                                      properties:
+                                        cookie:
+                                          properties:
+                                            name:
+                                              maxLength: 256
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - name
+                                          type: object
+                                        header:
+                                          properties:
+                                            name:
+                                              description: Name of an HTTP header.
+                                                HTTP/2 pseudo-headers (names beginning
+                                                with `:`) are not supported
+                                              maxLength: 256
+                                              minLength: 1
+                                              pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                              type: string
+                                            prefix:
+                                              maxLength: 256
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - name
+                                          type: object
+                                        queryParameter:
+                                          properties:
+                                            name:
+                                              maxLength: 256
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - name
+                                          type: object
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: exactly one of the fields in [header
+                                          queryParameter cookie] must be set
+                                        rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                          == 1'
+                                    oauthTokenExchange:
+                                      description: OAuth 2.0 token exchange (RFC 8693)
+                                        / jwt-bearer (RFC 7523) authentication.
+                                      properties:
+                                        actorToken:
+                                          description: RFC 8693 delegation actor token.
+                                            TokenExchange grant only.
+                                          properties:
+                                            mayAct:
+                                              description: may_act claim validation
+                                                mode. When omitted, may_act is not
+                                                enforced.
+                                              enum:
+                                              - Required
+                                              type: string
+                                            source:
+                                              description: Where to read the actor
+                                                token. Actor tokens have no default
+                                                source.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                expression:
+                                                  description: CEL expression that
+                                                    extracts the credential from the
+                                                    request.
+                                                  maxLength: 16384
+                                                  minLength: 1
+                                                  type: string
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: Name of an HTTP
+                                                        header. HTTP/2 pseudo-headers
+                                                        (names beginning with `:`)
+                                                        are not supported
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie
+                                                  expression] must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                                                  == 1'
+                                            tokenType:
+                                              description: |-
+                                                OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                are supported for actor tokens.
+                                              type: string
+                                          required:
+                                          - source
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: mayAct Required requires tokenType
+                                              Jwt
+                                            rule: '!has(self.mayAct) || self.mayAct
+                                              != ''Required'' || (has(self.tokenType)
+                                              && self.tokenType == ''Jwt'')'
+                                        additionalParams:
+                                          additionalProperties:
+                                            description: A Common Expression Language
+                                              (CEL) expression.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
+                                          description: Extra form params; values are
+                                            CEL expressions over the incoming request.
+                                          maxProperties: 64
+                                          type: object
+                                        audiences:
+                                          description: Audiences sent to the token
+                                            endpoint.
+                                          items:
+                                            maxLength: 256
+                                            minLength: 1
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
+                                        backendRef:
+                                          description: |-
+                                            `backendRef` selects a backend for this policy.
+                                            Mutually exclusive with `url`.
+                                          properties:
+                                            group:
+                                              default: ""
+                                              description: Group of the referent,
+                                                for example `gateway.networking.k8s.io`.
+                                                Empty selects the core API group
+                                              maxLength: 253
+                                              pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                              type: string
+                                            kind:
+                                              default: Service
+                                              description: Kubernetes resource kind
+                                                of the referent, for example `Service`.
+                                                Defaults to `Service`
+                                              maxLength: 63
+                                              minLength: 1
+                                              pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                              type: string
+                                            name:
+                                              description: Name is the name of the
+                                                referent.
+                                              maxLength: 253
+                                              minLength: 1
+                                              type: string
+                                            namespace:
+                                              description: Namespace of the referent.
+                                                Defaults to the local namespace. A
+                                                cross-namespace reference requires
+                                                a ReferenceGrant in the referent namespace
+                                              maxLength: 63
+                                              minLength: 1
+                                              pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                              type: string
+                                            port:
+                                              description: Destination port number.
+                                                Required when the referent is a Kubernetes
+                                                `Service`
+                                              format: int32
+                                              maximum: 65535
+                                              minimum: 1
+                                              type: integer
+                                          required:
+                                          - name
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: Must have port for Service reference
+                                            rule: '(size(self.group) == 0 && self.kind
+                                              == ''Service'') ? has(self.port) : true'
+                                        cache:
+                                          description: Response cache configuration.
+                                          properties:
+                                            inMemory:
+                                              properties:
+                                                defaultTtl:
+                                                  description: TTL used when the token
+                                                    endpoint omits expires_in. Default
+                                                    300s.
+                                                  maxLength: 32
+                                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                                  type: string
+                                                  x-kubernetes-validations:
+                                                  - message: defaultTtl must be at
+                                                      least 1 second
+                                                    rule: duration(self) >= duration('1s')
+                                                maxEntries:
+                                                  description: Default 8192; 0 disables
+                                                    the cache.
+                                                  format: int32
+                                                  type: integer
+                                              type: object
+                                          type: object
+                                        clientAuth:
+                                          description: Client authentication for the
+                                            token endpoint. When unset, none is sent.
+                                          properties:
+                                            clientId:
+                                              description: Client ID sent to the token
+                                                endpoint.
+                                              minLength: 1
+                                              type: string
+                                            method:
+                                              description: Client authentication method.
+                                                Defaults to ClientSecretBasic.
+                                              enum:
+                                              - ClientSecretBasic
+                                              - ClientSecretPost
+                                              - PrivateKeyJwt
+                                              type: string
+                                            privateKeyJwt:
+                                              description: Client assertion settings.
+                                                Required when method is PrivateKeyJwt.
+                                              properties:
+                                                alg:
+                                                  description: JWS signing algorithm.
+                                                    Defaults to RS256.
+                                                  enum:
+                                                  - ES256
+                                                  - ES384
+                                                  - PS256
+                                                  - RS256
+                                                  - RS384
+                                                  - RS512
+                                                  type: string
+                                                assertionAudience:
+                                                  description: Audience for the client
+                                                    assertion, typically the token
+                                                    endpoint URL.
+                                                  minLength: 1
+                                                  type: string
+                                                certificateHeader:
+                                                  description: JWS certificate header.
+                                                    Required when certificateRef is
+                                                    set.
+                                                  enum:
+                                                  - x5c
+                                                  - x5t#S256
+                                                  type: string
+                                                certificateRef:
+                                                  description: |-
+                                                    PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                                    leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                                    but the token endpoint will reject the assertions. Required when
+                                                    certificateHeader is set. The key defaults to `certificate`.
+                                                  properties:
+                                                    group:
+                                                      description: API group of the
+                                                        referenced credential; empty
+                                                        selects the core API group
+                                                      type: string
+                                                    key:
+                                                      description: Key in the referenced
+                                                        Secret. If omitted, a location-specific
+                                                        default is used
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential; empty defaults
+                                                        to `Secret`
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
+                                                kid:
+                                                  description: Optional JWS key ID
+                                                    header.
+                                                  type: string
+                                                signingKeyRef:
+                                                  description: PEM-encoded RSA or
+                                                    EC private key; key defaults to
+                                                    `signingKey`.
+                                                  properties:
+                                                    group:
+                                                      description: API group of the
+                                                        referenced credential; empty
+                                                        selects the core API group
+                                                      type: string
+                                                    key:
+                                                      description: Key in the referenced
+                                                        Secret. If omitted, a location-specific
+                                                        default is used
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential; empty defaults
+                                                        to `Secret`
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
+                                              required:
+                                              - assertionAudience
+                                              - signingKeyRef
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: certificateRef and certificateHeader
+                                                  must be set together
+                                                rule: has(self.certificateRef) ==
+                                                  has(self.certificateHeader)
+                                            secretRef:
+                                              description: |-
+                                                Secret providing the `clientSecret` key by default; override via
+                                                `secretRef.key`. When omitted, client_id is sent without a secret, which
+                                                is only valid with ClientSecretPost.
+                                              properties:
+                                                group:
+                                                  description: API group of the referenced
+                                                    credential; empty selects the
+                                                    core API group
+                                                  type: string
+                                                key:
+                                                  description: Key in the referenced
+                                                    Secret. If omitted, a location-specific
+                                                    default is used
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential; empty defaults to
+                                                    `Secret`
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
+                                          required:
+                                          - clientId
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: privateKeyJwt settings require
+                                              method PrivateKeyJwt
+                                            rule: has(self.privateKeyJwt) == (has(self.method)
+                                              && self.method == 'PrivateKeyJwt')
+                                          - message: secretRef is not valid with method
+                                              PrivateKeyJwt
+                                            rule: '!has(self.secretRef) || !has(self.method)
+                                              || self.method != ''PrivateKeyJwt'''
+                                          - message: clientAuth without secretRef
+                                              requires method ClientSecretPost or
+                                              PrivateKeyJwt
+                                            rule: has(self.secretRef) || has(self.privateKeyJwt)
+                                              || (has(self.method) && self.method
+                                              == 'ClientSecretPost')
+                                        grantType:
+                                          description: RFC followed by the request.
+                                            Defaults to TokenExchange (RFC 8693).
+                                          enum:
+                                          - JwtBearer
+                                          - TokenExchange
+                                          type: string
+                                        location:
+                                          description: |-
+                                            Where the exchanged token is written to the backend request.
+                                            Defaults to Authorization: Bearer.
+                                          properties:
+                                            cookie:
+                                              properties:
+                                                name:
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                            header:
+                                              properties:
+                                                name:
+                                                  description: Name of an HTTP header.
+                                                    HTTP/2 pseudo-headers (names beginning
+                                                    with `:`) are not supported
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                  type: string
+                                                prefix:
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                            queryParameter:
+                                              properties:
+                                                name:
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: exactly one of the fields in
+                                              [header queryParameter cookie] must
+                                              be set
+                                            rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                              == 1'
+                                        path:
+                                          description: Token endpoint path; defaults
+                                            to "/". Must start with "/".
+                                          pattern: ^/
+                                          type: string
+                                        requestedTokenType:
+                                          description: |-
+                                            RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+                                            built-in values may be requested; custom URIs are not supported here.
+                                          enum:
+                                          - AccessToken
+                                          - Jwt
+                                          - IdToken
+                                          - IdJag
+                                          type: string
+                                        resources:
+                                          description: Resources sent to the token
+                                            endpoint.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
+                                        scopes:
+                                          description: Scopes sent to the token endpoint.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
+                                        subjectToken:
+                                          description: |-
+                                            Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+                                            The token type may be a built-in value or a custom absolute URI for providers
+                                            that support custom token exchange profiles.
+                                          properties:
+                                            source:
+                                              description: Where to read the token.
+                                                CEL `expression` variant is permitted.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                expression:
+                                                  description: CEL expression that
+                                                    extracts the credential from the
+                                                    request.
+                                                  maxLength: 16384
+                                                  minLength: 1
+                                                  type: string
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: Name of an HTTP
+                                                        header. HTTP/2 pseudo-headers
+                                                        (names beginning with `:`)
+                                                        are not supported
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie
+                                                  expression] must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                                                  == 1'
+                                            tokenType:
+                                              description: |-
+                                                OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                are supported for subject tokens.
+                                              type: string
+                                          type: object
+                                        url:
+                                          description: |-
+                                            `url` directly specifies the HTTP(S) endpoint for this policy.
+                                            When the scheme is `https`, backend TLS is enabled automatically.
+                                            Mutually exclusive with `backendRef`.
+                                            URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                            will not apply Service policies or load balancing.
+                                          maxLength: 1024
+                                          minLength: 1
+                                          pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                          type: string
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: actorToken is only valid with TokenExchange
+                                          grantType
+                                        rule: '!(has(self.actorToken) && has(self.grantType)
+                                          && self.grantType == ''JwtBearer'')'
+                                      - message: requestedTokenType is only valid
+                                          with TokenExchange grantType
+                                        rule: '!(has(self.requestedTokenType) && has(self.grantType)
+                                          && self.grantType == ''JwtBearer'')'
+                                      - message: requestedTokenType IdJag is only
+                                          supported by crossAppAccess
+                                        rule: '!has(self.requestedTokenType) || self.requestedTokenType
+                                          != ''IdJag'''
+                                      - message: path may not be set when url is set
+                                        rule: 'has(self.url) ? !has(self.path) : true'
+                                      - message: exactly one of the fields in [backendRef
+                                          url] must be set
+                                        rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                          == 1'
+                                    passthrough:
+                                      description: |-
+                                        Reuses a client token already validated by another policy. Those policies
+                                        may strip client credentials; passthrough adds the original token back to
+                                        the backend request. Without client auth policies, this has no effect.
+                                      type: object
+                                    secretRef:
+                                      description: |-
+                                        Credential source for the authorization value, defaulting to a Kubernetes
+                                        `Secret`. By default, the value is read from the `Authorization` key; set
+                                        `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+                                        the default `Authorization` key.
+                                      properties:
+                                        group:
+                                          description: API group of the referenced
+                                            credential; empty selects the core API
+                                            group
+                                          type: string
+                                        key:
+                                          description: Key in the referenced Secret.
+                                            If omitted, a location-specific default
+                                            is used
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        kind:
+                                          description: Kind of the referenced credential;
+                                            empty defaults to `Secret`
+                                          type: string
+                                        name:
+                                          description: Name of the referenced credential
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                      x-kubernetes-validations:
+                                      - message: custom credential refs must set both
+                                          group and kind
+                                        rule: '(!has(self.group) || size(self.group)
+                                          == 0) ? (!has(self.kind) || size(self.kind)
+                                          == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                          && size(self.kind) > 0)'
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: must specify credentials, or at most
+                                      one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess/jwtSign
+                                      (credentials may be combined with a primary
+                                      auth kind)
+                                    rule: has(self.credentials) || has(self.key) ||
+                                      has(self.secretRef) || has(self.passthrough)
+                                      || has(self.aws) || has(self.azure) || has(self.gcp)
+                                      || has(self.oauthTokenExchange) || has(self.crossAppAccess)
+                                      || has(self.jwtSign)
+                                  - message: location may only be set for key, secretRef,
+                                      or passthrough auth
+                                    rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
+                                      || has(self.passthrough) : true'
+                                  - message: at most one of the fields in [key secretRef
+                                      passthrough aws azure gcp oauthTokenExchange
+                                      crossAppAccess jwtSign] may be set
+                                    rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess),has(self.jwtSign)].filter(x,x==true).size()
+                                      <= 1'
+                                http:
+                                  description: Settings for managing HTTP requests
+                                    to the backend
+                                  properties:
+                                    requestTimeout:
+                                      description: Deadline for receiving a response
+                                        from the backend.
+                                      maxLength: 32
+                                      pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                      type: string
+                                      x-kubernetes-validations:
+                                      - message: requestTimeout must be at least 1ms
+                                        rule: duration(self) >= duration('1ms')
+                                    version:
+                                      description: |-
+                                        HTTP protocol version for backend connections. If unset, it is inferred:
+                                        `Service` appProtocol, `HTTP2` for gRPC, the original protocol for
+                                        plaintext HTTP, or `HTTP1` for HTTPS because clients often upgrade HTTPS
+                                        to HTTP/2 even when the backend does not support it.
+                                      enum:
+                                      - HTTP1
+                                      - HTTP2
+                                      type: string
+                                  type: object
+                                tcp:
+                                  description: Settings for managing TCP connections
+                                    to the backend
+                                  properties:
+                                    connectTimeout:
+                                      description: |-
+                                        Deadline for establishing a connection to
+                                        the destination.
+                                      maxLength: 32
+                                      pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                      type: string
+                                      x-kubernetes-validations:
+                                      - message: connectTimeout must be at least 100ms
+                                        rule: duration(self) >= duration('100ms')
+                                    keepalive:
+                                      description: |-
+                                        Settings for enabling TCP keepalives on the
+                                        connection.
+                                      properties:
+                                        interval:
+                                          description: |-
+                                            Time between keepalive probes.
+                                            If unset, this defaults to 180s.
+                                          maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                          type: string
+                                          x-kubernetes-validations:
+                                          - message: interval must be at least 1 second
+                                            rule: duration(self) >= duration('1s')
+                                        retries:
+                                          description: |-
+                                            Maximum number of keepalive probes to send before dropping the connection.
+                                            If unset, this defaults to 9.
+                                          format: int32
+                                          maximum: 64
+                                          minimum: 1
+                                          type: integer
+                                        time:
+                                          description: |-
+                                            Time a connection needs to be idle before keepalive probes start being sent.
+                                            If unset, this defaults to 180s.
+                                          maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                          type: string
+                                          x-kubernetes-validations:
+                                          - message: time must be at least 1 second
+                                            rule: duration(self) >= duration('1s')
+                                      type: object
+                                  type: object
+                                tls:
+                                  description: |-
+                                    Settings for managing TLS connections to the backend
+
+                                    When set, TLS is originated to the backend using the system trusted CA
+                                    certificates, and SNI is inferred from the destination.
+                                  properties:
+                                    alpnProtocols:
+                                      description: |-
+                                        Application-Layer Protocol Negotiation (`ALPN`)
+                                        value to use in the TLS handshake.
+
+                                        If not present, defaults to `["h2", "http/1.1"]`.
+                                      items:
+                                        maxLength: 64
+                                        minLength: 1
+                                        type: string
+                                      maxItems: 16
+                                      minItems: 1
+                                      type: array
+                                    caCertificateRefs:
+                                      description: |-
+                                        CA certificate source to use to verify the server certificate. Omitted kind
+                                        and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                        key is required. If unset, the system's trusted certificates are used.
+                                      items:
+                                        description: |-
+                                          LocalCACertificateRef references a same-namespace CA certificate source.
+                                          An omitted kind defaults to ConfigMap.
+                                        properties:
+                                          kind:
+                                            default: ConfigMap
+                                            description: Kind of the referenced CA
+                                              certificate source. Omitted defaults
+                                              to ConfigMap.
+                                            enum:
+                                            - ConfigMap
+                                            - Secret
+                                            type: string
+                                          name:
+                                            description: Name of the referenced CA
+                                              certificate source.
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                      maxItems: 1
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    insecureSkipVerify:
+                                      description: |-
+                                        Originates TLS but skips verification of the backend's certificate
+                                        WARNING: insecure; only use if the risks are understood
+
+                                        Modes:
+                                        * `All` disables all TLS verification
+                                        * `Hostname` trusts the CA certificate but ignores hostname/SAN mismatches.
+                                          Still insecure; prefer `verifySubjectAltNames` where possible.
+                                      enum:
+                                      - All
+                                      - Hostname
+                                      type: string
+                                    keyExchangeGroups:
+                                      description: |-
+                                        Ordered list of key exchange groups for a TLS connection.
+                                        For example: `X25519_MLKEM768,X25519`.
+                                      items:
+                                        enum:
+                                        - P-256
+                                        - P-384
+                                        - X25519
+                                        - X25519_MLKEM768
+                                        type: string
+                                      type: array
+                                    mtlsCertificateRef:
+                                      description: |-
+                                        Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
+                                        referenced credential source (defaulting to a Kubernetes `Secret`). An
+                                        optional `ca.cert`, if present, verifies the server certificate, but
+                                        `caCertificateRefs` takes priority. If unspecified, no client certificate
+                                        is used.
+                                      items:
+                                        description: |-
+                                          References a same-namespace credential
+                                          Set only `name` for a Kubernetes Secret
+                                        properties:
+                                          group:
+                                            description: API group of the referenced
+                                              credential; empty selects the core API
+                                              group
+                                            type: string
+                                          kind:
+                                            description: Kind of the referenced credential;
+                                              empty defaults to `Secret`
+                                            type: string
+                                          name:
+                                            description: Name of the referenced credential
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                        x-kubernetes-validations:
+                                        - message: custom credential refs must set
+                                            both group and kind
+                                          rule: '(!has(self.group) || size(self.group)
+                                            == 0) ? (!has(self.kind) || size(self.kind)
+                                            == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                            && size(self.kind) > 0)'
+                                      maxItems: 1
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    sni:
+                                      description: |-
+                                        Server Name Indicator (`SNI`) to use in the TLS
+                                        handshake. If unset, the `SNI` is automatically set based on the
+                                        destination hostname.
+                                      maxLength: 253
+                                      minLength: 1
+                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                      type: string
+                                    verifySubjectAltNames:
+                                      description: |-
+                                        Subject Alternative Names (`SAN`)
+                                        to verify in the server certificate.
+                                        If not present, the destination hostname is automatically used.
+                                      items:
+                                        maxLength: 256
+                                        minLength: 1
+                                        type: string
+                                      maxItems: 16
+                                      minItems: 1
+                                      type: array
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: insecureSkipVerify All and caCertificateRefs
+                                      may not be set together
+                                    rule: 'has(self.insecureSkipVerify) && self.insecureSkipVerify
+                                      == ''All'' ? !has(self.caCertificateRefs) :
+                                      true'
+                                  - message: insecureSkipVerify and verifySubjectAltNames
+                                      may not be set together
+                                    rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
+                                      : true'
+                                  - message: at most one of the fields in [verifySubjectAltNames
+                                      insecureSkipVerify] may be set
+                                    rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
+                                      <= 1'
+                                tunnel:
+                                  description: Settings for managing tunnel connections
+                                    to the backend, like `HTTPS_PROXY`
+                                  properties:
+                                    backendRef:
+                                      description: |-
+                                        `backendRef` selects a backend for this policy.
+                                        Mutually exclusive with `url`.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: Group of the referent, for
+                                            example `gateway.networking.k8s.io`. Empty
+                                            selects the core API group
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: Kubernetes resource kind of
+                                            the referent, for example `Service`. Defaults
+                                            to `Service`
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: Namespace of the referent.
+                                            Defaults to the local namespace. A cross-namespace
+                                            reference requires a ReferenceGrant in
+                                            the referent namespace
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: Destination port number. Required
+                                            when the referent is a Kubernetes `Service`
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
+                                    url:
+                                      description: |-
+                                        `url` directly specifies the HTTP(S) endpoint for this policy.
+                                        When the scheme is `https`, backend TLS is enabled automatically.
+                                        Mutually exclusive with `backendRef`.
+                                        URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                        will not apply Service policies or load balancing.
+                                      maxLength: 1024
+                                      minLength: 1
+                                      pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                      type: string
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: exactly one of the fields in [backendRef
+                                      url] must be set
+                                    rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                      == 1'
+                                  - message: url must not include a path for backend
+                                      tunnel
+                                    rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
+                              type: object
+                            port:
+                              description: |-
+                                Port number of the backend REST API. Required when `backendRef` is
+                                set; when using `host`, embed the port in the host value itself
+                                instead.
+                              format: int32
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                            schema:
+                              description: |-
+                                Schema source for the OpenAPI spec. Either the literal schema content
+                                as a JSON or YAML string, or an object with one of:
+                                  - `url`: a remote URL to fetch the schema from. Fetched once when
+                                    this backend is reconciled; not polled or refreshed automatically.
+                                  - `configMapRef`: a reference to a key within a namespace-local
+                                    `ConfigMap` containing the schema content.
+                              x-kubernetes-preserve-unknown-fields: true
+                          required:
+                          - schema
+                          type: object
+                          x-kubernetes-validations:
+                          - message: port must be set if and only if backendRef is
+                              set; when using host, embed the port in the host value
+                              (e.g. "localhost:8080")
+                            rule: has(self.backendRef) == has(self.port)
+                          - message: mcp target policies may not be used with backendRef
+                            rule: '!has(self.backendRef) || !has(self.policies)'
+                          - message: exactly one of the fields in [host backendRef]
+                              must be set
+                            rule: '[has(self.host),has(self.backendRef)].filter(x,x==true).size()
+                              == 1'
                         selector:
                           description: |-
                             Label selector used to select `Service` resources.
@@ -9897,9 +12166,9 @@ spec:
                       - name
                       type: object
                       x-kubernetes-validations:
-                      - message: exactly one of the fields in [selector static] must
-                          be set
-                        rule: '[has(self.selector),has(self.static)].filter(x,x==true).size()
+                      - message: exactly one of the fields in [selector static openapi]
+                          must be set
+                        rule: '[has(self.selector),has(self.static),has(self.openapi)].filter(x,x==true).size()
                           == 1'
                     maxItems: 128
                     minItems: 1
