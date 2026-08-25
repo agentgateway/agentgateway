@@ -5838,6 +5838,78 @@ textarea {
 	gap: 10px;
 }
 
+.budget-help {
+	margin-bottom: 0;
+}
+
+.counter-key-list summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	border: 1px solid var(--line-strong);
+	border-radius: 6px;
+	background: var(--surface);
+	padding: 4px 8px;
+	color: var(--text);
+	font-size: 12px;
+	list-style: none;
+}
+
+.counter-key-list summary::-webkit-details-marker {
+	display: none;
+}
+
+.counter-key-list summary svg {
+	color: var(--muted);
+	transition: transform 0.15s ease;
+}
+
+.counter-key-list[open] summary svg {
+	transform: rotate(180deg);
+}
+
+.counter-key-list ul {
+	display: grid;
+	gap: 4px;
+	max-height: 160px;
+	overflow: auto;
+	margin: 6px 0 0;
+	padding: 0;
+	color: var(--muted);
+	font-size: 12px;
+	list-style: none;
+}
+
+.budget-help-copy {
+	color: var(--muted);
+	font-size: 13px;
+	line-height: 1.55;
+}
+
+.budget-help-copy p {
+	margin: 0 0 10px;
+}
+
+.budget-help-copy ul {
+	margin: 0;
+	padding-left: 18px;
+}
+
+.budget-help-copy li + li {
+	margin-top: 4px;
+}
+
+.budget-help-copy li strong {
+	color: var(--text);
+}
+
+.budget-help-copy code {
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
 .key-cell code,
 .virtual-key-value code {
 	display: block;

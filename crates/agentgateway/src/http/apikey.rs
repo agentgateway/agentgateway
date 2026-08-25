@@ -484,7 +484,7 @@ pub enum LocalAPIKey {
 }
 
 impl LocalAPIKey {
-	fn into_parts(self, specs: &[Budget]) -> anyhow::Result<(APIKeyHash, APIKeyPolicy)> {
+	fn into_parts(self, policy_budgets: &[Budget]) -> anyhow::Result<(APIKeyHash, APIKeyPolicy)> {
 		let (key_hash, metadata, allowed_models, inline_budgets) = match self {
 			LocalAPIKey::Key {
 				key,
@@ -500,7 +500,12 @@ impl LocalAPIKey {
 			} => (key_hash, metadata, allowed_models, budgets),
 		};
 		let metadata = metadata.unwrap_or_default();
-		let budgets = resolve_budgets(specs, &inline_budgets, key_hash.as_str(), &metadata)?;
+		let budgets = resolve_budgets(
+			policy_budgets,
+			&inline_budgets,
+			key_hash.as_str(),
+			&metadata,
+		)?;
 		Ok((
 			key_hash,
 			APIKeyPolicy {
@@ -513,13 +518,13 @@ impl LocalAPIKey {
 }
 
 impl LocalAPIKeys {
-	pub fn compile(self, specs: &[Budget]) -> anyhow::Result<APIKeyAuthentication> {
+	pub fn compile(self, policy_budgets: &[Budget]) -> anyhow::Result<APIKeyAuthentication> {
 		Ok(APIKeyAuthentication {
 			users: Arc::new(
 				self
 					.keys
 					.into_iter()
-					.map(|key| key.into_parts(specs))
+					.map(|key| key.into_parts(policy_budgets))
 					.collect::<anyhow::Result<_>>()?,
 			),
 			mode: self.mode,

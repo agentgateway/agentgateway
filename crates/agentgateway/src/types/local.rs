@@ -13,13 +13,12 @@ use agent_core::prelude::Strng;
 use anyhow::{Context, Error, anyhow, bail};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use rust_decimal::Decimal;
 use secrecy::SecretString;
 
 use crate::http::auth::jwt_sign::LocalJwtSignAuth;
 use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
-use crate::http::budget::{Budget, BudgetLimitUnit, BudgetScope, NANODOLLARS_PER_USD};
+use crate::http::budget::{Budget, validate_budgets};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
@@ -397,12 +396,6 @@ pub struct LocalConfig {
 	#[serde(default)]
 	llm: Option<LocalLLMConfig>,
 
-	/// budgets limits LLM spend or token usage for API keys. Unlike budgets declared inline on a
-	/// single key, these apply across every `apiKey` policy, scoped either to each key individually,
-	/// to each distinct value of a metadata field such as a group or tier, or shared by every key a
-	/// selector matches. Requires `config.database`.
-	#[serde(default)]
-	budgets: Vec<crate::http::budget::Budget>,
 	/// mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be
 	/// served under the attached `gateways` at /mcp and /sse.
 	/// All MCP servers listed will be served as a single virtual MCP server.
@@ -2481,6 +2474,11 @@ struct LocalGatewayPolicy {
 	/// Authenticate incoming requests with API keys.
 	#[serde(default)]
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
+	/// Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one
+	/// key, every key individually, each distinct value of a metadata field such as a group or tier,
+	/// or a pool of keys decided by selectors sharing one allowance.
+	#[serde(default)]
+	budgets: Vec<Budget>,
 }
 
 impl From<LocalGatewayPolicy> for FilterOrPolicy {
@@ -2495,6 +2493,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			transformations,
 			basic_auth,
 			api_key,
+			budgets,
 		} = val;
 		FilterOrPolicy {
 			oidc,
@@ -2506,6 +2505,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			transformations,
 			basic_auth,
 			api_key,
+			budgets,
 			..Default::default()
 		}
 	}
@@ -2522,6 +2522,7 @@ impl LocalGatewayPolicy {
 			&& self.transformations.is_none()
 			&& self.basic_auth.is_none()
 			&& self.api_key.is_none()
+			&& self.budgets.is_empty()
 	}
 }
 
@@ -2993,6 +2994,9 @@ pub struct FilterOrPolicy {
 	/// Inject artificial latency before forwarding requests.
 	#[serde(default)]
 	delay: Option<crate::http::delay::Policy>,
+	/// Budget for api keys based on selectors, groupby or key
+	#[serde(default)]
+	budgets: Vec<Budget>,
 }
 
 #[apply(schema_de!)]
@@ -3024,13 +3028,9 @@ async fn convert(
 		routes,
 		tcp_routes,
 		llm,
-		budgets,
 		mcp,
 		ui,
 	} = i;
-	
-	validate_budgets(&budgets, "budgets")?;
-	config.budget_policy.set_specs(budgets);
 	let model_catalog = local_runtime_config
 		.as_ref()
 		.as_ref()
@@ -3520,64 +3520,6 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 				"mcp (default)".to_string()
 			},
 		)?;
-	}
-	Ok(())
-}
-
-pub fn validate_budgets(budgets: &[Budget], source: &str) -> anyhow::Result<()> {
-	let mut names = HashSet::new();
-	for budget in budgets {
-		anyhow::ensure!(!budget.name.is_empty(), "budget names must not be empty");
-		anyhow::ensure!(
-			names.insert(&budget.name),
-			"duplicate budget name {:?} on {source}",
-			budget.name,
-		);
-		match &budget.scope {
-			BudgetScope::PerKey => {},
-			BudgetScope::GroupBy(field) => anyhow::ensure!(
-				!field.is_empty(),
-				"budget {:?} must name the metadata field to group by",
-				budget.name,
-			),
-			BudgetScope::Selector(selector) => {
-				anyhow::ensure!(
-					selector.keys().all(|field| !field.is_empty()),
-					"budget {:?} has a selector entry with an empty metadata field",
-					budget.name,
-				);
-			},
-		}
-		let window_ms = budget.window.rolling.as_millis();
-		anyhow::ensure!(
-			window_ms > 0,
-			"budget rolling windows must be greater than zero"
-		);
-		anyhow::ensure!(
-			window_ms <= i64::MAX as u128,
-			"budget rolling window is too large"
-		);
-		let amount = budget.limit.amount.decimal().normalize();
-		let multiplier = match budget.limit.unit {
-			BudgetLimitUnit::Usd => {
-				anyhow::ensure!(
-					amount.scale() <= 9,
-					"USD budget limits support at most 9 fractional digits"
-				);
-				NANODOLLARS_PER_USD
-			},
-			BudgetLimitUnit::Tokens => {
-				anyhow::ensure!(
-					amount.fract().is_zero(),
-					"token budget limits must be whole numbers"
-				);
-				1
-			},
-		};
-		anyhow::ensure!(
-			amount * Decimal::from(multiplier) <= Decimal::from(i64::MAX),
-			"budget limit exceeds database integer range"
-		);
 	}
 	Ok(())
 }
@@ -5297,6 +5239,7 @@ pub(crate) async fn split_policies_for_target(
 		oidc: oidc_config,
 		basic_auth,
 		api_key,
+		budgets,
 		transformations,
 		csrf,
 		ext_authz,
@@ -5435,12 +5378,17 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = api_key {
 		let (budget_policy, database_configured) =
 			budget_policy.ok_or_else(|| Error::msg("API key policies must be attached"))?;
-		let api_key = p.compile(budget_policy.specs())?;
+		validate_budgets(&budgets, "this policy")?;
+		let api_key = p.compile(&budgets)?;
 		budget_policy.register(&api_key, database_configured)?;
 		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(api_key)));
 		route_policies.push(TrafficPolicy::Budget(RequestPolicy::single_arc(
 			budget_policy,
 		)));
+	} else if !budgets.is_empty() {
+		// Budgets are charged against authenticated API keys, so one attached without an apiKey
+		// policy would never apply to anything.
+		bail!("budgets require an apiKey policy on the same target");
 	}
 	if let Some(p) = transformations {
 		if backend_target {

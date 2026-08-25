@@ -43,19 +43,20 @@ pub struct BudgetStatusScope {
 
 impl From<&ResolvedScope> for BudgetStatusScope {
 	fn from(scope: &ResolvedScope) -> Self {
+		let kind = scope.kind();
 		match scope {
 			ResolvedScope::PerKey { api_key, .. } => Self {
-				kind: "perKey",
+				kind,
 				field: None,
 				value: Some(api_key.clone()),
 			},
 			ResolvedScope::GroupBy { field, value } => Self {
-				kind: "groupBy",
+				kind,
 				field: Some(field.clone()),
 				value: Some(value.clone()),
 			},
 			ResolvedScope::Selector => Self {
-				kind: "selector",
+				kind,
 				field: None,
 				value: None,
 			},

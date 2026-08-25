@@ -1,5 +1,6 @@
 import type { ConfigResource, ConfigResourceKind } from '@/api/configResourcesApi';
 import { keyValue } from '@/credentialDisplay';
+import type { Budget } from '@/gateway-config';
 import type {
 	GatewayConfig,
 	LlmApiKeyPolicy,
@@ -296,6 +297,16 @@ export function upsertMcpTarget(config: GatewayConfig, target: McpTarget, previo
 	} else {
 		mcp.targets.push(target);
 	}
+}
+
+export function getLlmBudgets(config: GatewayConfig | undefined) {
+	return config?.llm?.policies?.budgets ?? [];
+}
+
+export function setLlmBudgets(config: GatewayConfig, budgets: Budget[]) {
+	const policies = ensureLlmPolicies(config);
+	if (budgets.length) policies.budgets = budgets;
+	else delete policies.budgets;
 }
 
 export function getApiKeyPolicy(config: GatewayConfig): LlmApiKeyPolicy {

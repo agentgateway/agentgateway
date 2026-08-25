@@ -97,13 +97,6 @@
         }
       ]
     },
-    "budgets": {
-      "description": "budgets limits LLM spend or token usage for API keys. Unlike budgets declared inline on a\nsingle key, these apply across every `apiKey` policy, scoped either to each key individually,\nto each distinct value of a metadata field such as a group or tier, or shared by every key a\nselector matches. Requires `config.database`.",
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/Budget"
-      }
-    },
     "mcp": {
       "description": "mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be\nserved under the attached `gateways` at /mcp and /sse.\nAll MCP servers listed will be served as a single virtual MCP server.",
       "anyOf": [
@@ -2058,6 +2051,13 @@
             }
           ],
           "default": null
+        },
+        "budgets": {
+          "description": "Budget for api keys based on selectors, groupby or key",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Budget"
+          }
         }
       },
       "additionalProperties": false
@@ -9662,6 +9662,13 @@
               "type": "null"
             }
           ]
+        },
+        "budgets": {
+          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Budget"
+          }
         }
       },
       "additionalProperties": false
@@ -11037,6 +11044,13 @@
               "type": "null"
             }
           ]
+        },
+        "budgets": {
+          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Budget"
+          }
         }
       },
       "additionalProperties": false
@@ -11190,6 +11204,13 @@
               "type": "null"
             }
           ]
+        },
+        "budgets": {
+          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Budget"
+          }
         }
       },
       "additionalProperties": false
@@ -12287,6 +12308,13 @@
               "type": "null"
             }
           ]
+        },
+        "budgets": {
+          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Budget"
+          }
         },
         "guardrails": {
           "description": "Guardrails to apply to every configured model.",

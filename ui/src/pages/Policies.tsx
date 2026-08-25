@@ -36,7 +36,7 @@ const llmPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
 	{ title: 'Safety', keys: ['guardrails'] as PolicyKey[] },
 	{
 		title: 'Traffic Shaping',
-		keys: ['localRateLimit', 'remoteRateLimit'] as PolicyKey[]
+		keys: ['localRateLimit', 'remoteRateLimit', 'budgets'] as PolicyKey[]
 	},
 	{ title: 'Mutation', keys: ['transformations', 'extProc'] as PolicyKey[] }
 ];

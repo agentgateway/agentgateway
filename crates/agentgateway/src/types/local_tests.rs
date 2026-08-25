@@ -132,7 +132,6 @@ async fn normalize_test_policies(
 		super::LocalConfig {
 			config: Arc::new(None),
 			binds: vec![],
-			budgets: vec![],
 			frontend_policies: Default::default(),
 			policies,
 			workloads: vec![],

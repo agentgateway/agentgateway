@@ -215,6 +215,14 @@ function invalidateConfigViews(queryClient: ReturnType<typeof useQueryClient>) {
 	void queryClient.invalidateQueries({ queryKey: ['runtime'] });
 	void queryClient.invalidateQueries({ queryKey: ['config_dump'] });
 	void queryClient.invalidateQueries({ queryKey: ['config_dump_mode'] });
+	invalidateBudgetStatus(queryClient);
+}
+
+function invalidateBudgetStatus(queryClient: ReturnType<typeof useQueryClient>) {
+	void queryClient.invalidateQueries({ queryKey: ['budgetStatus'] });
+	setTimeout(() => {
+		void queryClient.invalidateQueries({ queryKey: ['budgetStatus'] });
+	}, 750);
 }
 
 export function useUpdateConfig() {

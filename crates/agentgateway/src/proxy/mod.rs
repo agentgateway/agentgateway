@@ -515,6 +515,8 @@ impl ProxyError {
 							"message": exceeded.to_string(),
 							"type": "rate_limit_error",
 							"code": "budget_exceeded",
+							"budget": exceeded.budget,
+							"budget_kind": exceeded.kind,
 						}
 					})
 					.to_string(),

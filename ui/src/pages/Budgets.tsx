@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import type { BudgetStatus } from '@/api/budgetsApi';
@@ -19,14 +19,14 @@ import {
 	StatusBanner,
 	Tooltip
 } from '@/components/Primitives';
-import { getApiKeyPolicy, upsertVirtualKey } from '@/config';
+import { getApiKeyPolicy, getLlmBudgets, setLlmBudgets, upsertVirtualKey } from '@/config';
 import { keyLabel, keyValue } from '@/credentialDisplay';
 import type { Budget } from '@/gateway-config';
 import { useBudgetStatus, useLlmConfigData, useUpdateConfig } from '@/hooks';
 import type { GatewayConfig, VirtualApiKey } from '@/types';
 
 /** Where a budget is declared, which also decides how it is written back to the configuration. */
-type Source = { kind: 'document' } | { kind: 'key'; key: string };
+type Source = { kind: 'policy' } | { kind: 'key'; key: string };
 
 type BudgetRow = { budget: Budget; source: Source };
 
@@ -34,26 +34,14 @@ type ScopeKind = 'oneKey' | 'perKey' | 'groupBy' | 'selector';
 
 /** The four ways a budget can decide which keys share its counter, in the order they are offered. */
 const scopeKinds: { value: ScopeKind; label: string; description: string }[] = [
-	{
-		value: 'oneKey',
-		label: 'One key',
-		description: 'A single key gets this allowance.'
-	},
-	{
-		value: 'perKey',
-		label: 'Each key',
-		description: 'Every key gets its own separate allowance of this size.'
-	},
+	{ value: 'oneKey', label: 'One key', description: 'One key gets this allowance.' },
+	{ value: 'perKey', label: 'Each key', description: 'Every key gets its own allowance.' },
 	{
 		value: 'groupBy',
 		label: 'Per metadata value',
-		description: 'One allowance for each distinct value of a metadata field, such as one per team.'
+		description: 'One allowance per distinct value.'
 	},
-	{
-		value: 'selector',
-		label: 'Shared pool',
-		description: 'One allowance split between every key whose metadata matches a selector.'
-	}
+	{ value: 'selector', label: 'Shared pool', description: 'Matching keys split one allowance.' }
 ];
 
 export function BudgetsPage() {
@@ -83,14 +71,14 @@ export function BudgetsPage() {
 	}
 
 	function startNew() {
-		setEditing({ budget: newBudget(), source: { kind: 'document' } });
+		setEditing({ budget: newBudget(), source: { kind: 'policy' } });
 	}
 
 	return (
 		<div className="page-stack">
 			<PageHeader
 				title="Budgets"
-				description="Cap LLM spend or token usage for your API keys. Each budget is charged once a response completes, and resets when its rolling window rolls over."
+				description="Cap LLM spend or token usage for your API keys."
 				actions={
 					<button
 						className="button primary"
@@ -111,20 +99,16 @@ export function BudgetsPage() {
 			) : null}
 			{!databaseConfigured && rows.length > 0 ? (
 				<StatusBanner state="warn" title="Budgets require a database">
-					Counters are persisted so that usage survives restarts and is shared between gateway
-					instances. Set config.database.url, or the gateway will reject this configuration on load.
+					Set config.database.url to use budgets.
 				</StatusBanner>
 			) : null}
+
+			<BudgetHelp />
 
 			<Panel>
 				<div className="section-heading-row">
 					<div>
 						<h3>Configured budgets</h3>
-						<p>
-							Every budget pairs a limit with a scope that decides which keys share the counter. A
-							budget scoped to a single key is stored on that key; every other scope is stored at
-							the top level of the configuration and applies across all API key policies.
-						</p>
 					</div>
 				</div>
 				{isLoading ? (
@@ -136,7 +120,7 @@ export function BudgetsPage() {
 				) : rows.length === 0 ? (
 					<EmptyState
 						title="No budgets configured"
-						description="A budget caps spend or tokens over a rolling window. Scope it to one key, to every key individually, to each value of a metadata field such as team or tier, or to a pool of keys that share a single allowance."
+						description="Scope a budget to one key, every key, each value of a metadata field, or a shared pool."
 						action={
 							<button className="button primary" type="button" onClick={startNew}>
 								<Plus size={16} />
@@ -206,7 +190,12 @@ export function BudgetsPage() {
 				)}
 			</Panel>
 
-			<UsagePanel status={status.data?.budgets} loading={status.isLoading} />
+			<UsagePanel
+				status={status.data?.budgets}
+				loading={status.isLoading}
+				rows={rows}
+				keys={apiKeys}
+			/>
 
 			{editing ? (
 				<BudgetEditor
@@ -237,22 +226,66 @@ export function BudgetsPage() {
 	);
 }
 
+/** Collapsed explanation of how a budget behaves, for anyone meeting the page for the first time. */
+function BudgetHelp() {
+	return (
+		<details className="schema-details budget-help">
+			<summary>How budgets work</summary>
+			<div className="budget-help-copy">
+				<p>
+					A budget caps how much the API keys it covers may use on LLM requests during a repeating
+					window. Keys no budget covers are uncapped.
+				</p>
+				<ul>
+					<li>
+						<strong>What is counted.</strong> After every response the budget is charged the cost
+						the provider reported, or the prompt plus completion tokens, depending on the unit.
+						Responses that report neither are logged and left uncharged.
+					</li>
+					<li>
+						<strong>When traffic stops.</strong> The check runs before a request, against the usage
+						recorded so far. A request that starts under the limit always completes, so the total
+						can land slightly above it.
+					</li>
+					<li>
+						<strong>Who shares the allowance.</strong> The scope decides that: one key, each key on
+						its own, one allowance per value of a metadata field, or a single pool split by every
+						matching key. Several budgets can cover the same key, and all of them are charged.
+					</li>
+					<li>
+						<strong>When it resets.</strong> Windows are fixed and aligned to the Unix epoch, not to
+						the first request: <code>1h</code> follows UTC clock hours, <code>24h</code> starts at
+						midnight UTC, and <code>30d</code> runs in consecutive 30-day periods rather than
+						calendar months. Usage returns to zero at every reset.
+					</li>
+					<li>
+						<strong>What editing changes.</strong> Raising or lowering the limit keeps the usage
+						already recorded. Changing the window or the unit restarts the counter at zero, and so
+						does renaming the budget.
+					</li>
+				</ul>
+			</div>
+		</details>
+	);
+}
+
 /**
  * Live counters for every budget. One configured budget can back many counters, since a
  * per-metadata scope creates one for each distinct value it finds.
  */
-function UsagePanel(props: { status?: BudgetStatus[]; loading: boolean }) {
+function UsagePanel(props: {
+	status?: BudgetStatus[];
+	loading: boolean;
+	rows: BudgetRow[];
+	keys: VirtualApiKey[];
+}) {
 	const budgets = props.status ?? [];
 	return (
 		<Panel>
 			<div className="section-heading-row">
 				<div>
 					<h3>Current usage</h3>
-					<p>
-						One configured budget can back several counters, because a per-metadata scope creates
-						one for each distinct value it finds. Usage is charged after each response, so
-						concurrent requests can overshoot a limit slightly before it takes effect.
-					</p>
+					<p>Limits can overshoot slightly under concurrent requests.</p>
 				</div>
 			</div>
 			{props.loading ? (
@@ -260,7 +293,7 @@ function UsagePanel(props: { status?: BudgetStatus[]; loading: boolean }) {
 			) : budgets.length === 0 ? (
 				<EmptyState
 					title="No active counters"
-					description="A counter appears as soon as a configured budget matches an API key, and stays at zero until that key gets its first response."
+					description="Counters appear once a budget matches an API key."
 				/>
 			) : (
 				<div className="table-wrap">
@@ -269,6 +302,7 @@ function UsagePanel(props: { status?: BudgetStatus[]; loading: boolean }) {
 							<tr>
 								<th>Name</th>
 								<th>Applies to</th>
+								<th>Keys</th>
 								<th>Usage</th>
 								<th>Remaining</th>
 								<th>Resets</th>
@@ -281,6 +315,9 @@ function UsagePanel(props: { status?: BudgetStatus[]; loading: boolean }) {
 										<strong>{budget.name}</strong>
 									</td>
 									<td className="muted">{budgetScopeLabel(budget.scope)}</td>
+									<td>
+										<CounterKeyList keys={countingKeys(budget, props.rows, props.keys)} />
+									</td>
 									<td>
 										<div className="key-budget-summary-row">
 											<span>
@@ -308,6 +345,59 @@ function UsagePanel(props: { status?: BudgetStatus[]; loading: boolean }) {
 			)}
 		</Panel>
 	);
+}
+
+/**
+ * The API keys charging one live counter, since a pooled counter can be fed by many keys and the
+ * scope alone does not name them. The list expands inside the cell rather than floating over the
+ * table, which would otherwise scroll the header row out of view when a lower row is opened.
+ */
+function CounterKeyList(props: { keys: VirtualApiKey[] }) {
+	if (!props.keys.length) return <span className="muted">No matching keys</span>;
+	return (
+		<details className="counter-key-list">
+			<summary aria-label="Keys charging this counter">
+				{props.keys.length === 1 ? '1 key' : `${props.keys.length} keys`}
+				<ChevronDown size={14} aria-hidden="true" />
+			</summary>
+			<ul>
+				{props.keys.map((key, index) => (
+					// A key carrying neither a value nor a hash would otherwise collide with the next one.
+					<li key={keyOf(key) || `key-${index}`}>{keyLabel(key)}</li>
+				))}
+			</ul>
+		</details>
+	);
+}
+
+/**
+ * The keys that charge one live counter. A per-key counter names its key, a grouped counter takes
+ * every key carrying its metadata value, and a pooled counter takes every key its selector matches.
+ */
+function countingKeys(counter: BudgetStatus, rows: BudgetRow[], keys: VirtualApiKey[]) {
+	const { kind, field, value } = counter.scope;
+	if (kind === 'perKey') {
+		return keys.filter(key => metadataValue(key, 'name') === value);
+	}
+	if (kind === 'groupBy') {
+		return field ? keys.filter(key => metadataValue(key, field) === value) : [];
+	}
+	const row = rows.find(item => item.budget.name === counter.name && rowScopeKind(item) === kind);
+	if (!row) return [];
+	const selector = selectorRows(row.budget);
+	return keys.filter(key =>
+		selector.every(entry => metadataValue(key, entry.field) === entry.value)
+	);
+}
+
+/** One metadata field of a key as a budget scope sees it: scalars compared by their display form. */
+function metadataValue(key: VirtualApiKey, field: string) {
+	for (const [name, value] of metadataEntries(key)) {
+		if (name !== field) continue;
+		if (value === null || typeof value === 'object') return undefined;
+		return String(value);
+	}
+	return undefined;
 }
 
 function BudgetEditor(props: {
@@ -355,7 +445,7 @@ function BudgetEditor(props: {
 				window: { rolling: rolling.trim() },
 				onBudgetExceeded: action
 			},
-			kind === 'oneKey' ? { kind: 'key', key: targetKey } : { kind: 'document' }
+			kind === 'oneKey' ? { kind: 'key', key: targetKey } : { kind: 'policy' }
 		);
 	}
 
@@ -379,17 +469,11 @@ function BudgetEditor(props: {
 				</div>
 			}
 		>
-			<Field
-				label="Name"
-				hint="Identifies the counter that accumulates usage, so renaming a budget starts it over from zero."
-			>
+			<Field label="Name" hint="Renaming a budget restarts its usage from zero.">
 				<input value={name} onChange={event => setName(event.target.value)} />
 			</Field>
 
-			<FieldGroup
-				label="Applies to"
-				hint="Only a single-key budget is stored on the key itself. The other scopes are stored at the top level of the configuration and apply across every API key policy."
-			>
+			<FieldGroup label="Applies to">
 				<SegmentedControl
 					value={kind}
 					options={scopeKinds}
@@ -399,10 +483,7 @@ function BudgetEditor(props: {
 			</FieldGroup>
 
 			{kind === 'oneKey' ? (
-				<Field
-					label="API key"
-					hint="The budget is stored on this key, so renaming the key's display name does not reset usage. Moving the budget to another key starts a new counter."
-				>
+				<Field label="API key" hint="Moving the budget to another key restarts its usage.">
 					<Dropdown
 						value={targetKey}
 						options={props.keys.map(key => ({ value: keyOf(key) ?? '', label: keyLabel(key) }))}
@@ -417,7 +498,7 @@ function BudgetEditor(props: {
 			{kind === 'groupBy' ? (
 				<Field
 					label="Metadata field"
-					hint="Each distinct value gets its own allowance: with team, keys tagged team=research and team=ops are budgeted separately. Keys without the field are not budgeted. Suggestions come from your configured keys."
+					hint="Each value gets its own allowance. Keys without the field are not budgeted."
 				>
 					<FreeformCombobox
 						ariaLabel="Metadata field"
@@ -432,7 +513,7 @@ function BudgetEditor(props: {
 			{kind === 'selector' ? (
 				<FieldGroup
 					label="Key selector"
-					hint="A key joins the pool when its metadata matches every entry here. Leave it empty to pool every key. Changing the selector later does not reset usage already accumulated."
+					hint="A key joins when its metadata matches every entry. Leave empty to pool every key."
 				>
 					<div className="api-key-budget-list">
 						{selector.map((row, index) => (
@@ -477,7 +558,7 @@ function BudgetEditor(props: {
 
 			<Field
 				label="Limit unit"
-				hint="A response that reports neither cost nor tokens cannot be charged, and is logged instead."
+				hint="Responses reporting neither cost nor tokens are logged instead of charged."
 			>
 				<SegmentedControl
 					value={unit}
@@ -500,11 +581,7 @@ function BudgetEditor(props: {
 
 			<Field
 				label="Limit"
-				hint={
-					unit === 'USD'
-						? 'The most that may be spent in one window, in dollars.'
-						: 'The most tokens that may be used in one window, as a whole number.'
-				}
+				hint={unit === 'USD' ? 'Dollars per window.' : 'Whole tokens per window.'}
 			>
 				<input
 					inputMode="decimal"
@@ -515,15 +592,12 @@ function BudgetEditor(props: {
 
 			<Field
 				label="Window"
-				hint="How long usage accumulates before it resets, for example 1h, 24h, or 30d. Windows align to the Unix epoch, so 24h starts at midnight UTC rather than at the first request."
+				hint="For example 1h, 24h, or 30d. Aligned to the Unix epoch, so 24h starts at midnight UTC."
 			>
 				<input value={rolling} onChange={event => setRolling(event.target.value)} />
 			</Field>
 
-			<Field
-				label="When exceeded"
-				hint="Applies from the moment the counter passes the limit until the window resets."
-			>
+			<Field label="When exceeded" hint="Applies until the window resets.">
 				<SegmentedControl
 					value={action}
 					options={[
@@ -547,9 +621,9 @@ function BudgetEditor(props: {
 }
 
 function budgetRows(config: GatewayConfig | undefined, keys: VirtualApiKey[]): BudgetRow[] {
-	const rows: BudgetRow[] = (config?.budgets ?? []).map(budget => ({
+	const rows: BudgetRow[] = getLlmBudgets(config).map(budget => ({
 		budget,
-		source: { kind: 'document' as const }
+		source: { kind: 'policy' as const }
 	}));
 	for (const key of keys) {
 		for (const budget of key.budgets ?? []) {
@@ -560,8 +634,11 @@ function budgetRows(config: GatewayConfig | undefined, keys: VirtualApiKey[]): B
 }
 
 function removeBudget(draft: GatewayConfig, row: BudgetRow) {
-	if (row.source.kind === 'document') {
-		draft.budgets = (draft.budgets ?? []).filter((item: Budget) => item.name !== row.budget.name);
+	if (row.source.kind === 'policy') {
+		setLlmBudgets(
+			draft,
+			getLlmBudgets(draft).filter(item => item.name !== row.budget.name)
+		);
 		return;
 	}
 	const key = findKey(draft, row.source.key);
@@ -570,8 +647,8 @@ function removeBudget(draft: GatewayConfig, row: BudgetRow) {
 }
 
 function addBudget(draft: GatewayConfig, source: Source, budget: Budget) {
-	if (source.kind === 'document') {
-		draft.budgets = [...(draft.budgets ?? []), budget];
+	if (source.kind === 'policy') {
+		setLlmBudgets(draft, [...getLlmBudgets(draft), budget]);
 		return;
 	}
 	const key = findKey(draft, source.key);
@@ -607,7 +684,7 @@ function rowScopeKind(row: BudgetRow): ScopeKind {
 }
 
 function rowKey(row: BudgetRow) {
-	const owner = row.source.kind === 'key' ? row.source.key : 'document';
+	const owner = row.source.kind === 'key' ? row.source.key : 'policy';
 	return `${owner}:${row.budget.name}`;
 }
 

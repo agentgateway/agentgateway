@@ -11,7 +11,6 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::cel::LLMContext;
-use crate::types::local::validate_budgets;
 use crate::{apply, schema_de, serde_dur};
 
 mod database;
@@ -167,6 +166,17 @@ pub enum ResolvedScope {
 	Selector, // name comes from the Budget
 }
 
+impl ResolvedScope {
+	/// Which kind of counter this scope resolves to: `perKey`, `groupBy`, or `selector`.
+	pub fn kind(&self) -> &'static str {
+		match self {
+			Self::PerKey { .. } => "perKey",
+			Self::GroupBy { .. } => "groupBy",
+			Self::Selector => "selector",
+		}
+	}
+}
+
 impl std::fmt::Display for ResolvedScope {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -210,12 +220,71 @@ fn metadata_matches(selector: &HashMap<String, String>, metadata: &serde_json::V
 	})
 }
 
+pub fn validate_budgets(budgets: &[Budget], source: &str) -> anyhow::Result<()> {
+	let mut names = HashSet::new();
+	for budget in budgets {
+		anyhow::ensure!(!budget.name.is_empty(), "budget names must not be empty");
+		anyhow::ensure!(
+			names.insert(&budget.name),
+			"duplicate budget name {:?} on {source}",
+			budget.name,
+		);
+		match &budget.scope {
+			BudgetScope::PerKey => {},
+			BudgetScope::GroupBy(field) => anyhow::ensure!(
+				!field.is_empty(),
+				"budget {:?} must name the metadata field to group by",
+				budget.name,
+			),
+			BudgetScope::Selector(selector) => {
+				anyhow::ensure!(
+					selector.keys().all(|field| !field.is_empty()),
+					"budget {:?} has a selector entry with an empty metadata field",
+					budget.name,
+				);
+			},
+		}
+		let window_ms = budget.window.rolling.as_millis();
+		anyhow::ensure!(
+			window_ms > 0,
+			"budget rolling windows must be greater than zero"
+		);
+		anyhow::ensure!(
+			window_ms <= i64::MAX as u128,
+			"budget rolling window is too large"
+		);
+		let amount = budget.limit.amount.decimal().normalize();
+		let multiplier = match budget.limit.unit {
+			BudgetLimitUnit::Usd => {
+				anyhow::ensure!(
+					amount.scale() <= 9,
+					"USD budget limits support at most 9 fractional digits"
+				);
+				NANODOLLARS_PER_USD
+			},
+			BudgetLimitUnit::Tokens => {
+				anyhow::ensure!(
+					amount.fract().is_zero(),
+					"token budget limits must be whole numbers"
+				);
+				1
+			},
+		};
+		anyhow::ensure!(
+			amount * Decimal::from(multiplier) <= Decimal::from(i64::MAX),
+			"budget limit exceeds database integer range"
+		);
+	}
+	Ok(())
+}
+
 /// Resolves every budget that applies to one API key, pairing each with the counter it shares.
 ///
-/// Document-level budgets are matched against the key's metadata; budgets declared inline on the
-/// key always apply. Returns `None` when no budget applies, leaving the key unbudgeted.
+/// Budgets declared on the API key policy are matched against the key's metadata; budgets declared
+/// inline on the key itself always apply. Returns `None` when no budget applies, leaving the key
+/// unbudgeted.
 pub fn resolve_budgets(
-	specs: &[Budget],
+	policy_budgets: &[Budget],
 	inline: &[Budget],
 	api_key_id: &str,
 	metadata: &serde_json::Value,
@@ -225,11 +294,10 @@ pub fn resolve_budgets(
 		.and_then(serde_json::Value::as_str)
 		.filter(|name| !name.is_empty());
 
-		
-	validate_budgets(inline,"api-key")?;
+	validate_budgets(inline, "api-key")?;
 	let mut budgets = Vec::new();
 	let mut counters = HashSet::new();
-	for budget in inline.iter().chain(specs) {
+	for budget in inline.iter().chain(policy_budgets) {
 		let Some(scope) = resolve_scope(budget, api_key_id, api_key, metadata)? else {
 			continue;
 		};
@@ -429,10 +497,6 @@ pub struct BudgetPolicy {
 	/// share runtime counters with the process-wide policy but do not mutate them until reload succeeds.
 	#[serde(skip)]
 	registration: Option<Arc<DashMap<String, BudgetDefinition>>>,
-	/// Document-level budget definitions from the configuration being normalized. Installed once
-	/// while that configuration is converted, before any API key policy is compiled.
-	#[serde(skip)]
-	specs: Arc<OnceLock<Vec<Budget>>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -447,9 +511,13 @@ pub struct BudgetSettlement {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Budget exceeded")]
+#[error("Budget: '{budget}' of kind '{kind}' exceeded")]
 pub struct BudgetExceeded {
 	pub retry_after: u64,
+	/// Name of the budget that blocked the request.
+	pub budget: String,
+	/// Scope kind of that budget: `perKey`, `groupBy`, or `selector`.
+	pub kind: &'static str,
 }
 
 fn budget_id(scope: &ResolvedScope, budget: &Budget) -> String {
@@ -502,23 +570,7 @@ impl BudgetPolicy {
 			database: self.database.clone(),
 			flush_lock: self.flush_lock.clone(),
 			registration: Some(Arc::new(DashMap::new())),
-			specs: Arc::new(OnceLock::new()),
 		}
-	}
-
-	/// Installs the document-level budgets for the configuration being normalized. Called once per
-	/// reload, before any API key policy is compiled.
-	pub fn set_specs(&self, budgets: Vec<Budget>) {
-		self
-			.specs
-			.set(budgets)
-			.expect("budget specs are installed once per configuration");
-	}
-
-	/// Document-level budgets from the configuration being normalized. Empty on the process-wide
-	/// policy, which never resolves budgets itself.
-	pub(crate) fn specs(&self) -> &[Budget] {
-		self.specs.get().map_or(&[], Vec::as_slice)
 	}
 
 	pub(crate) fn registration(&self) -> BudgetRegistration {
@@ -572,8 +624,7 @@ impl BudgetPolicy {
 		let has_budgets = authentication
 			.users
 			.values()
-			.any(|policy| policy.budgets.is_some())
-			|| !self.specs().is_empty();
+			.any(|policy| policy.budgets.is_some());
 		anyhow::ensure!(
 			!has_budgets || self.database.get().is_some() || database_configured,
 			"API key budgets require config.database to be configured"
@@ -668,6 +719,8 @@ impl BudgetPolicy {
 					retry_after: retry_after
 						.as_secs()
 						.saturating_add(u64::from(retry_after.subsec_nanos() != 0)),
+					budget: budget.name.clone(),
+					kind: scope.kind(),
 				});
 			}
 		}
@@ -1020,7 +1073,7 @@ CREATE TABLE budget_usage (
 
 	#[test]
 	fn group_scoped_budgets_pool_keys_sharing_a_metadata_value() {
-		let specs = vec![scoped_budget(
+		let policy_budgets = vec![scoped_budget(
 			"team",
 			100,
 			BudgetScope::GroupBy("group".to_string()),
@@ -1032,7 +1085,7 @@ CREATE TABLE budget_usage (
 				{"key": "sk-c", "metadata": {"name": "carol", "group": "platform"}},
 			]
 		}))
-		.compile(&specs)
+		.compile(&policy_budgets)
 		.unwrap();
 
 		let ids = counter_ids(&authentication);
@@ -1063,7 +1116,7 @@ CREATE TABLE budget_usage (
 
 	#[test]
 	fn shared_budgets_only_pool_keys_the_selector_matches() {
-		let specs = vec![scoped_budget(
+		let policy_budgets = vec![scoped_budget(
 			"research",
 			100,
 			BudgetScope::Selector(HashMap::from([(
@@ -1078,7 +1131,7 @@ CREATE TABLE budget_usage (
 				{"key": "sk-c", "metadata": {"name": "carol", "group": "platform"}},
 			]
 		}))
-		.compile(&specs)
+		.compile(&policy_budgets)
 		.unwrap();
 
 		let ids = counter_ids(&authentication);
@@ -1090,7 +1143,7 @@ CREATE TABLE budget_usage (
 	/// such keys silently unbudgeted, so scalars are compared by their display form.
 	#[test]
 	fn numeric_metadata_matches_a_string_selector() {
-		let specs = vec![scoped_budget(
+		let policy_budgets = vec![scoped_budget(
 			"gold",
 			100,
 			BudgetScope::Selector(HashMap::from([("tier".to_string(), "1".to_string())])),
@@ -1098,16 +1151,16 @@ CREATE TABLE budget_usage (
 		let authentication = local_keys(serde_json::json!({
 			"keys": [{"key": "sk-a", "metadata": {"name": "alice", "tier": 1}}]
 		}))
-		.compile(&specs)
+		.compile(&policy_budgets)
 		.unwrap();
 
 		assert_eq!(counter_ids(&authentication).len(), 1);
 	}
 
-	/// A document-level per-key budget and an inline budget of the same name resolve to the same
+	/// A policy per-key budget and an inline budget of the same name resolve to the same
 	/// counter, which would otherwise let one silently replace the other's limit.
 	#[test]
-	fn a_document_budget_cannot_collide_with_an_inline_budget() {
+	fn a_policy_budget_cannot_collide_with_an_inline_budget() {
 		let specs = vec![scoped_budget("daily", 100, BudgetScope::PerKey)];
 		let err = local_keys(serde_json::json!({
 			"keys": [{
@@ -1133,7 +1186,7 @@ CREATE TABLE budget_usage (
 	/// A group counter's accumulated usage survives a limit change, because the counter identity
 	/// does not include the limit. Changing the window resets it, because the window does.
 	#[test]
-	fn editing_a_document_budget_preserves_usage_unless_the_window_changes() {
+	fn editing_a_policy_budget_preserves_usage_unless_the_window_changes() {
 		let keys = serde_json::json!({
 			"keys": [{"key": "sk-a", "metadata": {"name": "alice", "group": "research"}}]
 		});

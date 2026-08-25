@@ -171,6 +171,15 @@ async fn llm_token_budget_persists_and_blocks_requests() {
 			.and_then(|value| value.parse::<u64>().ok())
 			.is_some_and(|seconds| seconds > 0)
 	);
+	// The rejection names the budget that blocked the request and how it is scoped.
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["error"]["budget"], "tokens");
+	assert_eq!(body["error"]["budget_kind"], "perKey");
+	assert_eq!(
+		body["error"]["message"],
+		"Budget 'tokens' (perKey) exceeded"
+	);
 	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
 }
 
@@ -1380,16 +1389,15 @@ async fn llm_group_scoped_budget_pools_spend_across_keys() {
 				{"key": "sk-carol", "metadata": {"name": "carol", "group": "platform"}},
 			],
 			"mode": "strict"
-		}
+		},
+		"budgets": [{
+			"name": "team",
+			"scope": {"groupBy": "group"},
+			"limit": {"unit": "Tokens", "amount": 40},
+			"window": {"rolling": "1h"},
+			"onBudgetExceeded": "Block"
+		}]
 	});
-	let budgets: Vec<agentgateway::http::budget::Budget> = serde_json::from_value(json!([{
-		"name": "team",
-		"scope": {"groupBy": "group"},
-		"limit": {"unit": "Tokens", "amount": 40},
-		"window": {"rolling": "1h"},
-		"onBudgetExceeded": "Block"
-	}]))
-	.unwrap();
 
 	let mock = body_mock(include_bytes!(
 		"../../../llm/src/tests/response/completions/basic.json"
@@ -1405,7 +1413,6 @@ async fn llm_group_scoped_budget_pools_spend_across_keys() {
 	);
 	let config = agentgateway::config::parse_config("{}".to_string(), None).unwrap();
 	config.budget_policy.initialize(pool).await.unwrap();
-	config.budget_policy.set_specs(budgets);
 	let (mock, mut bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
 	bind.attach_route_policy(policy).await;
 
