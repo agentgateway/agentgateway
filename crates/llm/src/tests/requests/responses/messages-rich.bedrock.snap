@@ -89,34 +89,33 @@ info:
         "role": "user",
         "content": [
           {
-            "type": "text",
             "text": "Check item A-17 against these records."
           },
           {
-            "type": "image",
-            "source": {
-              "type": "base64",
-              "media_type": "image/png",
-              "data": "aQ=="
+            "image": {
+              "format": "png",
+              "source": {
+                "bytes": "aQ=="
+              }
             }
           },
           {
-            "type": "document",
-            "source": {
-              "type": "base64",
-              "media_type": "application/pdf",
-              "data": "JVBERi0xLjQK"
-            },
-            "title": "policy.pdf"
+            "document": {
+              "format": "pdf",
+              "name": "policy",
+              "source": {
+                "bytes": "JVBERi0xLjQK"
+              }
+            }
           },
           {
-            "type": "document",
-            "source": {
-              "type": "text",
-              "media_type": "text/plain",
-              "data": "shelf B12"
-            },
-            "title": "location.txt"
+            "document": {
+              "format": "txt",
+              "name": "location",
+              "source": {
+                "bytes": "c2hlbGYgQjEy"
+              }
+            }
           }
         ]
       },
@@ -124,15 +123,15 @@ info:
         "role": "assistant",
         "content": [
           {
-            "type": "text",
             "text": "I will check the live record."
           },
           {
-            "type": "tool_use",
-            "id": "call_weather",
-            "name": "weather",
-            "input": {
-              "city": "Seattle"
+            "toolUse": {
+              "toolUseId": "call_weather",
+              "name": "weather",
+              "input": {
+                "city": "Seattle"
+              }
             }
           }
         ]
@@ -141,103 +140,92 @@ info:
         "role": "user",
         "content": [
           {
-            "type": "tool_result",
-            "tool_use_id": "call_weather",
-            "content": [
-              {
-                "type": "text",
-                "text": "Rain, 12 C"
-              },
-              {
-                "type": "image",
-                "source": {
-                  "type": "base64",
-                  "media_type": "image/png",
-                  "data": "aQ=="
+            "toolResult": {
+              "toolUseId": "call_weather",
+              "content": [
+                {
+                  "text": "Rain, 12 C"
                 }
-              }
-            ]
+              ],
+              "status": null
+            }
           }
         ]
       }
     ],
     "system": [
       {
-        "type": "text",
         "text": "Return one inventory decision as JSON."
       },
       {
-        "type": "text",
         "text": "Use the warehouse policy dated 2026-07-15."
       },
       {
-        "type": "text",
         "text": "Keep item IDs unchanged."
       }
     ],
-    "model": "claude-sonnet-4-5",
-    "max_tokens": 512,
-    "tools": [
-      {
-        "name": "weather",
-        "description": "Read current weather for a city.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "city": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "city"
-          ]
-        },
-        "strict": false
-      },
-      {
-        "name": "inventory",
-        "description": "Read an inventory record.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "item_id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "item_id"
-          ]
-        },
-        "strict": true
-      }
-    ],
-    "output_config": {
-      "format": {
+    "inferenceConfig": {
+      "maxTokens": 512
+    },
+    "outputConfig": {
+      "textFormat": {
         "type": "json_schema",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "item_id": {
-              "type": "string"
-            },
-            "available": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "item_id",
-            "available"
-          ],
-          "additionalProperties": false
+        "structure": {
+          "jsonSchema": {
+            "schema": "{\"type\":\"object\",\"properties\":{\"item_id\":{\"type\":\"string\"},\"available\":{\"type\":\"boolean\"}},\"required\":[\"item_id\",\"available\"],\"additionalProperties\":false}",
+            "name": "inventory_decision"
+          }
         }
       }
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "weather",
+            "description": "Read current weather for a city.",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "toolSpec": {
+            "name": "inventory",
+            "description": "Read an inventory record.",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {
+                  "item_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "item_id"
+                ]
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "parsed": {
     "input_format": "Responses",
     "cache_convention": "InputIncludesCache",
     "request_model": "claude-sonnet-4-5",
-    "provider": "messages",
+    "provider": "bedrock",
     "streaming": false,
     "params": {
       "max_tokens": 512

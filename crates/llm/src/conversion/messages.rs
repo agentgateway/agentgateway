@@ -91,9 +91,7 @@ pub mod from_completions {
 	use crate::types::completions::typed as completions;
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::types::messages::typed as messages;
-	use crate::{
-		AIError, LogContentFields, StreamingUsageGuard, json, logged_response_parsing, parse, types,
-	};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	fn cache_control(
 		breakpoint: &Option<completions::PromptCacheBreakpointParam>,
@@ -398,6 +396,7 @@ pub mod from_completions {
 				.filter_map(|tool| match tool {
 					completions::Tool::Function(function_tool) => {
 						Some(messages::Tool::Custom(messages::CustomTool {
+							tool_type: None,
 							name: function_tool.function.name.clone(),
 							description: function_tool.function.description.clone(),
 							input_schema: function_tool
@@ -405,6 +404,7 @@ pub mod from_completions {
 								.parameters
 								.clone()
 								.unwrap_or_default(),
+							strict: None,
 							cache_control: None,
 						}))
 					},
@@ -625,15 +625,7 @@ pub mod from_completions {
 			},
 			cache_creation_input_tokens: resp.usage.cache_creation_input_tokens.map(|i| i as u64),
 
-			completion_tokens_details: resp
-				.usage
-				.output_tokens_details
-				.and_then(|details| details.thinking_tokens)
-				.map(|reasoning_tokens| completions::UsageCompletionDetails {
-					reasoning_tokens: Some(reasoning_tokens as u64),
-					audio_tokens: None,
-					rest: Default::default(),
-				}),
+			completion_tokens_details: None,
 		};
 
 		completions::Response {
@@ -672,7 +664,7 @@ pub mod from_completions {
 		b: Body,
 		buffer_limit: usize,
 		log: StreamingUsageGuard,
-		log_content: LogContentFields,
+		log_content: crate::LogContentFields,
 	) -> Body {
 		/// An ongoing `tool_use` block. `emitted_arguments` tracks whether we have put any argument
 		/// text on the wire yet, so `content_block_stop` can synthesize `{}` when Anthropic
@@ -688,7 +680,6 @@ pub mod from_completions {
 		// role field — it belongs on `choices[].delta`, so hold it until there is a chunk for it.
 		let mut pending_role = None;
 		let mut service_tier = None;
-		let mut initial_usage = None;
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 		let created = chrono::Utc::now().timestamp() as u32;
@@ -731,7 +722,6 @@ pub mod from_completions {
 					});
 					model = message.model.clone();
 					service_tier = message.usage.service_tier.clone();
-					initial_usage = Some(message.usage.clone());
 					log.update(|r| {
 						r.response.output_tokens = Some(message.usage.output_tokens as u64);
 						r.response.input_tokens = Some(message.usage.input_tokens as u64);
@@ -848,46 +838,32 @@ pub mod from_completions {
 				},
 				messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
 					let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
-					let telemetry_finish_reason = delta
+					let log_finish_reason = delta
 						.stop_reason
 						.as_ref()
 						.and_then(crate::types::serialize_str);
-					let initial = initial_usage.as_ref();
-					let input_tokens = usage
-						.input_tokens
-						.or_else(|| initial.map(|usage: &messages::Usage| usage.input_tokens))
-						.unwrap_or_default();
-					let output_tokens = usage
-						.output_tokens
-						.or_else(|| initial.map(|usage| usage.output_tokens))
-						.unwrap_or_default();
-					let cache_read_input_tokens = usage
-						.cache_read_input_tokens
-						.or_else(|| initial.and_then(|usage| usage.cache_read_input_tokens));
-					let cache_creation_input_tokens = usage
-						.cache_creation_input_tokens
-						.or_else(|| initial.and_then(|usage| usage.cache_creation_input_tokens));
-					let reasoning_tokens = usage
-						.output_tokens_details
-						.as_ref()
-						.and_then(|details| details.thinking_tokens)
-						.or_else(|| {
-							initial
-								.and_then(|usage| usage.output_tokens_details.as_ref())
-								.and_then(|details| details.thinking_tokens)
-						});
 					log.update(|r| {
-						r.response.input_tokens = Some(input_tokens as u64);
-						r.response.output_tokens = Some(output_tokens as u64);
-						r.response.total_tokens = Some((input_tokens + output_tokens) as u64);
-						r.response.cached_input_tokens = cache_read_input_tokens.map(|i| i as u64);
-						r.response.cache_creation_input_tokens = cache_creation_input_tokens.map(|i| i as u64);
-						r.response.reasoning_tokens = reasoning_tokens.map(|i| i as u64);
+						if let Some(inp) = usage.input_tokens {
+							r.response.input_tokens = Some(inp as u64);
+						}
+						if let Some(crt) = usage.cache_read_input_tokens {
+							r.response.cached_input_tokens = Some(crt as u64);
+						}
+						if let Some(cwt) = usage.cache_creation_input_tokens {
+							r.response.cache_creation_input_tokens = Some(cwt as u64);
+						}
+						if let Some(o) = usage.output_tokens {
+							r.response.output_tokens = Some(o as u64);
+						}
+						if let Some(inp) = r.response.input_tokens
+							&& let Some(o) = r.response.output_tokens
+						{
+							r.response.total_tokens = Some(inp + o)
+						}
 						if let Some(completion) = completion.take() {
 							r.response.completion = Some(vec![completion]);
 						}
-						r.response.output_messages =
-							tool_calls.take_output_messages(telemetry_finish_reason.clone());
+						r.response.output_messages = tool_calls.take_output_messages(log_finish_reason.clone());
 					});
 					let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
 						vec![completions::ChatChoiceStream {
@@ -901,11 +877,17 @@ pub mod from_completions {
 					mk(
 						choices,
 						Some(completions::Usage {
-							prompt_tokens: input_tokens as u32,
-							completion_tokens: output_tokens as u32,
-							total_tokens: (input_tokens + output_tokens) as u32,
-							cache_read_input_tokens: cache_read_input_tokens.map(|i| i as u64),
-							prompt_tokens_details: match (cache_read_input_tokens, cache_creation_input_tokens) {
+							prompt_tokens: usage.input_tokens.unwrap_or_default() as u32,
+							completion_tokens: usage.output_tokens.unwrap_or_default() as u32,
+
+							total_tokens: (usage.input_tokens.unwrap_or_default()
+								+ usage.output_tokens.unwrap_or_default()) as u32,
+
+							cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
+							prompt_tokens_details: match (
+								usage.cache_read_input_tokens,
+								usage.cache_creation_input_tokens,
+							) {
 								(None, None) => None,
 								(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
 									cached_tokens: cached_tokens.map(|i| i as u64),
@@ -914,14 +896,9 @@ pub mod from_completions {
 									rest: Default::default(),
 								}),
 							},
-							cache_creation_input_tokens: cache_creation_input_tokens.map(|i| i as u64),
-							completion_tokens_details: reasoning_tokens.map(|reasoning_tokens| {
-								completions::UsageCompletionDetails {
-									reasoning_tokens: Some(reasoning_tokens as u64),
-									audio_tokens: None,
-									rest: Default::default(),
-								}
-							}),
+							cache_creation_input_tokens: usage.cache_creation_input_tokens.map(|i| i as u64),
+
+							completion_tokens_details: None,
 						}),
 					)
 				},
@@ -974,6 +951,7 @@ pub mod from_completions {
 				},
 			}
 		});
+
 		parse::sse::append_done_on_success(body)
 	}
 }
@@ -1103,12 +1081,6 @@ pub fn passthrough_stream(
 			messages::MessagesStreamEvent::MessageStart { message } => {
 				log.update(|r| {
 					r.response.output_tokens = Some(message.usage.output_tokens as u64);
-					r.response.reasoning_tokens = message
-						.usage
-						.output_tokens_details
-						.as_ref()
-						.and_then(|details| details.thinking_tokens)
-						.map(|tokens| tokens as u64);
 					r.response.input_tokens = Some(message.usage.input_tokens as u64);
 					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
 					r.response.cache_creation_input_tokens =
@@ -1156,13 +1128,6 @@ pub fn passthrough_stream(
 					}
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
-					}
-					if let Some(thinking_tokens) = usage
-						.output_tokens_details
-						.as_ref()
-						.and_then(|details| details.thinking_tokens)
-					{
-						r.response.reasoning_tokens = Some(thinking_tokens as u64);
 					}
 					if let Some(crt) = usage.cache_read_input_tokens {
 						r.response.cached_input_tokens = Some(crt as u64);

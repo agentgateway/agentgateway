@@ -86,134 +86,60 @@ info:
   "request": {
     "messages": [
       {
+        "role": "developer",
+        "content": "Return one inventory decision as JSON."
+      },
+      {
+        "role": "developer",
+        "content": "Use the warehouse policy dated 2026-07-15."
+      },
+      {
+        "role": "developer",
+        "content": [
+          {
+            "type": "text",
+            "text": "Keep item IDs unchanged."
+          }
+        ]
+      },
+      {
         "role": "user",
         "content": [
           {
             "type": "text",
             "text": "Check item A-17 against these records."
-          },
-          {
-            "type": "image",
-            "source": {
-              "type": "base64",
-              "media_type": "image/png",
-              "data": "aQ=="
-            }
-          },
-          {
-            "type": "document",
-            "source": {
-              "type": "base64",
-              "media_type": "application/pdf",
-              "data": "JVBERi0xLjQK"
-            },
-            "title": "policy.pdf"
-          },
-          {
-            "type": "document",
-            "source": {
-              "type": "text",
-              "media_type": "text/plain",
-              "data": "shelf B12"
-            },
-            "title": "location.txt"
           }
         ]
       },
       {
         "role": "assistant",
-        "content": [
+        "content": "I will check the live record."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
           {
-            "type": "text",
-            "text": "I will check the live record."
-          },
-          {
-            "type": "tool_use",
+            "type": "function",
             "id": "call_weather",
-            "name": "weather",
-            "input": {
-              "city": "Seattle"
+            "function": {
+              "name": "weather",
+              "arguments": "{\"city\":\"Seattle\"}"
             }
           }
         ]
       },
       {
-        "role": "user",
-        "content": [
-          {
-            "type": "tool_result",
-            "tool_use_id": "call_weather",
-            "content": [
-              {
-                "type": "text",
-                "text": "Rain, 12 C"
-              },
-              {
-                "type": "image",
-                "source": {
-                  "type": "base64",
-                  "media_type": "image/png",
-                  "data": "aQ=="
-                }
-              }
-            ]
-          }
-        ]
-      }
-    ],
-    "system": [
-      {
-        "type": "text",
-        "text": "Return one inventory decision as JSON."
-      },
-      {
-        "type": "text",
-        "text": "Use the warehouse policy dated 2026-07-15."
-      },
-      {
-        "type": "text",
-        "text": "Keep item IDs unchanged."
+        "role": "tool",
+        "content": "Rain, 12 C",
+        "tool_call_id": "call_weather"
       }
     ],
     "model": "claude-sonnet-4-5",
-    "max_tokens": 512,
-    "tools": [
-      {
-        "name": "weather",
-        "description": "Read current weather for a city.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "city": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "city"
-          ]
-        },
-        "strict": false
-      },
-      {
-        "name": "inventory",
-        "description": "Read an inventory record.",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "item_id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "item_id"
-          ]
-        },
-        "strict": true
-      }
-    ],
-    "output_config": {
-      "format": {
-        "type": "json_schema",
+    "max_completion_tokens": 512,
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "inventory_decision",
         "schema": {
           "type": "object",
           "properties": {
@@ -229,15 +155,57 @@ info:
             "available"
           ],
           "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    "stream": false,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "description": "Read current weather for a city.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "inventory",
+          "description": "Read an inventory record.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ]
+          }
         }
       }
-    }
+    ],
+    "parallel_tool_calls": true
   },
   "parsed": {
     "input_format": "Responses",
     "cache_convention": "InputIncludesCache",
     "request_model": "claude-sonnet-4-5",
-    "provider": "messages",
+    "provider": "gemini",
     "streaming": false,
     "params": {
       "max_tokens": 512

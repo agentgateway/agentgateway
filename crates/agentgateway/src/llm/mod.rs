@@ -247,7 +247,11 @@ fn cache_convention_for(
 			InputExcludesCache
 		},
 		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
-		_ if matches!(provider_format, Some(Messages | AnthropicTokenCount)) => InputExcludesCache,
+		AIProvider::Custom(_) => match provider_format {
+			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
+			_ => InputIncludesCache,
+		},
+		_ if matches!(provider_format, Some(Messages)) => InputExcludesCache,
 		_ => InputIncludesCache, // openai, azure, gemini, copilot/vertex non-anthropic
 	}
 }
@@ -532,13 +536,7 @@ impl ChatTranslation {
 				return Ok(rendered);
 			},
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Copilot(_)) => {
-				let mut rendered = match req {
-					types::ChatRequest::Responses(req) => {
-						let req = copilot::prepare_responses_request(&req);
-						render_anthropic_messages(types::ChatRequest::Responses(req), ctx.catalog)?
-					},
-					req => render_anthropic_messages(req, ctx.catalog)?,
-				};
+				let mut rendered = render_anthropic_messages(req, ctx.catalog)?;
 				rendered.body = copilot::prepare_messages_body(rendered.body)?;
 				return Ok(rendered);
 			},
@@ -593,10 +591,10 @@ impl ChatTranslation {
 				},
 				InputFormat::Responses => conversion::messages::from_responses::translate_response(
 					bytes,
-					ctx.model,
 					responses_to_messages_state(ctx.provider_state)?,
 					ctx.buffer_limit,
-				),
+				)
+				.map(|response| Box::new(response) as Box<dyn ResponseType>),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,

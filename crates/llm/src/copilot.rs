@@ -105,30 +105,6 @@ pub fn prepare_messages_body(body: Vec<u8>) -> Result<Vec<u8>, AIError> {
 	serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
 }
 
-/// Applies confirmed Copilot compatibility rules to a Responses request before conversion.
-pub fn prepare_responses_request(
-	request: &crate::types::responses::Request,
-) -> crate::types::responses::Request {
-	let mut request = request.clone();
-	let automatic_tool_choice = request
-		.rest
-		.get("tool_choice")
-		.is_none_or(|choice| choice.as_str() == Some("auto"));
-	if automatic_tool_choice
-		&& let Some(tools) = request
-			.rest
-			.get_mut("tools")
-			.and_then(serde_json::Value::as_array_mut)
-	{
-		let cache_only_search = serde_json::json!({
-			"type": "web_search",
-			"external_web_access": false,
-		});
-		tools.retain(|tool| tool != &cache_only_search);
-	}
-	request
-}
-
 pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
 		RouteType::Messages => "/v1/messages",
@@ -147,7 +123,6 @@ mod tests {
 
 	use super::*;
 	use crate::model_catalog::{Catalog, TestCatalog, tags};
-	use crate::types::responses;
 
 	#[test]
 	fn catalog_format_tags_override_builtins() {
@@ -182,92 +157,6 @@ mod tests {
 
 	const CLAUDE_CODE_BETA_HEADER: &str =
 		"claude-code-20250219,advisor-tool-2026-03-01,effort-2025-11-24";
-
-	fn request(tools: Value, tool_choice: Option<Value>) -> responses::Request {
-		let mut request = json!({
-			"input": "work",
-			"model": "claude-sonnet-5",
-			"tools": tools,
-		});
-		if let Some(tool_choice) = tool_choice {
-			request["tool_choice"] = tool_choice;
-		}
-		serde_json::from_value(request).expect("valid Responses request")
-	}
-
-	fn tools(request: &responses::Request) -> &Vec<Value> {
-		request.rest["tools"]
-			.as_array()
-			.expect("Responses tools array")
-	}
-
-	#[test]
-	fn policy_removes_only_cache_only_hosted_search_for_automatic_choice() {
-		for tool_choice in [None, Some(json!("auto"))] {
-			let request = request(
-				json!([
-					{"type":"function","name":"web_search","parameters":{"type":"object"}},
-					{"type":"web_search","external_web_access":false},
-					{"type":"function","name":"weather","parameters":{"type":"object"}}
-				]),
-				tool_choice,
-			);
-			let prepared = prepare_responses_request(&request);
-
-			assert_eq!(
-				tools(&request).len(),
-				3,
-				"the caller request must not be mutated"
-			);
-			assert_eq!(
-				tools(&prepared),
-				&json!([
-					{"type":"function","name":"web_search","parameters":{"type":"object"}},
-					{"type":"function","name":"weather","parameters":{"type":"object"}}
-				])
-				.as_array()
-				.expect("expected tools")
-				.clone()
-			);
-		}
-	}
-
-	#[test]
-	fn policy_preserves_hosted_search_outside_the_safe_case() {
-		let cases = [
-			(
-				json!({"type":"web_search","external_web_access":true}),
-				None,
-			),
-			(json!({"type":"web_search"}), None),
-			(
-				json!({"type":"web_search","external_web_access":false,"unexpected":true}),
-				None,
-			),
-			(
-				json!({"type":"web_search","external_web_access":"false"}),
-				None,
-			),
-			(
-				json!({"type":"web_search","external_web_access":false}),
-				Some(json!({"type":"web_search"})),
-			),
-			(
-				json!({"type":"web_search","external_web_access":false}),
-				Some(json!("required")),
-			),
-			(
-				json!({"type":"web_search","external_web_access":false}),
-				Some(json!("none")),
-			),
-		];
-
-		for (tool, tool_choice) in cases {
-			let request = request(json!([tool]), tool_choice);
-			let prepared = prepare_responses_request(&request);
-			assert_eq!(tools(&prepared), tools(&request));
-		}
-	}
 
 	#[test]
 	fn messages_header_policy_sets_version_and_filters_only_unsupported_entries() {

@@ -66,9 +66,6 @@ impl ProxyError {
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
 			| ProxyError::InvalidRequest
-			| ProxyError::InvalidRequestString(_)
-			| ProxyError::PayloadTooLarge(_)
-			| ProxyError::UnsupportedMediaType(_)
 			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)

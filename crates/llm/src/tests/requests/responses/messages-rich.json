@@ -9,7 +9,6 @@
       "role": "user",
       "content": [
         {"type": "input_text", "text": "Check item A-17 against these records."},
-        {"type": "input_image", "image_url": "https://example.com/a-17.webp", "detail": "auto"},
         {"type": "input_image", "image_url": "data:image/png;base64,aQ=="},
         {"type": "input_file", "file_data": "data:application/pdf;base64,JVBERi0xLjQK", "filename": "policy.pdf"},
         {"type": "input_file", "file_data": "data:text/plain;base64,c2hlbGYgQjEy", "filename": "location.txt"}
@@ -25,9 +24,7 @@
         {"type": "input_image", "image_url": "data:image/png;base64,aQ=="}
       ],
       "status": "completed"
-    },
-    {"type": "custom_tool_call", "id": "ctc_query", "call_id": "call_query", "namespace": "inventory", "name": "lookup", "input": "A-17", "status": "completed"},
-    {"type": "custom_tool_call_output", "call_id": "call_query", "output": [{"type": "input_file", "file_data": "data:text/plain;base64,aW4gc3RvY2s=", "filename": "result.txt"}]}
+	}
   ],
   "max_output_tokens": 512,
   "parallel_tool_calls": true,
@@ -45,19 +42,7 @@
     }
   },
   "tools": [
-    {"type": "function", "name": "weather", "description": "Read current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}, "strict": false},
-    {
-      "type": "namespace",
-      "name": "inventory",
-      "description": "Warehouse inventory tools.",
-      "tools": [
-        {"type": "function", "name": "by_shelf", "parameters": {"type": "object"}},
-        {"type": "custom", "name": "lookup", "format": {"type": "text"}}
-      ]
-    },
-    {"type": "custom", "name": "python", "description": "Run a short Python expression.", "format": {"type": "text"}},
-    {"type": "local_shell"},
-    {"type": "shell", "environment": {"type": "local"}},
-    {"type": "apply_patch"}
+	{"type": "function", "name": "weather", "description": "Read current weather for a city.", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}, "strict": false},
+	{"type": "function", "name": "inventory", "description": "Read an inventory record.", "parameters": {"type": "object", "properties": {"item_id": {"type": "string"}}, "required": ["item_id"]}}
   ]
 }
