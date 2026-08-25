@@ -83,7 +83,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 			updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
 				*auth = *validAuth.DeepCopy()
 			})
-			waitForOAuthPolicyReason(t, policyKey, string(agentgateway.PolicyReasonValid), "")
+			waitForOAuthPolicyReason(t, policyKey, agentgateway.PolicyReasonValid, "")
 		})
 
 		tests := []struct {
@@ -112,7 +112,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 				updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
 					*auth = *validAuth.DeepCopy()
 				})
-				waitForOAuthPolicyReason(t, policyKey, string(agentgateway.PolicyReasonValid), "")
+				waitForOAuthPolicyReason(t, policyKey, agentgateway.PolicyReasonValid, "")
 				t.Send("oauth-token-exchange.com",
 					&testmatchers.HttpResponse{
 						StatusCode: http.StatusOK,
@@ -126,7 +126,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 				)
 
 				updateOAuthTokenExchange(t, policyKey, tt.mutate)
-				waitForOAuthPolicyReason(t, policyKey, string(agentgateway.PolicyReasonPartiallyValid), tt.wantMessage)
+				waitForOAuthPolicyReason(t, policyKey, agentgateway.PolicyReasonPartiallyValid, tt.wantMessage)
 				t.Send("oauth-token-exchange.com",
 					&testmatchers.HttpResponse{
 						StatusCode: http.StatusInternalServerError,
@@ -237,7 +237,7 @@ func waitForOAuthPolicyReason(
 		}
 		for _, ancestor := range policy.Status.Ancestors {
 			for _, condition := range ancestor.Conditions {
-				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
+				if condition.Type == agentgateway.PolicyConditionAccepted &&
 					condition.Status == metav1.ConditionTrue &&
 					condition.Reason == reason &&
 					strings.Contains(condition.Message, message) {
