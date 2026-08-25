@@ -119,6 +119,14 @@ pub struct BackendAuth {
 	pub credentials: Vec<BackendAuthCredential>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum BackendAuthError {
+	#[error("local backend authentication failure: {0}")]
+	Local(#[source] anyhow::Error),
+	#[error("credential provider failure: {0}")]
+	CredentialProvider(#[source] anyhow::Error),
+}
+
 impl BackendAuth {
 	pub fn new(kind: BackendAuthKind) -> Self {
 		Self {
@@ -254,7 +262,7 @@ async fn apply_backend_auth_kind(
 		BackendAuthKind::Gcp(g) => {
 			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
 				.await
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+				.map_err(BackendAuthError::Local)?;
 		},
 		BackendAuthKind::Aws(_) => {
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
@@ -266,18 +274,16 @@ async fn apply_backend_auth_kind(
 				&backend_info.call_target,
 			)
 			.await
-			.map_err(ProxyError::BackendAuthenticationFailed)?;
+			.map_err(BackendAuthError::Local)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 		BackendAuthKind::Copilot => {
 			copilot::insert_headers(req)
 				.await
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+				.map_err(BackendAuthError::Local)?;
 		},
 		BackendAuthKind::JwtSign(cfg) => {
-			let token = cfg
-				.sign()
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+			let token = cfg.sign().map_err(BackendAuthError::Local)?;
 			let explicit = cfg.location().is_some();
 			let resolved = cfg.location().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			resolved.insert(req, &token)?;
@@ -315,6 +321,7 @@ pub async fn apply_late_backend_auth(
 
 	aws::sign_request(req, aws_auth)
 		.await
+		.map_err(BackendAuthError::Local)
 		.map_err(ProxyError::BackendAuthenticationFailed)
 }
 

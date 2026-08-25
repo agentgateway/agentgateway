@@ -88,9 +88,14 @@ impl ProxyError {
 			ProxyError::AuthorizationFailed
 			| ProxyError::SubstrateEgressDenied(_)
 			| ProxyError::CsrfValidationFailed => ProxyResponseReason::Authorization,
+			ProxyError::BackendAuthenticationFailed(http::auth::BackendAuthError::Local(_)) => {
+				ProxyResponseReason::Internal
+			},
 			ProxyError::UpstreamCallFailed(_)
 			| ProxyError::UpstreamTCPCallFailed(_)
-			| ProxyError::BackendAuthenticationFailed(_)
+			| ProxyError::BackendAuthenticationFailed(
+				http::auth::BackendAuthError::CredentialProvider(_),
+			)
 			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
 			ProxyError::RequestTimeout | ProxyError::UpstreamCallTimeout => ProxyResponseReason::Timeout,
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
@@ -205,7 +210,7 @@ pub enum ProxyError {
 	#[error("authorization failed")]
 	AuthorizationFailed,
 	#[error("backend authentication failed: {0}")]
-	BackendAuthenticationFailed(anyhow::Error),
+	BackendAuthenticationFailed(#[from] http::auth::BackendAuthError),
 	#[error("parsing body: {0}")]
 	Body(http::Error),
 	#[error("upstream call failed: {0:?}")]
@@ -363,7 +368,10 @@ impl ProxyError {
 			ProxyError::BackendDoesNotExist => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendUnsupportedMirror => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::ServiceNotFound => StatusCode::INTERNAL_SERVER_ERROR,
-			ProxyError::BackendAuthenticationFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::BackendAuthenticationFailed(ref error) => match error {
+				http::auth::BackendAuthError::Local(_) => StatusCode::INTERNAL_SERVER_ERROR,
+				http::auth::BackendAuthError::CredentialProvider(_) => StatusCode::BAD_GATEWAY,
+			},
 			ProxyError::InvalidBackendType => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::ExtProc(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::CsrfValidationFailed => StatusCode::FORBIDDEN,
@@ -724,6 +732,44 @@ mod tests {
 				reason
 			);
 		}
+	}
+
+	#[test]
+	fn backend_auth_failure_status_depends_on_source() {
+		let make_local_error = || {
+			ProxyError::BackendAuthenticationFailed(http::auth::BackendAuthError::Local(anyhow::anyhow!(
+				"local authentication failed"
+			)))
+		};
+		let make_error = || {
+			ProxyError::BackendAuthenticationFailed(http::auth::BackendAuthError::CredentialProvider(
+				anyhow::anyhow!("credential provider failed"),
+			))
+		};
+
+		assert_eq!(
+			ProxyResponse::Error(make_local_error()).as_reason(),
+			ProxyResponseReason::Internal
+		);
+		assert_eq!(
+			make_local_error().into_response_with_grpc(false).status(),
+			StatusCode::INTERNAL_SERVER_ERROR
+		);
+		let grpc_response = make_local_error().into_response_with_grpc(true);
+		assert_eq!(grpc_response.status(), StatusCode::OK);
+		assert_eq!(grpc_response.headers()["grpc-status"], "2");
+
+		assert_eq!(
+			ProxyResponse::Error(make_error()).as_reason(),
+			ProxyResponseReason::UpstreamFailure
+		);
+		assert_eq!(
+			make_error().into_response_with_grpc(false).status(),
+			StatusCode::BAD_GATEWAY
+		);
+		let grpc_response = make_error().into_response_with_grpc(true);
+		assert_eq!(grpc_response.status(), StatusCode::OK);
+		assert_eq!(grpc_response.headers()["grpc-status"], "14");
 	}
 
 	fn assert_ai_error_mapping(

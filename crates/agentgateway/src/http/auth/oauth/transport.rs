@@ -12,6 +12,7 @@ use super::{
 	ChainedExchange, ExchangeRequest, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,
 	OAuthTokenExchangeAuth, OAuthTokenType, sign_client_assertion,
 };
+use crate::http::auth::BackendAuthError;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::oauth::{
 	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
@@ -54,7 +55,9 @@ impl FetchError {
 				debug!(%status, error = %source, "oauth token exchange rejected by authorization server");
 				ProxyError::InvalidRequest
 			},
-			FetchError::Upstream(e) => ProxyError::BackendAuthenticationFailed(e),
+			FetchError::Upstream(e) => {
+				ProxyError::BackendAuthenticationFailed(BackendAuthError::Local(e))
+			},
 		}
 	}
 
