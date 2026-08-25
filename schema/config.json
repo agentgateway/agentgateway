@@ -8363,9 +8363,9 @@
             "null"
           ]
         },
-        "providerPreference": {
+        "endpointPreference": {
           "description": "Which endpoint to prefer (Runtime vs Mantle).",
-          "$ref": "#/$defs/BedrockProviderPreference",
+          "$ref": "#/$defs/BedrockEndpointPreference",
           "default": "runtimePreferred"
         }
       },
@@ -8374,7 +8374,7 @@
         "region"
       ]
     },
-    "BedrockProviderPreference": {
+    "BedrockEndpointPreference": {
       "type": "string",
       "enum": [
         "runtimePreferred",
@@ -10991,9 +10991,9 @@
             "null"
           ]
         },
-        "bedrockProviderPreference": {
+        "bedrockEndpointPreference": {
           "description": "Which Bedrock endpoint to prefer (Runtime vs Mantle).",
-          "$ref": "#/$defs/BedrockProviderPreference",
+          "$ref": "#/$defs/BedrockEndpointPreference",
           "default": "runtimePreferred"
         },
         "vertexRegion": {

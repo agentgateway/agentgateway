@@ -2580,6 +2580,10 @@ async fn make_backend_call(
 			)
 		};
 	if let Some(llm) = &backend_call.backend_policies.llm_provider {
+		// `setup_request` may have rewritten the connection target to a model-aware host
+		// (e.g. Bedrock Mantle vs Runtime), so the endpoint captured earlier can be stale.
+		// Refresh it from the finalized target rather than coupling logging into authority setup.
+		log.add(|l| l.endpoint = Some(backend_call.target.clone()));
 		llm.provider.strip_browser_cors_headers(&mut req);
 		apply_auto_hostname(&mut req, &backend_call.target)?;
 		// Some auth types (AWS) need to be applied after all request processing

@@ -10,7 +10,7 @@ pub struct AwsRegion {
 
 #[apply(schema_enum!)]
 #[derive(Default)]
-pub enum BedrockProviderPreference {
+pub enum BedrockEndpointPreference {
 	#[default]
 	RuntimePreferred,
 	MantleOnly,
@@ -42,7 +42,7 @@ pub struct Provider {
 	pub guardrail_version: Option<Strng>,
 	/// Which endpoint to prefer (Runtime vs Mantle).
 	#[serde(default)]
-	pub provider_preference: BedrockProviderPreference,
+	pub endpoint_preference: BedrockEndpointPreference,
 }
 
 impl super::Provider for Provider {
@@ -91,10 +91,10 @@ impl Provider {
 		model_id: Option<&str>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> BedrockEndpoint {
-		use BedrockProviderPreference::*;
+		use BedrockEndpointPreference::*;
 
 		use crate::model_catalog::tags;
-		match self.provider_preference {
+		match self.endpoint_preference {
 			RuntimeOnly => BedrockEndpoint::Runtime,
 			MantleOnly => BedrockEndpoint::Mantle,
 			// Prefer Runtime; use Mantle only for models tagged Mantle but not Runtime.
@@ -209,20 +209,20 @@ mod tests {
 	use super::*;
 	use crate::{ChatFormat, RouteType};
 
-	fn provider(pref: BedrockProviderPreference) -> Provider {
+	fn provider(pref: BedrockEndpointPreference) -> Provider {
 		Provider {
 			model: None,
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			provider_preference: pref,
+			endpoint_preference: pref,
 		}
 	}
 
 	#[test]
 	fn resolve_endpoint_explicit_preferences_ignore_model_table() {
-		let mantle = provider(BedrockProviderPreference::MantleOnly);
-		let runtime = provider(BedrockProviderPreference::RuntimeOnly);
+		let mantle = provider(BedrockEndpointPreference::MantleOnly);
+		let runtime = provider(BedrockEndpointPreference::RuntimeOnly);
 		assert_eq!(
 			mantle.resolve_endpoint(RouteType::Messages, Some("any-model"), None),
 			BedrockEndpoint::Mantle
@@ -236,7 +236,7 @@ mod tests {
 	#[test]
 	fn resolve_endpoint_runtime_preferred_routes_non_chat_by_route_type() {
 		// These routes resolve by route type alone (no catalog lookup), so this is deterministic.
-		let p = provider(BedrockProviderPreference::RuntimePreferred);
+		let p = provider(BedrockEndpointPreference::RuntimePreferred);
 		assert_eq!(
 			p.resolve_endpoint(RouteType::Embeddings, None, None),
 			BedrockEndpoint::Runtime
@@ -258,7 +258,7 @@ mod tests {
 	#[test]
 	fn resolve_endpoint_runtime_preferred_uses_catalog_tags() {
 		use crate::model_catalog::{TestCatalog, tags};
-		let p = provider(BedrockProviderPreference::RuntimePreferred);
+		let p = provider(BedrockEndpointPreference::RuntimePreferred);
 		let cat = TestCatalog::new([("openai.gpt-oss-120b", &[tags::MANTLE][..])]);
 		let catalog: crate::model_catalog::Catalog = Some(&cat);
 		assert_eq!(
@@ -277,7 +277,7 @@ mod tests {
 
 	#[test]
 	fn mantle_endpoint_uses_correct_host_path_and_signing() {
-		let p = provider(BedrockProviderPreference::MantleOnly);
+		let p = provider(BedrockEndpointPreference::MantleOnly);
 		assert_eq!(
 			p.get_host(RouteType::Messages, None, None).as_str(),
 			"bedrock-mantle.us-east-1.api.aws"
@@ -305,7 +305,7 @@ mod tests {
 
 	#[test]
 	fn runtime_endpoint_uses_correct_host_path_and_signing() {
-		let p = provider(BedrockProviderPreference::RuntimeOnly);
+		let p = provider(BedrockEndpointPreference::RuntimeOnly);
 		assert_eq!(
 			p.get_host(RouteType::Messages, None, None).as_str(),
 			"bedrock-runtime.us-east-1.amazonaws.com"
@@ -329,9 +329,9 @@ mod tests {
 	#[test]
 	fn rerank_always_uses_agent_runtime_host() {
 		for pref in [
-			BedrockProviderPreference::MantleOnly,
-			BedrockProviderPreference::RuntimeOnly,
-			BedrockProviderPreference::RuntimePreferred,
+			BedrockEndpointPreference::MantleOnly,
+			BedrockEndpointPreference::RuntimeOnly,
+			BedrockEndpointPreference::RuntimePreferred,
 		] {
 			assert_eq!(
 				provider(pref)
@@ -344,7 +344,7 @@ mod tests {
 
 	#[test]
 	fn supported_chat_formats_mantle_advertises_native_runtime_converse() {
-		let mantle = provider(BedrockProviderPreference::MantleOnly);
+		let mantle = provider(BedrockEndpointPreference::MantleOnly);
 		assert_eq!(
 			mantle.supported_chat_formats(Some("any"), None),
 			vec![
@@ -353,7 +353,7 @@ mod tests {
 				ChatFormat::OpenAIResponses,
 			]
 		);
-		let runtime = provider(BedrockProviderPreference::RuntimeOnly);
+		let runtime = provider(BedrockEndpointPreference::RuntimeOnly);
 		assert_eq!(
 			runtime.supported_chat_formats(Some("any"), None),
 			vec![ChatFormat::BedrockConverse]
@@ -363,7 +363,7 @@ mod tests {
 	#[test]
 	fn non_chat_routes_stay_on_runtime_even_for_mantle_only() {
 		// These routes exist only on Runtime, so MantleOnly must not force them to Mantle.
-		let p = provider(BedrockProviderPreference::MantleOnly);
+		let p = provider(BedrockEndpointPreference::MantleOnly);
 		for rt in [
 			RouteType::Embeddings,
 			RouteType::Rerank,

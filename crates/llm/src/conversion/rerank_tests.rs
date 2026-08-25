@@ -10,7 +10,7 @@ fn bedrock_provider(model: &str, region: &str) -> crate::bedrock::Provider {
 		region: agent_core::strng::new(region),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		provider_preference: Default::default(),
+		endpoint_preference: Default::default(),
 	}
 }
 

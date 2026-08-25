@@ -1009,7 +1009,7 @@ async fn gemini_inbound_requires_a_gemini_upstream() {
 				region: strng::new("us-east-1"),
 				guardrail_identifier: None,
 				guardrail_version: None,
-				provider_preference: Default::default(),
+				endpoint_preference: Default::default(),
 			})),
 			"bedrock-runtime.us-east-1.amazonaws.com",
 			"bedrock",

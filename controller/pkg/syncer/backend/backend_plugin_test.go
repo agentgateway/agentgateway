@@ -613,7 +613,7 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
-			name: "Valid Bedrock backend with MantleOnly provider preference",
+			name: "Valid Bedrock backend with MantleOnly endpoint preference",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "bedrock-mantle-only",
@@ -626,7 +626,7 @@ func TestBuildAIBackend(t *testing.T) {
 								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
 								BedrockSettings: agentgateway.BedrockSettings{
 									Region:             "us-east-1",
-									ProviderPreference: agentgateway.BedrockProviderPreferenceMantleOnly,
+									EndpointPreference: agentgateway.BedrockEndpointPreferenceMantleOnly,
 								},
 							},
 						},
@@ -635,7 +635,7 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
-			name: "Valid Bedrock backend with RuntimeOnly provider preference",
+			name: "Valid Bedrock backend with RuntimeOnly endpoint preference",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "bedrock-runtime-only",
@@ -648,7 +648,7 @@ func TestBuildAIBackend(t *testing.T) {
 								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
 								BedrockSettings: agentgateway.BedrockSettings{
 									Region:             "us-east-1",
-									ProviderPreference: agentgateway.BedrockProviderPreferenceRuntimeOnly,
+									EndpointPreference: agentgateway.BedrockEndpointPreferenceRuntimeOnly,
 								},
 							},
 						},
@@ -657,7 +657,7 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
-			name: "Valid Bedrock backend with default provider preference",
+			name: "Valid Bedrock backend with default endpoint preference",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "bedrock-default",

@@ -1890,14 +1890,14 @@ pub(crate) fn backend_with_policies_from_proto(
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								provider_preference: match bedrock.provider_preference() {
-									proto::agent::ai_backend::BedrockProviderPreference::MantleOnly => {
-										llm::bedrock::BedrockProviderPreference::MantleOnly
+								endpoint_preference: match bedrock.endpoint_preference() {
+									proto::agent::ai_backend::BedrockEndpointPreference::MantleOnly => {
+										llm::bedrock::BedrockEndpointPreference::MantleOnly
 									},
-									proto::agent::ai_backend::BedrockProviderPreference::RuntimeOnly => {
-										llm::bedrock::BedrockProviderPreference::RuntimeOnly
+									proto::agent::ai_backend::BedrockEndpointPreference::RuntimeOnly => {
+										llm::bedrock::BedrockEndpointPreference::RuntimeOnly
 									},
-									_ => llm::bedrock::BedrockProviderPreference::RuntimePreferred,
+									_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
 								},
 							})
 						},

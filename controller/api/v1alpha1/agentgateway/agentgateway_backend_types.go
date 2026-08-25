@@ -564,27 +564,27 @@ type BedrockSettings struct {
 	// +optional
 	Guardrail *AWSGuardrailConfig `json:"guardrail,omitempty"`
 
-	// ProviderPreference selects which Bedrock API surface to prefer.
+	// EndpointPreference selects which Bedrock API surface to prefer.
 	// `RuntimePreferred` (the default) uses Runtime and routes to Mantle only for
 	// models the catalog tags `mantle` but not `runtime`; `MantleOnly` and
 	// `RuntimeOnly` force one endpoint.
 	// +kubebuilder:default=RuntimePreferred
 	// +optional
-	ProviderPreference BedrockProviderPreference `json:"providerPreference,omitempty"`
+	EndpointPreference BedrockEndpointPreference `json:"endpointPreference,omitempty"`
 }
 
-// BedrockProviderPreference selects the Bedrock API provider preference.
+// BedrockEndpointPreference selects the Bedrock API provider preference.
 // +k8s:enum
-type BedrockProviderPreference string
+type BedrockEndpointPreference string
 
 const (
-	// BedrockProviderPreferenceRuntimePreferred uses Runtime by default and routes to
+	// BedrockEndpointPreferenceRuntimePreferred uses Runtime by default and routes to
 	// Mantle only for models the catalog tags `mantle` but not `runtime`. This is the default.
-	BedrockProviderPreferenceRuntimePreferred BedrockProviderPreference = "RuntimePreferred"
-	// BedrockProviderPreferenceMantleOnly always uses the Mantle endpoint, regardless of catalog tags.
-	BedrockProviderPreferenceMantleOnly BedrockProviderPreference = "MantleOnly"
-	// BedrockProviderPreferenceRuntimeOnly always uses the Runtime endpoint, regardless of catalog tags.
-	BedrockProviderPreferenceRuntimeOnly BedrockProviderPreference = "RuntimeOnly"
+	BedrockEndpointPreferenceRuntimePreferred BedrockEndpointPreference = "RuntimePreferred"
+	// BedrockEndpointPreferenceMantleOnly always uses the Mantle endpoint, regardless of catalog tags.
+	BedrockEndpointPreferenceMantleOnly BedrockEndpointPreference = "MantleOnly"
+	// BedrockEndpointPreferenceRuntimeOnly always uses the Runtime endpoint, regardless of catalog tags.
+	BedrockEndpointPreferenceRuntimeOnly BedrockEndpointPreference = "RuntimeOnly"
 )
 
 type BedrockConfig struct {

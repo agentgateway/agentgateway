@@ -2259,52 +2259,52 @@ func (BackendPolicySpec_McpGuardrails_FailureMode) EnumDescriptor() ([]byte, []i
 	return file_resource_proto_rawDescGZIP(), []int{58, 11, 1}
 }
 
-type AIBackend_BedrockProviderPreference int32
+type AIBackend_BedrockEndpointPreference int32
 
 const (
-	AIBackend_BEDROCK_PROVIDER_PREFERENCE_RUNTIME_PREFERRED AIBackend_BedrockProviderPreference = 0
-	AIBackend_BEDROCK_PROVIDER_PREFERENCE_MANTLE_ONLY       AIBackend_BedrockProviderPreference = 1
-	AIBackend_BEDROCK_PROVIDER_PREFERENCE_RUNTIME_ONLY      AIBackend_BedrockProviderPreference = 2
+	AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED AIBackend_BedrockEndpointPreference = 0
+	AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY       AIBackend_BedrockEndpointPreference = 1
+	AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY      AIBackend_BedrockEndpointPreference = 2
 )
 
-// Enum value maps for AIBackend_BedrockProviderPreference.
+// Enum value maps for AIBackend_BedrockEndpointPreference.
 var (
-	AIBackend_BedrockProviderPreference_name = map[int32]string{
-		0: "BEDROCK_PROVIDER_PREFERENCE_RUNTIME_PREFERRED",
-		1: "BEDROCK_PROVIDER_PREFERENCE_MANTLE_ONLY",
-		2: "BEDROCK_PROVIDER_PREFERENCE_RUNTIME_ONLY",
+	AIBackend_BedrockEndpointPreference_name = map[int32]string{
+		0: "BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED",
+		1: "BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY",
+		2: "BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY",
 	}
-	AIBackend_BedrockProviderPreference_value = map[string]int32{
-		"BEDROCK_PROVIDER_PREFERENCE_RUNTIME_PREFERRED": 0,
-		"BEDROCK_PROVIDER_PREFERENCE_MANTLE_ONLY":       1,
-		"BEDROCK_PROVIDER_PREFERENCE_RUNTIME_ONLY":      2,
+	AIBackend_BedrockEndpointPreference_value = map[string]int32{
+		"BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED": 0,
+		"BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY":       1,
+		"BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY":      2,
 	}
 )
 
-func (x AIBackend_BedrockProviderPreference) Enum() *AIBackend_BedrockProviderPreference {
-	p := new(AIBackend_BedrockProviderPreference)
+func (x AIBackend_BedrockEndpointPreference) Enum() *AIBackend_BedrockEndpointPreference {
+	p := new(AIBackend_BedrockEndpointPreference)
 	*p = x
 	return p
 }
 
-func (x AIBackend_BedrockProviderPreference) String() string {
+func (x AIBackend_BedrockEndpointPreference) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (AIBackend_BedrockProviderPreference) Descriptor() protoreflect.EnumDescriptor {
+func (AIBackend_BedrockEndpointPreference) Descriptor() protoreflect.EnumDescriptor {
 	return file_resource_proto_enumTypes[43].Descriptor()
 }
 
-func (AIBackend_BedrockProviderPreference) Type() protoreflect.EnumType {
+func (AIBackend_BedrockEndpointPreference) Type() protoreflect.EnumType {
 	return &file_resource_proto_enumTypes[43]
 }
 
-func (x AIBackend_BedrockProviderPreference) Number() protoreflect.EnumNumber {
+func (x AIBackend_BedrockEndpointPreference) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use AIBackend_BedrockProviderPreference.Descriptor instead.
-func (AIBackend_BedrockProviderPreference) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use AIBackend_BedrockEndpointPreference.Descriptor instead.
+func (AIBackend_BedrockEndpointPreference) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{63, 0}
 }
 
@@ -15750,7 +15750,7 @@ type AIBackend_Bedrock struct {
 	Region              string                              `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
 	GuardrailIdentifier *string                             `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3,oneof" json:"guardrail_identifier,omitempty"`
 	GuardrailVersion    *string                             `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3,oneof" json:"guardrail_version,omitempty"`
-	ProviderPreference  AIBackend_BedrockProviderPreference `protobuf:"varint,5,opt,name=provider_preference,json=providerPreference,proto3,enum=agentgateway.dev.resource.AIBackend_BedrockProviderPreference" json:"provider_preference,omitempty"`
+	EndpointPreference  AIBackend_BedrockEndpointPreference `protobuf:"varint,5,opt,name=endpoint_preference,json=endpointPreference,proto3,enum=agentgateway.dev.resource.AIBackend_BedrockEndpointPreference" json:"endpoint_preference,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -15813,11 +15813,11 @@ func (x *AIBackend_Bedrock) GetGuardrailVersion() string {
 	return ""
 }
 
-func (x *AIBackend_Bedrock) GetProviderPreference() AIBackend_BedrockProviderPreference {
+func (x *AIBackend_Bedrock) GetEndpointPreference() AIBackend_BedrockEndpointPreference {
 	if x != nil {
-		return x.ProviderPreference
+		return x.EndpointPreference
 	}
-	return AIBackend_BEDROCK_PROVIDER_PREFERENCE_RUNTIME_PREFERRED
+	return AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED
 }
 
 type AIBackend_AzureOpenAI struct {
@@ -18812,7 +18812,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x126\n" +
 	"\x14guardrail_identifier\x18\x03 \x01(\tH\x01R\x13guardrailIdentifier\x88\x01\x01\x120\n" +
 	"\x11guardrail_version\x18\x04 \x01(\tH\x02R\x10guardrailVersion\x88\x01\x01\x12o\n" +
-	"\x13provider_preference\x18\x05 \x01(\x0e2>.agentgateway.dev.resource.AIBackend.BedrockProviderPreferenceR\x12providerPreferenceB\b\n" +
+	"\x13endpoint_preference\x18\x05 \x01(\x0e2>.agentgateway.dev.resource.AIBackend.BedrockEndpointPreferenceR\x12endpointPreferenceB\b\n" +
 	"\x06_modelB\x17\n" +
 	"\x15_guardrail_identifierB\x14\n" +
 	"\x12_guardrail_version\x1a\xb5\x01\n" +
@@ -18873,10 +18873,10 @@ const file_resource_proto_rawDesc = "" +
 	"\x0f_model_override\x1a\\\n" +
 	"\rProviderGroup\x12K\n" +
 	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"\xa9\x01\n" +
-	"\x19BedrockProviderPreference\x121\n" +
-	"-BEDROCK_PROVIDER_PREFERENCE_RUNTIME_PREFERRED\x10\x00\x12+\n" +
-	"'BEDROCK_PROVIDER_PREFERENCE_MANTLE_ONLY\x10\x01\x12,\n" +
-	"(BEDROCK_PROVIDER_PREFERENCE_RUNTIME_ONLY\x10\x02\"-\n" +
+	"\x19BedrockEndpointPreference\x121\n" +
+	"-BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED\x10\x00\x12+\n" +
+	"'BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY\x10\x01\x12,\n" +
+	"(BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY\x10\x02\"-\n" +
 	"\x11AzureResourceType\x12\v\n" +
 	"\aOPEN_AI\x10\x00\x12\v\n" +
 	"\aFOUNDRY\x10\x01\"\xa4\x01\n" +
@@ -19159,7 +19159,7 @@ var file_resource_proto_goTypes = []any{
 	(BackendPolicySpec_McpAuthentication_Mode)(0),               // 40: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
 	(BackendPolicySpec_McpGuardrails_Phase)(0),                  // 41: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Phase
 	(BackendPolicySpec_McpGuardrails_FailureMode)(0),            // 42: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.FailureMode
-	(AIBackend_BedrockProviderPreference)(0),                    // 43: agentgateway.dev.resource.AIBackend.BedrockProviderPreference
+	(AIBackend_BedrockEndpointPreference)(0),                    // 43: agentgateway.dev.resource.AIBackend.BedrockEndpointPreference
 	(AIBackend_AzureResourceType)(0),                            // 44: agentgateway.dev.resource.AIBackend.AzureResourceType
 	(AIBackend_ProviderFormat)(0),                               // 45: agentgateway.dev.resource.AIBackend.ProviderFormat
 	(AIBackend_ProviderPreset)(0),                               // 46: agentgateway.dev.resource.AIBackend.ProviderPreset
@@ -19746,7 +19746,7 @@ var file_resource_proto_depIdxs = []int32{
 	235, // 349: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.methods:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.MethodsEntry
 	41,  // 350: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.MethodsEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Phase
 	248, // 351: agentgateway.dev.resource.AIBackend.OpenAI.moderation:type_name -> agentgateway.dev.resource.AIBackend.OpenAI.Moderation
-	43,  // 352: agentgateway.dev.resource.AIBackend.Bedrock.provider_preference:type_name -> agentgateway.dev.resource.AIBackend.BedrockProviderPreference
+	43,  // 352: agentgateway.dev.resource.AIBackend.Bedrock.endpoint_preference:type_name -> agentgateway.dev.resource.AIBackend.BedrockEndpointPreference
 	44,  // 353: agentgateway.dev.resource.AIBackend.Azure.resource_type:type_name -> agentgateway.dev.resource.AIBackend.AzureResourceType
 	45,  // 354: agentgateway.dev.resource.AIBackend.ProviderFormatConfig.format:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormat
 	244, // 355: agentgateway.dev.resource.AIBackend.Custom.formats:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormatConfig

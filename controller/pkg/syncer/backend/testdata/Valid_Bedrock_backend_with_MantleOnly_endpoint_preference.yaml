@@ -2,8 +2,8 @@ ai:
   providerGroups:
   - providers:
     - bedrock:
+        endpointPreference: BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY
         model: anthropic.claude-3-5-sonnet-20241022-v2:0
-        providerPreference: BEDROCK_PROVIDER_PREFERENCE_MANTLE_ONLY
         region: us-east-1
       name: backend
 key: test-ns/bedrock-mantle-only

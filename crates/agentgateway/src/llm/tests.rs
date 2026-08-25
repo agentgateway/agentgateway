@@ -51,18 +51,18 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 
 #[test]
 fn bedrock_chat_translation_follows_endpoint_selection() {
-	fn bedrock(pref: bedrock::BedrockProviderPreference) -> AIProvider {
+	fn bedrock(pref: bedrock::BedrockEndpointPreference) -> AIProvider {
 		AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
 			model: None,
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			provider_preference: pref,
+			endpoint_preference: pref,
 		}))
 	}
 
 	// Runtime endpoint keeps translating every chat input to Converse.
-	let runtime = bedrock(bedrock::BedrockProviderPreference::RuntimeOnly);
+	let runtime = bedrock(bedrock::BedrockEndpointPreference::RuntimeOnly);
 	for input in [
 		InputFormat::Completions,
 		InputFormat::Messages,
@@ -79,7 +79,7 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	}
 
 	// Mantle endpoint passes the client format through natively rather than to Converse.
-	let mantle = bedrock(bedrock::BedrockProviderPreference::MantleOnly);
+	let mantle = bedrock(bedrock::BedrockEndpointPreference::MantleOnly);
 	for (input, expected) in [
 		(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		(InputFormat::Messages, ChatFormat::AnthropicMessages),
@@ -1750,7 +1750,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		provider_preference: Default::default(),
+		endpoint_preference: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -1832,7 +1832,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		provider_preference: Default::default(),
+		endpoint_preference: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -2302,7 +2302,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		provider_preference: Default::default(),
+		endpoint_preference: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -2518,7 +2518,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		provider_preference: Default::default(),
+		endpoint_preference: Default::default(),
 	});
 
 	let body = Body::from(
@@ -3002,7 +3002,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			provider_preference: Default::default(),
+			endpoint_preference: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
