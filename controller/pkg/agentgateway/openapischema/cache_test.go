@@ -80,8 +80,8 @@ func TestGetNeverBlocksOnSlowUpstream(t *testing.T) {
 	if ready {
 		t.Fatalf("expected ready=false on first call (fetch just scheduled), got ready=true, schema=%q", schema)
 	}
-	if err == nil {
-		t.Fatal("expected a 'will retry automatically' error on first call, got nil")
+	if err != nil {
+		t.Fatalf("expected err=nil on first call (pending, not failed), got %v", err)
 	}
 }
 
@@ -117,18 +117,18 @@ func TestGetSurfacesFetchFailure(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	var err error
 	for time.Now().Before(deadline) {
-		_, ready, e := c.Get(krt.TestingDummyContext{}, srv.URL)
-		err = e
+		var ready bool
+		_, ready, err = c.Get(krt.TestingDummyContext{}, srv.URL)
 		if ready {
 			t.Fatal("expected the fetch to fail (server returns 500), got ready=true")
 		}
-		if err != nil && !isPending(err) {
-			break // got the real failure, not just "pending"
+		if err != nil {
+			break // done: the fetch failed
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond) // still pending (ready=false, err=nil)
 	}
-	if err == nil || isPending(err) {
-		t.Fatalf("expected a concrete fetch-failure error within the deadline, got %v", err)
+	if err == nil {
+		t.Fatal("expected a concrete fetch-failure error within the deadline, got nil")
 	}
 }
 
@@ -163,41 +163,30 @@ func TestGetEnforcesSizeLimit(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	var err error
 	for time.Now().Before(deadline) {
-		_, ready, e := c.Get(krt.TestingDummyContext{}, srv.URL)
-		err = e
+		var ready bool
+		_, ready, err = c.Get(krt.TestingDummyContext{}, srv.URL)
 		if ready {
 			t.Fatal("expected the fetch to fail (response exceeds size limit), got ready=true")
 		}
-		if err != nil && !isPending(err) {
-			break
+		if err != nil {
+			break // done: the fetch failed
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond) // still pending (ready=false, err=nil)
 	}
-	if err == nil || isPending(err) {
-		t.Fatalf("expected a size-limit error within the deadline, got %v", err)
+	if err == nil {
+		t.Fatal("expected a size-limit error within the deadline, got nil")
 	}
 }
 
-func isPending(err error) bool {
-	return err != nil && err.Error() != "" && containsWillRetry(err.Error())
-}
-
-func containsWillRetry(s string) bool {
-	const marker = "will retry automatically"
-	for i := 0; i+len(marker) <= len(s); i++ {
-		if s[i:i+len(marker)] == marker {
-			return true
-		}
-	}
-	return false
-}
-
+// pollUntilReady polls Get until it settles: ready=true (success) or a
+// non-nil error (failure). A pending result (ready=false, err=nil) just
+// means the background fetch hasn't completed yet, so it keeps polling.
 func pollUntilReady(t *testing.T, c *Cache, rawURL string) (schema string, ready bool, err error) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		schema, ready, err = c.Get(krt.TestingDummyContext{}, rawURL)
-		if ready || (err != nil && !isPending(err)) {
+		if ready || err != nil {
 			return schema, ready, err
 		}
 		time.Sleep(10 * time.Millisecond)

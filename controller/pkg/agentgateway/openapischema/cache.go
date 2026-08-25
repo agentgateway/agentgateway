@@ -115,7 +115,7 @@ func (c *Cache) Get(ctx krt.HandlerContext, rawURL string) (schema string, ready
 	}
 
 	c.ensureFetch(rawURL)
-	return "", false, fmt.Errorf("fetching openapi schema from %s (will retry automatically)", rawURL)
+	return "", false, nil
 }
 
 // ensureFetch schedules a background fetch for rawURL unless one is already
