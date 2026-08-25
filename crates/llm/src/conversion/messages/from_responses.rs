@@ -37,6 +37,13 @@ fn translate_typed(
 ) -> Result<(Vec<u8>, State), AIError> {
 	validate_typed_request(&req)?;
 	let output_format = typed_output_format(req.text.as_ref());
+	let reasoning_disabled = matches!(
+		req
+			.reasoning
+			.as_ref()
+			.and_then(|reasoning| reasoning.effort.as_ref()),
+		Some(responses::ReasoningEffort::None)
+	);
 	let reasoning_effort = typed_reasoning_effort(req.reasoning.as_ref());
 	let mut state = State::default();
 	if req
@@ -68,6 +75,7 @@ fn translate_typed(
 	let thinking = match thinking_budget_tokens {
 		Some(budget_tokens) => super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens)
 			.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens }),
+		None if reasoning_disabled => Some(messages::ThinkingInput::Disabled {}),
 		None => reasoning_effort.map(|_| messages::ThinkingInput::Adaptive {}),
 	};
 	let user_id = req

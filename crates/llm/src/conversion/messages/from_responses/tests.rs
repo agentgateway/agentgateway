@@ -58,6 +58,43 @@ fn explicit_thinking_budget_is_preserved_and_capped() {
 	));
 }
 
+#[test]
+fn explicit_none_reasoning_disables_thinking() {
+	let (body, _) = translate(&request(json!({
+		"model": "claude",
+		"input": "work",
+		"reasoning": {"effort": "none"}
+	})))
+	.expect("request should translate");
+	let translated: types::messages::typed::Request =
+		serde_json::from_slice(&body).expect("valid Messages request");
+
+	assert!(matches!(
+		translated.thinking,
+		Some(types::messages::typed::ThinkingInput::Disabled {})
+	));
+}
+
+#[test]
+fn explicit_thinking_budget_takes_precedence_over_disabled_reasoning() {
+	let (body, _) = translate(&request(json!({
+		"model": "claude",
+		"input": "work",
+		"reasoning": {"effort": "none"},
+		"vendor_extensions": {"thinking_budget_tokens": 1024}
+	})))
+	.expect("request should translate");
+	let translated: types::messages::typed::Request =
+		serde_json::from_slice(&body).expect("valid Messages request");
+
+	assert!(matches!(
+		translated.thinking,
+		Some(types::messages::typed::ThinkingInput::Enabled {
+			budget_tokens: 1024
+		})
+	));
+}
+
 fn sse_event(name: &str, data: serde_json::Value) -> String {
 	format!("event: {name}\ndata: {data}\n\n")
 }
