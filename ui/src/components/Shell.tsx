@@ -23,7 +23,8 @@ import {
 	Shield,
 	ShieldCheck,
 	SlidersHorizontal,
-	Sun
+	Sun,
+	Wallet
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -246,6 +247,7 @@ function navigationGroups(options: {
 						},
 						{ to: '/llm/guardrails', label: 'Guardrails', icon: Shield },
 						{ to: '/llm/keys', label: 'Virtual API Keys', icon: KeyRound },
+						{ to: '/llm/budgets', label: 'Budgets', icon: Wallet },
 						{ to: '/llm/costs', label: 'Costs', icon: Coins },
 
 						{

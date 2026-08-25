@@ -1363,3 +1363,82 @@ impl ratelimitmock::Handler for RecordingRateLimit {
 		ratelimitmock::ok_response()
 	}
 }
+
+/// A budget scoped to a metadata field pools spend across every key sharing that value, so one key
+/// can exhaust the allowance for the whole group.
+#[tokio::test]
+async fn llm_group_scoped_budget_pools_spend_across_keys() {
+	let pool =
+		agentgateway::database::DatabasePool::connect_with_max_connections("sqlite::memory:", Some(1))
+			.await
+			.unwrap();
+	let policy = json!({
+		"apiKey": {
+			"keys": [
+				{"key": "sk-alice", "metadata": {"name": "alice", "group": "research"}},
+				{"key": "sk-bob", "metadata": {"name": "bob", "group": "research"}},
+				{"key": "sk-carol", "metadata": {"name": "carol", "group": "platform"}},
+			],
+			"mode": "strict"
+		}
+	});
+	let budgets: Vec<agentgateway::http::budget::Budget> = serde_json::from_value(json!([{
+		"name": "team",
+		"scope": {"groupBy": "group"},
+		"limit": {"unit": "Tokens", "amount": 40},
+		"window": {"rolling": "1h"},
+		"onBudgetExceeded": "Block"
+	}]))
+	.unwrap();
+
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
+		false,
+	);
+	let config = agentgateway::config::parse_config("{}".to_string(), None).unwrap();
+	config.budget_policy.initialize(pool).await.unwrap();
+	config.budget_policy.set_specs(budgets);
+	let (mock, mut bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	bind.attach_route_policy(policy).await;
+
+	macro_rules! send {
+		($key:literal, $io:expr) => {
+			RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+				.header("authorization", concat!("Bearer ", $key))
+				.body(Body::from(
+					include_bytes!("../../../llm/src/tests/requests/completions/basic.json").to_vec(),
+				))
+				.send($io)
+				.await
+				.unwrap()
+		};
+	}
+
+	// Alice spends the group's allowance.
+	let response = send!("sk-alice", io.clone());
+	assert_eq!(response.status(), StatusCode::OK);
+	response.into_body().collect().await.unwrap();
+
+	// Bob shares her group, so he is blocked without having sent anything himself.
+	let response = send!("sk-bob", io.clone());
+	assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+	// Carol is in a different group and still has her own allowance.
+	let upstream = mock.received_requests().await.unwrap().len();
+	let response = send!("sk-carol", io);
+	assert_eq!(response.status(), StatusCode::OK);
+	response.into_body().collect().await.unwrap();
+	assert_eq!(
+		mock.received_requests().await.unwrap().len(),
+		upstream + 1,
+		"the blocked request never reached the provider"
+	);
+}

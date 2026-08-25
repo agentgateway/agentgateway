@@ -1,7 +1,7 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use super::BudgetPolicy;
+use super::{BudgetPolicy, ResolvedScope};
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,13 +14,53 @@ pub struct BudgetStatusResponse {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStatus {
-	pub api_key_name: String,
+	pub scope: BudgetStatusScope,
 	pub name: String,
 	pub limit: BudgetStatusLimit,
 	pub usage: BudgetStatusUsage,
 	pub window: BudgetStatusWindow,
 	pub on_budget_exceeded: String,
 	pub updated_at: i64,
+}
+
+/// Identifies which API keys share a counter, so a budget can be attributed to a single key, to a
+/// metadata value such as a group or tier, or to every key a selector matched.
+///
+/// Field order is also the sort order for reported budgets.
+#[derive(Debug, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetStatusScope {
+	/// `perKey`, `groupBy`, or `shared`.
+	pub kind: &'static str,
+	/// Metadata field partitioning the counter. Only set for `groupBy`.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub field: Option<String>,
+	/// Value identifying this counter within its kind: the API key display name for `perKey`, the
+	/// metadata value for `groupBy`. Absent for `shared`, where the budget name is the identity.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub value: Option<String>,
+}
+
+impl From<&ResolvedScope> for BudgetStatusScope {
+	fn from(scope: &ResolvedScope) -> Self {
+		match scope {
+			ResolvedScope::PerKey { api_key, .. } => Self {
+				kind: "perKey",
+				field: None,
+				value: Some(api_key.clone()),
+			},
+			ResolvedScope::GroupBy { field, value } => Self {
+				kind: "groupBy",
+				field: Some(field.clone()),
+				value: Some(value.clone()),
+			},
+			ResolvedScope::Shared => Self {
+				kind: "shared",
+				field: None,
+				value: None,
+			},
+		}
+	}
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -48,16 +88,24 @@ pub struct BudgetStatusWindow {
 }
 
 impl BudgetPolicy {
-	/// Returns a point-in-time status snapshot, optionally filtered by API key display name.
+	/// Returns a point-in-time status snapshot, optionally narrowed to the budgets that can apply to
+	/// one API key display name.
+	///
 	/// Expired counters are reported with zero usage even if no request has advanced their window.
+	/// Group and shared counters do not record which keys contribute to them, so they are reported
+	/// for every key rather than hidden from the key whose spend they may be limiting.
 	pub fn status(&self, api_key_name: Option<&str>) -> anyhow::Result<BudgetStatusResponse> {
 		let observed_at = Utc::now();
+		let applies_to_key = |scope: &ResolvedScope| match scope {
+			ResolvedScope::PerKey { api_key, .. } => api_key_name.is_none_or(|name| api_key == name),
+			ResolvedScope::GroupBy { .. } | ResolvedScope::Shared => true,
+		};
 		let mut budgets = self
 			.counters
 			.iter()
 			.filter_map(|counter| {
 				let definition = counter.definition.as_ref()?;
-				if !api_key_name.is_none_or(|name| definition.api_key == name) {
+				if !applies_to_key(&definition.scope) {
 					return None;
 				}
 				let limit = definition.budget.limit.amount.decimal();
@@ -69,7 +117,7 @@ impl BudgetPolicy {
 				};
 				let remaining = (limit - used).max(Decimal::ZERO);
 				Some(BudgetStatus {
-					api_key_name: definition.api_key.clone(),
+					scope: (&definition.scope).into(),
 					name: definition.budget.name.clone(),
 					limit: BudgetStatusLimit {
 						unit: definition.budget.limit.unit.as_str().to_owned(),
@@ -92,7 +140,7 @@ impl BudgetPolicy {
 				})
 			})
 			.collect::<Vec<_>>();
-		budgets.sort_by(|a, b| (&a.api_key_name, &a.name).cmp(&(&b.api_key_name, &b.name)));
+		budgets.sort_by(|a, b| (&a.scope, &a.name).cmp(&(&b.scope, &b.name)));
 		Ok(BudgetStatusResponse {
 			observed_at: observed_at.timestamp_millis(),
 			budgets,

@@ -16,6 +16,7 @@ import {
 import { useRef, useState } from 'react';
 
 import type { BudgetStatus, BudgetStatusResponse } from '@/api/budgetsApi';
+import { findPerKeyBudget } from '@/api/budgetsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { EnumSelector } from '@/components/EnumSelector';
 import {
@@ -73,9 +74,9 @@ export function KeysPage() {
 	const upsertResource = useUpsertConfigResource();
 	const upsertPolicy = useUpsertPolicyResource();
 	const deleteResource = useDeleteConfigResource();
-	const budgetStatus = useBudgetStatus({
-		enabled: keys.some(key => key.budgets?.length)
-	});
+	// Shared and grouped budgets are declared at the top level of the configuration rather than on a
+	// key, so they can exist even when no key declares an inline budget.
+	const budgetStatus = useBudgetStatus({ enabled: Boolean(policies.apiKey) });
 	const help = useSchemaHelp();
 	const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
 	const filePolicyOwned = Boolean(
@@ -929,8 +930,10 @@ function BudgetEditor(props: {
 				<div className="api-key-budget-list">
 					{props.budgets.map((budget, index) => {
 						const editing = editingIndex === index;
-						const live = status.data?.budgets.find(
-							item => item.apiKeyName === props.apiKeyName && item.name === budget.name.trim()
+						const live = findPerKeyBudget(
+							status.data?.budgets,
+							props.apiKeyName,
+							budget.name.trim()
 						);
 						return (
 							<article className="api-key-budget-card" key={index}>
@@ -1267,9 +1270,7 @@ function BudgetSummary(props: {
 	return (
 		<div className="key-budget-summary">
 			{budgets.map((budget, index) => {
-				const live = props.status?.budgets.find(
-					item => item.apiKeyName === props.apiKeyName && item.name === budget.name
-				);
+				const live = findPerKeyBudget(props.status?.budgets, props.apiKeyName, budget.name);
 				const { used, fraction, level } = budgetProgress(budget, live);
 				return (
 					<Tooltip

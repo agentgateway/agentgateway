@@ -1,15 +1,13 @@
-use std::collections::HashSet;
 use std::hash::Hash;
 
 use ::cel::Value;
-use rust_decimal::Decimal;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serializer};
 use subtle::ConstantTimeEq;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
-use crate::http::budget::{Budget, BudgetLimitUnit, MatchedBudgets, NANODOLLARS_PER_USD};
+use crate::http::budget::{Budget, MatchedBudgets, resolve_budgets};
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::{apply, *};
@@ -486,8 +484,8 @@ pub enum LocalAPIKey {
 }
 
 impl LocalAPIKey {
-	fn into_parts(self) -> anyhow::Result<(APIKeyHash, APIKeyPolicy)> {
-		let (key_hash, metadata, allowed_models, budgets) = match self {
+	fn into_parts(self, specs: &[Budget]) -> anyhow::Result<(APIKeyHash, APIKeyPolicy)> {
+		let (key_hash, metadata, allowed_models, inline_budgets) = match self {
 			LocalAPIKey::Key {
 				key,
 				metadata,
@@ -502,59 +500,7 @@ impl LocalAPIKey {
 			} => (key_hash, metadata, allowed_models, budgets),
 		};
 		let metadata = metadata.unwrap_or_default();
-		let api_key = metadata
-			.get("name")
-			.and_then(serde_json::Value::as_str)
-			.filter(|name| !name.is_empty())
-			.map(str::to_owned);
-		if !budgets.is_empty() && api_key.is_none() {
-			anyhow::bail!("API keys with budgets must have a metadata.name");
-		}
-		let mut budget_names = HashSet::new();
-		for budget in &budgets {
-			anyhow::ensure!(!budget.name.is_empty(), "budget names must not be empty");
-			anyhow::ensure!(
-				budget_names.insert(&budget.name),
-				"duplicate budget name {:?} on API key {:?}",
-				budget.name,
-				api_key.as_deref().unwrap_or_default(),
-			);
-			let window_ms = budget.window.rolling.as_millis();
-			anyhow::ensure!(
-				window_ms > 0,
-				"budget rolling windows must be greater than zero"
-			);
-			anyhow::ensure!(
-				window_ms <= i64::MAX as u128,
-				"budget rolling window is too large"
-			);
-			let amount = budget.limit.amount.decimal().normalize();
-			let multiplier = match budget.limit.unit {
-				BudgetLimitUnit::Usd => {
-					anyhow::ensure!(
-						amount.scale() <= 9,
-						"USD budget limits support at most 9 fractional digits"
-					);
-					NANODOLLARS_PER_USD
-				},
-				BudgetLimitUnit::Tokens => {
-					anyhow::ensure!(
-						amount.fract().is_zero(),
-						"token budget limits must be whole numbers"
-					);
-					1
-				},
-			};
-			anyhow::ensure!(
-				amount * Decimal::from(multiplier) <= Decimal::from(i64::MAX),
-				"budget limit exceeds database integer range"
-			);
-		}
-		let budgets = (!budgets.is_empty()).then(|| MatchedBudgets {
-			api_key: api_key.expect("budget API keys have a name"),
-			api_key_id: key_hash.as_str().to_owned(),
-			budgets,
-		});
+		let budgets = resolve_budgets(specs, &inline_budgets, key_hash.as_str(), &metadata)?;
 		Ok((
 			key_hash,
 			APIKeyPolicy {
@@ -567,13 +513,13 @@ impl LocalAPIKey {
 }
 
 impl LocalAPIKeys {
-	pub fn compile(self) -> anyhow::Result<APIKeyAuthentication> {
+	pub fn compile(self, specs: &[Budget]) -> anyhow::Result<APIKeyAuthentication> {
 		Ok(APIKeyAuthentication {
 			users: Arc::new(
 				self
 					.keys
 					.into_iter()
-					.map(LocalAPIKey::into_parts)
+					.map(|key| key.into_parts(specs))
 					.collect::<anyhow::Result<_>>()?,
 			),
 			mode: self.mode,
@@ -583,7 +529,7 @@ impl LocalAPIKeys {
 
 	pub fn into(self) -> APIKeyAuthentication {
 		self
-			.compile()
-			.expect("API key allowedModels configuration must be valid")
+			.compile(&[])
+			.expect("API key configuration must be valid")
 	}
 }

@@ -1036,9 +1036,15 @@ impl TestBind {
 		}
 	}
 	pub async fn attach_frontend_policy(&mut self, p: serde_json::Value) {
-		let cfg = serde_json::json!({
-			"frontendPolicies": p,
-		});
+		self
+			.attach_local_config(serde_json::json!({ "frontendPolicies": p }))
+			.await;
+	}
+
+	/// Loads a whole local configuration document, so its policies are compiled the way a real
+	/// configuration reload compiles them. Required for document-level settings such as `budgets`,
+	/// which policies resolve against while the document is being converted.
+	pub async fn attach_local_config(&mut self, cfg: serde_json::Value) {
 		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
 		let normalized = local::NormalizedLocalConfig::from(
 			self.pi.cfg.as_ref(),

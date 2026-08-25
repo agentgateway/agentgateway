@@ -394,6 +394,13 @@ pub struct LocalConfig {
 	/// served under the attached `gateways` using the standard serving paths (`/v1/models`, `/v1/chat/completions`, etc).
 	#[serde(default)]
 	llm: Option<LocalLLMConfig>,
+
+	/// budgets limits LLM spend or token usage for API keys. Unlike budgets declared inline on a
+	/// single key, these apply across every `apiKey` policy, scoped either to each key individually,
+	/// to each distinct value of a metadata field such as a group or tier, or shared by every key a
+	/// selector matches. Requires `config.database`.
+	#[serde(default)]
+	budgets: Vec<crate::http::budget::Budget>,
 	/// mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be
 	/// served under the attached `gateways` at /mcp and /sse.
 	/// All MCP servers listed will be served as a single virtual MCP server.
@@ -3015,9 +3022,14 @@ async fn convert(
 		routes,
 		tcp_routes,
 		llm,
+		budgets,
 		mcp,
 		ui,
 	} = i;
+	// Installed on the budget policy rather than returned, because API key policies resolve their
+	// budgets against these while this conversion is still running.
+	http::budget::validate_budgets(&budgets, "budgets")?;
+	config.budget_policy.set_specs(budgets);
 	let model_catalog = local_runtime_config
 		.as_ref()
 		.as_ref()
@@ -5364,7 +5376,7 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = api_key {
 		let (budget_policy, database_configured) =
 			budget_policy.ok_or_else(|| Error::msg("API key policies must be attached"))?;
-		let api_key = p.compile()?;
+		let api_key = p.compile(budget_policy.specs())?;
 		budget_policy.register(&api_key, database_configured)?;
 		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(api_key)));
 		route_policies.push(TrafficPolicy::Budget(RequestPolicy::single_arc(

@@ -97,6 +97,13 @@
         }
       ]
     },
+    "budgets": {
+      "description": "budgets limits LLM spend or token usage for API keys. Unlike budgets declared inline on a\nsingle key, these apply across every `apiKey` policy, scoped either to each key individually,\nto each distinct value of a metadata field such as a group or tier, or shared by every key a\nselector matches. Requires `config.database`.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Budget"
+      }
+    },
     "mcp": {
       "description": "mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be\nserved under the attached `gateways` at /mcp and /sse.\nAll MCP servers listed will be served as a single virtual MCP server.",
       "anyOf": [
@@ -6501,7 +6508,7 @@
       "type": "object",
       "properties": {
         "name": {
-          "description": "Stable name for this budget within its owning API key.",
+          "description": "Stable name for this budget within the API key or configuration that declares it. The name\nidentifies the counter that accumulates usage, so renaming a budget starts a new one.",
           "type": "string"
         },
         "limit": {
@@ -6515,6 +6522,10 @@
         "onBudgetExceeded": {
           "description": "Action taken when the budget is exceeded.",
           "$ref": "#/$defs/BudgetExceededAction"
+        },
+        "scope": {
+          "description": "Which API keys share this budget's counter. Defaults to one counter per key.",
+          "$ref": "#/$defs/BudgetScope"
         }
       },
       "additionalProperties": false,
@@ -6570,6 +6581,44 @@
       "enum": [
         "Audit",
         "Block"
+      ]
+    },
+    "BudgetScope": {
+      "oneOf": [
+        {
+          "description": "One counter per API key, identified by the key itself.",
+          "type": "string",
+          "const": "perKey"
+        },
+        {
+          "description": "One counter per distinct value of this metadata field.",
+          "type": "object",
+          "properties": {
+            "groupBy": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "groupBy"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "One counter shared by every key whose metadata matches all of these fields.",
+          "type": "object",
+          "properties": {
+            "shared": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "shared"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "APIKeyHash": {

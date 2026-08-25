@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 
 import { routerBasePath } from '@/basePath';
 import { Shell } from '@/components/Shell';
+import { BudgetsPage } from '@/pages/Budgets';
 import { CelPage } from '@/pages/Cel';
 import { ClientSetupPage } from '@/pages/ClientSetup';
 import { CostsPage } from '@/pages/Costs';
@@ -105,6 +106,12 @@ const keysRoute = createRoute({
 	getParentRoute: () => rootRoute,
 	path: '/llm/keys',
 	component: KeysPage
+});
+
+const budgetsRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: '/llm/budgets',
+	component: BudgetsPage
 });
 
 const playgroundRoute = createRoute({
@@ -213,6 +220,7 @@ const router = createRouter({
 		logsRoute,
 		analyticsRoute,
 		keysRoute,
+		budgetsRoute,
 		playgroundRoute,
 		clientSetupRoute,
 		mcpGetStartedRoute,
