@@ -201,6 +201,12 @@ pub fn get_messages_helper(
 	out
 }
 
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic prompt-cache breakpoint
+	"cache_control",
+];
+
 impl RequestType for Request {
 	fn body_is_json(&self) -> bool {
 		true
@@ -289,6 +295,7 @@ impl RequestType for Request {
 					"\n",
 					TextPart::text_mut,
 					TextPart::rest_mut,
+					PRESERVED_REST_KEYS,
 					&mut |text| f(ContentScope::SystemPrompt, text),
 				);
 			},
@@ -308,6 +315,7 @@ impl RequestType for Request {
 						" ",
 						ContentPart::text_mut,
 						ContentPart::rest_mut,
+						PRESERVED_REST_KEYS,
 						&mut |text| f(ContentScope::Messages, text),
 					);
 				},
