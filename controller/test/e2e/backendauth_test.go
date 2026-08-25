@@ -73,9 +73,9 @@ func testInvalidJwtSign(t base.Test) {
 	assertions.EventuallyAgwPolicyStatus(t, "backendauth-invalid-jwt-sign", base.Namespace, func(status gwv1.PolicyStatus) error {
 		for _, ancestor := range status.Ancestors {
 			for _, condition := range ancestor.Conditions {
-				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
+				if condition.Type == agentgateway.PolicyConditionAccepted &&
 					condition.Status == metav1.ConditionTrue &&
-					condition.Reason == string(agentgateway.PolicyReasonPartiallyValid) &&
+					condition.Reason == agentgateway.PolicyReasonPartiallyValid &&
 					strings.Contains(condition.Message, missingKeyRef) {
 					return nil
 				}

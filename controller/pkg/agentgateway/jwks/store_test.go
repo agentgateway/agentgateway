@@ -497,7 +497,7 @@ func testRemotePolicy(name, uri string, ttl time.Duration) *agentgateway.Agentga
 }
 
 func longStringPtr(s string) *agentgateway.LongString {
-	v := agentgateway.LongString(s)
+	v := s
 	return &v
 }
 
@@ -505,7 +505,7 @@ func jwksPath(s *agentgateway.LongString) string {
 	if s == nil {
 		return ""
 	}
-	return string(*s)
+	return *s
 }
 
 func testBackend(name, uri string, ttl time.Duration) *agentgateway.AgentgatewayBackend {

@@ -5,4 +5,4 @@ plugins:
 - module: github.com/kgateway-dev/krtequals
   version: 'v0.0.0-20251210234050-024ef4e99e5c'
 - module: 'sigs.k8s.io/kube-api-linter'
-  version: 'v0.0.0-20260518104151-5ebe05f9440b' # Pin to a commit while there's no tag
+  version: 'v0.0.0-20260716143926-092fe0c72997' # Pin to a commit while there's no tag

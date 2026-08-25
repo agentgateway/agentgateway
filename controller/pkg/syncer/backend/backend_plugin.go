@@ -128,7 +128,7 @@ func appendLLMProviderBackendReferences(llm *agentgateway.LLMProvider, app func(
 	}
 	var port *gwv1.PortNumber
 	if llm.Custom.BackendRef.Port != nil {
-		port = new(gwv1.PortNumber(*llm.Custom.BackendRef.Port))
+		port = new(*llm.Custom.BackendRef.Port)
 	}
 	app(gwv1.BackendObjectReference{Group: group, Kind: kind, Name: gwv1.ObjectName(llm.Custom.BackendRef.Name), Port: port})
 }
@@ -150,7 +150,7 @@ func BuildAgwBackend(
 		case b.UnixPath != nil:
 			sb.UnixPath = *b.UnixPath
 		default:
-			sb.Host = string(b.Host)
+			sb.Host = b.Host
 			sb.Port = b.Port
 		}
 		return []*api.Backend{{
@@ -164,7 +164,7 @@ func BuildAgwBackend(
 	}
 	if b := backend.Spec.A2A; b != nil {
 		sb := &api.StaticBackend{}
-		sb.Host = string(b.Host)
+		sb.Host = b.Host
 		sb.Port = b.Port
 		a2aPolicy := &api.BackendPolicySpec{
 			Kind: &api.BackendPolicySpec_A2A_{
@@ -492,7 +492,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			},
 		}
 	} else if llm.AzureOpenAI != nil {
-		resourceName, resourceType := parseAzureEndpoint(string(llm.AzureOpenAI.Endpoint))
+		resourceName, resourceType := parseAzureEndpoint(llm.AzureOpenAI.Endpoint)
 		provider.Provider = &api.AIBackend_Provider_Azure{
 			Azure: &api.AIBackend_Azure{
 				ResourceName: resourceName,
@@ -508,7 +508,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		}
 		provider.Provider = &api.AIBackend_Provider_Azure{
 			Azure: &api.AIBackend_Azure{
-				ResourceName: string(llm.Azure.ResourceName),
+				ResourceName: llm.Azure.ResourceName,
 				ResourceType: resourceType,
 				Model:        llm.Azure.Model,
 				ApiVersion:   llm.Azure.ApiVersion,
@@ -588,7 +588,7 @@ func translateOpenAIInlineModeration(m *agentgateway.OpenAIInlineModeration) (*a
 	if err != nil {
 		return nil, err
 	}
-	model := string(m.Model)
+	model := m.Model
 	if model == "" {
 		model = defaultOpenAIInlineModerationModel
 	}

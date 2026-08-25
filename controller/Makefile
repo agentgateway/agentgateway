@@ -144,7 +144,7 @@ ensure-custom-golangci-lint:
 	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ]; then \
 		echo "Rebuilding golangci-lint custom with $$expected_go_version..."; \
 		rm -f "$(CUSTOM_GOLANGCI_LINT_BIN)"; \
-		golangci-lint custom; \
+		GOTOOLCHAIN="$$expected_go_version" golangci-lint custom; \
 	fi
 
 .PHONY: lint-actions
