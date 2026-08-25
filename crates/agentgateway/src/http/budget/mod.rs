@@ -187,12 +187,6 @@ impl std::fmt::Display for ResolvedScope {
 	}
 }
 
-/// Renders an API key metadata field as a budget scope key.
-///
-/// Scalars are coerced to their display form so that unquoted YAML such as `tier: 1` scopes the
-/// same way as `tier: "1"`. Silently leaving such a key unbudgeted would be a worse outcome than
-/// coercing. Values with no meaningful scope identity yield `None`, and the key is simply not
-/// budgeted by this scope.
 fn metadata_scope_value(metadata: &serde_json::Value, field: &str) -> Option<String> {
 	match metadata.get(field)? {
 		serde_json::Value::String(value) => Some(value.clone()),

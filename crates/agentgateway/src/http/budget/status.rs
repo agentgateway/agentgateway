@@ -28,15 +28,16 @@ pub struct BudgetStatus {
 ///
 /// Field order is also the sort order for reported budgets.
 #[derive(Debug, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(rename_all = "camelCase")]
+// Camel case has no effect here, this is the standard in this file.
+#[serde(rename_all = "camelCase")] 
 pub struct BudgetStatusScope {
-	/// `perKey`, `groupBy`, or `shared`.
+	/// `perKey`, `groupBy`, or `selector`.
 	pub kind: &'static str,
 	/// Metadata field partitioning the counter. Only set for `groupBy`.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub field: Option<String>,
 	/// Value identifying this counter within its kind: the API key display name for `perKey`, the
-	/// metadata value for `groupBy`. Absent for `shared`, where the budget name is the identity.
+	/// metadata value for `groupBy`. Absent for `selector`, where the budget name is the identity.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub value: Option<String>,
 }
@@ -93,7 +94,7 @@ impl BudgetPolicy {
 	/// one API key display name.
 	///
 	/// Expired counters are reported with zero usage even if no request has advanced their window.
-	/// Group and shared counters do not record which keys contribute to them, so they are reported
+	/// Group and selector counters do not record which keys contribute to them, so they are reported
 	/// for every key rather than hidden from the key whose spend they may be limiting.
 	pub fn status(&self, api_key_name: Option<&str>) -> anyhow::Result<BudgetStatusResponse> {
 		let observed_at = Utc::now();
