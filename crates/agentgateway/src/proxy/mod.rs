@@ -597,6 +597,17 @@ impl ProxyError {
 			}
 		}
 
+		// RFC 6750 §3 requires a bearer challenge on a 401. Add it before the gRPC response is built
+		// so gRPC clients receive it too.
+		if let ProxyError::JwtAuthenticationFailure(error) = &this
+			&& code == StatusCode::UNAUTHORIZED
+		{
+			rb = rb.header(
+				hyper::header::WWW_AUTHENTICATE,
+				bearer_challenge(None, Some(error)),
+			);
+		}
+
 		if let Some(grpc_status) = grpc_status {
 			return rb
 				.status(StatusCode::OK)
@@ -627,15 +638,6 @@ impl ProxyError {
 					.to_string(),
 				))
 				.expect("budget exceeded response is valid");
-		}
-
-		if let ProxyError::JwtAuthenticationFailure(error) = &this
-			&& code == StatusCode::UNAUTHORIZED
-		{
-			rb = rb.header(
-				hyper::header::WWW_AUTHENTICATE,
-				bearer_challenge(None, Some(error)),
-			);
 		}
 
 		if let ProxyError::McpJwtAuthenticationFailure(inner, challenge) = &this
@@ -897,6 +899,23 @@ mod tests {
 			!response
 				.headers()
 				.contains_key(hyper::header::WWW_AUTHENTICATE)
+		);
+	}
+
+	#[test]
+	fn grpc_jwt_failure_carries_authentication_challenge() {
+		let response = ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::Missing)
+			.into_response_with_grpc(true);
+		assert_eq!(
+			response.headers().get("grpc-status").unwrap(),
+			&i32::from(Code::Unauthenticated).to_string()
+		);
+		assert_eq!(
+			response
+				.headers()
+				.get(hyper::header::WWW_AUTHENTICATE)
+				.unwrap(),
+			"Bearer"
 		);
 	}
 
