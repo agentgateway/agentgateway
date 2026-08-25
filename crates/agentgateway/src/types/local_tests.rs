@@ -361,11 +361,8 @@ binds:
 }
 
 #[tokio::test]
-async fn test_local_listener_protocol_auto_allows_both_route_sets() {
-	// protocol: AUTO is the one case where a single listener may declare both
-	// `routes` and `tcpRoutes` -- BindProtocol::auto picks whichever applies
-	// per connection, based on peeking the first bytes (see gateway.rs).
-	let normalized = normalize_test_yaml(
+async fn test_local_listener_protocol_auto_rejects_tcp_routes() {
+	let err = normalize_test_yaml(
 		r#"
 binds:
 - port: 1080
@@ -380,12 +377,8 @@ binds:
 "#,
 	)
 	.await
-	.expect("an Auto listener with both routes and tcpRoutes should normalize");
-
-	assert_eq!(normalized.binds.len(), 1);
-	assert_eq!(normalized.binds[0].protocol, BindProtocol::auto);
-	assert_eq!(normalized.listener_routes[0].1.len(), 1);
-	assert_eq!(normalized.listener_tcp_routes[0].1.len(), 1);
+	.expect_err("AUTO must use an explicit TCP listener for opaque TCP");
+	assert!(err.to_string().contains("explicit TCP listener"), "{err}");
 }
 
 #[tokio::test]
@@ -399,30 +392,35 @@ binds:
 "#,
 	)
 	.await
-	.expect_err("an Auto listener with neither routes nor tcpRoutes should be rejected");
+	.expect_err("an Auto listener without routes should be rejected");
 	assert!(err.to_string().contains("protocol AUTO"), "{err}");
 }
 
 #[tokio::test]
-async fn test_auto_bind_rejects_multiple_tcp_fallback_listeners() {
-	let err = normalize_test_yaml(
+async fn test_auto_bind_allows_tls_routes_and_one_explicit_tcp_listener() {
+	let normalized = normalize_test_yaml(
 		r#"
 binds:
 - port: 1080
   listeners:
   - protocol: AUTO
+    routes:
+    - backends:
+      - dynamic: {}
+  - protocol: TLS
+    hostname: "*"
     tcpRoutes:
     - backends:
       - host: "127.0.0.1:1"
-  - protocol: AUTO
+  - protocol: TCP
     tcpRoutes:
     - backends:
       - host: "127.0.0.1:2"
 "#,
 	)
 	.await
-	.expect_err("an AUTO bind with two TCP fallbacks should be rejected");
-	assert!(err.to_string().contains("multiple TCP fallback"), "{err}");
+	.expect("TLS passthrough and explicit TCP listener should normalize");
+	assert_eq!(normalized.binds[0].protocol, BindProtocol::auto);
 }
 
 #[tokio::test]

@@ -3321,8 +3321,6 @@ async fn convert(
 
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
-	validate_auto_bind_tcp_fallbacks(&all_binds, &all_listener_tcp_routes)?;
-
 	let normalized = NormalizedLocalConfig {
 		budget_registration: Default::default(),
 		model_catalog,
@@ -4869,33 +4867,6 @@ fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
 	BindProtocol::http
 }
 
-fn validate_auto_bind_tcp_fallbacks(
-	binds: &[BindSnapshot],
-	listener_tcp_routes: &[(ListenerKey, Vec<TCPRoute>)],
-) -> anyhow::Result<()> {
-	for bind in binds
-		.iter()
-		.filter(|bind| bind.protocol == BindProtocol::auto)
-	{
-		let fallback_count = bind
-			.listeners
-			.iter()
-			.filter(|listener| {
-				listener_tcp_routes
-					.iter()
-					.any(|(key, routes)| key == &listener.key && !routes.is_empty())
-			})
-			.count();
-		if fallback_count > 1 {
-			bail!(
-				"AUTO bind {} has multiple TCP fallback listeners; configure tcpRoutes on at most one listener",
-				bind.key
-			);
-		}
-	}
-	Ok(())
-}
-
 async fn convert_listener(
 	resources: &crate::resource_manager::ResourceFetcher,
 	config: &crate::Config,
@@ -4960,8 +4931,11 @@ async fn convert_listener(
 		},
 		LocalListenerProtocol::HBONE => ListenerProtocol::HBONE,
 		LocalListenerProtocol::Auto => {
-			if routes.is_none() && tcp_routes.is_none() {
-				bail!("protocol AUTO requires 'routes', 'tcpRoutes', or both")
+			if routes.is_none() {
+				bail!("protocol AUTO requires 'routes'")
+			}
+			if tcp_routes.is_some() {
+				bail!("protocol AUTO does not support 'tcpRoutes'; configure an explicit TCP listener")
 			}
 			// Auto-detection happens per connection (BindProtocol::auto), before
 			// either route set is consulted, so this listener must still be
