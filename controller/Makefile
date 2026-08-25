@@ -36,9 +36,8 @@ z := $(shell mkdir -p $(OUTPUT_DIR))
 BUILDX_BUILD ?= docker buildx build -q
 
 # A 'v'-prefixed semver used only locally. Most calling GHA jobs customize
-# this. Exported for use in goreleaser.yaml. Because our docker images are
-# tagged with a 'v' prefix, we use the prefix here and strip the 'v' prefix
-# where actual semver is desired.
+# this. Because our docker images are tagged with a 'v' prefix, we use the
+# prefix here and strip the 'v' prefix where actual semver is desired.
 VERSION ?= v1.0.1-dev
 TAG ?= $(VERSION)
 export VERSION
@@ -74,9 +73,6 @@ TEST_ASSET_DIR ?= $(ROOTDIR)/_test
 BUG_REPORT_DIR := $(TEST_ASSET_DIR)/bug_report
 $(BUG_REPORT_DIR):
 	mkdir -p $(BUG_REPORT_DIR)
-
-# Base Alpine image used for all containers. Exported for use in goreleaser.yaml.
-export ALPINE_BASE_IMAGE ?= alpine:3.17.6
 
 DEPSGOBIN ?= $(OUTPUT_DIR)
 ANALYZE_ARGS ?= --fix --verbose --max-issues-per-linter 0 --max-same-issues 0
