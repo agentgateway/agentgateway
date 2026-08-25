@@ -121,10 +121,10 @@ pub struct BackendAuth {
 
 #[derive(Debug, thiserror::Error)]
 pub enum BackendAuthError {
-	#[error("local backend authentication failure: {0}")]
-	Local(#[source] anyhow::Error),
-	#[error("credential provider failure: {0}")]
-	CredentialProvider(#[source] anyhow::Error),
+	#[error(transparent)]
+	Local(anyhow::Error),
+	#[error(transparent)]
+	CredentialProvider(anyhow::Error),
 }
 
 impl BackendAuth {
