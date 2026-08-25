@@ -4315,6 +4315,77 @@ mod tests {
 		}
 	}
 
+	fn backend_auth_kind_for_test(
+		kind: proto::agent::backend_auth_policy::Kind,
+		diagnostics: &mut Diagnostics,
+	) -> BackendAuthKind {
+		backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(kind),
+				credentials: vec![],
+			},
+			diagnostics,
+		)
+		.expect("backendAuth policy conversion should succeed")
+		.expect("backendAuth kind should be present")
+	}
+
+	#[test]
+	fn oauth_load_warnings_do_not_reject_config() {
+		let mut diagnostics = Diagnostics::default();
+		let auth = backend_auth_kind_for_test(
+			proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
+				proto::agent::OAuthTokenExchange {
+					scopes: vec!["bad scope".to_string()],
+					..Default::default()
+				},
+			),
+			&mut diagnostics,
+		);
+
+		assert!(matches!(auth, BackendAuthKind::OAuthTokenExchange(_)));
+		assert!(diagnostics.is_empty());
+	}
+
+	#[test]
+	fn cross_app_access_load_warnings_do_not_reject_config() {
+		fn endpoint(backend: &str) -> proto::agent::cross_app_access_auth::Endpoint {
+			proto::agent::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::agent::BackendReference {
+					kind: Some(proto::agent::backend_reference::Kind::Backend(
+						backend.to_string(),
+					)),
+					..Default::default()
+				}),
+				token_endpoint_path: Some("/token".to_string()),
+				client_auth: Some(proto::agent::OAuthClientAuth {
+					client_id: "gateway-client".to_string(),
+					method: proto::agent::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
+				inline_policies: vec![],
+			}
+		}
+
+		let mut diagnostics = Diagnostics::default();
+		let auth = backend_auth_kind_for_test(
+			proto::agent::backend_auth_policy::Kind::CrossAppAccess(proto::agent::CrossAppAccessAuth {
+				identity_provider: Some(endpoint("default/idp")),
+				resource_authorization_server: Some(endpoint("default/resource-as")),
+				audience: "https://resource-as.example".to_string(),
+				scopes: vec!["read".to_string()],
+				access_token_scopes: Some(proto::agent::cross_app_access_auth::ScopeOverride {
+					values: vec!["write".to_string()],
+				}),
+				..Default::default()
+			}),
+			&mut diagnostics,
+		);
+
+		assert!(matches!(auth, BackendAuthKind::CrossAppAccess(_)));
+		assert!(diagnostics.is_empty());
+	}
+
 	fn jwt_sign_from_proto_for_test(
 		jwt_sign: proto::agent::JwtSign,
 		diagnostics: &mut Diagnostics,

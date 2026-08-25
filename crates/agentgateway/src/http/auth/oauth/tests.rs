@@ -89,6 +89,10 @@ fn auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 	config(endpoint).into()
 }
 
+fn private_key_jwt_from_raw(raw: RawPrivateKeyJwt) -> Result<PrivateKeyJwt, String> {
+	PrivateKeyJwt::load(raw).map(|(private_key, _)| private_key)
+}
+
 fn ready(auth: &OAuthTokenExchangeAuth) -> &OAuthTokenExchangeConfig {
 	auth.config().expect("valid OAuth token exchange config")
 }
@@ -720,7 +724,7 @@ async fn id_jag_chained_exchange_client_error_is_upstream_failure() {
 #[tokio::test]
 async fn private_key_jwt_sends_client_assertion_form_fields() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+	let private_key = private_key_jwt_from_raw(RawPrivateKeyJwt {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()).into()),
 		certificate_header: Some(CertificateHeader::X5c),
@@ -790,23 +794,24 @@ fn private_key_jwt_debug_redacts_key_and_certificate() {
 	assert!(!raw_debug.contains(TEST_EC_CERT_PEM));
 	assert!(raw_debug.contains("[REDACTED]"));
 
-	let private_key = PrivateKeyJwt::try_from(raw).unwrap();
+	let private_key = private_key_jwt_from_raw(raw).unwrap();
 	let debug = format!("{private_key:?}");
 	assert!(!debug.contains(TEST_EC_PRIVATE_KEY_PEM));
 	assert!(!debug.contains(TEST_EC_CERT_DER_BASE64));
-	assert!(debug.contains("x5c: Some(\"[REDACTED]\")"));
+	assert!(debug.contains("certificate_header: Some(X5c([REDACTED]))"));
 	assert!(debug.contains("alg: Es256"));
 }
 
 #[test]
 fn private_key_jwt_sets_x5t_s256_header() {
-	let private_key = serde_json::from_value::<PrivateKeyJwt>(json!({
-		"signingKey": TEST_EC_PRIVATE_KEY_PEM,
-		"certificate": TEST_EC_CERT_PEM,
-		"certificateHeader": "x5t#S256",
-		"alg": "ES256",
-		"assertionAudience": "https://issuer.example/token",
-	}))
+	let private_key = private_key_jwt_from_raw(RawPrivateKeyJwt {
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
+		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()).into()),
+		certificate_header: Some(CertificateHeader::X5tS256),
+		alg: JwtSigningAlg::Es256,
+		kid: None,
+		assertion_audience: "https://issuer.example/token".into(),
+	})
 	.unwrap();
 
 	let assertion = sign_client_assertion("gateway-client", &private_key).unwrap();
@@ -822,7 +827,7 @@ fn private_key_jwt_sets_x5t_s256_header() {
 fn private_key_jwt_signs_with_ps256() {
 	let signing_key = rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256).unwrap();
 	let public_key = signing_key.public_key_pem();
-	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+	let private_key = private_key_jwt_from_raw(RawPrivateKeyJwt {
 		signing_key: SecretString::from(signing_key.serialize_pem()),
 		certificate: None,
 		certificate_header: None,
@@ -856,7 +861,7 @@ fn private_key_jwt_requires_certificate_and_header_together(
 	#[case] with_certificate_header: bool,
 	#[case] expected: &str,
 ) {
-	let err = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+	let err = private_key_jwt_from_raw(RawPrivateKeyJwt {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: with_certificate
 			.then(|| FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()))
@@ -916,7 +921,7 @@ fn private_key_jwt_rejects_non_certificate_pem_at_deserialize_time() {
 
 #[test]
 fn private_key_jwt_rejects_invalid_certificate_in_chain() {
-	let err = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+	let err = private_key_jwt_from_raw(RawPrivateKeyJwt {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: Some(
 			FileOrInline::Inline(format!("{TEST_EC_CERT_PEM}{TEST_INVALID_CERT_PEM}")).into(),
@@ -931,19 +936,6 @@ fn private_key_jwt_rejects_invalid_certificate_in_chain() {
 		err.contains("failed to parse oauth private_key_jwt certificate"),
 		"got: {err}"
 	);
-}
-
-#[test]
-fn private_key_jwt_warns_but_accepts_mismatched_certificate() {
-	PrivateKeyJwt::try_from(RawPrivateKeyJwt {
-		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
-		certificate: Some(FileOrInline::Inline(TEST_MISMATCHED_CERT_PEM.to_string()).into()),
-		certificate_header: Some(CertificateHeader::X5c),
-		alg: JwtSigningAlg::Es256,
-		kid: None,
-		assertion_audience: "https://issuer.example/token".into(),
-	})
-	.expect("a certificate mismatch must remain non-fatal");
 }
 
 #[test]
@@ -1046,7 +1038,7 @@ fn cross_app_access_local_config() -> CrossAppAccessAuth {
 			}"#,
 	)
 	.unwrap();
-	auth.validate_load().unwrap();
+	auth.check_load().unwrap();
 	auth
 }
 
@@ -1164,9 +1156,7 @@ fn cross_app_access_rejects_id_jag_subject_token_type() {
 		..Default::default()
 	});
 
-	let err = CrossAppAccessAuth::from(config)
-		.validate_load()
-		.unwrap_err();
+	let err = CrossAppAccessAuth::from(config).check_load().unwrap_err();
 	assert!(err.contains("subjectToken tokenType id-jag"));
 }
 
@@ -1293,7 +1283,7 @@ fn cross_app_access_validate_load_preserves_path_prefix() {
 	config.resource_authorization_server.path = "oauth2/token".into();
 	let auth = CrossAppAccessAuth::from(config);
 
-	let err = auth.validate_load().expect_err("invalid path should fail");
+	let err = auth.check_load().expect_err("invalid path should fail");
 	assert!(
 		err.contains("crossAppAccess.resourceAuthorizationServer.path"),
 		"got: {err}"
@@ -1927,6 +1917,197 @@ fn validate_load_rejects_invalid_local_config(
 }
 
 #[test]
+fn load_warnings_report_accepted_but_risky_config() {
+	let auth = OAuthTokenExchangeAuth::from(OAuthTokenExchangeConfig {
+		scopes: vec!["bad scope".into()],
+		resources: vec!["/relative".into()],
+		authorization_location: AuthorizationLocation::QueryParameter {
+			name: "access_token".into(),
+		},
+		..config(Arc::new(SimpleBackendReference::Invalid))
+	});
+
+	let warnings = auth.check_load().unwrap();
+	assert_eq!(
+		warnings,
+		vec![
+			OAuthConfigWarning::InvalidResource {
+				context: "oauth token exchange",
+				resource: "/relative".into(),
+			},
+			OAuthConfigWarning::InvalidScope {
+				context: "oauth token exchange",
+				scope: "bad scope".into(),
+			},
+			OAuthConfigWarning::QueryParameterBearerToken,
+		]
+	);
+}
+
+#[test]
+fn config_warning_messages_are_concise() {
+	let cases = [
+		(
+			OAuthConfigWarning::CertificateKeyMismatch,
+			"privateKeyJwt: certificate does not match signingKey",
+		),
+		(
+			OAuthConfigWarning::CertificateKeyComparisonFailed("unsupported key".into()),
+			"privateKeyJwt: cannot compare certificate with signingKey: unsupported key",
+		),
+		(
+			OAuthConfigWarning::InvalidResource {
+				context: "oauth token exchange",
+				resource: "/relative".into(),
+			},
+			"oauth token exchange: resource \"/relative\" must be an absolute URI without a fragment",
+		),
+		(
+			OAuthConfigWarning::InvalidScope {
+				context: "oauth token exchange",
+				scope: "bad scope".into(),
+			},
+			"oauth token exchange: scope \"bad scope\" must be non-empty ASCII without spaces, quotes, backslashes, or controls",
+		),
+		(
+			OAuthConfigWarning::QueryParameterBearerToken,
+			"oauth token exchange: query-parameter bearer tokens are omitted from OAuth 2.1",
+		),
+		(
+			OAuthConfigWarning::UnreachableAccessTokenScopes(vec!["write".into()]),
+			"crossAppAccess: accessTokenScopes [\"write\"] are not in scopes; chained exchange may return invalid_scope",
+		),
+	];
+
+	for (warning, expected) in cases {
+		assert_eq!(warning.to_string(), expected);
+	}
+}
+
+#[test]
+fn invalid_config_fails_load_check() {
+	assert!(
+		OAuthTokenExchangeAuth::new_invalid("boom".into())
+			.check_load()
+			.is_err()
+	);
+	assert!(
+		CrossAppAccessAuth::new_invalid("boom".into())
+			.check_load()
+			.is_err()
+	);
+}
+
+#[test]
+fn cross_app_access_load_warnings_report_unreachable_access_token_scopes() {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	config.access_token_scopes = Some(vec!["read".into(), "write".into()]);
+
+	let warnings = CrossAppAccessAuth::from(config.clone())
+		.check_load()
+		.unwrap();
+	assert_eq!(
+		warnings,
+		vec![OAuthConfigWarning::UnreachableAccessTokenScopes(vec![
+			"write".into()
+		])]
+	);
+
+	config.access_token_scopes = Some(vec!["read".into()]);
+	let warnings = CrossAppAccessAuth::from(config).check_load().unwrap();
+	assert!(warnings.is_empty(), "got: {warnings:#?}");
+}
+
+#[test]
+fn cross_app_access_load_warnings_name_cross_app_access_fields() {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	config.resources = vec!["/relative".into()];
+	config.scopes = vec!["bad scope".into()];
+	config.access_token_scopes = Some(vec!["other bad scope".into()]);
+
+	let warnings = CrossAppAccessAuth::from(config).check_load().unwrap();
+	assert!(warnings.contains(&OAuthConfigWarning::InvalidResource {
+		context: "crossAppAccess.resources",
+		resource: "/relative".into(),
+	}));
+	assert!(warnings.contains(&OAuthConfigWarning::InvalidScope {
+		context: "crossAppAccess.scopes",
+		scope: "bad scope".into(),
+	}));
+	assert!(warnings.contains(&OAuthConfigWarning::InvalidScope {
+		context: "crossAppAccess.accessTokenScopes",
+		scope: "other bad scope".into(),
+	}));
+
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	config.scopes = vec!["bad scope".into()];
+	assert_eq!(
+		CrossAppAccessAuth::from(config).check_load().unwrap(),
+		vec![OAuthConfigWarning::InvalidScope {
+			context: "crossAppAccess.scopes",
+			scope: "bad scope".into(),
+		}]
+	);
+}
+
+#[test]
+fn certificate_warning_is_returned_separately_from_private_key() {
+	let (_, warning) = PrivateKeyJwt::load(RawPrivateKeyJwt {
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
+		certificate: Some(FileOrInline::Inline(TEST_MISMATCHED_CERT_PEM.to_string()).into()),
+		certificate_header: Some(CertificateHeader::X5c),
+		alg: JwtSigningAlg::Es256,
+		kid: None,
+		assertion_audience: "https://issuer.example/token".into(),
+	})
+	.expect("a certificate mismatch must remain non-fatal");
+
+	assert_eq!(warning, Some(OAuthConfigWarning::CertificateKeyMismatch));
+}
+
+#[test]
+fn certificate_warning_does_not_reach_proto_diagnostics() {
+	let proto = proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".into(),
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
+				signing_key: TEST_EC_PRIVATE_KEY_PEM.into(),
+				certificate: TEST_MISMATCHED_CERT_PEM.into(),
+				certificate_header: proto::o_auth_client_auth::private_key_jwt::CertificateHeader::X5c
+					as i32,
+				alg: proto::JwtSigningAlg::Es256 as i32,
+				assertion_audience: "https://issuer.example/token".into(),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+		..Default::default()
+	};
+	let mut diagnostics = Diagnostics::default();
+	OAuthTokenExchangeAuth::from_proto(proto.clone(), &mut diagnostics)
+		.expect("a certificate mismatch must remain non-fatal");
+
+	assert!(diagnostics.is_empty());
+
+	let mut invalid_proto = proto;
+	invalid_proto.token_endpoint_path = Some("relative".into());
+	let mut diagnostics = Diagnostics::default();
+	OAuthTokenExchangeAuth::from_proto(invalid_proto, &mut diagnostics)
+		.expect_err("the later path validation must fail");
+	assert!(diagnostics.is_empty());
+}
+
+#[test]
 fn accepts_supported_requested_token_types_from_proto() {
 	for token_type in [TOKEN_TYPE_ACCESS, TOKEN_TYPE_JWT, TOKEN_TYPE_ID] {
 		let auth = OAuthTokenExchangeAuth::from_proto(
@@ -1947,7 +2128,7 @@ fn accepts_supported_requested_token_types_from_proto() {
 
 #[test]
 fn private_key_jwt_client_auth_from_proto() {
-	let auth = OAuthClientAuth::try_from(proto::OAuthClientAuth {
+	let (auth, warnings) = OAuthClientAuth::from_proto(proto::OAuthClientAuth {
 		client_id: "gateway-client".to_string(),
 		method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
 		private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
@@ -1961,6 +2142,7 @@ fn private_key_jwt_client_auth_from_proto() {
 		..Default::default()
 	})
 	.unwrap();
+	assert!(warnings.is_empty());
 
 	assert_eq!(auth.client_id, "gateway-client");
 	match auth.method {
@@ -1980,7 +2162,7 @@ fn private_key_jwt_client_auth_from_proto() {
 
 #[test]
 fn private_key_jwt_serialization_omits_unset_optional_headers() {
-	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+	let private_key = private_key_jwt_from_raw(RawPrivateKeyJwt {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: None,
 		certificate_header: None,
@@ -2485,6 +2667,8 @@ fn authorization_location_from_proto() {
 #[test]
 fn query_parameter_authorization_location_from_proto() {
 	let proto = proto::OAuthTokenExchange {
+		resources: vec!["/relative".into()],
+		scopes: vec!["bad scope".into()],
 		authorization_location: Some(proto::AuthorizationLocation {
 			kind: Some(proto::authorization_location::Kind::QueryParameter(
 				proto::authorization_location::QueryParameter {
@@ -2494,7 +2678,9 @@ fn query_parameter_authorization_location_from_proto() {
 		}),
 		..Default::default()
 	};
-	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
+	let mut diagnostics = Diagnostics::default();
+	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut diagnostics).unwrap();
+	assert!(diagnostics.is_empty());
 	let auth = ready(&auth);
 	assert!(matches!(
 		auth.authorization_location,
@@ -2560,7 +2746,7 @@ async fn invalid_cross_app_runtime_policy_rejects_before_reading_or_mutating_cre
 
 	assert!(matches!(err, ProxyError::BackendAuthenticationFailed(_)));
 	let message = err.to_string();
-	assert!(message.contains("OAuth token exchange configuration is invalid"));
+	assert!(message.contains("crossAppAccess configuration is invalid"));
 	assert!(!message.contains(detailed));
 	assert_eq!(
 		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
