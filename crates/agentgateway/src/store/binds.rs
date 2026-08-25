@@ -200,6 +200,7 @@ impl FrontendPolices {
 	}
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
 		if let Some(frontend::LoggingPolicy {
+			preset: _,
 			filter,
 			add: fields_add,
 			remove: _,
@@ -2684,6 +2685,7 @@ mod tests {
 
 	fn create_access_log_policy(remove_item: &str) -> FrontendPolicy {
 		FrontendPolicy::AccessLog(LoggingPolicy {
+			preset: None,
 			filter: None,
 			add: Arc::new(OrderedStringMap::default()),
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),

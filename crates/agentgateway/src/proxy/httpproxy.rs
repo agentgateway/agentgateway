@@ -116,6 +116,9 @@ fn select_route_chain(
 
 pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
 	// Merge filter/fields into config for this request
+	if lp.preset.is_some() {
+		log.access_log_preset = lp.preset;
+	}
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();
 	}
@@ -783,6 +786,8 @@ impl HTTPProxy {
 			.map(|s| s.to_string())
 			.snapshot_on_err(log, &mut req)?;
 		log.host = Some(host.clone());
+		log.server_port = req.uri().port_u16();
+		log.scheme = req.uri().scheme().cloned();
 		log.method = Some(req.method().clone());
 		log.path = Some(
 			if req.method() == ::http::Method::CONNECT && req.uri().path().is_empty() {

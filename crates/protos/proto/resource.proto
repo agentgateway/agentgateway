@@ -790,6 +790,11 @@ message FrontendPolicySpec {
   }
   // Logging configuration policy
   message Logging {
+    enum Preset {
+      PRESET_UNSPECIFIED = 0;
+      OTEL = 1;
+    }
+
     // CEL expression to filter out logs. If unset, all logs are considered.
     optional string filter = 1;
 
@@ -833,6 +838,9 @@ message FrontendPolicySpec {
 
     // Optional OTLP access log export configuration.
     OtlpAccessLog otlp_access_log = 3;
+
+    // Default stdout access log fields. Unspecified keeps the human-oriented legacy fields.
+    Preset preset = 4;
   }
 
   message Tracing {

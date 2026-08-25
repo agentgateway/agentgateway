@@ -3370,8 +3370,23 @@ type Retry struct {
 	Condition *CELExpression `json:"condition,omitempty"`
 }
 
+// +k8s:enum
+type AccessLogPreset string
+
+const (
+	// AccessLogPresetOtel uses the OTel-aligned built-in HTTP field set for
+	// stdout access logs.
+	AccessLogPresetOtel AccessLogPreset = "Otel"
+)
+
 // Per-request access log settings.
 type AccessLog struct {
+	// Preset selects the built-in field set for standard output access logs.
+	// When unset, legacy human-oriented fields are used.
+	// `Otel` selects the OTel-aligned built-in HTTP field set.
+	// +optional
+	Preset *AccessLogPreset `json:"preset,omitempty"`
+
 	// CEL expression used to filter logs. A log
 	// will only be emitted if the expression evaluates to `true`.
 	// +optional

@@ -44,7 +44,7 @@ use crate::telemetry::metrics::{
 	OutboundCallLabels, RouteIdentifier,
 };
 use crate::telemetry::trc::TraceParent;
-use crate::telemetry::{log_store, trc};
+use crate::telemetry::{log_store, semconv, trc};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
@@ -985,6 +985,7 @@ impl RequestLog {
 	) -> Self {
 		RequestLog {
 			cel,
+			access_log_preset: None,
 			database_llm: Default::default(),
 			input_messages: Default::default(),
 			metrics,
@@ -1009,6 +1010,8 @@ impl RequestLog {
 			backend_info: None,
 			backend_protocol: None,
 			host: None,
+			server_port: None,
+			scheme: None,
 			method: None,
 			path: None,
 			path_match: None,
@@ -1133,6 +1136,7 @@ impl RequestLog {
 #[derive(Debug)]
 pub struct RequestLog {
 	pub cel: CelLogging,
+	pub access_log_preset: Option<crate::types::frontend::AccessLogPreset>,
 	/// Controls whether normalized LLM prompt/completion content is persisted in the database's
 	/// dedicated payload table. `None` preserves the legacy behavior of persisting content captured
 	/// by CEL expressions. This is independent from CEL attribute capture.
@@ -1172,7 +1176,9 @@ pub struct RequestLog {
 	pub backend_protocol: Option<cel::BackendProtocol>,
 
 	pub host: Option<String>,
+	pub scheme: Option<::http::uri::Scheme>,
 	pub method: Option<::http::Method>,
+	pub server_port: Option<u16>,
 	pub path: Option<String>,
 	pub path_match: Option<Strng>,
 	pub version: Option<::http::Version>,
@@ -1805,11 +1811,107 @@ impl Drop for DropOnLog {
 					crate::http::is_grpc_content_type(&request.headers)
 						.then(|| strng::new(request.path.path().trim_start_matches('/')))
 				});
+			let use_otel_stdout = maybe_enable_log
+				&& matches!(
+					log.access_log_preset.as_ref(),
+					Some(crate::types::frontend::AccessLogPreset::Otel)
+				);
 
-			if enable_trace && let Some(t) = &log.tracer {
-				let base_len = kv.len();
+			let trace_needs_otel = enable_trace
+				&& log
+					.outgoing_span
+					.as_ref()
+					.is_some_and(|span| span.is_sampled());
+
+			let needs_otel = trace_needs_otel || otlp_log_enabled || use_otel_stdout;
+			let needs_http_semconv = needs_otel && !is_tcp;
+
+			let client_address = needs_http_semconv.then(|| log.tcp_info.peer_addr.ip().to_string());
+
+			let server_scheme = needs_http_semconv.then(|| {
+				if let Some(scheme) = log.scheme.as_ref() {
+					scheme.as_str()
+				} else if log.tls_info.is_some() {
+					"https"
+				} else {
+					"http"
+				}
+			});
+
+			let (url_path, url_query) = if needs_http_semconv {
+				log.path.as_deref().map_or((None, None), |path| {
+					let (path, query) = semconv::path_and_query(path);
+					(Some(path), query)
+				})
+			} else {
+				(None, None)
+			};
+
+			let server_port = if needs_http_semconv {
+				log.server_port
+			} else {
+				None
+			};
+
+			let mut otel_kv = needs_otel.then(|| {
+				let mut otel_kv = kv.clone();
+
+				if needs_http_semconv {
+					otel_kv.reserve(
+						usize::from(server_scheme.is_some())
+							+ usize::from(server_port.is_some())
+							+ usize::from(url_query.is_some()),
+					);
+
+					for (key, value) in &mut otel_kv {
+						*key = semconv::http_attribute(key);
+						match *key {
+							semconv::attribute::CLIENT_ADDRESS => {
+								*value = client_address.as_deref().map(Into::into);
+							},
+							semconv::attribute::SERVER_ADDRESS => {
+								*value = log.host.as_deref().map(Into::into);
+							},
+							semconv::attribute::URL_PATH => {
+								*value = url_path.map(Into::into);
+							},
+							semconv::attribute::NETWORK_PROTOCOL_VERSION => {
+								*value = log
+									.version
+									.as_ref()
+									.and_then(semconv::protocol_version)
+									.map(Into::into);
+							},
+							_ => {},
+						}
+					}
+
+					if let Some(scheme) = server_scheme {
+						otel_kv.push((semconv::attribute::URL_SCHEME, Some(scheme.into())));
+					}
+
+					if let Some(port) = server_port {
+						otel_kv.push((
+							semconv::attribute::SERVER_PORT,
+							Some(i64::from(port).into()),
+						));
+					}
+
+					if let Some(query) = url_query {
+						otel_kv.push((semconv::attribute::URL_QUERY, Some(query.into())));
+					}
+				}
+
+				otel_kv
+			});
+
+			if trace_needs_otel && let Some(t) = &log.tracer {
+				let otel_kv = otel_kv
+					.as_mut()
+					.expect("OTel attributes are built for sampled traces");
+				let base_len = otel_kv.len();
 				if let Some(trace_cost_fields) = &trace_cost_fields {
-					kv.extend(
+					otel_kv.extend(
 						trace_cost_fields
 							.iter()
 							.map(|(key, value)| (*key, Some(value.as_str().into()))),
@@ -1820,9 +1922,9 @@ impl Drop for DropOnLog {
 					&end_time,
 					&cel_exec,
 					protocol_span_name.as_deref(),
-					kv.as_slice(),
+					otel_kv.as_slice(),
 				);
-				kv.truncate(base_len);
+				otel_kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
 				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
@@ -1837,7 +1939,10 @@ impl Drop for DropOnLog {
 			if let Some(otel) = &log.otel_logger
 				&& cel_exec.eval_otlp_filter()
 			{
-				let mut otlp_kv = kv.clone();
+				let mut otlp_kv = otel_kv
+					.as_ref()
+					.expect("OTel attributes are built when OTLP logging is enabled")
+					.clone();
 				otlp_kv.reserve(cel_exec.otlp_fields.add.len());
 				for (k, v) in &mut otlp_kv {
 					if cel_exec.otlp_fields.has(k) {
@@ -1875,7 +1980,29 @@ impl Drop for DropOnLog {
 				}
 
 				if maybe_enable_log {
-					agent_core::telemetry::log(level, "request", &kv);
+					if use_otel_stdout {
+						let mut stdout_kv = otel_kv
+							.as_ref()
+							.expect("OTel attributes are built for the OTel stdout preset")
+							.clone();
+
+						stdout_kv.reserve(fields.add.len());
+
+						for (k, v) in &mut stdout_kv {
+							if fields.has(k) {
+								*v = None;
+							}
+						}
+
+						for (k, v) in &raws {
+							let eval = v.as_ref().map(json_value_to_value_bag);
+							stdout_kv.push((k, eval));
+						}
+
+						agent_core::telemetry::log(level, "request", &stdout_kv);
+					} else {
+						agent_core::telemetry::log(level, "request", &kv);
+					}
 				}
 
 				if log_store_enabled {

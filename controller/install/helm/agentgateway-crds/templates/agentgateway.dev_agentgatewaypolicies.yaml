@@ -6803,6 +6803,14 @@ spec:
                             be set
                           rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
                             == 1'
+                      preset:
+                        description: |-
+                          Preset selects the built-in field set for standard output access logs.
+                          When unset, legacy human-oriented fields are used.
+                          `Otel` selects the OTel-aligned built-in HTTP field set.
+                        enum:
+                        - Otel
+                        type: string
                     type: object
                   connect:
                     description: |-

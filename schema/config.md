@@ -18082,6 +18082,7 @@
 |`frontendPolicies.connect`|object|Enable or disable downstream HTTP CONNECT handling.|
 |`frontendPolicies.connect.mode`|enum|How downstream HTTP CONNECT requests are handled.<br>Possible values: `deny`, `route`, `tunnel`.|
 |`frontendPolicies.accessLog`|object|Settings for request access logs.|
+|`frontendPolicies.accessLog.preset`|enum|Selects the built-in fields for stdout access logs.<br>If unset, human-oriented legacy fields are used.<br>Possible values: `otel`.|
 |`frontendPolicies.accessLog.filter`|string|CEL expression that decides whether a request is logged.|
 |`frontendPolicies.accessLog.add`|object|Access log fields to add, computed from CEL expressions.|
 |`frontendPolicies.accessLog.remove`|[]string|Access log field names to remove.|
@@ -18373,6 +18374,7 @@
 |`frontendPolicies.accessLog.database.llm`|enum|LLM detail stored in the database. `metadata` stores request metadata, usage, timing, and<br>cost without prompt or completion content in the dedicated payload table. `full`<br>additionally captures and stores prompt and completion content there. When omitted, legacy<br>behavior is preserved: content captured by CEL expressions is also stored in the payload.<br>Possible values: `metadata`, `full`.|
 |`frontendPolicies.accessLog.database.add`|object|Database-only fields to add, computed from CEL expressions.|
 |`frontendPolicies.logging`|object|Settings for request access logs.|
+|`frontendPolicies.logging.preset`|enum|Selects the built-in fields for stdout access logs.<br>If unset, human-oriented legacy fields are used.<br>Possible values: `otel`.|
 |`frontendPolicies.logging.filter`|string|CEL expression that decides whether a request is logged.|
 |`frontendPolicies.logging.add`|object|Access log fields to add, computed from CEL expressions.|
 |`frontendPolicies.logging.remove`|[]string|Access log field names to remove.|

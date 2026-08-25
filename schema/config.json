@@ -10212,6 +10212,17 @@
     "LoggingPolicy": {
       "type": "object",
       "properties": {
+        "preset": {
+          "description": "Selects the built-in fields for stdout access logs.\nIf unset, human-oriented legacy fields are used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccessLogPreset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "filter": {
           "description": "CEL expression that decides whether a request is logged.",
           "anyOf": [
@@ -10262,6 +10273,15 @@
         }
       },
       "additionalProperties": false
+    },
+    "AccessLogPreset": {
+      "oneOf": [
+        {
+          "description": "Use the OTel-aligned built-in HTTP field set for stdout access logs.",
+          "type": "string",
+          "const": "otel"
+        }
+      ]
     },
     "OtlpLoggingConfig": {
       "type": "object",

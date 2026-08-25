@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use agent_core::telemetry::ValueBag;
-use http::Version;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use opentelemetry::trace::{SpanContext, SpanId, SpanKind, Status, TraceId, TraceState};
@@ -156,13 +155,6 @@ pub struct DeprecatedConfig {
 	pub path: String,
 }
 
-mod semconv {
-	use opentelemetry::Key;
-
-	pub static PROTOCOL_VERSION: Key = Key::from_static_str("network.protocol.version");
-	pub static URL_SCHEME: Key = Key::from_static_str("url.scheme");
-}
-
 impl Tracer {
 	pub fn new(
 		config: &TracingConfig,
@@ -301,19 +293,6 @@ impl Tracer {
 		}
 		let start = request.start.as_system_time();
 		let end = end.as_system_time();
-
-		// For now we only accept HTTP(?)
-		attributes.push(KeyValue::new(semconv::URL_SCHEME.clone(), "http"));
-		// Otel spec has a special format here
-		match &request.version {
-			Some(Version::HTTP_11) => {
-				attributes.push(KeyValue::new(semconv::PROTOCOL_VERSION.clone(), "1.1"));
-			},
-			Some(Version::HTTP_2) => {
-				attributes.push(KeyValue::new(semconv::PROTOCOL_VERSION.clone(), "2"));
-			},
-			_ => {},
-		}
 
 		attributes.reserve(self.fields.add.len());
 

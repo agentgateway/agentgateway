@@ -219,6 +219,7 @@ fn merge_deprecated_frontend_policies(
 			);
 		}
 		frontend_policies.access_log = Some(frontend::LoggingPolicy {
+			preset: None,
 			filter: log.filter.clone(),
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),

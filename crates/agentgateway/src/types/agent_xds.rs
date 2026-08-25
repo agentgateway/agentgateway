@@ -3525,7 +3525,12 @@ fn frontend_policy_from_proto(
 					})
 				})
 				.transpose()?;
+			let preset = match fps::logging::Preset::try_from(p.preset) {
+				Ok(fps::logging::Preset::Otel) => Some(frontend::AccessLogPreset::Otel),
+				Ok(fps::logging::Preset::Unspecified) | Err(_) => None,
+			};
 			let mut logging_policy = frontend::LoggingPolicy {
+				preset,
 				filter: p
 					.filter
 					.as_ref()
