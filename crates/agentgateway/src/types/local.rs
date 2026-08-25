@@ -16,6 +16,7 @@ use itertools::Itertools;
 use secrecy::SecretString;
 
 use crate::http::auth::jwt_sign::LocalJwtSignAuth;
+use crate::http::auth::oauth::log_config_warnings;
 use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
@@ -2288,13 +2289,13 @@ where
 			LocalBackendAuthKind::OAuthTokenExchange(auth) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
-				auth.validate_load().map_err(serde::de::Error::custom)?;
+				log_config_warnings(auth.check_load().map_err(serde::de::Error::custom)?);
 				Ok(LocalBackendAuthKind::OAuthTokenExchange(auth))
 			},
 			LocalBackendAuthKind::CrossAppAccess(auth) => {
 				// The derived exchange is built on deserialize; validate here so untagged
 				// compat parsing still returns the real cross-field error.
-				auth.validate_load().map_err(serde::de::Error::custom)?;
+				log_config_warnings(auth.check_load().map_err(serde::de::Error::custom)?);
 				Ok(LocalBackendAuthKind::CrossAppAccess(auth))
 			},
 			auth => Ok(auth),
