@@ -243,7 +243,7 @@ pub enum ProxyError {
 		remaining: u64,
 		reset_seconds: u64,
 	},
-	// remote (RLS) denial; the 429 body and headers are built at response rendering
+	// remote (RLS) denial; into_response_with_grpc builds the 429 body and headers
 	#[error("rate limit exceeded")]
 	RemoteRateLimitExceeded {
 		status: Option<http::localratelimit::RateLimitStatus>,

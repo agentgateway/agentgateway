@@ -453,7 +453,7 @@ impl RemoteRateLimit {
 			..
 		} = cr;
 		let mut res = PolicyResponse::default();
-		// if not OK, deny; rendering builds the 429 from this error
+		// if not OK, deny; ProxyError::into_response_with_grpc builds the 429 from this error
 		if overall_code != (proto::rate_limit_response::Code::Ok as i32) {
 			let mut hm = HeaderMap::new();
 			process_headers(&mut hm, response_headers_to_add);
