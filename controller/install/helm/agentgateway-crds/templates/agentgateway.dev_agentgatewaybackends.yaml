@@ -9785,6 +9785,262 @@ spec:
                                       insecureSkipVerify] may be set
                                     rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
                                       <= 1'
+                                transformation:
+                                  description: Mutates and transforms requests and
+                                    responses sent to and from the backend.
+                                  properties:
+                                    request:
+                                      description: Request transformation settings.
+                                      properties:
+                                        add:
+                                          description: |-
+                                            Headers to add to the request and what each value
+                                            should be set to. If there is already a header with these values then
+                                            append the value as an extra entry.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: The name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: |-
+                                                  CEL expression that generates the output value for
+                                                  the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                        body:
+                                          description: HTTP body transformation.
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                        metadata:
+                                          additionalProperties:
+                                            description: A Common Expression Language
+                                              (CEL) expression.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
+                                          description: |-
+                                            Stores CEL-evaluated values under the `metadata` CEL variable
+                                            for subsequent policy evaluations. `metadata` is evaluated before header
+                                            or body transformations.
+                                          maxProperties: 16
+                                          minProperties: 1
+                                          type: object
+                                        remove:
+                                          description: |-
+                                            Header names to remove from the request or
+                                            response.
+                                          items:
+                                            description: HTTP header name.
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                            type: string
+                                            x-kubernetes-validations:
+                                            - message: pseudo-headers must be one
+                                                of :authority, :method, :path, :scheme,
+                                                or :status
+                                              rule: '!self.startsWith('':'') || self
+                                                in ['':authority'', '':method'', '':path'',
+                                                '':scheme'', '':status'']'
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-type: set
+                                        set:
+                                          description: Headers to set and the values
+                                            to use.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: The name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: |-
+                                                  CEL expression that generates the output value for
+                                                  the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: at least one of the fields in [add
+                                          body metadata remove set] must be set
+                                        rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                                          >= 1'
+                                    response:
+                                      description: Response transformation settings.
+                                      properties:
+                                        add:
+                                          description: |-
+                                            Headers to add to the request and what each value
+                                            should be set to. If there is already a header with these values then
+                                            append the value as an extra entry.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: The name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: |-
+                                                  CEL expression that generates the output value for
+                                                  the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                        body:
+                                          description: HTTP body transformation.
+                                          maxLength: 16384
+                                          minLength: 1
+                                          type: string
+                                        metadata:
+                                          additionalProperties:
+                                            description: A Common Expression Language
+                                              (CEL) expression.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
+                                          description: |-
+                                            Stores CEL-evaluated values under the `metadata` CEL variable
+                                            for subsequent policy evaluations. `metadata` is evaluated before header
+                                            or body transformations.
+                                          maxProperties: 16
+                                          minProperties: 1
+                                          type: object
+                                        remove:
+                                          description: |-
+                                            Header names to remove from the request or
+                                            response.
+                                          items:
+                                            description: HTTP header name.
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                            type: string
+                                            x-kubernetes-validations:
+                                            - message: pseudo-headers must be one
+                                                of :authority, :method, :path, :scheme,
+                                                or :status
+                                              rule: '!self.startsWith('':'') || self
+                                                in ['':authority'', '':method'', '':path'',
+                                                '':scheme'', '':status'']'
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-type: set
+                                        set:
+                                          description: Headers to set and the values
+                                            to use.
+                                          items:
+                                            properties:
+                                              name:
+                                                description: The name of the header
+                                                  to add.
+                                                maxLength: 256
+                                                minLength: 1
+                                                pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                type: string
+                                                x-kubernetes-validations:
+                                                - message: pseudo-headers must be
+                                                    one of :authority, :method, :path,
+                                                    :scheme, or :status
+                                                  rule: '!self.startsWith('':'') ||
+                                                    self in ['':authority'', '':method'',
+                                                    '':path'', '':scheme'', '':status'']'
+                                              value:
+                                                description: |-
+                                                  CEL expression that generates the output value for
+                                                  the header.
+                                                maxLength: 16384
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
+                                            - value
+                                            type: object
+                                          maxItems: 16
+                                          minItems: 1
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: at least one of the fields in [add
+                                          body metadata remove set] must be set
+                                        rule: '[has(self.add),has(self.body),has(self.metadata),has(self.remove),has(self.set)].filter(x,x==true).size()
+                                          >= 1'
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: at least one of the fields in [request
+                                      response] must be set
+                                    rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
+                                      >= 1'
                                 tunnel:
                                   description: Settings for managing tunnel connections
                                     to the backend, like `HTTPS_PROXY`

@@ -92,11 +92,10 @@ func BuildAgwBackendReferences(
 				appendLLMProviderBackendReferences(&p.LLMProvider, app)
 				if p.Policies != nil {
 					plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
-						BackendSimple:  p.Policies.BackendSimple,
-						AI:             p.Policies.AI,
-						MCP:            nil,
-						Transformation: p.Policies.Transformation,
-						Health:         p.Policies.Health,
+						BackendSimple: p.Policies.BackendSimple,
+						AI:            p.Policies.AI,
+						MCP:           nil,
+						Health:        p.Policies.Health,
 					}, app)
 				}
 			}
@@ -452,10 +451,9 @@ func translateAIBackendPolicies(
 		return nil, nil
 	}
 	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
-		BackendSimple:  policies.BackendSimple,
-		AI:             policies.AI,
-		Transformation: policies.Transformation,
-		Health:         policies.Health,
+		BackendSimple: policies.BackendSimple,
+		AI:            policies.AI,
+		Health:        policies.Health,
 	})
 }
 

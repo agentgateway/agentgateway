@@ -202,6 +202,10 @@ type BackendSimple struct {
 	// Settings for managing authentication to the backend
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
+
+	// Mutates and transforms requests and responses sent to and from the backend.
+	// +optional
+	Transformation *Transformation `json:"transformation,omitempty"`
 }
 
 // PolicyBackendEndpoint identifies a backend used by policy features.
@@ -373,10 +377,6 @@ type BackendWithAI struct {
 	// +optional
 	AI *BackendAI `json:"ai,omitempty"`
 
-	// Mutates and transforms requests and responses sent to and from the backend.
-	// +optional
-	Transformation *Transformation `json:"transformation,omitempty"`
-
 	// Settings for passive and active health checking.
 	// +optional
 	Health *Health `json:"health,omitempty"`
@@ -395,10 +395,6 @@ type BackendFull struct {
 	// connecting to a `Backend` of type `mcp`.
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
-
-	// Mutates and transforms requests and responses sent to and from the backend.
-	// +optional
-	Transformation *Transformation `json:"transformation,omitempty"`
 
 	// Settings for passive and active health checking.
 	// +optional

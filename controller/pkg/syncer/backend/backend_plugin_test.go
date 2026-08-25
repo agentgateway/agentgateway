@@ -54,6 +54,45 @@ func TestBuildMCP(t *testing.T) {
 			},
 		},
 		{
+			name: "Static MCPBackend target with per-target transformation",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "per-target-transformation-mcp-backend",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "identity-aware-target",
+								Static: &agentgateway.McpTarget{
+									Host: shortStringPtr("mcp-server.example.com"),
+									Port: 8080,
+									Policies: &agentgateway.BackendSimple{
+										Transformation: &agentgateway.Transformation{
+											Request: &agentgateway.Transform{
+												Add: []agentgateway.HeaderTransformation{
+													{
+														Name:  "x-authenticated-user",
+														Value: `has(jwt.sub) ? jwt.sub : ""`,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								Name: "plain-target",
+								Static: &agentgateway.McpTarget{
+									Host: shortStringPtr("other-server.example.com"),
+									Port: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Static MCPBackend backend with prefixMode Never",
 			backend: &agentgateway.AgentgatewayBackend{
 				Name:      "never-prefix-mcp-backend",

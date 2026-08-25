@@ -1,0 +1,32 @@
+- inlinePolicies:
+  - transformation:
+      request:
+        add:
+        - expression: 'has(jwt.sub) ? jwt.sub : ""'
+          name: x-authenticated-user
+  key: test-ns/per-target-transformation-mcp-backend/identity-aware-target
+  name:
+    name: per-target-transformation-mcp-backend
+    namespace: test-ns
+  static:
+    host: mcp-server.example.com
+    port: 8080
+- key: test-ns/per-target-transformation-mcp-backend/plain-target
+  name:
+    name: per-target-transformation-mcp-backend
+    namespace: test-ns
+  static:
+    host: other-server.example.com
+    port: 8080
+- key: test-ns/per-target-transformation-mcp-backend
+  mcp:
+    targets:
+    - backend:
+        backend: test-ns/per-target-transformation-mcp-backend/identity-aware-target
+      name: identity-aware-target
+    - backend:
+        backend: test-ns/per-target-transformation-mcp-backend/plain-target
+      name: plain-target
+  name:
+    name: per-target-transformation-mcp-backend
+    namespace: test-ns

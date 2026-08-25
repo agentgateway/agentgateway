@@ -1602,11 +1602,6 @@ func (in *BackendFull) DeepCopyInto(out *BackendFull) {
 		*out = new(BackendMCP)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Transformation != nil {
-		in, out := &in.Transformation, &out.Transformation
-		*out = new(Transformation)
-		(*in).DeepCopyInto(*out)
-	}
 	if in.Health != nil {
 		in, out := &in.Health, &out.Health
 		*out = new(Health)
@@ -1710,6 +1705,11 @@ func (in *BackendSimple) DeepCopyInto(out *BackendSimple) {
 	if in.Auth != nil {
 		in, out := &in.Auth, &out.Auth
 		*out = new(BackendAuth)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Transformation != nil {
+		in, out := &in.Transformation, &out.Transformation
+		*out = new(Transformation)
 		(*in).DeepCopyInto(*out)
 	}
 }
@@ -1831,11 +1831,6 @@ func (in *BackendWithAI) DeepCopyInto(out *BackendWithAI) {
 	if in.AI != nil {
 		in, out := &in.AI, &out.AI
 		*out = new(BackendAI)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.Transformation != nil {
-		in, out := &in.Transformation, &out.Transformation
-		*out = new(Transformation)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Health != nil {
