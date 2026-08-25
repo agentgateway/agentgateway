@@ -3321,6 +3321,7 @@ async fn convert(
 
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
+	validate_auto_bind_tcp_fallbacks(&all_binds, &all_listener_tcp_routes)?;
 
 	let normalized = NormalizedLocalConfig {
 		budget_registration: Default::default(),
@@ -4866,6 +4867,33 @@ fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
 		return BindProtocol::tcp;
 	}
 	BindProtocol::http
+}
+
+fn validate_auto_bind_tcp_fallbacks(
+	binds: &[BindSnapshot],
+	listener_tcp_routes: &[(ListenerKey, Vec<TCPRoute>)],
+) -> anyhow::Result<()> {
+	for bind in binds
+		.iter()
+		.filter(|bind| bind.protocol == BindProtocol::auto)
+	{
+		let fallback_count = bind
+			.listeners
+			.iter()
+			.filter(|listener| {
+				listener_tcp_routes
+					.iter()
+					.any(|(key, routes)| key == &listener.key && !routes.is_empty())
+			})
+			.count();
+		if fallback_count > 1 {
+			bail!(
+				"AUTO bind {} has multiple TCP fallback listeners; configure tcpRoutes on at most one listener",
+				bind.key
+			);
+		}
+	}
+	Ok(())
 }
 
 async fn convert_listener(

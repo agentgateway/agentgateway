@@ -1380,13 +1380,15 @@ impl HTTPProxy {
 	}
 
 	fn detect_misdirected(
-		log: &RequestLog,
+		_log: &RequestLog,
 		bind: &BindSnapshot,
 		req: &Request,
 		selected_listener: &Listener,
 	) -> Result<(), ProxyError> {
-		if log.tls_info.is_none() {
-			// Only applicable for HTTPS
+		if !matches!(
+			selected_listener.protocol,
+			ListenerProtocol::HTTPS(_) | ListenerProtocol::TLS(_)
+		) {
 			return Ok(());
 		}
 		// From the spec:

@@ -1050,10 +1050,28 @@ impl Gateway {
 					error!("no bind found for {bind_name}");
 					return;
 				};
-				let Ok(selected_listener) = bind.listeners.get_exactly_one() else {
-					return;
-				};
-				selected_listener
+				let fallback_listeners = bind.listeners.iter().filter(|listener| {
+					inputs
+						.stores
+						.read_binds()
+						.get_listener_tcp_routes(&listener.key)
+						.is_some()
+				});
+				let mut fallback_listeners = fallback_listeners.peekable();
+				match (fallback_listeners.next(), fallback_listeners.next()) {
+					(Some(selected_listener), None) => Arc::new(selected_listener.clone()),
+					(Some(_), Some(_)) => {
+						error!(bind = %bind_name, "multiple TCP fallback listeners configured for bind");
+						return;
+					},
+					(None, _) => {
+						let Ok(selected_listener) = bind.listeners.get_exactly_one() else {
+							error!(bind = %bind_name, "no TCP fallback listener configured for bind");
+							return;
+						};
+						selected_listener
+					},
+				}
 			},
 		};
 		let tcp = stream.tcp();

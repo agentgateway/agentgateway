@@ -1,5 +1,6 @@
 use agentgateway::test_helpers::ateapimock;
-use agentgateway::transport::{stream::TLSConnectionInfo, tls::TlsInfo};
+use agentgateway::transport::stream::TLSConnectionInfo;
+use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BindMode, TunnelProtocol};
 use protos::ateapi::{Actor, ActorStatus, ResumeActorResponse};
 use tokio::sync::Notify;

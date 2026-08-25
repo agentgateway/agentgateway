@@ -229,12 +229,20 @@ async fn auto_protocol_peek_timeout() {
 async fn auto_protocol_raw_tcp_fallback() {
 	let echo_addr = spawn_tcp_echo().await;
 	let route = basic_named_tcp_route(strng::format!("/{echo_addr}"));
-	let bind = auto_bind(ListenerSet::from_list([Listener {
-		key: LISTENER_KEY,
-		name: Default::default(),
-		hostname: Default::default(),
-		protocol: ListenerProtocol::TCP,
-	}]));
+	let bind = auto_bind(ListenerSet::from_list([
+		Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: Default::default(),
+			protocol: ListenerProtocol::TCP,
+		},
+		Listener {
+			key: strng::literal!("http-listener"),
+			name: Default::default(),
+			hostname: strng::literal!("http.example.com"),
+			protocol: ListenerProtocol::HTTP,
+		},
+	]));
 
 	let t = setup_proxy_test("{}")
 		.unwrap()

@@ -404,6 +404,28 @@ binds:
 }
 
 #[tokio::test]
+async fn test_auto_bind_rejects_multiple_tcp_fallback_listeners() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - protocol: AUTO
+    tcpRoutes:
+    - backends:
+      - host: "127.0.0.1:1"
+  - protocol: AUTO
+    tcpRoutes:
+    - backends:
+      - host: "127.0.0.1:2"
+"#,
+	)
+	.await
+	.expect_err("an AUTO bind with two TCP fallbacks should be rejected");
+	assert!(err.to_string().contains("multiple TCP fallback"), "{err}");
+}
+
+#[tokio::test]
 async fn test_explicit_port_zero_counts_as_wildcard() {
 	// `port: 0` on an internal bind is the same wildcard sentinel as omitting the port. A portless
 	// wildcard plus an explicit `port: 0` wildcard must still be rejected as two wildcards.
