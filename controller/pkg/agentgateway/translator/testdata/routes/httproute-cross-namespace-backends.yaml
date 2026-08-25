@@ -196,46 +196,6 @@ output:
     Name: test-gateway
     Namespace: default
   resource:
-    policy:
-      backend:
-        inferenceRouting:
-          endpointPicker:
-            port: 8080
-            service:
-              hostname: cross-ns-service-without-grant.cross-ns-without-grant.svc.cluster.local
-              namespace: cross-ns-without-grant
-          failureMode: FAIL_CLOSED
-      key: cross-ns-without-grant/cross-ns-pool-without-grant:inference
-      name:
-        kind: InferencePool
-        name: cross-ns-pool-without-grant
-        namespace: cross-ns-without-grant
-      target:
-        service:
-          hostname: cross-ns-pool-without-grant.cross-ns-without-grant.inference.cluster.local
-          namespace: cross-ns-without-grant
-- gateway:
-    Name: test-gateway
-    Namespace: default
-  resource:
-    policy:
-      backend:
-        backendTls:
-          verification: INSECURE_ALL
-      key: cross-ns-without-grant/cross-ns-pool-without-grant:inferencetls
-      name:
-        kind: InferencePool
-        name: cross-ns-pool-without-grant
-        namespace: cross-ns-without-grant
-      target:
-        service:
-          hostname: cross-ns-service-without-grant.cross-ns-without-grant.svc.cluster.local
-          namespace: cross-ns-without-grant
-          port: 8080
-- gateway:
-    Name: test-gateway
-    Namespace: default
-  resource:
     route:
       backends:
       - backend:
@@ -306,25 +266,7 @@ status:
     name: cross-ns-pool-without-grant
     namespace: cross-ns-without-grant
   spec: null
-  status:
-    parents:
-    - conditions:
-      - lastTransitionTime: fake
-        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
-        reason: Accepted
-        status: "True"
-        type: Accepted
-      - lastTransitionTime: fake
-        message: All InferencePool references have been resolved
-        reason: ResolvedRefs
-        status: "True"
-        type: ResolvedRefs
-      controllerName: agentgateway.dev/agentgateway
-      parentRef:
-        group: gateway.networking.k8s.io
-        kind: Gateway
-        name: test-gateway
-        namespace: default
+  status: {}
 - apiVersion: gateway.networking.k8s.io/v1
   kind: HTTPRoute
   metadata:
