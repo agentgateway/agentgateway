@@ -1288,8 +1288,16 @@ impl TestBind {
 	}
 
 	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+		self.serve_tunnel_with_tls_info(bind_name, None)
+	}
+
+	pub fn serve_tunnel_with_tls_info(
+		&self,
+		bind_name: BindKey,
+		tls_info: Option<crate::transport::stream::TLSConnectionInfo>,
+	) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
-		let server = Socket::from_memory(
+		let mut server = Socket::from_memory(
 			server,
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
@@ -1298,6 +1306,9 @@ impl TestBind {
 				raw_peer_addr: None,
 			},
 		);
+		if let Some(tls_info) = tls_info {
+			server.ext_mut().insert(tls_info);
+		}
 		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
 		let bind_protocol = bind.protocol;
 		let tunnel_protocol = bind.tunnel_protocol;

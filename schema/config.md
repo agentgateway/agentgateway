@@ -113,7 +113,7 @@
 |`binds[].listeners[].name`|string|Name identifying this listener, referenced by `gateways: gateway-name/listener-name`.|
 |`binds[].listeners[].namespace`|string|Namespace scoping this listener.|
 |`binds[].listeners[].hostname`|string|Can be a wildcard|
-|`binds[].listeners[].protocol`|enum|Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, or HBONE.<br>Possible values: `HTTP`, `HTTPS`, `TLS`, `TCP`, `HBONE`.|
+|`binds[].listeners[].protocol`|enum|Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, HBONE, or AUTO.<br>Possible values: `HTTP`, `HTTPS`, `TLS`, `TCP`, `HBONE`, `AUTO`.|
 |`binds[].listeners[].tls`|object|TLS configuration, used with the HTTPS and TLS protocols.|
 |`binds[].listeners[].tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Unused when `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
 |`binds[].listeners[].tls.cert`|string|Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).<br>Required unless `spiffe` is set.|

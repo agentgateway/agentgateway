@@ -1,4 +1,5 @@
 use agentgateway::test_helpers::ateapimock;
+use agentgateway::transport::{stream::TLSConnectionInfo, tls::TlsInfo};
 use agentgateway::types::agent::{Backend, BindMode, TunnelProtocol};
 use protos::ateapi::{Actor, ActorStatus, ResumeActorResponse};
 use tokio::sync::Notify;
@@ -502,12 +503,21 @@ async fn substrate_egress_authorizes_a_reentered_connect_request() {
 		}))
 		.await;
 
-	let mut io = gateway.serve_tunnel(strng::literal!("outer"));
-	io.write_all(
-		b"CONNECT allowed.example:18080 HTTP/1.1\r\nHost: allowed.example:18080\r\nX-Ate-Atespace: demo\r\nX-Ate-Actor: my-actor\r\nX-Ate-Actor-Version: 1\r\n\r\n",
-	)
-	.await
-	.unwrap();
+	let mut io = gateway.serve_tunnel_with_tls_info(
+		strng::literal!("outer"),
+		Some(TLSConnectionInfo {
+			src_identity: Some(TlsInfo {
+				spiffe_id: Some(strng::literal!(
+					"spiffe://substrate-actor.local/atespace/demo/actor/my-actor"
+				)),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+	);
+	io.write_all(b"CONNECT allowed.example:18080 HTTP/1.1\r\nHost: allowed.example:18080\r\n\r\n")
+		.await
+		.unwrap();
 	let mut response = Vec::new();
 	loop {
 		let mut chunk = [0; 1024];
