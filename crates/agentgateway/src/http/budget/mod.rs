@@ -11,6 +11,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::cel::LLMContext;
+use crate::types::local::validate_budgets;
 use crate::{apply, schema_de, serde_dur};
 
 mod database;
@@ -209,70 +210,6 @@ fn metadata_matches(selector: &HashMap<String, String>, metadata: &serde_json::V
 	})
 }
 
-/// Validates the budgets declared by one source, either the document-level list or the budgets
-/// declared inline on a single API key. `source` names that origin in error messages.
-///
-/// A budget's name identifies its counter, so names must be unique within their source. Limits are
-/// checked against the database integer range here because exceeding it at charge time would fail
-/// an otherwise valid request.
-pub fn validate_budgets(budgets: &[Budget], source: &str) -> anyhow::Result<()> {
-	let mut names = HashSet::new();
-	for budget in budgets {
-		anyhow::ensure!(!budget.name.is_empty(), "budget names must not be empty");
-		anyhow::ensure!(
-			names.insert(&budget.name),
-			"duplicate budget name {:?} on {source}",
-			budget.name,
-		);
-		match &budget.scope {
-			BudgetScope::PerKey => {},
-			BudgetScope::GroupBy(field) => anyhow::ensure!(
-				!field.is_empty(),
-				"budget {:?} must name the metadata field to group by",
-				budget.name,
-			),
-			BudgetScope::Shared(selector) => {
-				anyhow::ensure!(
-					selector.keys().all(|field| !field.is_empty()),
-					"budget {:?} has a selector entry with an empty metadata field",
-					budget.name,
-				);
-			},
-		}
-		let window_ms = budget.window.rolling.as_millis();
-		anyhow::ensure!(
-			window_ms > 0,
-			"budget rolling windows must be greater than zero"
-		);
-		anyhow::ensure!(
-			window_ms <= i64::MAX as u128,
-			"budget rolling window is too large"
-		);
-		let amount = budget.limit.amount.decimal().normalize();
-		let multiplier = match budget.limit.unit {
-			BudgetLimitUnit::Usd => {
-				anyhow::ensure!(
-					amount.scale() <= 9,
-					"USD budget limits support at most 9 fractional digits"
-				);
-				NANODOLLARS_PER_USD
-			},
-			BudgetLimitUnit::Tokens => {
-				anyhow::ensure!(
-					amount.fract().is_zero(),
-					"token budget limits must be whole numbers"
-				);
-				1
-			},
-		};
-		anyhow::ensure!(
-			amount * Decimal::from(multiplier) <= Decimal::from(i64::MAX),
-			"budget limit exceeds database integer range"
-		);
-	}
-	Ok(())
-}
-
 /// Resolves every budget that applies to one API key, pairing each with the counter it shares.
 ///
 /// Document-level budgets are matched against the key's metadata; budgets declared inline on the
@@ -287,10 +224,9 @@ pub fn resolve_budgets(
 		.get("name")
 		.and_then(serde_json::Value::as_str)
 		.filter(|name| !name.is_empty());
-	// Document-level budgets are validated once when the configuration is normalized; inline ones
-	// are declared per key, so they are validated here.
-	validate_budgets(inline, "an API key")?;
 
+		
+	validate_budgets(inline,"api-key")?;
 	let mut budgets = Vec::new();
 	let mut counters = HashSet::new();
 	for budget in inline.iter().chain(specs) {

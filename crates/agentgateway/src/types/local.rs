@@ -13,11 +13,13 @@ use agent_core::prelude::Strng;
 use anyhow::{Context, Error, anyhow, bail};
 use indexmap::IndexMap;
 use itertools::Itertools;
+use rust_decimal::Decimal;
 use secrecy::SecretString;
 
 use crate::http::auth::jwt_sign::LocalJwtSignAuth;
 use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
+use crate::http::budget::{Budget, BudgetLimitUnit, BudgetScope, NANODOLLARS_PER_USD};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
@@ -3026,9 +3028,8 @@ async fn convert(
 		mcp,
 		ui,
 	} = i;
-	// Installed on the budget policy rather than returned, because API key policies resolve their
-	// budgets against these while this conversion is still running.
-	http::budget::validate_budgets(&budgets, "budgets")?;
+	
+	validate_budgets(&budgets, "budgets")?;
 	config.budget_policy.set_specs(budgets);
 	let model_catalog = local_runtime_config
 		.as_ref()
@@ -3519,6 +3520,64 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 				"mcp (default)".to_string()
 			},
 		)?;
+	}
+	Ok(())
+}
+
+pub fn validate_budgets(budgets: &[Budget], source: &str) -> anyhow::Result<()> {
+	let mut names = HashSet::new();
+	for budget in budgets {
+		anyhow::ensure!(!budget.name.is_empty(), "budget names must not be empty");
+		anyhow::ensure!(
+			names.insert(&budget.name),
+			"duplicate budget name {:?} on {source}",
+			budget.name,
+		);
+		match &budget.scope {
+			BudgetScope::PerKey => {},
+			BudgetScope::GroupBy(field) => anyhow::ensure!(
+				!field.is_empty(),
+				"budget {:?} must name the metadata field to group by",
+				budget.name,
+			),
+			BudgetScope::Shared(selector) => {
+				anyhow::ensure!(
+					selector.keys().all(|field| !field.is_empty()),
+					"budget {:?} has a selector entry with an empty metadata field",
+					budget.name,
+				);
+			},
+		}
+		let window_ms = budget.window.rolling.as_millis();
+		anyhow::ensure!(
+			window_ms > 0,
+			"budget rolling windows must be greater than zero"
+		);
+		anyhow::ensure!(
+			window_ms <= i64::MAX as u128,
+			"budget rolling window is too large"
+		);
+		let amount = budget.limit.amount.decimal().normalize();
+		let multiplier = match budget.limit.unit {
+			BudgetLimitUnit::Usd => {
+				anyhow::ensure!(
+					amount.scale() <= 9,
+					"USD budget limits support at most 9 fractional digits"
+				);
+				NANODOLLARS_PER_USD
+			},
+			BudgetLimitUnit::Tokens => {
+				anyhow::ensure!(
+					amount.fract().is_zero(),
+					"token budget limits must be whole numbers"
+				);
+				1
+			},
+		};
+		anyhow::ensure!(
+			amount * Decimal::from(multiplier) <= Decimal::from(i64::MAX),
+			"budget limit exceeds database integer range"
+		);
 	}
 	Ok(())
 }
