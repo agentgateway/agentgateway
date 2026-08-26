@@ -8378,6 +8378,7 @@
       "type": "string",
       "enum": [
         "runtimePreferred",
+        "mantlePreferred",
         "mantleOnly",
         "runtimeOnly"
       ]

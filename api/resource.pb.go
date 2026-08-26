@@ -2265,6 +2265,7 @@ const (
 	AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED AIBackend_BedrockEndpointPreference = 0
 	AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY       AIBackend_BedrockEndpointPreference = 1
 	AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY      AIBackend_BedrockEndpointPreference = 2
+	AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED  AIBackend_BedrockEndpointPreference = 3
 )
 
 // Enum value maps for AIBackend_BedrockEndpointPreference.
@@ -2273,11 +2274,13 @@ var (
 		0: "BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED",
 		1: "BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY",
 		2: "BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY",
+		3: "BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED",
 	}
 	AIBackend_BedrockEndpointPreference_value = map[string]int32{
 		"BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED": 0,
 		"BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY":       1,
 		"BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY":      2,
+		"BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED":  3,
 	}
 )
 
@@ -18770,7 +18773,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\xcb!\n" +
+	"_qualifier\"\xfd!\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -18872,11 +18875,12 @@ const file_resource_proto_rawDesc = "" +
 	"\t_base_urlB\x11\n" +
 	"\x0f_model_override\x1a\\\n" +
 	"\rProviderGroup\x12K\n" +
-	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"\xa9\x01\n" +
+	"\tproviders\x18\x01 \x03(\v2-.agentgateway.dev.resource.AIBackend.ProviderR\tproviders\"\xdb\x01\n" +
 	"\x19BedrockEndpointPreference\x121\n" +
 	"-BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED\x10\x00\x12+\n" +
 	"'BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY\x10\x01\x12,\n" +
-	"(BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY\x10\x02\"-\n" +
+	"(BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY\x10\x02\x120\n" +
+	",BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED\x10\x03\"-\n" +
 	"\x11AzureResourceType\x12\v\n" +
 	"\aOPEN_AI\x10\x00\x12\v\n" +
 	"\aFOUNDRY\x10\x01\"\xa4\x01\n" +

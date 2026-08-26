@@ -13,6 +13,7 @@ pub struct AwsRegion {
 pub enum BedrockEndpointPreference {
 	#[default]
 	RuntimePreferred,
+	MantlePreferred,
 	MantleOnly,
 	RuntimeOnly,
 }
@@ -78,11 +79,9 @@ impl Provider {
 			// Model listing is a Mantle-native route.
 			RT::Models => BedrockEndpoint::Mantle,
 			// Passthrough/detect stay on Runtime; we cannot reason about the wire format.
-			RT::Detect | RT::Passthrough => BedrockEndpoint::Runtime,
+			RT::Detect | RT::Passthrough | RT::GenerateContent => BedrockEndpoint::Runtime,
 			// Chat routes all resolve identically, from the preference + catalog tags.
-			RT::Completions | RT::Messages | RT::Responses | RT::GenerateContent => {
-				self.chat_endpoint(model_id, catalog)
-			},
+			RT::Completions | RT::Messages | RT::Responses => self.chat_endpoint(model_id, catalog),
 		}
 	}
 
@@ -91,22 +90,21 @@ impl Provider {
 		model_id: Option<&str>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> BedrockEndpoint {
+		use BedrockEndpoint::{Mantle, Runtime};
 		use BedrockEndpointPreference::*;
 
 		use crate::model_catalog::tags;
+		let effective = self.model.as_deref().or(model_id);
+		let has = |tag| effective.is_some_and(|m| catalog.is_some_and(|c| c.model_has_tag(m, tag)));
 		match self.endpoint_preference {
-			RuntimeOnly => BedrockEndpoint::Runtime,
-			MantleOnly => BedrockEndpoint::Mantle,
+			RuntimeOnly => Runtime,
+			MantleOnly => Mantle,
 			// Prefer Runtime; use Mantle only for models tagged Mantle but not Runtime.
-			RuntimePreferred => {
-				let effective = self.model.as_deref().or(model_id);
-				let has = |tag| effective.is_some_and(|m| catalog.is_some_and(|c| c.model_has_tag(m, tag)));
-				if has(tags::MANTLE) && !has(tags::RUNTIME) {
-					BedrockEndpoint::Mantle
-				} else {
-					BedrockEndpoint::Runtime
-				}
-			},
+			RuntimePreferred if has(tags::MANTLE) && !has(tags::RUNTIME) => Mantle,
+			RuntimePreferred => Runtime,
+			// Prefer Mantle; use Runtime only for models tagged Runtime but not Mantle.
+			MantlePreferred if has(tags::RUNTIME) && !has(tags::MANTLE) => Runtime,
+			MantlePreferred => Mantle,
 		}
 	}
 
@@ -276,6 +274,45 @@ mod tests {
 	}
 
 	#[test]
+	fn resolve_endpoint_mantle_preferred_is_the_mirror_of_runtime_preferred() {
+		use crate::model_catalog::{TestCatalog, tags};
+		let p = provider(BedrockEndpointPreference::MantlePreferred);
+		let cat = TestCatalog::new([
+			("only.mantle", &[tags::MANTLE][..]),
+			("only.runtime", &[tags::RUNTIME][..]),
+			("both.endpoints", &[tags::MANTLE, tags::RUNTIME][..]),
+		]);
+		let catalog: crate::model_catalog::Catalog = Some(&cat);
+		// Prefer Mantle: only a model tagged Runtime-but-not-Mantle falls back to Runtime.
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("only.runtime"), catalog),
+			BedrockEndpoint::Runtime
+		);
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("only.mantle"), catalog),
+			BedrockEndpoint::Mantle
+		);
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("both.endpoints"), catalog),
+			BedrockEndpoint::Mantle
+		);
+		// Untagged / no-catalog models default to Mantle under MantlePreferred.
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("untagged.model"), catalog),
+			BedrockEndpoint::Mantle
+		);
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("untagged.model"), None),
+			BedrockEndpoint::Mantle
+		);
+		// Non-chat routes still resolve by route type regardless of the Mantle preference.
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Embeddings, Some("only.mantle"), catalog),
+			BedrockEndpoint::Runtime
+		);
+	}
+
+	#[test]
 	fn mantle_endpoint_uses_correct_host_path_and_signing() {
 		let p = provider(BedrockEndpointPreference::MantleOnly);
 		assert_eq!(
@@ -369,6 +406,10 @@ mod tests {
 			RouteType::Rerank,
 			RouteType::AnthropicTokenCount,
 			RouteType::Realtime,
+			// Gemini-native routes are not served by Bedrock (Mantle has no generateContent /
+			// count-tokens API), so they must not be forced onto Mantle either.
+			RouteType::GenerateContent,
+			RouteType::GeminiCountTokens,
 		] {
 			assert_eq!(
 				p.resolve_endpoint(rt, Some("m"), None),

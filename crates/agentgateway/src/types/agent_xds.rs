@@ -1891,6 +1891,9 @@ pub(crate) fn backend_with_policies_from_proto(
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
 								endpoint_preference: match bedrock.endpoint_preference() {
+									proto::agent::ai_backend::BedrockEndpointPreference::MantlePreferred => {
+										llm::bedrock::BedrockEndpointPreference::MantlePreferred
+									},
 									proto::agent::ai_backend::BedrockEndpointPreference::MantleOnly => {
 										llm::bedrock::BedrockEndpointPreference::MantleOnly
 									},

@@ -546,6 +546,8 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 
 		endpointPreference := api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED
 		switch llm.Bedrock.EndpointPreference {
+		case agentgateway.BedrockEndpointPreferenceMantlePreferred:
+			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED
 		case agentgateway.BedrockEndpointPreferenceMantleOnly:
 			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY
 		case agentgateway.BedrockEndpointPreferenceRuntimeOnly:

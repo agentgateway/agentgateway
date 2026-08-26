@@ -61,7 +61,6 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 		}))
 	}
 
-	// Runtime endpoint keeps translating every chat input to Converse.
 	let runtime = bedrock(bedrock::BedrockEndpointPreference::RuntimeOnly);
 	for input in [
 		InputFormat::Completions,
@@ -70,7 +69,11 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	] {
 		assert_eq!(
 			runtime
-				.chat_translation(input, Some("anthropic.claude-3-5-sonnet-20241022-v2:0"), None)
+				.chat_translation(
+					input,
+					Some("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+					None
+				)
 				.unwrap()
 				.output,
 			ChatFormat::BedrockConverse,
