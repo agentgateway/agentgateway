@@ -347,8 +347,8 @@ function UsagePanel(props: {
 							</tr>
 						</thead>
 						<tbody>
-							{budgets.map(budget => (
-								<tr key={counterKey(budget)}>
+							{budgets.map((budget, index) => (
+								<tr key={counterKey(budget, index)}>
 									<td>
 										<strong>{budget.name}</strong>
 									</td>
@@ -415,6 +415,13 @@ function CounterKeyList(props: { keys: VirtualApiKey[] }) {
 function countingKeys(counter: BudgetStatus, rows: BudgetRow[], keys: VirtualApiKey[]) {
 	const { kind, field, value } = counter.scope;
 	if (kind === 'perKey') {
+		const declared = rows.find(
+			item => item.source.kind === 'key' && item.budget.name === counter.name
+		)?.source;
+		if (declared?.kind === 'key') {
+			const key = keys.find(item => keyOf(item) === declared.key);
+			return key ? [key] : [];
+		}
 		return keys.filter(key => metadataValue(key, 'name') === value);
 	}
 	if (kind === 'groupBy') {
@@ -897,9 +904,9 @@ function countersFor(row: BudgetRow, status: BudgetStatus[] | undefined) {
 	return (status ?? []).filter(item => item.name === row.budget.name && item.scope.kind === wanted);
 }
 
-function counterKey(budget: BudgetStatus) {
+function counterKey(budget: BudgetStatus, index: number) {
 	const { kind, field, value } = budget.scope;
-	return `${kind}:${field ?? ''}:${value ?? ''}:${budget.name}`;
+	return `${kind}:${field ?? ''}:${value ?? ''}:${budget.name}:${index}`;
 }
 
 function meterLevel(budget: BudgetStatus) {
