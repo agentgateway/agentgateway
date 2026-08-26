@@ -62,6 +62,7 @@ async fn handle_metrics(reg: Arc<Registry>, req: Request<Incoming>) -> Result<Re
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum MetricsFormat {
 	#[default]
+	PlainText,
 	OpenMetricsText,
 	PrometheusProtobuf,
 }
@@ -69,6 +70,7 @@ enum MetricsFormat {
 impl MetricsFormat {
 	fn content_type(self) -> &'static str {
 		match self {
+			Self::PlainText => "text/plain;charset=utf-8",
 			Self::OpenMetricsText => {
 				"application/openmetrics-text;version=1.0.0;charset=utf-8;escaping=allow-utf-8"
 			},
@@ -80,7 +82,7 @@ impl MetricsFormat {
 
 	fn encode(self, registry: &Registry) -> Result<Vec<u8>> {
 		match self {
-			Self::OpenMetricsText => {
+			Self::OpenMetricsText | Self::PlainText => {
 				let mut buffer = String::new();
 				encode_openmetrics(&mut buffer, registry)?;
 				Ok(buffer.into_bytes())
@@ -92,7 +94,7 @@ impl MetricsFormat {
 
 fn negotiate_format<T>(req: &Request<T>) -> Option<MetricsFormat> {
 	use mediatype::Name;
-	use mediatype::names::{APPLICATION, Q};
+	use mediatype::names::{APPLICATION, PLAIN, Q, TEXT};
 
 	let mut values = req.headers().get_all(http::header::ACCEPT).iter();
 	Accept::decode(&mut values)
@@ -107,15 +109,16 @@ fn negotiate_format<T>(req: &Request<T>) -> Option<MetricsFormat> {
 		})
 		.collect::<Accept>()
 		.negotiate(&[
+			MediaType::new(TEXT, PLAIN),
 			MediaType::new(APPLICATION, Name::new_unchecked("openmetrics-text")),
 			MediaType::new(APPLICATION, Name::new_unchecked("vnd.google.protobuf")),
 			MediaType::new(APPLICATION, Name::new_unchecked("protobuf")),
 			MediaType::new(APPLICATION, Name::new_unchecked("x-protobuf")),
 		])
-		.and_then(|media_type| match media_type.subty.as_str() {
-			"openmetrics-text" => Some(MetricsFormat::OpenMetricsText),
-			"vnd.google.protobuf" | "protobuf" | "x-protobuf" => Some(MetricsFormat::PrometheusProtobuf),
-			_ => None,
+		.map(|media_type| match media_type.subty.as_str() {
+			"openmetrics-text" => MetricsFormat::OpenMetricsText,
+			"vnd.google.protobuf" | "protobuf" | "x-protobuf" => MetricsFormat::PrometheusProtobuf,
+			_ => MetricsFormat::PlainText,
 		})
 }
 
@@ -133,12 +136,13 @@ mod tests {
 	use crate::Address;
 
 	#[rstest]
-	#[case::no_accept(None, MetricsFormat::OpenMetricsText)]
-	#[case::wildcard(Some("*/*"), MetricsFormat::OpenMetricsText)]
+	#[case::no_accept(None, MetricsFormat::PlainText)]
+	#[case::wildcard(Some("*/*"), MetricsFormat::PlainText)]
 	#[case::openmetrics(
 		Some("application/openmetrics-text;version=1.0.0"),
 		MetricsFormat::OpenMetricsText
 	)]
+	#[case::plain_text(Some("text/plain;version=0.0.4"), MetricsFormat::PlainText)]
 	#[case::canonical_protobuf(
 		Some(
 			"APPLICATION/VND.GOOGLE.PROTOBUF;PROTO=io.prometheus.client.MetricFamily;ENCODING=delimited"
@@ -194,7 +198,7 @@ mod tests {
 		"application/vnd.google.protobuf;q=0.9,text/plain;q=0.8",
 		MetricsFormat::PrometheusProtobuf
 	)]
-	#[case::wildcard_parameter("*/*;unknown=parameter", MetricsFormat::OpenMetricsText)]
+	#[case::wildcard_parameter("*/*;unknown=parameter", MetricsFormat::PlainText)]
 	#[case::quoted_openmetrics_parameters(
 		"application/openmetrics-text;version=\"1.0.0\";escaping=\"allow-utf-8\"",
 		MetricsFormat::OpenMetricsText
@@ -219,7 +223,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn serves_each_wire_format() {
+	async fn serves_each_metrics_format() {
 		let counter: Counter = Counter::default();
 		let mut registry = Registry::default();
 		registry.register("requests", "Requests", counter.clone());
@@ -253,6 +257,19 @@ mod tests {
 			"application/openmetrics-text;version=1.0.0;charset=utf-8;escaping=allow-utf-8"
 		);
 		assert!(openmetrics.bytes().await.unwrap().ends_with(b"# EOF\n"));
+
+		let plain_text = client
+			.get(&url)
+			.header("accept", "text/plain;version=0.0.4")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(plain_text.status(), reqwest::StatusCode::OK);
+		assert_eq!(
+			plain_text.headers()[reqwest::header::CONTENT_TYPE],
+			"text/plain;charset=utf-8"
+		);
+		assert!(plain_text.text().await.unwrap().contains("requests_total"));
 
 		let protobuf = client
 			.get(url)

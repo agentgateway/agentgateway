@@ -52,13 +52,14 @@ agentgateway_requests_total{gateway="bind/3000",method="DELETE",status="202"} 2
 
 ## Metrics Formats
 
-The metrics can be retrived in either text format or protobuf, controlled via the `Accept` header on the request. Specifying multiple formats with a quality parameter will cause the gateway to choose the best match of highest quality (standard accept header behaviour).
+Metrics are available as OpenMetrics text or Prometheus protobuf, selected using the request's `Accept` header. When multiple formats are requested, standard quality parameters determine which supported format is returned.
 
-If you use protobuf, the response contains length-delimited `io.prometheus.client.MetricFamily` messages. These can be deserialized using the official [Prometheus protobuf definition](https://github.com/prometheus/prometheus/blob/main/prompb/io/prometheus/client/metrics.proto).
+For OpenMetrics text, use:
 
-For OpenMetrics text format use `Accept: application/openmetrics-text`.
+* `Accept: application/openmetrics-text;version=1.0.0`
 
-For Protobuf use one of:
-* `Accept: application/vnd.google.protobuf`
-* `Accept: application/protobuf`
-* `Accept: application/x-protobuf`
+For Prometheus protobuf, use:
+
+* `Accept: application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited`
+
+The protobuf response is a length-delimited stream of `io.prometheus.client.MetricFamily` messages defined by the official [Prometheus client model](https://github.com/prometheus/client_model/blob/master/io/prometheus/client/metrics.proto).
