@@ -41,7 +41,6 @@ export type PolicyEditorKind =
 	| 'extAuthz'
 	| 'extProc'
 	| 'jwtAuth'
-	| 'budgets'
 	| 'localRateLimit'
 	| 'mcpAuthentication'
 	| 'mcpAuthorization'

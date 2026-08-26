@@ -9,6 +9,7 @@ import {
 	ShieldCheck,
 	SlidersHorizontal,
 	Timer,
+	Wallet,
 	Workflow
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -50,6 +51,7 @@ export const policyUi: Partial<
 		customEditor: 'backendAuth'
 	},
 	basicAuth: { title: 'Basic auth', icon: LockKeyhole },
+	budgets: { title: 'Budgets', icon: Wallet },
 	cors: { title: 'CORS', icon: Workflow, customEditor: 'cors' },
 	extAuthz: {
 		title: 'External authz',

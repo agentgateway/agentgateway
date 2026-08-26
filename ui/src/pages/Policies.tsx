@@ -71,6 +71,7 @@ export function PoliciesPage() {
 			policies={config => config.data?.llm?.policies as Record<string, unknown> | null | undefined}
 			managedLinks={{
 				apiKey: { to: '/llm/keys', summary: 'Managed on Virtual API Keys' },
+				budgets: { to: '/llm/budgets', summary: 'Managed on Budgets' },
 				guardrails: { to: '/llm/guardrails', summary: 'Managed on Guardrails' }
 			}}
 			onSavePolicy={(next, key, value) => {
