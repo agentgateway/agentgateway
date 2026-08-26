@@ -17,6 +17,7 @@ import { useRef, useState } from 'react';
 
 import type { BudgetStatus, BudgetStatusResponse } from '@/api/budgetsApi';
 import { findPerKeyBudget } from '@/api/budgetsApi';
+import { budgetGroupByFields, budgetScopeKind, budgetsForKey, counterForKey } from '@/budgets';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { EnumSelector } from '@/components/EnumSelector';
 import {
@@ -82,6 +83,7 @@ export function KeysPage() {
 	const budgetStatus = useBudgetStatus({ enabled: Boolean(policies.apiKey) });
 	const help = useSchemaHelp();
 	const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
+	const policyBudgets = policy?.budgets ?? [];
 	const filePolicyOwned = Boolean(
 		rawConfig.data?.llm?.policies &&
 			Object.prototype.hasOwnProperty.call(rawConfig.data.llm.policies, 'apiKey')
@@ -301,8 +303,8 @@ export function KeysPage() {
 										</td>
 										<td>
 											<BudgetSummary
-												apiKeyName={keyName(item)}
-												value={item.budgets}
+												apiKey={item}
+												policyBudgets={policyBudgets}
 												status={budgetStatus.data}
 											/>
 										</td>
@@ -1264,24 +1266,26 @@ function AllowedModelsSummary(props: { value?: string[] | null }) {
 }
 
 function BudgetSummary(props: {
-	apiKeyName: string;
-	value?: VirtualApiKeyBudget[];
+	apiKey: VirtualApiKey;
+	policyBudgets: VirtualApiKeyBudget[];
 	status?: BudgetStatusResponse;
 }) {
-	const budgets = props.value ?? [];
+	const budgets = budgetsForKey(props.policyBudgets, props.apiKey);
 	if (!budgets.length) return <span className="muted">—</span>;
 	return (
 		<div className="key-budget-summary">
-			{budgets.map((budget, index) => {
-				const live = findPerKeyBudget(props.status?.budgets, props.apiKeyName, budget.name);
+			{budgets.map(({ budget, inline }, index) => {
+				const live = counterForKey(props.status?.budgets, props.apiKey, budget);
 				const { used, fraction, level } = budgetProgress(budget, live);
 				return (
 					<Tooltip
 						key={`${budget.name}:${index}`}
-						content={`${budgetAmountLabel(used, budget.limit.unit)} of ${budgetAmountLabel(
-							budget.limit.amount,
+						content={`${budgetScopeSummary(budget, inline)}. ${budgetAmountLabel(
+							used,
 							budget.limit.unit
-						)} per ${budget.window.rolling}`}
+						)} of ${budgetAmountLabel(budget.limit.amount, budget.limit.unit)} per ${
+							budget.window.rolling
+						}`}
 					>
 						<div className="key-budget-summary-row">
 							<span className="key-budget-summary-name">{budget.name}</span>
@@ -1295,6 +1299,19 @@ function BudgetSummary(props: {
 			})}
 		</div>
 	);
+}
+
+/** Says whether a key owns its allowance or shares one, since the meter alone cannot show that. */
+function budgetScopeSummary(budget: VirtualApiKeyBudget, inline: boolean) {
+	if (inline) return 'On this key';
+	switch (budgetScopeKind(budget)) {
+		case 'perKey':
+			return 'Every key, counted separately';
+		case 'groupBy':
+			return `Shared by ${budgetGroupByFields(budget).join(', ')}`;
+		default:
+			return 'Shared pool';
+	}
 }
 
 function MetadataSummary(props: { value: unknown }) {
