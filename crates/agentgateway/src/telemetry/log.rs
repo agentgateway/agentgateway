@@ -1475,7 +1475,8 @@ impl Drop for DropOnLog {
 
 			let guardrails_json = guardrails
 				.as_ref()
-				.and_then(|g| serde_json::to_value(g).ok());
+				.map(|g| serde_json::Value::Array(g.iter().map(cel::GuardrailInfo::minimal).collect()));
+
 			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 			let mut kv = vec![
 				(

@@ -1438,6 +1438,22 @@ pub struct GuardrailInfo {
 	pub assessments: Vec<serde_json::Value>,
 }
 
+impl GuardrailInfo {
+	/// Minimal details about which guardrail fired, when it fired and what the action was.
+	/// Does not include detailed reasons or assessments.
+	pub fn minimal(&self) -> serde_json::Value {
+		let mut entry = serde_json::json!({
+			"phase": self.phase,
+			"guard": self.guard,
+			"action": self.action,
+		});
+		if let Some(id) = &self.guardrail_id {
+			entry["guardrailId"] = id.as_str().into();
+		}
+		entry
+	}
+}
+
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct LLMContext {
