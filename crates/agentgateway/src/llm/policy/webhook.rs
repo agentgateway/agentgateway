@@ -155,7 +155,8 @@ fn build_request_for_request(
 	let body = GuardrailsPromptRequest {
 		body: PromptMessages { messages },
 	};
-	build_request(&body, REQUEST_PATH, webhook, context, http_headers)
+	let path = webhook.path.as_deref().unwrap_or(REQUEST_PATH);
+	build_request(&body, path, webhook, context, http_headers)
 }
 
 fn build_request_for_response(
@@ -167,7 +168,8 @@ fn build_request_for_response(
 	let body = GuardrailsResponseRequest {
 		body: ResponseChoices { choices },
 	};
-	build_request(&body, RESPONSE_PATH, webhook, context, http_headers)
+	let path = webhook.path.as_deref().unwrap_or(RESPONSE_PATH);
+	build_request(&body, path, webhook, context, http_headers)
 }
 
 fn build_request<T: serde::Serialize>(
@@ -178,6 +180,7 @@ fn build_request<T: serde::Serialize>(
 	http_headers: &HeaderMap,
 ) -> anyhow::Result<crate::http::Request> {
 	let body_bytes = serde_json::to_vec(body)?;
+	let path = path.trim_start_matches('/');
 	let mut rb = ::http::Request::builder()
 		.uri(format!("/{path}"))
 		.method(http::Method::POST);
@@ -244,19 +247,24 @@ pub(super) async fn send_request(
 	context: EvaluationContext<'_>,
 	http_headers: &HeaderMap,
 	messages: Vec<Message>,
+	buffer_limit: Option<crate::transport::BufferLimit>,
 ) -> anyhow::Result<GuardrailsPromptResponse> {
-	let whr = with_default_timeout(build_request_for_request(
-		webhook,
-		context,
-		http_headers,
-		messages,
-	)?);
-	let res = Box::pin(
-		client
-			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-			.call_reference(whr, &webhook.target),
-	)
-	.await?;
+	let req = build_request_for_request(webhook, context, http_headers, messages)?;
+	if !passes_min_size(webhook.min_size_bytes, request_body_len(&req)) {
+		return Ok(GuardrailsPromptResponse {
+			action: RequestAction::Pass(PassAction {
+				reason: Some("request below min_size_bytes".to_string()),
+			}),
+		});
+	}
+	let mut whr = with_default_timeout(req);
+	if let Some(limit) = buffer_limit {
+		whr.extensions_mut().insert(limit);
+	}
+	let res = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
+		.call_reference(whr, &webhook.target)
+		.await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
 }
@@ -268,18 +276,116 @@ pub(super) async fn send_response(
 	http_headers: &HeaderMap,
 	choices: Vec<ResponseChoice>,
 ) -> anyhow::Result<GuardrailsResponseResponse> {
-	let whr = with_default_timeout(build_request_for_response(
-		webhook,
-		context,
-		http_headers,
-		choices,
-	)?);
+	let req = build_request_for_response(webhook, context, http_headers, choices)?;
+	if !passes_min_size(webhook.min_size_bytes, request_body_len(&req)) {
+		return Ok(GuardrailsResponseResponse {
+			action: ResponseAction::Pass(PassAction {
+				reason: Some("response below min_size_bytes".to_string()),
+			}),
+		});
+	}
+	let whr = with_default_timeout(req);
 	let res = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_reference(whr, &webhook.target)
 		.await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
+}
+
+/// The exact byte length of an already-built request body, if known. Request bodies built by
+/// `build_request` are fully in memory, so this is a lookup, not a re-serialization.
+fn request_body_len(req: &crate::http::Request) -> Option<u64> {
+	use http_body::Body as _;
+	req.body().size_hint().exact()
+}
+
+/// Returns `false` if `len` is below `min_size_bytes` (0 disables the gate, i.e. always call
+/// the webhook). Fails open (calls the webhook) if `len` is unknown, so a bug here can't
+/// silently disable the webhook.
+pub(super) fn passes_min_size(min_size_bytes: usize, len: Option<u64>) -> bool {
+	if min_size_bytes == 0 {
+		return true;
+	}
+	len.map(|len| len >= min_size_bytes as u64).unwrap_or(true)
+}
+
+/// Outcome of a [`WebhookMessageFormat::Raw`] request call.
+pub(super) enum RawRequestOutcome {
+	/// Leave the request unchanged.
+	Pass,
+	/// Replace the messages with these raw, provider-native objects.
+	Replace(Vec<serde_json::Value>),
+}
+
+#[derive(Serialize)]
+struct RawMessagesRequest<'a> {
+	messages: &'a [serde_json::Value],
+	#[serde(skip_serializing_if = "Option::is_none")]
+	model: Option<&'a str>,
+}
+
+/// Raw response shape: `{messages}`. An absent/null `messages` passes the request through
+/// unchanged; otherwise the messages replace the original.
+#[derive(Deserialize)]
+struct RawMessagesResponse {
+	#[serde(default)]
+	messages: Option<Vec<serde_json::Value>>,
+}
+
+/// Call a webhook configured with [`WebhookMessageFormat::Raw`]: send the raw, provider-native
+/// messages verbatim (no guardrail envelope) and apply the same reply.
+pub(super) async fn send_request_raw(
+	client: &PolicyClient,
+	webhook: &Webhook,
+	context: EvaluationContext<'_>,
+	http_headers: &HeaderMap,
+	messages: &[serde_json::Value],
+	model: Option<&str>,
+	buffer_limit: Option<crate::transport::BufferLimit>,
+) -> anyhow::Result<RawRequestOutcome> {
+	let body = RawMessagesRequest { messages, model };
+	let path = webhook.path.as_deref().unwrap_or(REQUEST_PATH);
+	let req = build_request(&body, path, webhook, context, http_headers)?;
+	if !passes_min_size(webhook.min_size_bytes, request_body_len(&req)) {
+		return Ok(RawRequestOutcome::Pass);
+	}
+	let mut whr = with_default_timeout(req);
+	if let Some(limit) = buffer_limit {
+		whr.extensions_mut().insert(limit);
+	}
+	let res = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
+		.call_reference(whr, &webhook.target)
+		.await?;
+	let status = res.status();
+	if status != ::http::StatusCode::OK {
+		anyhow::bail!("raw webhook returned status {status}");
+	}
+	let parsed: RawMessagesResponse = json::from_response_body(res).await?;
+	match parsed.messages {
+		None => Ok(RawRequestOutcome::Pass),
+		Some(replacement) => {
+			validate_replacement(messages, &replacement).map_err(anyhow::Error::msg)?;
+			Ok(RawRequestOutcome::Replace(replacement))
+		},
+	}
+}
+
+/// Sanity-check raw replacement messages from a webhook before applying them. Rejects output
+/// that is empty (when the input wasn't) or contains non-object messages; anything else about
+/// the content is between the webhook and the provider, same as guardrail-mode masking.
+fn validate_replacement(
+	original: &[serde_json::Value],
+	replacement: &[serde_json::Value],
+) -> Result<(), String> {
+	if replacement.is_empty() && !original.is_empty() {
+		return Err("webhook returned an empty message array".to_string());
+	}
+	if replacement.iter().any(|m| !m.is_object()) {
+		return Err("webhook returned non-object messages".to_string());
+	}
+	Ok(())
 }
 
 #[cfg(test)]
@@ -300,6 +406,9 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: FailureMode::FailClosed,
+			message_format: Default::default(),
+			path: None,
+			min_size_bytes: 0,
 		}
 	}
 
@@ -484,5 +593,80 @@ mod tests {
 		assert_eq!(req.uri().path(), "/prefixed/request");
 		// ...but context-dependent ones are skipped.
 		assert!(req.headers().get("x-user").is_none());
+	}
+
+	#[test]
+	fn configured_path_overrides_default() {
+		let mut wh = webhook(vec![]);
+		wh.path = Some("/v1/compress".to_string());
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(None, None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
+		assert_eq!(req.uri().path(), "/v1/compress");
+	}
+
+	#[test]
+	fn min_size_gate_zero_always_passes() {
+		assert!(passes_min_size(0, None));
+		assert!(passes_min_size(0, Some(0)));
+	}
+
+	#[test]
+	fn min_size_gate_rejects_small_payloads() {
+		assert!(!passes_min_size(10_000, Some(20)));
+		assert!(passes_min_size(10, Some(20)));
+	}
+
+	#[test]
+	fn min_size_gate_fails_open_on_unknown_length() {
+		assert!(passes_min_size(10_000, None));
+	}
+
+	#[test]
+	fn min_size_gate_uses_the_built_request_body_length() {
+		let mut wh = webhook(vec![]);
+		wh.min_size_bytes = 10_000;
+		let messages = vec![Message {
+			role: "user".into(),
+			content: "hi".into(),
+		}];
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(None, None),
+			&HeaderMap::new(),
+			messages,
+		)
+		.unwrap();
+		assert!(!passes_min_size(wh.min_size_bytes, request_body_len(&req)));
+	}
+
+	#[test]
+	fn validate_replacement_rejects_empty_output_for_nonempty_input() {
+		let original = vec![serde_json::json!({"role": "user", "content": "hi"})];
+		assert!(validate_replacement(&original, &[]).is_err());
+		assert!(validate_replacement(&[], &[]).is_ok());
+	}
+
+	#[test]
+	fn validate_replacement_rejects_non_object_messages() {
+		let original = vec![serde_json::json!({"role": "user", "content": "hi"})];
+		let replacement = vec![serde_json::json!("not an object")];
+		assert!(validate_replacement(&original, &replacement).is_err());
+	}
+
+	#[test]
+	fn validate_replacement_allows_arbitrary_content_changes() {
+		// Content-level correctness (e.g. tool-call pairing) is between the webhook and the
+		// provider, same as guardrail-mode masking; only shape is checked here.
+		let original = vec![
+			serde_json::json!({"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "f", "input": {}}]}),
+			serde_json::json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]}),
+		];
+		let dropped = vec![original[0].clone()];
+		assert!(validate_replacement(&original, &dropped).is_ok());
 	}
 }

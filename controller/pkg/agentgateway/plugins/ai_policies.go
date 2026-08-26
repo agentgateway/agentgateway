@@ -141,10 +141,20 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	if err != nil {
 		return nil, fmt.Errorf("failed to build webhook: %v", err)
 	}
+	minSizeBytes := uint64(0)
+	if webhook.MinSizeBytes != nil {
+		if *webhook.MinSizeBytes < 0 {
+			return nil, fmt.Errorf("webhook minSizeBytes must be non-negative")
+		}
+		minSizeBytes = uint64(*webhook.MinSizeBytes) // nolint:gosec // checked non-negative above
+	}
 
 	w := &api.BackendPolicySpec_Ai_Webhook{
-		Backend:     be,
-		FailureMode: webhookFailureMode(webhook.FailureMode),
+		Backend:       be,
+		FailureMode:   webhookFailureMode(webhook.FailureMode),
+		MessageFormat: webhookMessageFormat(webhook.MessageFormat),
+		Path:          webhook.Path,
+		MinSizeBytes:  minSizeBytes,
 	}
 
 	var errs []error
@@ -154,7 +164,6 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
 	}
-
 	if len(webhook.ForwardHeaderMatches) > 0 {
 		headers := make([]*api.HeaderMatch, 0, len(webhook.ForwardHeaderMatches))
 		for _, match := range webhook.ForwardHeaderMatches {
@@ -183,6 +192,13 @@ func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_
 		return api.BackendPolicySpec_Ai_Webhook_FAIL_OPEN
 	}
 	return api.BackendPolicySpec_Ai_Webhook_FAIL_CLOSED
+}
+
+func webhookMessageFormat(format agentgateway.WebhookMessageFormat) api.BackendPolicySpec_Ai_Webhook_MessageFormat {
+	if format == agentgateway.WebhookMessageFormatRaw {
+		return api.BackendPolicySpec_Ai_Webhook_RAW
+	}
+	return api.BackendPolicySpec_Ai_Webhook_GUARDRAIL
 }
 
 func processBuiltinRegexRule(builtin agentgateway.BuiltIn, logger *slog.Logger) *api.BackendPolicySpec_Ai_RegexRule {

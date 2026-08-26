@@ -5236,6 +5236,23 @@
         "failureMode": {
           "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
           "$ref": "#/$defs/WebhookFailureMode"
+        },
+        "messageFormat": {
+          "description": "Wire format used to talk to the webhook. Defaults to `guardrail`.",
+          "$ref": "#/$defs/WebhookMessageFormat"
+        },
+        "path": {
+          "description": "Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request\nguards and `/response` for response guards. Can also be overridden per-request via the\n`:path` pseudo-header in `headers`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minSizeBytes": {
+          "description": "Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.\nRequests/responses below the threshold skip the webhook entirely and are left unchanged.\nDefaults to 0 (always call).",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -5255,6 +5272,21 @@
           "description": "Allow the request through when the webhook guardrail is unavailable.",
           "type": "string",
           "const": "failOpen"
+        }
+      ]
+    },
+    "WebhookMessageFormat": {
+      "description": "Wire format used when calling a webhook.\n\n`guardrail` sends/receives the guardrail envelope (`{body:{messages}}` request,\n`{action:{...}}` response) using a simplified role/content message shape.\n\n`raw` sends/receives provider-native messages with no envelope (`{messages, model}` request,\n`{messages}` response, where an absent/null `messages` passes the request through unchanged).\nThis preserves fields — tool calls, cache markers — that the guardrail envelope's simplified\nshape would lose, which makes it suitable for use cases like context compression. Only\nsupported on request guards; request formats with no message array (embeddings, rerank, ...)\nare skipped, and using `raw` on a response guard fails per `failure_mode`.",
+      "oneOf": [
+        {
+          "description": "Guardrail envelope with simplified role/content messages (default).",
+          "type": "string",
+          "const": "guardrail"
+        },
+        {
+          "description": "Raw, provider-native messages with no envelope.",
+          "type": "string",
+          "const": "raw"
         }
       ]
     },

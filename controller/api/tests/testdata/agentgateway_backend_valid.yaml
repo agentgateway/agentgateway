@@ -58,6 +58,14 @@ spec:
                     kind: AgentgatewayBackend
                     group: agentgateway.dev
                   failureMode: FailOpen
+              - webhook:
+                  backendRef:
+                    name: compression
+                    kind: AgentgatewayBackend
+                    group: agentgateway.dev
+                  messageFormat: Raw
+                  path: /v1/compress
+                  minSizeBytes: 16384
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

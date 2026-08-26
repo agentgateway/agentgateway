@@ -28,6 +28,46 @@ spec:
                 auth:
                   oauthTokenExchange: {}
 ---
+_err: "messageFormat 'Raw' is not supported on response guards"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: prompt-guard-response-webhook-raw
+spec:
+  ai:
+    provider:
+      openai: {}
+  policies:
+    ai:
+      promptGuard:
+        response:
+        - webhook:
+            backendRef:
+              name: compression
+              kind: AgentgatewayBackend
+              group: agentgateway.dev
+            messageFormat: Raw
+---
+_err: "minSizeBytes in body should be greater than or equal to 0"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: prompt-guard-webhook-negative-min-size
+spec:
+  ai:
+    provider:
+      openai: {}
+  policies:
+    ai:
+      promptGuard:
+        request:
+        - webhook:
+            backendRef:
+              name: compression
+              kind: AgentgatewayBackend
+              group: agentgateway.dev
+            minSizeBytes: -1
+---
 _err: AI policies require AI
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

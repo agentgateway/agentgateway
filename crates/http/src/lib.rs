@@ -5,7 +5,7 @@ pub type Response = http::Response<Body>;
 
 pub const DEFAULT_BUFFER_LIMIT: usize = 2_097_152;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct BufferLimit(pub usize);
 
 impl BufferLimit {

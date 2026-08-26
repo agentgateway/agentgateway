@@ -1305,6 +1305,22 @@ message BackendPolicySpec {
         FAIL_OPEN = 1;
       }
       FailureMode failure_mode = 4;
+
+      // Wire format used to talk to the webhook. Defaults to GUARDRAIL.
+      enum MessageFormat {
+        GUARDRAIL = 0;
+        RAW = 1;
+      }
+      MessageFormat message_format = 5;
+
+      // Request path sent to the webhook, e.g. "/v1/compress". Defaults to
+      // "/request" for request guards and "/response" for response guards.
+      optional string path = 6;
+
+      // Minimum size, in bytes, of the JSON-serialized messages before the
+      // webhook is called. Requests/responses below the threshold skip the
+      // webhook entirely. Defaults to 0 (always call).
+      uint64 min_size_bytes = 7;
     }
 
     message Moderation {

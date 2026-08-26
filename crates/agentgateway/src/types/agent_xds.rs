@@ -4018,6 +4018,16 @@ fn convert_webhook(
 			_ => llm::policy::FailureMode::FailClosed,
 		};
 
+	let message_format =
+		match proto::agent::backend_policy_spec::ai::webhook::MessageFormat::try_from(w.message_format)
+		{
+			Ok(proto::agent::backend_policy_spec::ai::webhook::MessageFormat::Raw) => {
+				llm::policy::WebhookMessageFormat::Raw
+			},
+			// Default to Guardrail (proto default is GUARDRAIL = 0)
+			_ => llm::policy::WebhookMessageFormat::Guardrail,
+		};
+
 	let headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)> = w
 		.headers
 		.iter()
@@ -4037,11 +4047,26 @@ fn convert_webhook(
 		})
 		.collect();
 
+	let min_size_bytes = match usize::try_from(w.min_size_bytes) {
+		Ok(value) => value,
+		Err(_) => {
+			diagnostics.add_warning(format!(
+				"webhook minSizeBytes {} exceeds the platform limit; clamping to {}",
+				w.min_size_bytes,
+				usize::MAX
+			));
+			usize::MAX
+		},
+	};
+
 	Ok(llm::policy::Webhook {
 		target,
 		headers,
 		forward_header_matches,
 		failure_mode,
+		message_format,
+		path: w.path.clone(),
+		min_size_bytes,
 	})
 }
 
@@ -5800,6 +5825,9 @@ mod tests {
 			headers: Default::default(),
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			message_format: 0,
+			path: None,
+			min_size_bytes: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5824,6 +5852,9 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			message_format: 0,
+			path: None,
+			min_size_bytes: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5852,6 +5883,9 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			message_format: 0,
+			path: None,
+			min_size_bytes: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5867,6 +5901,28 @@ mod tests {
 	}
 
 	#[test]
+	fn test_convert_webhook_raw_message_format_and_path_and_min_size() -> Result<(), ProtoError> {
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: 0,
+			message_format: proto::agent::backend_policy_spec::ai::webhook::MessageFormat::Raw as i32,
+			path: Some("/v1/compress".to_string()),
+			min_size_bytes: 16_384,
+		};
+		let mut diag = Diagnostics::default();
+		let result = convert_webhook(&wh, &mut diag)?;
+		assert_eq!(
+			result.message_format,
+			llm::policy::WebhookMessageFormat::Raw
+		);
+		assert_eq!(result.path.as_deref(), Some("/v1/compress"));
+		assert_eq!(result.min_size_bytes, 16_384);
+		Ok(())
+	}
+
+	#[test]
 	fn test_convert_webhook_invalid_header_names_skipped() {
 		let mut headers = std::collections::HashMap::new();
 		headers.insert("x-valid".to_string(), "request.path".to_string());
@@ -5877,6 +5933,9 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			message_format: 0,
+			path: None,
+			min_size_bytes: 0,
 		};
 		let mut diag = Diagnostics::default();
 		// convert_webhook returns Result, but invalid header names produce warnings not errors
