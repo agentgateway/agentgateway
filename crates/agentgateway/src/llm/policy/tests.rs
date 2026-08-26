@@ -58,6 +58,51 @@ async fn webhook_fail_open_emits_single_metric() {
 }
 
 #[test]
+fn moderation_flagged_records_guardrail_info() {
+	let cats = [
+		"hate",
+		"hate/threatening",
+		"harassment",
+		"harassment/threatening",
+		"illicit",
+		"illicit/violent",
+		"self-harm",
+		"self-harm/intent",
+		"self-harm/instructions",
+		"sexual",
+		"sexual/minors",
+		"violence",
+		"violence/graphic",
+	];
+	let obj = |v: fn(&str) -> serde_json::Value| -> serde_json::Value {
+		cats.iter().map(|c| (c.to_string(), v(c))).collect()
+	};
+	let resp: async_openai::types::moderations::CreateModerationResponse =
+		serde_json::from_value(serde_json::json!({
+			"id": "modr-1",
+			"model": "omni-moderation-latest",
+			"results": [{
+				"flagged": true,
+				"categories": obj(|c| serde_json::json!(c == "violence")),
+				"category_scores": obj(|_| serde_json::json!(0.5)),
+				"category_applied_input_types": obj(|_| serde_json::json!(["text"])),
+			}]
+		}))
+		.unwrap();
+
+	let log = GuardrailLog::default();
+	let outcome = Policy::moderation_outcome(resp, &RequestRejection::default(), Some(&log));
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.guard, "openAIModeration");
+	assert_eq!(entry.action, "reject");
+	assert_eq!(
+		entry.assessments[0]["flaggedCategories"],
+		serde_json::json!(["violence"])
+	);
+}
+
+#[test]
 fn webhook_reject_records_guardrail_info() {
 	use crate::llm::policy::webhook::{RejectAction, RequestAction};
 

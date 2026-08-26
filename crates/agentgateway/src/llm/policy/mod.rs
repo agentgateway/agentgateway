@@ -982,7 +982,7 @@ impl Policy {
 				Self::evaluate_webhook_request(req, http_headers, client, wh, original, guardrail_log).await
 			},
 			RequestGuardKind::OpenAIModeration(m) => {
-				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
+				Self::evaluate_moderation(req, claims, client, m, &guard.rejection, guardrail_log).await
 			},
 			RequestGuardKind::BedrockGuardrails(bg) => {
 				Self::evaluate_bedrock_guardrails_request(
@@ -1012,13 +1012,53 @@ impl Policy {
 		client: &PolicyClient,
 		moderation: &Moderation,
 		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		let resp = moderation::send_request(req, claims, client, moderation).await?;
-		if resp.results.iter().any(|r| r.flagged) {
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else {
-			Ok(GuardrailOutcome::None)
+		Ok(Self::moderation_outcome(resp, rejection, guardrail_log))
+	}
+
+	fn moderation_outcome(
+		resp: async_openai::types::moderations::CreateModerationResponse,
+		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
+	) -> GuardrailOutcome<RequestGuardMutation> {
+		if !resp.results.iter().any(|r| r.flagged) {
+			return GuardrailOutcome::None;
 		}
+		// One entry per flagged result listing the flagged category names; input text
+		// is never included.
+		let assessments = resp
+			.results
+			.iter()
+			.filter(|r| r.flagged)
+			.map(|r| {
+				let flagged: Vec<String> = serde_json::to_value(&r.categories)
+					.ok()
+					.and_then(|v| match v {
+						serde_json::Value::Object(m) => Some(
+							m.into_iter()
+								.filter(|(_, v)| v.as_bool() == Some(true))
+								.map(|(k, _)| k)
+								.collect(),
+						),
+						_ => None,
+					})
+					.unwrap_or_default();
+				serde_json::json!({"flaggedCategories": flagged})
+			})
+			.collect();
+		record_guardrail_info(
+			guardrail_log,
+			cel::GuardrailInfo {
+				phase: guardrail_phase(GuardrailPhase::Request),
+				guard: strng::literal!("openAIModeration"),
+				action: strng::literal!("reject"),
+				assessments,
+				..Default::default()
+			},
+		);
+		GuardrailOutcome::Rejected(rejection.as_response())
 	}
 
 	#[allow(clippy::too_many_arguments)]
