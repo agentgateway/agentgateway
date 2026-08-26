@@ -6,7 +6,7 @@ import {
 	mockGateway,
 	populatedConfig,
 	sameOriginGatewayConfig
-} from './fixtures';
+} from '../fixtures';
 
 const pages = [
 	['/', 'Gateway Overview'],

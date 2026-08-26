@@ -117,16 +117,61 @@ jobs:
         corepack enable
         pnpm install --frozen-lockfile
         pnpm lint
-    - name: Install Playwright browser
-      run: pnpm exec playwright install --with-deps chromium
+
+  ui-e2e:
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      with:
+        node-version-file: ui/.nvmrc
+    - name: Install dependencies
+      run: |
+        corepack enable
+        pnpm install --frozen-lockfile
     - name: End-to-end tests
       run: pnpm test:e2e
-    - name: Upload Playwright traces
+    - name: Upload Playwright results
       if: failure()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       with:
-        name: playwright-ui-traces
-        path: ui/test-results
+        name: playwright-ui-e2e-results
+        path: ui/tests/test-results
+        retention-days: 2
+
+  ui-visual-regressions:
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+    - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      with:
+        node-version-file: ui/.nvmrc
+    - name: Install dependencies
+      run: |
+        corepack enable
+        pnpm install --frozen-lockfile
+    - name: Visual regression tests
+      run: pnpm test:visual-regressions
+    - name: Upload Playwright results
+      if: failure()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: playwright-ui-visual-regression-results
+        path: |
+          ui/tests/test-results
+          ui/tests/playwright-report
         retention-days: 2
 
   #### Controller jobs ####

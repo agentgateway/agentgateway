@@ -35,12 +35,42 @@ pnpm build
 
 `--frozen-lockfile` installs exactly what `ui/pnpm-lock.yaml` records and fails
 if it disagrees with `package.json`. CI, the release build and the Docker images
-run the same command. `pnpm lint` and `pnpm test:e2e` are the checks CI runs,
-and `pnpm dev` starts the dev server on http://localhost:19000.
+run the same command. CI runs `pnpm lint`, `pnpm test:e2e`, and
+`pnpm test:visual-regressions`. `pnpm dev` starts the dev server on
+http://localhost:19000.
 
 Dependencies are pinned to exact versions. To change one, edit
 `ui/package.json`, run `pnpm install` without `--frozen-lockfile`, and commit
 the updated lockfile.
+
+Both test commands invoke Playwright directly, with configurations under
+`ui/tests/`. CI runs both suites in the pinned Linux Playwright image.
+Local end-to-end tests run directly with `pnpm test:e2e`, without a container.
+For local screenshot comparisons and baseline updates, use the explicit
+Linux container launcher from `ui/`:
+
+```bash
+pnpm test:visual-regressions:linux
+pnpm test:visual-regressions:linux --grep 'LLM Models'
+pnpm test:visual-regressions:linux --update-snapshots=all
+```
+
+Docker must be running. To use Podman instead, run
+`DOCKER_BUILDER=podman pnpm test:visual-regressions:linux`.
+The launcher selects the repository's Node and pnpm versions, then calls
+`pnpm test:visual-regressions` inside the container. Running the direct command
+on macOS can produce different pixels because rendering depends on the platform.
+Keep baselines unchanged for appearance-preserving refactors. After intentional
+visual changes, inspect every updated PNG under
+`ui/tests/visual-regression/baselines/` and rerun the comparison without the update flag.
+
+Generated traces and screenshot comparisons are written to `ui/tests/test-results/`.
+The HTML report is written to `ui/tests/playwright-report/`. Both directories are
+ignored by Git. From `ui/`, open the report with:
+
+```bash
+pnpm exec playwright show-report tests/playwright-report
+```
 
 Build the agentgateway binary:
 
