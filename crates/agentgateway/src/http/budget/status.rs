@@ -92,10 +92,10 @@ pub struct BudgetStatusWindow {
 impl BudgetPolicy {
 	/// Returns a point-in-time status snapshot, optionally narrowed to the budgets that can apply to
 	/// one API key display name.
+	/// Group and selector counters do not record which keys contribute to them, so they are reported
+	/// for every key they apply to.
 	///
 	/// Expired counters are reported with zero usage even if no request has advanced their window.
-	/// Group and selector counters do not record which keys contribute to them, so they are reported
-	/// for every key rather than hidden from the key whose spend they may be limiting.
 	pub fn status(&self, api_key_name: Option<&str>) -> anyhow::Result<BudgetStatusResponse> {
 		let observed_at = Utc::now();
 		let applies_to_key = |scope: &ResolvedScope| match scope {
