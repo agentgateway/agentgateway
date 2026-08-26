@@ -979,7 +979,7 @@ impl Policy {
 				guardrail_log,
 			)),
 			RequestGuardKind::Webhook(wh) => {
-				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
+				Self::evaluate_webhook_request(req, http_headers, client, wh, original, guardrail_log).await
 			},
 			RequestGuardKind::OpenAIModeration(m) => {
 				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
@@ -1396,6 +1396,7 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		let llm_request = webhook
 			.headers
@@ -1418,17 +1419,35 @@ impl Policy {
 				};
 			},
 		};
-		match whr.action {
+		Self::webhook_request_outcome(whr.action, guardrail_log)
+	}
+
+	fn webhook_request_outcome(
+		action: RequestAction,
+		guardrail_log: Option<&GuardrailLog>,
+	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+		let record = |action: Strng, reason: Option<String>| {
+			record_guardrail_info(
+				guardrail_log,
+				cel::GuardrailInfo {
+					phase: guardrail_phase(GuardrailPhase::Request),
+					guard: strng::literal!("webhook"),
+					action,
+					action_reason: reason,
+					..Default::default()
+				},
+			)
+		};
+		match action {
 			RequestAction::Mask(mask) => {
 				debug!(
 					"webhook masked request: {}",
-					mask
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					mask.reason.as_deref().unwrap_or("no reason specified")
 				);
 				let MaskActionBody::PromptMessages(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
+				record(strng::literal!("mask"), mask.reason);
 				Ok(GuardrailOutcome::Masked(RequestGuardMutation::Messages(
 					body.messages,
 				)))
@@ -1436,10 +1455,9 @@ impl Policy {
 			RequestAction::Reject(rej) => {
 				debug!(
 					"webhook rejected request: {}",
-					rej
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					rej.reason.as_deref().unwrap_or("no reason specified")
 				);
+				record(strng::literal!("reject"), rej.reason);
 				Ok(GuardrailOutcome::Rejected(
 					::http::response::Builder::new()
 						.status(rej.status_code)
@@ -1464,6 +1482,7 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		let messages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
@@ -1487,17 +1506,35 @@ impl Policy {
 				};
 			},
 		};
-		match whr.action {
+		Self::webhook_response_outcome(whr.action, guardrail_log)
+	}
+
+	fn webhook_response_outcome(
+		action: ResponseAction,
+		guardrail_log: Option<&GuardrailLog>,
+	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
+		let record = |action: Strng, reason: Option<String>| {
+			record_guardrail_info(
+				guardrail_log,
+				cel::GuardrailInfo {
+					phase: guardrail_phase(GuardrailPhase::Response),
+					guard: strng::literal!("webhook"),
+					action,
+					action_reason: reason,
+					..Default::default()
+				},
+			)
+		};
+		match action {
 			ResponseAction::Mask(mask) => {
 				debug!(
 					"webhook masked response: {}",
-					mask
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					mask.reason.as_deref().unwrap_or("no reason specified")
 				);
 				let MaskActionBody::ResponseChoices(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
+				record(strng::literal!("mask"), mask.reason);
 				Ok(GuardrailOutcome::Masked(ResponseGuardMutation::Choices(
 					body.choices,
 				)))
@@ -1505,10 +1542,9 @@ impl Policy {
 			ResponseAction::Reject(rej) => {
 				debug!(
 					"webhook rejected response: {}",
-					rej
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					rej.reason.as_deref().unwrap_or("no reason specified")
 				);
+				record(strng::literal!("reject"), rej.reason);
 				Ok(GuardrailOutcome::Rejected(
 					::http::response::Builder::new()
 						.status(rej.status_code)
@@ -1726,7 +1762,8 @@ impl Policy {
 				guardrail_log,
 			)),
 			ResponseGuardKind::Webhook(wh) => {
-				Self::evaluate_webhook_response(resp, http_headers, client, wh, original).await
+				Self::evaluate_webhook_response(resp, http_headers, client, wh, original, guardrail_log)
+					.await
 			},
 			ResponseGuardKind::BedrockGuardrails(bg) => {
 				Self::evaluate_bedrock_guardrails_response(

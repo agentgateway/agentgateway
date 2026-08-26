@@ -58,6 +58,27 @@ async fn webhook_fail_open_emits_single_metric() {
 }
 
 #[test]
+fn webhook_reject_records_guardrail_info() {
+	use crate::llm::policy::webhook::{RejectAction, RequestAction};
+
+	let log = GuardrailLog::default();
+	let outcome = Policy::webhook_request_outcome(
+		RequestAction::Reject(RejectAction {
+			body: "blocked".to_string(),
+			status_code: 403,
+			reason: Some("policy violation".to_string()),
+		}),
+		Some(&log),
+	)
+	.unwrap();
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.guard, "webhook");
+	assert_eq!(entry.action, "reject");
+	assert_eq!(entry.action_reason.as_deref(), Some("policy violation"));
+}
+
+#[test]
 fn test_get_webhook_forward_headers() {
 	let mut headers = HeaderMap::new();
 	headers.append("x-test-header", HeaderValue::from_static("first-value"));
