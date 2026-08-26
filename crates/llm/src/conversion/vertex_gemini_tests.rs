@@ -93,6 +93,146 @@ fn gs_url_uses_explicit_mime_hint() {
 	);
 }
 
+// ---------- Request: content parts / files ----------
+
+fn file_content(file: Value) -> Value {
+	json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": [
+			{ "type": "text", "text": "What is this document about?" },
+			{ "type": "file", "file": file }
+		]}]
+	})
+}
+
+#[test]
+fn file_data_url_becomes_inline_data() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "data:application/pdf;base64,JVBERi0xLjQK"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["inlineData"]["mimeType"], "application/pdf");
+	assert_eq!(part["inlineData"]["data"], "JVBERi0xLjQK");
+}
+
+#[test]
+fn file_gs_uri_takes_mime_from_filename() {
+	// The gs:// object has no extension, so the mime can only come from `filename`.
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "gs://bucket/object"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], "gs://bucket/object");
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn file_gs_uri_without_extension_or_hint_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({
+			"file_data": "gs://bucket/object"
+		}))),
+		None,
+	);
+	assert!(
+		err.is_err(),
+		"extension-less gs:// file with no MIME hint must be rejected before egress"
+	);
+}
+
+#[test]
+fn data_url_without_media_type_falls_back_to_filename() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "data:;base64,JVBERi0xLjQK"
+	})));
+	assert_eq!(
+		g["contents"][0]["parts"][1]["inlineData"]["mimeType"],
+		"application/pdf"
+	);
+}
+
+#[test]
+fn data_url_without_media_type_or_filename_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(
+			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
+		)),
+		None,
+	);
+	assert!(
+		err.is_err(),
+		"an empty mimeType is rejected by Vertex, so it must not be sent"
+	);
+}
+
+#[test]
+fn raw_base64_file_data_takes_mime_from_filename() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "JVBERi0xLjQK"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["inlineData"]["mimeType"], "application/pdf");
+	assert_eq!(part["inlineData"]["data"], "JVBERi0xLjQK");
+}
+
+#[test]
+fn raw_base64_file_data_without_a_mime_source_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
+		None,
+	);
+	assert!(
+		err.is_err(),
+		"raw base64 with no filename or hint cannot yield the mimeType Vertex requires"
+	);
+}
+
+#[test]
+fn file_id_holding_a_gs_uri_becomes_file_data() {
+	// Some clients put a bucket URI in `file_id` rather than `file_data`; Vertex can fetch
+	// that directly, so it is honoured instead of being treated as an opaque OpenAI id.
+	let g = to_gemini(file_content(json!({ "file_id": "gs://bucket/report.pdf" })));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], "gs://bucket/report.pdf");
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn file_id_is_rejected_rather_than_dropped() {
+	// Vertex has no OpenAI Files store, so an opaque file_id cannot be resolved. It must
+	// error rather than silently vanish from the request (#3117).
+	let err = from_completions::translate(
+		&req(file_content(json!({ "file_id": "file-abc123" }))),
+		None,
+	);
+	let err = err.expect_err("opaque file_id must be rejected");
+	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
+	assert!(
+		matches!(err, crate::AIError::UnsupportedConversion(_)),
+		"bad client input must be a request error, got {err:?}"
+	);
+	assert!(
+		format!("{err:?}").contains("file_id"),
+		"error should name the field: {err:?}"
+	);
+}
+
+#[test]
+fn file_part_without_data_or_id_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({ "filename": "report.pdf" }))),
+		None,
+	);
+	assert!(
+		err.is_err(),
+		"a file part carrying no payload must be rejected"
+	);
+}
+
 #[test]
 fn empty_string_user_content_is_preserved() {
 	let g = to_gemini(json!({

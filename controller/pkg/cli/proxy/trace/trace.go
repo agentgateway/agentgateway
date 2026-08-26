@@ -62,6 +62,7 @@ type traceEnvelope struct {
 
 type traceEvent struct {
 	Type            string            `json:"type"`
+	ID              uint64            `json:"id,omitempty"`
 	Message         string            `json:"message,omitempty"`
 	Expr            string            `json:"expr,omitempty"`
 	RequestState    json.RawMessage   `json:"requestState,omitempty"`
@@ -697,6 +698,8 @@ func displayEventType(eventType string) string {
 		return "Request Done"
 	case "bodySnapshot":
 		return "Body Snapshot"
+	case "bodySnapshotStart":
+		return "Body Snapshot"
 	case "llmRouteResolved":
 		return "LLM Route"
 	case "llmRequestDetected":
@@ -762,6 +765,8 @@ func summarizeEvent(event traceEvent) string {
 		return truncate(strings.Join(parts, " "), 120)
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
+	case "bodySnapshotStart":
+		return fmt.Sprintf("%s body snapshot (pending)", event.Stage)
 	case "llmRouteResolved":
 		return strings.TrimSpace(fmt.Sprintf(
 			"%s %s",
@@ -1388,9 +1393,40 @@ func (m *traceModel) setHeader() {
 }
 
 func (m *traceModel) addRow(row traceRow) {
+	if row.Envelope.Message.Type == "bodySnapshot" {
+		for rowIndex := range m.rows {
+			pending := &m.rows[rowIndex]
+			if pending.Envelope.Message.Type == "bodySnapshotStart" &&
+				pending.Envelope.Message.ID == row.Envelope.Message.ID {
+				row.CurrentSnapshot = pending.CurrentSnapshot
+				row.PreviousSnapshot = pending.PreviousSnapshot
+				m.rows[rowIndex] = row
+				m.renderRow(rowIndex)
+				selectedRow, _ := m.table.GetSelection()
+				if selectedRow == rowIndex+m.headerRows {
+					m.renderDetails(selectedRow)
+				}
+				return
+			}
+		}
+	}
+
 	rowIndex := len(m.rows)
 	m.rows = append(m.rows, row)
+	m.renderRow(rowIndex)
 
+	tableRow := rowIndex + m.headerRows
+	selectedRow, _ := m.table.GetSelection()
+	shouldFollow := selectedRow == 0 || selectedRow == tableRow-1
+	if shouldFollow {
+		m.table.Select(tableRow, 0)
+	}
+	m.table.ScrollToEnd()
+	m.setStatus(fmt.Sprintf("%d events", len(m.rows)))
+}
+
+func (m *traceModel) renderRow(rowIndex int) {
+	row := m.rows[rowIndex]
 	tableRow := rowIndex + m.headerRows
 	textColor := traceSeverityColor(row.Envelope.Severity)
 	for col, text := range []string{
@@ -1405,14 +1441,6 @@ func (m *traceModel) addRow(row traceRow) {
 			SetSelectedStyle(tcell.StyleDefault.Reverse(true))
 		m.table.SetCell(tableRow, col, cell)
 	}
-
-	selectedRow, _ := m.table.GetSelection()
-	shouldFollow := selectedRow == 0 || selectedRow == tableRow-1
-	if shouldFollow {
-		m.table.Select(tableRow, 0)
-	}
-	m.table.ScrollToEnd()
-	m.setStatus(fmt.Sprintf("%d events", len(m.rows)))
 }
 
 func (m *traceModel) setStatus(text string) {

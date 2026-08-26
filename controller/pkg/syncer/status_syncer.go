@@ -21,6 +21,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -525,6 +526,7 @@ func mergeGatewayStatus(existing gwv1.GatewayStatus, desired gwv1.GatewayStatus)
 
 func mergeGatewayConditions(existing []metav1.Condition, desired []metav1.Condition) []metav1.Condition {
 	out := append([]metav1.Condition(nil), desired...)
+	preserveDeploymentFailedGatewayProgrammedCondition(&out, existing, desired)
 	existingAccepted := meta.FindStatusCondition(existing, string(gwv1.GatewayConditionAccepted))
 	desiredAccepted := meta.FindStatusCondition(desired, string(gwv1.GatewayConditionAccepted))
 	selectedAccepted := selectGatewayAcceptedCondition(existingAccepted, desiredAccepted)
@@ -539,6 +541,26 @@ func mergeGatewayConditions(existing []metav1.Condition, desired []metav1.Condit
 	}
 
 	return out
+}
+
+func preserveDeploymentFailedGatewayProgrammedCondition(
+	out *[]metav1.Condition,
+	existing []metav1.Condition,
+	desired []metav1.Condition,
+) {
+	existingProgrammed := meta.FindStatusCondition(existing, string(gwv1.GatewayConditionProgrammed))
+	if existingProgrammed == nil ||
+		existingProgrammed.Status != metav1.ConditionFalse ||
+		existingProgrammed.Reason != string(reports.GatewayReasonDeploymentFailed) {
+		return
+	}
+
+	desiredProgrammed := meta.FindStatusCondition(desired, string(gwv1.GatewayConditionProgrammed))
+	if desiredProgrammed != nil &&
+		(!isGatewayProgrammedDefaultSuccess(desiredProgrammed) || desiredProgrammed.ObservedGeneration > existingProgrammed.ObservedGeneration) {
+		return
+	}
+	replaceStatusCondition(out, *existingProgrammed)
 }
 
 func selectGatewayAcceptedCondition(existingAccepted, desiredAccepted *metav1.Condition) *metav1.Condition {

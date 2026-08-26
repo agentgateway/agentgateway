@@ -56,6 +56,9 @@ tolerations: []
 # -- Set affinity rules for pod scheduling, such as 'nodeAffinity:'.
 affinity: {}
 
+# -- Configure how controller pods are spread across topology domains, such as nodes or zones.
+topologySpreadConstraints: []
+
 # -- Set the pod DNS configuration, such as 'options: [{name: ndots, value: "3"}]'. Merged with the DNS settings the kubelet derives from the pod's dnsPolicy.
 dnsConfig: {}
 

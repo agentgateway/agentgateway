@@ -117,7 +117,7 @@ func (r *Rates) validate() error {
 	v := reflect.ValueOf(*r)
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {
-		m, ok := v.Field(i).Interface().(Money)
+		m, ok := reflect.TypeAssert[Money](v.Field(i))
 		if !ok {
 			continue
 		}

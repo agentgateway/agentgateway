@@ -288,13 +288,11 @@ func virtualkeysBuildConfigMap(secret *corev1.Secret, policyName string, labels 
 	}
 
 	return &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{APIVersion: corev1.SchemeGroupVersion.String(), Kind: "ConfigMap"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret.Name + "-" + policyName + "-configmap",
-			Namespace: secret.Namespace,
-			Labels:    labels,
-		},
-		Data: data,
+		APIVersion: corev1.SchemeGroupVersion.String(), Kind: "ConfigMap",
+		Name:      secret.Name + "-" + policyName + "-configmap",
+		Namespace: secret.Namespace,
+		Labels:    labels,
+		Data:      data,
 	}, nil
 }
 

@@ -3326,6 +3326,7 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 			vec![],
 			crate::http::jwt::Mode::Strict,
 			crate::http::auth::AuthorizationLocation::bearer_header(),
+			false,
 		)),
 		mode: crate::types::agent::McpAuthenticationMode::Strict,
 		client_id: None,
@@ -6179,6 +6180,7 @@ async fn mcp_extauth_deny() {
 	);
 }
 
+#[allow(clippy::result_large_err)]
 async fn try_mcp_streamable_client(
 	s: SocketAddr,
 ) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>

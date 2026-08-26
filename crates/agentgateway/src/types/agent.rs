@@ -24,6 +24,7 @@ use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::control::caclient::CaClient;
+use crate::control::spiffe::SpiffeClient;
 use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
@@ -226,6 +227,7 @@ enum ServerTlsCertificateSource {
 	Static,
 	DynamicCa,
 	IstioWorkload { mtls: bool, default_alpns: Alpns },
+	Spiffe { default_alpns: Alpns },
 }
 
 impl Eq for ServerTLSConfig {}
@@ -382,12 +384,24 @@ impl ServerTLSConfig {
 		}
 	}
 
+	/// Serving identity sourced from the SPIFFE Workload API
+	pub fn spiffe(default_alpns: Alpns) -> Self {
+		Self {
+			source: ServerTlsCertificateSource::Spiffe { default_alpns },
+			base_config: None,
+			inputs: None,
+			insecure_fallback_verifier: None,
+			per_profile_config: Arc::new(Default::default()),
+		}
+	}
+
 	/// config_for returns the appropriate config for the requested ALPN
 	/// If none is return, it means the certificates were invalid.
 	pub async fn config_for(
 		&self,
 		tls: Option<&frontend::TLS>,
 		ca: Option<&Arc<CaClient>>,
+		spiffe: Option<&Arc<SpiffeClient>>,
 	) -> anyhow::Result<Arc<ServerConfig>> {
 		if let ServerTlsCertificateSource::IstioWorkload {
 			mtls,
@@ -400,6 +414,14 @@ impl ServerTLSConfig {
 				.unwrap_or_else(|| default_alpns.clone());
 			let cert = ca.get_identity().await?;
 			return Ok(Arc::new(cert.server_config(alpns, *mtls)?));
+		}
+
+		if let ServerTlsCertificateSource::Spiffe { default_alpns } = &self.source {
+			let spiffe = spiffe.ok_or_else(|| anyhow!("SPIFFE source is required for spiffe TLS"))?;
+			let alpns = tls
+				.and_then(|t| t.alpn.clone())
+				.unwrap_or_else(|| default_alpns.clone());
+			return Ok(spiffe.server_config(alpns)?);
 		}
 
 		let inputs = match self.inputs.as_ref() {
@@ -466,7 +488,8 @@ impl ServerTLSConfig {
 					&inputs.dynamic_ca_cert_cache,
 				)?
 			},
-			ServerTlsCertificateSource::IstioWorkload { .. } => unreachable!(),
+			ServerTlsCertificateSource::IstioWorkload { .. }
+			| ServerTlsCertificateSource::Spiffe { .. } => unreachable!(),
 		};
 		let base = Arc::new(base);
 		writer.insert(key.clone(), Arc::clone(&base));
@@ -477,6 +500,7 @@ impl ServerTLSConfig {
 		if matches!(
 			self.source,
 			ServerTlsCertificateSource::IstioWorkload { mtls: true, .. }
+				| ServerTlsCertificateSource::Spiffe { .. }
 		) {
 			return false;
 		}
@@ -486,36 +510,38 @@ impl ServerTLSConfig {
 			.is_some_and(|inputs| inputs.allow_insecure_mtls)
 	}
 
-	pub fn include_src_identity_for_connection(&self, conn: &rustls::ServerConnection) -> bool {
+	pub fn include_src_identity_for_connection(
+		&self,
+		conn: &rustls::ServerConnection,
+	) -> Option<tls::PeerIdentityMode> {
+		// SPIFFE peers carry a raw SPIFFE ID that must not be reinterpreted as an Istio identity.
+		if matches!(self.source, ServerTlsCertificateSource::Spiffe { .. }) {
+			return Some(tls::PeerIdentityMode::Spiffe);
+		}
 		if matches!(
 			self.source,
 			ServerTlsCertificateSource::IstioWorkload { mtls: true, .. }
 		) {
-			return true;
+			return Some(tls::PeerIdentityMode::Istio);
 		}
 		if !self.allow_insecure_mtls() {
-			return true;
+			return Some(tls::PeerIdentityMode::Istio);
 		}
 
-		let Some(peer_certs) = conn.peer_certificates() else {
-			return false;
-		};
-		let Some((end_entity, intermediates)) = peer_certs.split_first() else {
-			return false;
-		};
+		let peer_certs = conn.peer_certificates()?;
+		let (end_entity, intermediates) = peer_certs.split_first()?;
 
-		let Some(verifier) = self.insecure_fallback_verifier.as_ref() else {
-			return false;
-		};
+		let verifier = self.insecure_fallback_verifier.as_ref()?;
 
 		let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
 			Ok(duration) => rustls::pki_types::UnixTime::since_unix_epoch(duration),
-			Err(_) => return false,
+			Err(_) => return None,
 		};
 
 		verifier
 			.verify_client_cert(end_entity, intermediates, now)
 			.is_ok()
+			.then_some(tls::PeerIdentityMode::Istio)
 	}
 
 	fn build_server_config(
@@ -610,7 +636,16 @@ impl serde::Serialize for ServerTLSConfig {
 		S: Serializer,
 	{
 		// TODO: store raw pem
-		serializer.serialize_none()
+		use serde::ser::SerializeStruct;
+		let source = match &self.source {
+			ServerTlsCertificateSource::Static => "Static",
+			ServerTlsCertificateSource::DynamicCa => "DynamicCa",
+			ServerTlsCertificateSource::IstioWorkload { .. } => "IstioWorkload",
+			ServerTlsCertificateSource::Spiffe { .. } => "SPIFFE",
+		};
+		let mut st = serializer.serialize_struct("ServerTLSConfig", 1)?;
+		st.serialize_field("certificateSource", source)?;
+		st.end()
 	}
 }
 
@@ -621,7 +656,13 @@ impl JsonSchema for ServerTLSConfig {
 	}
 
 	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
-		schemars::json_schema!({ "type": "null" })
+		// Serialize-only dump view: the cert material isn't stored, only the source
+		// discriminant is emitted. Typed as a plain string so the allowed values live
+		// solely in the `Serialize` impl above rather than being duplicated here.
+		schemars::json_schema!({
+			"type": "object",
+			"properties": { "certificateSource": { "type": "string" } }
+		})
 	}
 }
 
@@ -674,11 +715,12 @@ impl ListenerProtocol {
 		&self,
 		tls: Option<&frontend::TLS>,
 		ca: Option<&Arc<CaClient>>,
+		spiffe: Option<&Arc<SpiffeClient>>,
 	) -> Option<anyhow::Result<Arc<rustls::ServerConfig>>> {
 		match self {
-			ListenerProtocol::HTTPS(t) => Some(t.config_for(tls, ca).await),
+			ListenerProtocol::HTTPS(t) => Some(t.config_for(tls, ca, spiffe).await),
 			ListenerProtocol::TLS(t) => match t.as_ref() {
-				Some(t) => Some(t.config_for(tls, ca).await),
+				Some(t) => Some(t.config_for(tls, ca, spiffe).await),
 				None => None,
 			},
 			_ => None,
@@ -693,11 +735,14 @@ impl ListenerProtocol {
 		}
 	}
 
-	pub fn include_src_identity_for_connection(&self, conn: &rustls::ServerConnection) -> bool {
+	pub fn include_src_identity_for_connection(
+		&self,
+		conn: &rustls::ServerConnection,
+	) -> Option<tls::PeerIdentityMode> {
 		match self {
 			ListenerProtocol::HTTPS(t) => t.include_src_identity_for_connection(conn),
 			ListenerProtocol::TLS(Some(t)) => t.include_src_identity_for_connection(conn),
-			_ => true,
+			_ => Some(tls::PeerIdentityMode::Istio),
 		}
 	}
 }
@@ -2733,11 +2778,14 @@ pub enum TrafficPolicy {
 	LocalRateLimit(RequestPolicy<Vec<crate::http::localratelimit::RateLimit>>),
 	RemoteRateLimit(RequestPolicy<remoteratelimit::RemoteRateLimit>),
 	ExtAuthz(RequestPolicy<ext_authz::ExtAuthz>),
+	SubstrateEgress(RequestPolicy<crate::http::substrate::SubstrateEgress>),
+	SubstrateIngress(RequestPolicy<crate::http::substrate::SubstrateIngress>),
 	ExtProc(RequestPolicy<ext_proc::ExtProc>),
 	JwtAuth(RequestPolicy<JwtAuthentication>),
 	Oidc(RequestPolicy<crate::http::oidc::OidcPolicy>),
 	BasicAuth(RequestPolicy<crate::http::basicauth::BasicAuthentication>),
 	APIKey(RequestPolicy<crate::http::apikey::APIKeyAuthentication>),
+	Budget(RequestPolicy<crate::http::budget::BudgetPolicy>),
 	Transformation(RequestPolicy<crate::http::transformation_cel::Transformation>),
 	Csrf(RequestPolicy<crate::http::csrf::Csrf>),
 
@@ -3030,6 +3078,7 @@ impl LocalMcpAuthentication {
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: self.mode.into(),
 			location: self.authorization_location.clone(),
+			preserve_token: false,
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,
@@ -3146,6 +3195,7 @@ impl Target {
 }
 
 #[apply(schema!)]
+#[derive(Hash, PartialEq, Eq)]
 pub struct KeepaliveConfig {
 	/// Enable TCP keepalive probes on backend connections. Defaults to true.
 	#[serde(default = "defaults::always_true")]
@@ -3295,7 +3345,7 @@ mod tests {
 		.expect("build dynamic CA TLS config");
 
 		let base = tls_config
-			.config_for(None, None)
+			.config_for(None, None, None)
 			.await
 			.expect("base config");
 		assert_eq!(base.alpn_protocols, vec![b"h2".to_vec()]);
@@ -3305,7 +3355,7 @@ mod tests {
 			..Default::default()
 		};
 		let profiled = tls_config
-			.config_for(Some(&frontend_tls), None)
+			.config_for(Some(&frontend_tls), None, None)
 			.await
 			.expect("profiled config");
 

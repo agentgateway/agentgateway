@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -13,8 +14,48 @@ import (
 	"testing"
 	"testing/iotest"
 
+	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
 )
+
+func TestBodySnapshotCompletionUpdatesPendingRow(t *testing.T) {
+	model := newTraceModel(tview.NewApplication(), &traceTarget{ResourceName: "test"})
+	start := uint64(10)
+	currentSnapshot := json.RawMessage(`{"request":{"path":"/at-start"}}`)
+	model.addRow(traceRow{
+		RawJSON: "start",
+		Envelope: traceEnvelope{
+			EventStart: &start,
+			EventEnd:   start,
+			Severity:   "info",
+			Message:    traceEvent{Type: "bodySnapshotStart", ID: 7, Stage: "request"},
+		},
+		Summary:         "request body snapshot (pending)",
+		CurrentSnapshot: currentSnapshot,
+	})
+
+	model.addRow(traceRow{
+		RawJSON: "finish",
+		Envelope: traceEnvelope{
+			EventStart: &start,
+			EventEnd:   25,
+			Severity:   "info",
+			Message:    traceEvent{Type: "bodySnapshot", ID: 7, Stage: "request"},
+		},
+		Summary:         "request body snapshot",
+		CurrentSnapshot: json.RawMessage(`{"request":{"path":"/at-finish"}}`),
+	})
+
+	if len(model.rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(model.rows))
+	}
+	if got := model.rows[0]; got.RawJSON != "finish" || got.Envelope.Message.Type != "bodySnapshot" {
+		t.Fatalf("pending row was not replaced: %#v", got)
+	}
+	if !bytes.Equal(model.rows[0].CurrentSnapshot, currentSnapshot) {
+		t.Fatalf("snapshot context moved from body start: got %s", model.rows[0].CurrentSnapshot)
+	}
+}
 
 func TestNormalizeTraceRequestStateBodies(t *testing.T) {
 	tests := []struct {

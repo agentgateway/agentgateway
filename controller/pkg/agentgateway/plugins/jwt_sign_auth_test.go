@@ -8,7 +8,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -26,12 +25,10 @@ func (jwtSignErrorCredentialResolver) ResolveCredentialRef(
 
 func jwtSignTestPolicy(auth *agentgateway.JwtSignAuth) *agentgateway.AgentgatewayPolicy {
 	return &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
+		Namespace: "default",
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			Backend: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					Auth: &agentgateway.BackendAuth{JwtSign: auth},
-				},
+				Auth: &agentgateway.BackendAuth{JwtSign: auth},
 			},
 		},
 	}
@@ -51,8 +48,8 @@ func translatedJwtSign(t *testing.T, policy *api.Policy) *api.JwtSign {
 
 func jwtSignSecret(data map[string][]byte) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "jwt-sign-secret"},
-		Data:       data,
+		Namespace: "default", Name: "jwt-sign-secret",
+		Data: data,
 	}
 }
 

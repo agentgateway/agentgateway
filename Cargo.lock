@@ -249,6 +249,7 @@ dependencies = [
  "cookie",
  "core_affinity",
  "crossbeam",
+ "dashmap",
  "divan",
  "flagset",
  "frozen-collections",
@@ -331,6 +332,7 @@ dependencies = [
  "serde_yaml",
  "shellexpand",
  "socket2",
+ "spiffe",
  "sqlx",
  "sse-stream",
  "stacker",
@@ -6878,6 +6880,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "spiffe"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66b316e388514701f5c8aac295909a66f72f738b8ac632814d62692309877742"
+dependencies = [
+ "arc-swap",
+ "base64ct",
+ "fastrand",
+ "futures",
+ "hyper-util",
+ "log",
+ "pkcs8",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tonic-prost",
+ "tower",
+ "tracing",
+ "url",
+ "x509-parser",
+ "zeroize",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8823,10 +8855,13 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 name = "xtask"
 version = "0.0.0"
 dependencies = [
+ "agent-core",
+ "agent-xds",
  "agentgateway",
  "anyhow",
  "cel",
  "fs-err",
+ "prometheus-client",
  "schemars 1.2.1",
  "serde_json",
 ]

@@ -173,6 +173,7 @@ impl WorkloadCertificate {
 		Ok(VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
+			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
 		})
 	}
 	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
@@ -195,6 +196,7 @@ impl WorkloadCertificate {
 		Ok(VersionedBackendTLS {
 			hostname_override: None,
 			config: Arc::new(cc),
+			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
 		})
 	}
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {

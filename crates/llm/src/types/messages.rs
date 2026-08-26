@@ -4,8 +4,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
-	SimpleChatCompletionMessage, visit_json_at,
+	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
+	RequestType, ResponseType, SimpleChatCompletionMessage, visit_json_at,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
@@ -90,6 +90,13 @@ impl TextPart {
 			TextPart::Unknown(_) => None,
 		}
 	}
+
+	fn rest_mut(&mut self) -> Option<&mut serde_json::Value> {
+		match self {
+			TextPart::Text { rest, .. } => Some(rest),
+			TextPart::Unknown(_) => None,
+		}
+	}
 }
 
 impl ContentPart {
@@ -103,6 +110,13 @@ impl ContentPart {
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
 			ContentPart::Text { text, .. } => Some(text),
+			ContentPart::Unknown(_) => None,
+		}
+	}
+
+	fn rest_mut(&mut self) -> Option<&mut serde_json::Value> {
+		match self {
+			ContentPart::Text { rest, .. } => Some(rest),
 			ContentPart::Unknown(_) => None,
 		}
 	}
@@ -187,6 +201,12 @@ pub fn get_messages_helper(
 	out
 }
 
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic prompt-cache breakpoint
+	"cache_control",
+];
+
 impl RequestType for Request {
 	fn body_is_json(&self) -> bool {
 		true
@@ -244,6 +264,41 @@ impl RequestType for Request {
 		get_messages_helper(&self.messages, &self.system)
 	}
 
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		let mut messages = self
+			.system
+			.as_ref()
+			.map(|system| NormalizedMessage {
+				role: strng::literal!("system"),
+				parts: match system {
+					TextBlock::Text(text) => {
+						vec![NormalizedMessagePart::text(strng::new(text))]
+					},
+					TextBlock::Array(parts) => parts
+						.iter()
+						.filter_map(TextPart::text)
+						.map(|text| NormalizedMessagePart::text(strng::new(text)))
+						.collect(),
+				},
+			})
+			.into_iter()
+			.collect::<Vec<_>>();
+		messages.extend(self.messages.iter().map(|message| NormalizedMessage {
+			role: strng::new(&message.role),
+			parts: match &message.content {
+				Some(ContentBlock::Text(text)) => {
+					vec![NormalizedMessagePart::text(strng::new(text))]
+				},
+				Some(ContentBlock::Array(parts)) => {
+					parts.iter().filter_map(normalized_anthropic_part).collect()
+				},
+				None => Vec::new(),
+			},
+		}));
+		crate::types::attach_tool_result_names(&mut messages);
+		messages
+	}
+
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = messages
 			.into_iter()
@@ -282,9 +337,14 @@ impl RequestType for Request {
 		match &mut self.system {
 			Some(TextBlock::Text(text)) => f(ContentScope::SystemPrompt, text),
 			Some(TextBlock::Array(parts)) => {
-				crate::types::scan_text_runs(parts, "\n", TextPart::text_mut, &mut |text| {
-					f(ContentScope::SystemPrompt, text)
-				});
+				crate::types::scan_text_runs(
+					parts,
+					"\n",
+					TextPart::text_mut,
+					TextPart::rest_mut,
+					PRESERVED_REST_KEYS,
+					&mut |text| f(ContentScope::SystemPrompt, text),
+				);
 			},
 			None => {},
 		}
@@ -297,13 +357,51 @@ impl RequestType for Request {
 							visit_tool_part_text(value, f);
 						}
 					}
-					crate::types::scan_text_runs(parts, " ", ContentPart::text_mut, &mut |text| {
-						f(ContentScope::Messages, text)
-					});
+					crate::types::scan_text_runs(
+						parts,
+						" ",
+						ContentPart::text_mut,
+						ContentPart::rest_mut,
+						PRESERVED_REST_KEYS,
+						&mut |text| f(ContentScope::Messages, text),
+					);
 				},
 				None => {},
 			}
 		}
+	}
+}
+
+fn normalized_anthropic_part(part: &ContentPart) -> Option<NormalizedMessagePart> {
+	match part {
+		ContentPart::Text { text, .. } => Some(NormalizedMessagePart::text(strng::new(text))),
+		ContentPart::Unknown(value) => match value.get("type").and_then(serde_json::Value::as_str) {
+			Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
+				crate::types::normalized_tool_call(value)
+			},
+			Some(item_type) if item_type == "tool_result" || item_type.ends_with("_tool_result") => {
+				Some(NormalizedMessagePart::tool_result(
+					value
+						.get("tool_use_id")
+						.or_else(|| value.get("id"))
+						.and_then(serde_json::Value::as_str)
+						.map(strng::new),
+					value
+						.get("name")
+						.and_then(serde_json::Value::as_str)
+						.map(strng::new),
+					value
+						.get("content")
+						.cloned()
+						.unwrap_or_else(|| serde_json::Value::Null),
+					value.get("is_error").and_then(serde_json::Value::as_bool),
+				))
+			},
+			Some("thinking" | "redacted_thinking") => {
+				Some(NormalizedMessagePart::reasoning(value.clone()))
+			},
+			_ => None,
+		},
 	}
 }
 

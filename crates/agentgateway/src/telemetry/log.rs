@@ -67,20 +67,64 @@ struct DatabaseAttributes {
 
 fn database_llm_payload(
 	mode: Option<crate::types::frontend::DatabaseLlmMode>,
+	input_messages: Option<&[agent_llm::types::NormalizedMessage]>,
 	info: Option<&LLMContext>,
 ) -> Option<log_store::StoredRequestLogPayload> {
 	if mode == Some(crate::types::frontend::DatabaseLlmMode::Metadata) {
 		return None;
 	}
-	let info = info?;
-	let request_prompt_json = info
-		.prompt
-		.as_ref()
-		.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
-	let response_completion_json = info
-		.completion
-		.as_ref()
-		.and_then(|completion| serde_json::to_value(completion).ok());
+	let request_prompt_json = if mode == Some(crate::types::frontend::DatabaseLlmMode::Full) {
+		input_messages
+			.and_then(|messages| serde_json::to_value(messages).ok())
+			.or_else(|| {
+				info?
+					.prompt
+					.as_ref()
+					.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok())
+			})
+	} else {
+		info?
+			.prompt
+			.as_ref()
+			.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok())
+	};
+	let response_completion_json = if mode == Some(crate::types::frontend::DatabaseLlmMode::Full) {
+		info.and_then(|info| {
+			// Response capture exposes visible text and structured tool calls separately. Recombine them
+			// into the same provider-neutral message shape used for the stored request.
+			let mut parts = info
+				.completion
+				.iter()
+				.flatten()
+				// Tool-call-only responses may initialize completion capture with an empty string. Omitting
+				// it prevents a phantom empty assistant message in the conversation view.
+				.filter(|completion| !completion.trim().is_empty())
+				.map(|completion| agent_llm::types::NormalizedMessagePart::text(completion.as_str().into()))
+				.collect::<Vec<_>>();
+			parts.extend(info.tool_calls.iter().flatten().map(|call| {
+				agent_llm::types::NormalizedMessagePart::tool_call(
+					call.id.clone(),
+					call.name.clone(),
+					call.arguments.clone(),
+				)
+			}));
+			if parts.is_empty() {
+				return None;
+			}
+			serde_json::to_value([agent_llm::types::NormalizedMessage {
+				role: "assistant".into(),
+				parts,
+			}])
+			.ok()
+		})
+	} else {
+		info.and_then(|info| {
+			info
+				.completion
+				.as_ref()
+				.and_then(|completion| serde_json::to_value(completion).ok())
+		})
+	};
 	(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
 		log_store::StoredRequestLogPayload {
 			request_prompt_json,
@@ -919,6 +963,7 @@ impl RequestLog {
 		RequestLog {
 			cel,
 			database_llm: Default::default(),
+			input_messages: Default::default(),
 			metrics,
 			model_catalog,
 			start,
@@ -959,9 +1004,12 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
+			budgets: None,
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
+			ate_actor_id: None,
+			ate_atespace: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -1064,6 +1112,8 @@ pub struct RequestLog {
 	/// dedicated payload table. `None` preserves the legacy behavior of persisting content captured
 	/// by CEL expressions. This is independent from CEL attribute capture.
 	pub database_llm: Option<crate::types::frontend::DatabaseLlmMode>,
+	/// Provider-neutral input messages retained for full database payload logging.
+	pub input_messages: Option<Arc<Vec<agent_llm::types::NormalizedMessage>>>,
 	pub metrics: Arc<Metrics>,
 	pub model_catalog: Arc<ModelCatalog>,
 	pub start: Timestamp,
@@ -1123,11 +1173,15 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
+	pub budgets: Option<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
 	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
+
+	pub ate_actor_id: Option<String>,
+	pub ate_atespace: Option<String>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1203,6 +1257,9 @@ impl Drop for DropOnLog {
 				.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref())));
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
+			}
+			if let (Some(budgets), Some(llm_response)) = (log.budgets.take(), llm_response.as_ref()) {
+				budgets.settle(llm_response);
 			}
 
 			let mcp = log.mcp_status.take();
@@ -1526,6 +1583,8 @@ impl Drop for DropOnLog {
 					"inferencepool.selected_endpoint",
 					log.inference_pool.display(),
 				),
+				("ate.actor.id", log.ate_actor_id.display()),
+				("ate.atespace", log.ate_atespace.display()),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",
@@ -1819,7 +1878,11 @@ impl Drop for DropOnLog {
 						}
 					}
 					let attributes = database_attributes(&db_kv);
-					let payload = database_llm_payload(log.database_llm, llm_response.as_ref());
+					let payload = database_llm_payload(
+						log.database_llm,
+						log.input_messages.as_deref().map(Vec::as_slice),
+						llm_response.as_ref(),
+					);
 					let has_payload = payload.is_some();
 					let total_tokens = llm_response.as_ref().and_then(|llm| {
 						llm
@@ -2537,7 +2600,7 @@ mod tests {
 		assert_eq!(log.database_llm, None);
 		assert!(!log.cel.cel_context.needs_llm_prompt());
 		assert!(!log.cel.cel_context.needs_llm_completion());
-		assert!(database_llm_payload(None, Some(&llm_context_with_content())).is_some());
+		assert!(database_llm_payload(None, None, Some(&llm_context_with_content())).is_some());
 	}
 
 	#[test]
@@ -2551,14 +2614,15 @@ mod tests {
 		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
 
 		assert_eq!(log.database_llm, Some(DatabaseLlmMode::Full));
-		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_prompt());
 		assert!(log.cel.cel_context.needs_llm_completion());
+		assert!(log.cel.cel_context.needs_llm_tool_calls());
 	}
 
 	#[test]
 	fn database_llm_metadata_does_not_persist_captured_content() {
 		let context = llm_context_with_content();
-		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), Some(&context)).is_none());
+		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), None, Some(&context)).is_none());
 	}
 
 	#[test]
@@ -2587,6 +2651,7 @@ mod tests {
 		assert!(
 			database_llm_payload(
 				Some(DatabaseLlmMode::Metadata),
+				None,
 				Some(&llm_context_with_content())
 			)
 			.is_none()
@@ -2595,15 +2660,41 @@ mod tests {
 
 	#[test]
 	fn database_llm_full_persists_content_in_payload_only() {
-		let context = llm_context_with_content();
-		let payload = database_llm_payload(Some(DatabaseLlmMode::Full), Some(&context)).unwrap();
+		let mut context = llm_context_with_content();
+		context.completion = Some(vec![String::new()]);
+		context.tool_calls = Some(vec![agent_llm::types::ToolCall {
+			id: "call-1".into(),
+			name: "lookup".into(),
+			arguments: serde_json::json!({"query": "weather"}),
+		}]);
+		let messages = vec![agent_llm::types::NormalizedMessage {
+			role: "user".into(),
+			parts: vec![agent_llm::types::NormalizedMessagePart::text(
+				"hello".into(),
+			)],
+		}];
+		let payload =
+			database_llm_payload(Some(DatabaseLlmMode::Full), Some(&messages), Some(&context)).unwrap();
 		assert_eq!(
 			payload.request_prompt_json,
-			Some(serde_json::json!([{"role": "user", "content": "hello"}]))
+			Some(serde_json::json!([{
+				"role": "user",
+				"parts": [{"type": "text", "text": "hello"}]
+			}]))
 		);
 		assert_eq!(
 			payload.response_completion_json,
-			Some(serde_json::json!(["world"]))
+			Some(serde_json::json!([{
+				"role": "assistant",
+				"parts": [
+					{
+						"type": "toolCall",
+						"id": "call-1",
+						"name": "lookup",
+						"arguments": {"query": "weather"}
+					}
+				]
+			}]))
 		);
 	}
 

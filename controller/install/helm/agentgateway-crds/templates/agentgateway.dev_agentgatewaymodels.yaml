@@ -221,6 +221,13 @@ spec:
                     x-kubernetes-list-map-keys:
                     - type
                     x-kubernetes-list-type: map
+                  providerOverride:
+                    description: |-
+                      Provider identity used for cost-catalog lookup and telemetry.
+                      Defaults to "custom" when unset.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
                 required:
                 - formats
                 type: object
@@ -2101,6 +2108,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -2200,6 +2216,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -2260,6 +2282,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -2527,6 +2558,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -2626,6 +2666,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -2686,6 +2732,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -2972,6 +3027,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -3071,6 +3135,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -3131,6 +3201,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3795,6 +3874,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -3894,6 +3982,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -3954,6 +4048,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -4221,6 +4324,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -4320,6 +4432,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -4380,6 +4498,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -4700,6 +4827,14 @@ spec:
                         maxItems: 1
                         type: array
                         x-kubernetes-list-type: atomic
+                      certificateSource:
+                        default: Inline
+                        description: Source for the gateway's client identity and
+                          trust roots (`Inline` default, or `SPIFFE`).
+                        enum:
+                        - Inline
+                        - SPIFFE
+                        type: string
                       insecureSkipVerify:
                         description: |-
                           Originates TLS but skips verification of the backend's certificate
@@ -4794,6 +4929,11 @@ spec:
                         be set together
                       rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                         : true'
+                    - message: certificateSource SPIFFE may not be combined with mtlsCertificateRef,
+                        caCertificateRefs, or insecureSkipVerify
+                      rule: '!has(self.certificateSource) || self.certificateSource
+                        != ''SPIFFE'' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs)
+                        && !has(self.insecureSkipVerify))'
                     - message: at most one of the fields in [verifySubjectAltNames
                         insecureSkipVerify] may be set
                       rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -4877,6 +5017,15 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      mode:
+                        default: Auto
+                        description: |-
+                          How requests are sent through the proxy.
+                          Defaults to `Auto`.
+                        enum:
+                        - Auto
+                        - Connect
+                        type: string
                       url:
                         description: |-
                           `url` directly specifies the HTTP(S) endpoint for this policy.

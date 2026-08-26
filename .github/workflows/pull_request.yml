@@ -18,7 +18,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  RUST_VERSION: "1.97.0"
+  RUST_VERSION: "1.98.0"
   CARGO_BUILD_WARNINGS: deny
   GO_VERSION: "1.27.0"
 

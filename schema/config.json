@@ -210,6 +210,17 @@
             "null"
           ]
         },
+        "spiffe": {
+          "description": "Local SPIFFE Workload API configuration\nWhen set, listeners and backends may source their TLS identity from SPIFFE.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawSpiffeConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "namespace": {
           "description": "Kubernetes namespace for this gateway instance.",
           "type": [
@@ -408,7 +419,7 @@
               "interval": "3m0s",
               "retries": 9
             },
-            "connectTimeout": "10s",
+            "connectTimeout": "11s",
             "poolIdleTimeout": "1m30s",
             "poolMaxSize": null
           }
@@ -733,6 +744,19 @@
         }
       ]
     },
+    "RawSpiffeConfig": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "RawStandardAttributes": {
       "type": "object",
       "properties": {
@@ -1037,9 +1061,9 @@
           }
         },
         "connectTimeout": {
-          "description": "Maximum time to wait when establishing a connection to an upstream. Defaults to 10 seconds.",
+          "description": "Maximum time to wait when establishing a connection to an upstream. Defaults to 11 seconds.",
           "type": "string",
-          "default": "10s"
+          "default": "11s"
         },
         "poolIdleTimeout": {
           "description": "The maximum duration to keep an idle connection alive.",
@@ -1263,23 +1287,40 @@
       "type": "object",
       "properties": {
         "mode": {
-          "description": "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA\nmode uses cert/key as a CA for on-demand SNI leaf certificate issuance.",
+          "description": "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA\nmode uses cert/key as a CA for on-demand SNI leaf certificate issuance.\nUnused when `spiffe` is set.",
           "$ref": "#/$defs/LocalTLSServerMode",
           "default": "static"
         },
         "cert": {
-          "description": "Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).",
-          "type": "string"
-        },
-        "key": {
-          "description": "Path to the TLS private key file.",
-          "type": "string"
-        },
-        "root": {
-          "description": "Path to a root CA certificate file used to validate client certificates.",
+          "description": "Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).\nRequired unless `spiffe` is set.",
           "type": [
             "string",
             "null"
+          ]
+        },
+        "key": {
+          "description": "Path to the TLS private key file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root": {
+          "description": "Path to a root CA certificate file used to validate client certificates (mTLS).\nOmit for one-way server TLS. Not used when `spiffe` is set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spiffe": {
+          "description": "Source the serving identity from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalSpiffeConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "cipherSuites": {
@@ -1348,10 +1389,6 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "cert",
-        "key"
-      ],
       "allOf": [
         {
           "not": {
@@ -1377,6 +1414,10 @@
         "static",
         "dynamicCa"
       ]
+    },
+    "LocalSpiffeConfig": {
+      "type": "object",
+      "additionalProperties": false
     },
     "TLSVersion": {
       "type": "string",
@@ -1915,6 +1956,30 @@
               "type": "null"
             }
           ]
+        },
+        "substrateIngress": {
+          "description": "Resolve Substrate actor hostnames for dynamic route backends on ingress.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubstrateIngress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "substrateEgress": {
+          "description": "Authorize CONNECT egress using the originating actor's dynamic policy.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubstrateEgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "transformations": {
           "description": "Modify request and response headers, bodies, or metadata.",
@@ -2886,6 +2951,17 @@
             "$ref": "#/$defs/KeyExchangeGroup"
           },
           "default": null
+        },
+        "spiffe": {
+          "description": "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nPin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);\nIf `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalSpiffeBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -2898,6 +2974,10 @@
         "P-384",
         "X25519_MLKEM768"
       ]
+    },
+    "LocalSpiffeBackendTLS": {
+      "type": "object",
+      "additionalProperties": false
     },
     "BackendAuthCompat": {
       "anyOf": [
@@ -2957,7 +3037,7 @@
                   "type": "object",
                   "properties": {
                     "value": {
-                      "description": "Secret value to send to the backend.",
+                      "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
                       "$ref": "#/$defs/FileOrInline"
                     },
                     "location": {
@@ -4283,7 +4363,7 @@
               "type": "object",
               "properties": {
                 "value": {
-                  "description": "Secret value to send to the backend.",
+                  "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
                   "$ref": "#/$defs/FileOrInline"
                 },
                 "location": {
@@ -4420,18 +4500,24 @@
       "properties": {
         "keepalives": {
           "description": "TCP keepalive settings for backend connections.",
-          "$ref": "#/$defs/KeepaliveConfig"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeepaliveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "connectTimeout": {
           "description": "Maximum time allowed to establish a backend TCP connection.",
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "keepalives",
-        "connectTimeout"
-      ]
+      "additionalProperties": false
     },
     "Tunnel": {
       "type": "object",
@@ -4439,6 +4525,11 @@
         "proxy": {
           "description": "Proxy backend used to tunnel the connection.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "mode": {
+          "description": "How requests are sent through the proxy.",
+          "$ref": "#/$defs/TunnelMode",
+          "default": "auto"
         },
         "policies": {
           "description": "Policies to connect to the proxy backend",
@@ -4455,6 +4546,20 @@
       "additionalProperties": false,
       "required": [
         "proxy"
+      ]
+    },
+    "TunnelMode": {
+      "oneOf": [
+        {
+          "description": "Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Use CONNECT for all transports, including plaintext HTTP.",
+          "type": "string",
+          "const": "connect"
+        }
       ]
     },
     "FailureMode": {
@@ -6048,6 +6153,11 @@
                 }
               }
             },
+            "preserveToken": {
+              "description": "Keep a successfully validated JWT in its original location.",
+              "type": "boolean",
+              "default": false
+            },
             "providers": {
               "description": "Trusted issuers and their signing keys.",
               "type": "array",
@@ -6079,6 +6189,11 @@
                   "prefix": "Bearer "
                 }
               }
+            },
+            "preserveToken": {
+              "description": "Keep a successfully validated JWT in its original location.",
+              "type": "boolean",
+              "default": false
             },
             "issuer": {
               "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
@@ -6349,6 +6464,24 @@
             },
             "metadata": {
               "description": "Optional metadata attached to requests authenticated with this key."
+            },
+            "allowedModels": {
+              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "default": null
+            },
+            "budgets": {
+              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Budget"
+              }
             }
           },
           "additionalProperties": false,
@@ -6365,6 +6498,24 @@
             },
             "metadata": {
               "description": "Optional metadata attached to requests authenticated with this key."
+            },
+            "allowedModels": {
+              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "default": null
+            },
+            "budgets": {
+              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Budget"
+              }
             }
           },
           "additionalProperties": false,
@@ -6376,6 +6527,82 @@
     },
     "APIKey": {
       "type": "string"
+    },
+    "Budget": {
+      "description": "A named budget attached to a standalone API key.\n\nUsage is charged after an LLM response when the provider reports the tokens or cost required by\nthe configured unit. Requests with unavailable usage are logged but cannot be charged or blocked\nretroactively.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Stable name for this budget within its owning API key.",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Maximum usage allowed during the window.",
+          "$ref": "#/$defs/BudgetLimit"
+        },
+        "window": {
+          "description": "Rolling window over which usage will be accumulated.",
+          "$ref": "#/$defs/BudgetWindow"
+        },
+        "onBudgetExceeded": {
+          "description": "Action taken when the budget is exceeded.",
+          "$ref": "#/$defs/BudgetExceededAction"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "limit",
+        "window",
+        "onBudgetExceeded"
+      ]
+    },
+    "BudgetLimit": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "$ref": "#/$defs/BudgetLimitUnit"
+        },
+        "amount": {
+          "$ref": "#/$defs/BudgetAmount"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "amount"
+      ]
+    },
+    "BudgetLimitUnit": {
+      "type": "string",
+      "enum": [
+        "USD",
+        "Tokens"
+      ]
+    },
+    "BudgetAmount": {
+      "type": "number",
+      "format": "double"
+    },
+    "BudgetWindow": {
+      "type": "object",
+      "properties": {
+        "rolling": {
+          "description": "Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.\nWindows are aligned to the Unix epoch rather than starting with the first request: `1h`\nfollows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day\nperiods rather than calendar months.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "rolling"
+      ]
+    },
+    "BudgetExceededAction": {
+      "type": "string",
+      "enum": [
+        "Audit",
+        "Block"
+      ]
     },
     "APIKeyHash": {
       "type": "string"
@@ -7191,6 +7418,217 @@
             "responseTrailerMode": "send",
             "allowModeOverride": false
           }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
+    "SubstrateIngress": {
+      "description": "Resolves Substrate actor hostnames through the ate-api for dynamic route backends.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "targetPort": {
+          "description": "Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.\nThis is independent from `connect_target_port`, which is used for raw CONNECT tunnels.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 443
+        },
+        "connectTargetPort": {
+          "description": "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 444
+        },
+        "cacheTtl": {
+          "description": "How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.",
+          "type": "string",
+          "default": "5s"
+        },
+        "requestParking": {
+          "description": "Bounded request parking while a suspended actor is waiting for worker capacity.",
+          "$ref": "#/$defs/RequestParking",
+          "default": {
+            "budget": "5s",
+            "max": 1024,
+            "retryInterval": "100ms",
+            "retryFactor": 1.1
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
+    "RequestParking": {
+      "description": "Bounds requests held while an actor is waiting for capacity to resume.",
+      "type": "object",
+      "properties": {
+        "budget": {
+          "description": "Maximum time to wait for the actor to become routable.",
+          "type": "string",
+          "default": "5s"
+        },
+        "max": {
+          "description": "Maximum concurrent requests that may wait for actor resumption. Set to 0 to disable parking.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 1024
+        },
+        "retryInterval": {
+          "description": "Initial delay between ResumeActor retries while parked.",
+          "type": "string",
+          "default": "100ms"
+        },
+        "retryFactor": {
+          "description": "Multiplier applied to the delay after each parked retry.",
+          "type": "number",
+          "format": "double",
+          "default": 1.1
+        }
+      },
+      "additionalProperties": false
+    },
+    "SubstrateEgress": {
+      "description": "Authorizes an actor's egress to the hostname recovered from an internal CONNECT listener.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "unevaluatedProperties": false,
@@ -10345,6 +10783,31 @@
           },
           "required": [
             "host"
+          ]
+        },
+        {
+          "description": "Resolve the dial target from request metadata using a CEL expression.",
+          "type": "object",
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "dynamic"
           ]
         },
         {

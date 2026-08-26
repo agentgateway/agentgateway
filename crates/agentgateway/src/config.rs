@@ -241,6 +241,12 @@ pub fn parse_config(
 	} else {
 		None
 	};
+
+	let spiffe = raw
+		.spiffe
+		.and_then(|cfg| cfg.endpoint)
+		.map(|endpoint| crate::control::spiffe::Config { endpoint });
+
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();
 
 	// Self-identity for locality-aware load balancing.
@@ -398,6 +404,7 @@ pub fn parse_config(
 		);
 	}
 
+	let hbone_defaults = agent_hbone::Config::default();
 	Ok(crate::Config {
 		ipv6_enabled,
 		network: network.clone().into(),
@@ -408,12 +415,14 @@ pub fn parse_config(
 		self_addr,
 		xds,
 		ca,
+		spiffe,
 		num_worker_threads: parse_worker_threads(raw.worker_threads)
 			.ctx("invalid WORKER_THREADS/config.workerThreads")?,
 		termination_min_deadline,
 		threading_mode,
 		backend: raw.backend,
 		admin_runtime_handle: None,
+		budget_policy: Arc::new(crate::http::budget::BudgetPolicy::default()),
 		termination_max_deadline: match termination_max_deadline {
 				Some(period) => period,
 				None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
@@ -590,25 +599,27 @@ pub fn parse_config(
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
-				// window size: per-stream limit
-				window_size: parse("HTTP2_STREAM_WINDOW_SIZE")
-					.ctx("invalid HTTP2_STREAM_WINDOW_SIZE")?
-					.or(raw.hbone.as_ref().and_then(|h| h.window_size))
-					.unwrap_or(4u32 * 1024 * 1024),
-			// connection window size: per connection.
-			// Setting this to the same value as window_size can introduce deadlocks in some applications
-			// where clients do not read data on streamA until they receive data on streamB.
-			// If streamA consumes the entire connection window, we enter a deadlock.
-			// A 4x limit should be appropriate without introducing too much potential buffering.
-				connection_window_size: parse("HTTP2_CONNECTION_WINDOW_SIZE")?
-					.or(raw.hbone.as_ref().and_then(|h| h.connection_window_size))
-					.unwrap_or(16u32 * 1024 * 1024),
-				frame_size: parse("HTTP2_FRAME_SIZE")?
-					.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
-					.unwrap_or(1024u32 * 1024),
-				pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
-					.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
-					.unwrap_or(100u16),
+				h2: agent_hbone::H2Config {
+					// window size: per-stream limit
+					window_size: parse("HTTP2_STREAM_WINDOW_SIZE")
+						.ctx("invalid HTTP2_STREAM_WINDOW_SIZE")?
+						.or(raw.hbone.as_ref().and_then(|h| h.window_size))
+						.unwrap_or(hbone_defaults.h2.window_size),
+					// connection window size: per connection.
+					// Setting this to the same value as window_size can introduce deadlocks in some applications
+					// where clients do not read data on streamA until they receive data on streamB.
+					// If streamA consumes the entire connection window, we enter a deadlock.
+					// A 4x limit should be appropriate without introducing too much potential buffering.
+					connection_window_size: parse("HTTP2_CONNECTION_WINDOW_SIZE")?
+						.or(raw.hbone.as_ref().and_then(|h| h.connection_window_size))
+						.unwrap_or(hbone_defaults.h2.connection_window_size),
+					frame_size: parse("HTTP2_FRAME_SIZE")?
+						.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
+						.unwrap_or(hbone_defaults.h2.frame_size),
+					max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
+						.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
+						.unwrap_or(hbone_defaults.h2.max_streams_per_conn),
+				},
 				pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
 					.or(
 						raw
@@ -616,7 +627,7 @@ pub fn parse_config(
 						.as_ref()
 						.and_then(|h| h.pool_unused_release_timeout),
 				)
-				.unwrap_or(Duration::from_secs(60 * 5)),
+				.unwrap_or(hbone_defaults.pool_unused_release_timeout),
 		}),
 	})
 }
@@ -1749,5 +1760,29 @@ config:
 		unsafe {
 			env::remove_var("SESSION_KEY");
 		}
+	}
+
+	#[test]
+	fn spiffe_disabled_without_endpoint() {
+		let _env = lock_env();
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+		assert!(
+			config.spiffe.is_none(),
+			"SPIFFE must be disabled when no socket is configured"
+		);
+	}
+
+	#[test]
+	fn spiffe_enabled_from_raw_endpoint_field() {
+		let _env = lock_env();
+		let config = parse_config(
+			"config:\n  spiffe:\n    endpoint: unix:///run/spire/agent.sock\n".to_string(),
+			None,
+		)
+		.expect("config should parse");
+		let spiffe = config
+			.spiffe
+			.expect("spiffe.endpoint should enable the SPIFFE Workload API");
+		assert_eq!(spiffe.endpoint, "unix:///run/spire/agent.sock");
 	}
 }

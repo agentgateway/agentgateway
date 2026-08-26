@@ -57,7 +57,7 @@ export function TargetEditor(props: {
 }
 
 export function KeyValueEditor(props: {
-	label: string;
+	label?: string;
 	tooltip?: string;
 	values: Record<string, string>;
 	keyPlaceholder?: string;
@@ -79,77 +79,82 @@ export function KeyValueEditor(props: {
 		setValueDraft('');
 	}
 
-	return (
-		<FieldGroup label={props.label} tooltip={props.tooltip}>
-			<div className="kv-editor">
-				{entries.length ? (
-					<div className="kv-list">
-						{entries.map(([key, value]) => (
-							<div className="kv-row" key={key}>
-								<code>{key}</code>
-								<span>{value}</span>
-								<button
-									className="table-action danger"
-									type="button"
-									onClick={() => {
-										const next = { ...props.values };
-										delete next[key];
-										props.onChange(next);
-									}}
-								>
-									Remove
-								</button>
-							</div>
-						))}
-					</div>
-				) : (
-					<div className="empty-inline">No values configured.</div>
-				)}
-				{props.quickKeys?.length ? (
-					<div className="kv-quick-row" aria-label={`${props.label} quick keys`}>
-						{props.quickKeys.map(key => (
+	const editor = (
+		<div className="kv-editor">
+			{entries.length ? (
+				<div className="kv-list">
+					{entries.map(([key, value]) => (
+						<div className="kv-row" key={key}>
+							<code>{key}</code>
+							<span>{value}</span>
 							<button
-								className="choice-pill compact"
+								className="table-action danger"
 								type="button"
-								key={key}
-								disabled={key in props.values}
 								onClick={() => {
-									setKeyDraft(key);
-									window.requestAnimationFrame(() => valueRef.current?.focus());
+									const next = { ...props.values };
+									delete next[key];
+									props.onChange(next);
 								}}
 							>
-								{key}
+								Remove
 							</button>
-						))}
-					</div>
-				) : null}
-				<div className="kv-add-row">
-					<input
-						value={keyDraft}
-						onChange={event => setKeyDraft(event.target.value)}
-						placeholder={props.keyPlaceholder ?? 'name'}
-					/>
-					<input
-						ref={valueRef}
-						className={props.valueKind === 'cel' ? 'mono-input' : undefined}
-						value={valueDraft}
-						onChange={event => setValueDraft(event.target.value)}
-						onKeyDown={event => {
-							if (event.key === 'Enter') {
-								event.preventDefault();
-								add();
-							}
-						}}
-						placeholder={
-							props.valuePlaceholder ?? (props.valueKind === 'cel' ? 'request.path' : 'value')
-						}
-					/>
-					<button className="button" type="button" onClick={add}>
-						Add
-					</button>
+						</div>
+					))}
 				</div>
+			) : (
+				<div className="empty-inline">No values configured.</div>
+			)}
+			{props.quickKeys?.length ? (
+				<div className="kv-quick-row" aria-label={`${props.label ?? 'Metadata'} quick keys`}>
+					{props.quickKeys.map(key => (
+						<button
+							className="choice-pill compact"
+							type="button"
+							key={key}
+							disabled={key in props.values}
+							onClick={() => {
+								setKeyDraft(key);
+								window.requestAnimationFrame(() => valueRef.current?.focus());
+							}}
+						>
+							{key}
+						</button>
+					))}
+				</div>
+			) : null}
+			<div className="kv-add-row">
+				<input
+					value={keyDraft}
+					onChange={event => setKeyDraft(event.target.value)}
+					placeholder={props.keyPlaceholder ?? 'name'}
+				/>
+				<input
+					ref={valueRef}
+					className={props.valueKind === 'cel' ? 'mono-input' : undefined}
+					value={valueDraft}
+					onChange={event => setValueDraft(event.target.value)}
+					onKeyDown={event => {
+						if (event.key === 'Enter') {
+							event.preventDefault();
+							add();
+						}
+					}}
+					placeholder={
+						props.valuePlaceholder ?? (props.valueKind === 'cel' ? 'request.path' : 'value')
+					}
+				/>
+				<button className="button" type="button" onClick={add}>
+					Add
+				</button>
 			</div>
+		</div>
+	);
+	return props.label ? (
+		<FieldGroup label={props.label} tooltip={props.tooltip}>
+			{editor}
 		</FieldGroup>
+	) : (
+		editor
 	);
 }
 

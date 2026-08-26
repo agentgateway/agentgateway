@@ -1,9 +1,9 @@
-use agent_core::metrics::Recorder;
+use agent_core::metrics::{MetricRegistry, Recorder};
 use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::registry::{Registry, Unit};
+use prometheus_client::registry::Unit;
 
 use super::service::discovery::v3::DeltaDiscoveryResponse;
 
@@ -34,7 +34,7 @@ pub struct TypeUrl {
 }
 
 impl Metrics {
-	pub fn new(registry: &mut Registry) -> Self {
+	pub fn new(registry: &mut impl MetricRegistry) -> Self {
 		let connection_terminations = Family::default();
 		registry.register(
 			"xds_connection_terminations",

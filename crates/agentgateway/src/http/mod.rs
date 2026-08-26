@@ -2,6 +2,7 @@ pub mod filters;
 pub mod health;
 pub mod timeout;
 
+pub mod budget;
 pub mod buffer;
 pub mod bufferbody;
 mod buflist;
@@ -30,6 +31,7 @@ mod recordbody;
 pub mod remoteratelimit;
 pub mod sessionaffinity;
 pub mod sessionpersistence;
+pub mod substrate;
 pub mod tests_common;
 pub mod transformation_cel;
 
@@ -41,7 +43,10 @@ pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
 pub(crate) fn mark_sensitive_headers(req: &mut Request, configured: &[HeaderName]) {
 	for (name, value) in req.headers_mut() {
-		if name == header::AUTHORIZATION || configured.contains(name) {
+		if name == header::AUTHORIZATION
+			|| name == header::PROXY_AUTHORIZATION
+			|| configured.contains(name)
+		{
 			value.set_sensitive(true)
 		}
 	}

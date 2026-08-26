@@ -173,6 +173,9 @@ pub struct RawConfig {
 	xds_address: Option<String>,
 	/// Authentication token for communicating with the xDS control plane.
 	xds_auth_token: Option<String>,
+	/// Local SPIFFE Workload API configuration
+	/// When set, listeners and backends may source their TLS identity from SPIFFE.
+	spiffe: Option<RawSpiffeConfig>,
 	/// Kubernetes namespace for this gateway instance.
 	namespace: Option<String>,
 	/// Name of this gateway. Required when xDS is configured.
@@ -275,7 +278,7 @@ pub struct BackendConfig {
 	/// TCP keepalive configuration for upstream connections.
 	#[serde(default)]
 	keepalives: types::agent::KeepaliveConfig,
-	/// Maximum time to wait when establishing a connection to an upstream. Defaults to 10 seconds.
+	/// Maximum time to wait when establishing a connection to an upstream. Defaults to 11 seconds.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::connect_timeout")]
@@ -325,7 +328,9 @@ mod defaults {
 	use std::time::Duration;
 
 	pub fn connect_timeout() -> Duration {
-		Duration::from_secs(10)
+		// Most systems use 10s. Using 11s makes timeouts from this setting distinguishable
+		// from another layer's 10s timeout.
+		Duration::from_secs(11)
 	}
 	pub fn pool_idle_timeout() -> Duration {
 		Duration::from_secs(90)
@@ -505,6 +510,12 @@ pub struct RawLoggingFields {
 	add: IndexMap<String, String>,
 }
 
+#[apply(schema_de!)]
+pub struct RawSpiffeConfig {
+	/// SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).
+	endpoint: Option<String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct StringOrInt(String);
 
@@ -643,6 +654,8 @@ pub struct Config {
 	/// XDS address to use. If unset, XDS will not be used.
 	pub xds: XDSConfig,
 	pub ca: Option<caclient::Config>,
+	/// Connection to the local SPIFFE Workload API, enabling SPIFFE-sourced TLS on binds.
+	pub spiffe: Option<control::spiffe::Config>,
 
 	pub tracing: Option<trc::DeprecatedConfig>,
 	pub metrics: crate::telemetry::log::MetricsConfig,
@@ -661,6 +674,9 @@ pub struct Config {
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
+	/// Process-wide budget policy used by standalone configuration.
+	#[serde(skip)]
+	pub budget_policy: Arc<http::budget::BudgetPolicy>,
 
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
@@ -738,6 +754,8 @@ impl Config {
 		Some(local::AttachedPolicyContext {
 			oidc_policy_id: crate::http::oidc::PolicyId::policy(&policy_key),
 			oidc_cookie_encoder: self.oidc_cookie_encoder.as_ref(),
+			budget_policy: &self.budget_policy,
+			database_configured: self.database.is_some(),
 		})
 	}
 }
@@ -813,6 +831,7 @@ pub struct ProxyInputs {
 	pub admin: Option<management::admin::AdminService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
+	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
 }
 
 impl ProxyInputs {
@@ -821,6 +840,7 @@ impl ProxyInputs {
 	/// This constructor is intended for use cases where the gateway is embedded
 	/// directly into another application, bypassing [`app::run`] which creates
 	/// its own admin servers, signal handlers, and XDS state management.
+	#[allow(clippy::too_many_arguments)]
 	pub fn new(
 		cfg: Arc<Config>,
 		stores: Stores,
@@ -829,6 +849,7 @@ impl ProxyInputs {
 		mcp_state: mcp::App,
 		model_catalog: Option<llm::catalog::ModelCatalog>,
 		ca: Option<Arc<CaClient>>,
+		spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
 	) -> Self {
 		Self {
 			cfg,
@@ -839,6 +860,7 @@ impl ProxyInputs {
 			admin: None,
 			mcp_state,
 			ca,
+			spiffe,
 		}
 	}
 }

@@ -23,7 +23,7 @@ func (s stubJWKSLookup) InlineForOwner(krt.HandlerContext, jwks.RemoteJwksOwner)
 }
 
 func longStringPtr(s string) *agentgateway.LongString {
-	v := agentgateway.LongString(s)
+	v := s
 	return &v
 }
 
@@ -37,10 +37,8 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProvider
 			JWKS: agentgateway.JWKS{
 				Remote: &agentgateway.RemoteJWKS{
 					JwksPath: longStringPtr("/keys"),
-					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
-						BackendRef: &gwv1.BackendObjectReference{
-							Name: "jwks-backend",
-						},
+					BackendRef: &gwv1.BackendObjectReference{
+						Name: "jwks-backend",
 					},
 				},
 			},

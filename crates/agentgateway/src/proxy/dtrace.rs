@@ -16,15 +16,38 @@ tokio::task_local! {
 		static ACTIVE: Option<DebugTracer>;
 }
 
-pub struct TracingBody(&'static str, RecordedBodyHandle, DebugTracer);
+pub struct TracingBody {
+	stage: &'static str,
+	id: u64,
+	start: Instant,
+	body: RecordedBodyHandle,
+	tracer: DebugTracer,
+}
 
 impl TracingBody {
-	pub fn maybe_wrap(scope: &'static str, b: Body, limit: usize) -> Body {
+	pub fn maybe_wrap(stage: &'static str, b: Body, limit: usize) -> Body {
 		if let Some(tracer) = ACTIVE.try_with(|f| f.clone()).ok().flatten() {
+			let tracer = tracer.detached();
+			let id = NEXT_BODY_SNAPSHOT_ID.fetch_add(1, Ordering::Relaxed);
+			let start = Instant::now();
+			tracer.send_with_timings(
+				Some(start),
+				start,
+				MessageType::BodySnapshotStart {
+					id,
+					stage: stage.to_string(),
+				},
+			);
 			// RecordBody will get us the Bytes of the request. Note this doesn't block the body, just
 			// records.
 			let (b, handle) = RecordedBody::new_with_limit(b, limit);
-			let t = TracingBody(scope, handle, tracer);
+			let t = TracingBody {
+				stage,
+				id,
+				start,
+				body: handle,
+				tracer,
+			};
 			// Now, we store it in a DropBody so when the body is done we can emit an event.
 			DropBody::new(b, t)
 		} else {
@@ -35,12 +58,19 @@ impl TracingBody {
 
 impl Drop for TracingBody {
 	fn drop(&mut self) {
-		self.2.send(MessageType::BodySnapshot {
-			stage: self.0.to_string(),
-			body: self.1.bytes(),
-		})
+		self.tracer.send_with_timings(
+			Some(self.start),
+			Instant::now(),
+			MessageType::BodySnapshot {
+				id: self.id,
+				stage: self.stage.to_string(),
+				body: self.body.bytes(),
+			},
+		)
 	}
 }
+
+static NEXT_BODY_SNAPSHOT_ID: AtomicU64 = AtomicU64::new(1);
 
 pub fn is_active() -> bool {
 	ACTIVE.try_with(|f| f.is_some()).unwrap_or(false)
@@ -352,7 +382,12 @@ pub enum MessageType {
 		stage: String,
 		requestState: serde_json::Value,
 	},
+	BodySnapshotStart {
+		id: u64,
+		stage: String,
+	},
 	BodySnapshot {
+		id: u64,
 		stage: String,
 		#[serde(serialize_with = "crate::serde_base64::serialize")]
 		body: Bytes,
@@ -418,6 +453,7 @@ impl MessageType {
 			MessageType::RequestStarted
 			| MessageType::RequestSnapshot { .. }
 			| MessageType::ResponseSnapshot { .. }
+			| MessageType::BodySnapshotStart { .. }
 			| MessageType::BodySnapshot { .. }
 			| MessageType::RouteSelection {
 				selectedRoute: Some(_),

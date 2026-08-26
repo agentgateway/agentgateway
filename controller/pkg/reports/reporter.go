@@ -239,12 +239,10 @@ func getParentRefKey(parentRef *gwv1.ParentReference) ParentRefKey {
 		ns = string(*parentRef.Namespace)
 	}
 	return ParentRefKey{
-		Group: group,
-		Kind:  kind,
-		NamespacedName: types.NamespacedName{
-			Namespace: ns,
-			Name:      string(parentRef.Name),
-		},
+		Group:     group,
+		Kind:      kind,
+		Namespace: ns,
+		Name:      string(parentRef.Name),
 	}
 }
 

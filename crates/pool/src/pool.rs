@@ -147,6 +147,10 @@ pub enum ExpectedCapacity {
 pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {
 	fn expected_capacity(&self) -> ExpectedCapacity;
 
+	fn connect_timeout(&self) -> Option<Duration> {
+		None
+	}
+
 	fn shard(&self) -> usize {
 		let mut hasher = DefaultHasher::new();
 		self.hash(&mut hasher);
@@ -355,6 +359,7 @@ impl HttpConnection {
 			HttpConnection::Http2(h) => h.load.remaining_capacity(),
 		}
 	}
+	#[allow(clippy::result_large_err)]
 	pub fn try_send_request(
 		&mut self,
 		req: Request<RequestBody>,

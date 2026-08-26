@@ -20,3 +20,7 @@ These policies help ensure that the code base is kept at a high level of quality
 Additionally, it ensures maintainers do not waste time reviewing low-quality AI-generated code.
 
 Issues or PRs that appear to violate these guidelines may be closed without review.
+
+## Other rules
+
+* Do not use contributions for subtle self-promotion, such as adding examples that unnecessarily feature your own tools or projects.

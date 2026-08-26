@@ -68,11 +68,14 @@ impl ProxyError {
 			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
+			| ProxyError::SubstrateEgressUnavailable(_)
 			| ProxyError::RouteCycleDetected
 			| ProxyError::Body(_)
 			| ProxyError::Http(_)
 			| ProxyError::BackendUnsupportedMirror
-			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
+			| ProxyError::FilterError(_)
+			| ProxyError::StaleAssignment => ProxyResponseReason::Internal,
+			ProxyError::SubstrateIngressFailed(status, _) => substrate_ingress_reason(*status),
 			ProxyError::AIRequest(error) => classify_ai_request(error).reason,
 			ProxyError::AIResponse(error) => classify_ai_response(error).reason,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
@@ -82,20 +85,30 @@ impl ProxyError {
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
-			ProxyError::AuthorizationFailed | ProxyError::CsrfValidationFailed => {
-				ProxyResponseReason::Authorization
-			},
+			ProxyError::AuthorizationFailed
+			| ProxyError::SubstrateEgressDenied(_)
+			| ProxyError::CsrfValidationFailed => ProxyResponseReason::Authorization,
 			ProxyError::UpstreamCallFailed(_)
 			| ProxyError::UpstreamTCPCallFailed(_)
 			| ProxyError::BackendAuthenticationFailed(_)
 			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
 			ProxyError::RequestTimeout | ProxyError::UpstreamCallTimeout => ProxyResponseReason::Timeout,
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
-			ProxyError::RateLimitFailed | ProxyError::RateLimitExceeded { .. } => {
-				ProxyResponseReason::RateLimit
-			},
+			ProxyError::RateLimitFailed
+			| ProxyError::RateLimitExceeded { .. }
+			| ProxyError::BudgetExceeded(_) => ProxyResponseReason::RateLimit,
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
 		}
+	}
+}
+
+fn substrate_ingress_reason(status: StatusCode) -> ProxyResponseReason {
+	match status {
+		StatusCode::NOT_FOUND => ProxyResponseReason::NotFound,
+		StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => ProxyResponseReason::Authorization,
+		StatusCode::TOO_MANY_REQUESTS => ProxyResponseReason::RateLimit,
+		StatusCode::REQUEST_TIMEOUT | StatusCode::GATEWAY_TIMEOUT => ProxyResponseReason::Timeout,
+		_ => ProxyResponseReason::Internal,
 	}
 }
 
@@ -157,6 +170,8 @@ pub enum ProxyError {
 	RouteCycleDetected,
 	#[error("misdirected request")]
 	MisdirectedRequest,
+	#[error("substrate worker assignment is stale")]
+	StaleAssignment,
 	#[error("no valid backends")]
 	NoValidBackends,
 	#[error("backend does not exist")]
@@ -215,12 +230,20 @@ pub enum ProxyError {
 	ExtProc(#[from] ext_proc::Error),
 	#[error("processing failed: {0}")]
 	ProcessingString(String),
+	#[error("{1}")]
+	SubstrateIngressFailed(StatusCode, String),
+	#[error("{0}")]
+	SubstrateEgressDenied(String),
+	#[error("{0}")]
+	SubstrateEgressUnavailable(String),
 	#[error("rate limit exceeded")]
 	RateLimitExceeded {
 		limit: u64,
 		remaining: u64,
 		reset_seconds: u64,
 	},
+	#[error(transparent)]
+	BudgetExceeded(#[from] http::budget::BudgetExceeded),
 	#[error("rate limit failed")]
 	RateLimitFailed,
 	#[error("request rejected by {guardrail} guardrail")]
@@ -335,6 +358,7 @@ impl ProxyError {
 			ProxyError::RouteNotFound => StatusCode::NOT_FOUND,
 			ProxyError::RouteCycleDetected => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
+			ProxyError::StaleAssignment => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoValidBackends => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendDoesNotExist => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendUnsupportedMirror => StatusCode::INTERNAL_SERVER_ERROR,
@@ -370,10 +394,18 @@ impl ProxyError {
 				| http::oidc::Error::Config(_)
 				| http::oidc::Error::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			},
-			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::BasicAuthenticationFailure(ref e) => {
+				if e.is_proxy() {
+					StatusCode::PROXY_AUTHENTICATION_REQUIRED
+				} else {
+					StatusCode::UNAUTHORIZED
+				}
+			},
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
+			ProxyError::SubstrateEgressDenied(_) => StatusCode::FORBIDDEN,
+			ProxyError::SubstrateEgressUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
@@ -388,7 +420,9 @@ impl ProxyError {
 			ProxyError::Http(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::Body(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::SubstrateIngressFailed(status, _) => status,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+			ProxyError::BudgetExceeded(_) => StatusCode::TOO_MANY_REQUESTS,
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
 			ProxyError::RateLimitFailed => StatusCode::INTERNAL_SERVER_ERROR,
@@ -443,15 +477,18 @@ impl ProxyError {
 			http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
 		}
 
-		// Add WWW-Authenticate header for basic auth failures
+		// Add an authentication challenge for basic auth failures. Requests authenticating to the
+		// gateway as a forward proxy are challenged with `Proxy-Authenticate` (paired with 407);
+		// ordinary requests use `WWW-Authenticate` (paired with 401).
 		if let ProxyError::BasicAuthenticationFailure(err) = &self {
-			let realm = match err {
-				http::basicauth::Error::Missing { realm } => realm,
-				http::basicauth::Error::InvalidCredentials { realm } => realm,
+			let auth_header = format!("Basic realm=\"{}\"", err.realm());
+			let challenge = if err.is_proxy() {
+				hyper::header::PROXY_AUTHENTICATE
+			} else {
+				hyper::header::WWW_AUTHENTICATE
 			};
-			let auth_header = format!("Basic realm=\"{}\"", realm);
 			if let Ok(hv) = HeaderValue::try_from(auth_header) {
-				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
+				rb = rb.header(challenge, hv);
 			}
 		}
 
@@ -466,6 +503,23 @@ impl ProxyError {
 				)
 				.body(http::Body::empty())
 				.unwrap();
+		}
+
+		if let ProxyError::BudgetExceeded(exceeded) = &self {
+			return rb
+				.header(hyper::header::CONTENT_TYPE, "application/json")
+				.header(hyper::header::RETRY_AFTER, exceeded.retry_after.to_string())
+				.body(http::Body::from(
+					serde_json::json!({
+						"error": {
+							"message": exceeded.to_string(),
+							"type": "rate_limit_error",
+							"code": "budget_exceeded",
+						}
+					})
+					.to_string(),
+				))
+				.expect("budget exceeded response is valid");
 		}
 
 		// Add WWW-Authenticate header for MCP failures
@@ -511,6 +565,7 @@ fn http_status_to_grpc_status(status: StatusCode) -> Code {
 		StatusCode::OK => Code::Ok,
 		StatusCode::BAD_REQUEST => Code::Internal,
 		StatusCode::UNAUTHORIZED => Code::Unauthenticated,
+		StatusCode::PROXY_AUTHENTICATION_REQUIRED => Code::Unauthenticated,
 		StatusCode::FORBIDDEN => Code::PermissionDenied,
 		// HTTP 404 maps to UNIMPLEMENTED, not gRPC NOT_FOUND.
 		StatusCode::NOT_FOUND => Code::Unimplemented,
@@ -580,6 +635,34 @@ pub fn resolve_simple_backend(
 	resolve_simple_backend_with_policies(b, pi)
 }
 
+pub fn resolve_tunnel_backend(
+	b: &SimpleBackendReference,
+	pi: &ProxyInputs,
+) -> Result<BackendWithPolicies, ProxyError> {
+	let reference = match b {
+		SimpleBackendReference::Service { name, port } => BackendReference::Service {
+			name: name.clone(),
+			port: *port,
+		},
+		SimpleBackendReference::Backend(name) => BackendReference::Backend(name.clone()),
+		SimpleBackendReference::InlineBackend(target) => {
+			BackendReference::InlineBackend(target.clone())
+		},
+		SimpleBackendReference::Invalid => BackendReference::Invalid,
+	};
+	let backend = resolve_backend(&reference, pi)?;
+	match &backend.backend {
+		Backend::Service(_, _)
+		| Backend::Opaque(_, _)
+		| Backend::Aws(_, _)
+		| Backend::Dynamic(_, _)
+		| Backend::Invalid => Ok(backend),
+		Backend::MCP(_, _) | Backend::AI(_, _) | Backend::LLMRouter(_, _) | Backend::Internal(_, _) => {
+			Err(ProxyError::InvalidBackendType)
+		},
+	}
+}
+
 pub fn resolve_simple_backend_with_policies(
 	b: &SimpleBackendReference,
 	pi: &ProxyInputs,
@@ -623,6 +706,25 @@ pub fn resolve_simple_backend_with_policies(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn substrate_ingress_reason_preserves_client_facing_statuses() {
+		for (status, reason) in [
+			(StatusCode::NOT_FOUND, ProxyResponseReason::NotFound),
+			(StatusCode::UNAUTHORIZED, ProxyResponseReason::Authorization),
+			(StatusCode::FORBIDDEN, ProxyResponseReason::Authorization),
+			(
+				StatusCode::TOO_MANY_REQUESTS,
+				ProxyResponseReason::RateLimit,
+			),
+			(StatusCode::GATEWAY_TIMEOUT, ProxyResponseReason::Timeout),
+		] {
+			assert_eq!(
+				ProxyResponse::Error(ProxyError::SubstrateIngressFailed(status, String::new())).as_reason(),
+				reason
+			);
+		}
+	}
 
 	fn assert_ai_error_mapping(
 		make_error: impl Fn() -> ProxyError,

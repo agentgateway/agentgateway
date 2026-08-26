@@ -211,14 +211,19 @@ impl Socket {
 		metrics: Metrics,
 		tls: TlsStream<Box<SocketType>>,
 	) -> anyhow::Result<Self> {
-		Self::from_tls_with_identity(ext, metrics, tls, true)
+		Self::from_tls_with_identity(
+			ext,
+			metrics,
+			tls,
+			Some(crate::transport::tls::PeerIdentityMode::Istio),
+		)
 	}
 
 	pub fn from_tls_with_identity(
 		mut ext: Extension,
 		metrics: Metrics,
 		tls: TlsStream<Box<SocketType>>,
-		include_src_identity: bool,
+		peer_identity: Option<crate::transport::tls::PeerIdentityMode>,
 	) -> anyhow::Result<Self> {
 		// Nested TLS termination must not replace an identity authenticated by an
 		// outer layer, such as the Istio mTLS connection carrying HBONE.
@@ -236,11 +241,7 @@ impl Socket {
 			let (_, ssl) = tls.get_ref();
 			TLSConnectionInfo {
 				src_identity: existing_src_identity.or_else(|| {
-					if include_src_identity {
-						crate::transport::tls::identity_from_connection(ssl)
-					} else {
-						None
-					}
+					peer_identity.and_then(|mode| crate::transport::tls::identity_from_connection(ssl, mode))
 				}),
 				negotiated_alpn: ssl.alpn_protocol().map(Alpn::from),
 				server_name,
@@ -579,7 +580,7 @@ impl Extension {
 	pub fn new() -> Self {
 		Extension::Single(http::Extensions::new())
 	}
-	fn wrap(ext: Arc<Extension>) -> Self {
+	pub(crate) fn wrap(ext: Arc<Extension>) -> Self {
 		Extension::Wrapped(http::Extensions::new(), ext)
 	}
 

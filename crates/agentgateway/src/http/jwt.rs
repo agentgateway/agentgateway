@@ -73,6 +73,7 @@ pub struct Jwt {
 	mode: Mode,
 	providers: Vec<Provider>,
 	location: AuthorizationLocation,
+	preserve_token: bool,
 }
 
 #[derive(Clone)]
@@ -93,11 +94,14 @@ impl serde::Serialize for Jwt {
 			mode: Mode,
 			providers: &'a Vec<Provider>,
 			location: &'a AuthorizationLocation,
+			#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+			preserve_token: bool,
 		}
 		Serde {
 			mode: self.mode,
 			providers: &self.providers,
 			location: &self.location,
+			preserve_token: self.preserve_token,
 		}
 		.serialize(serializer)
 	}
@@ -142,6 +146,9 @@ pub enum LocalJwtConfig {
 		/// Where to read the JWT from in incoming requests.
 		#[cfg_attr(feature = "schema", schemars(default))]
 		location: AuthorizationLocation,
+		/// Keep a successfully validated JWT in its original location.
+		#[cfg_attr(feature = "schema", schemars(default))]
+		preserve_token: bool,
 		/// Trusted issuers and their signing keys.
 		providers: Vec<ProviderConfig>,
 	},
@@ -153,6 +160,9 @@ pub enum LocalJwtConfig {
 		/// Where to read the JWT from in incoming requests.
 		#[cfg_attr(feature = "schema", schemars(default))]
 		location: AuthorizationLocation,
+		/// Keep a successfully validated JWT in its original location.
+		#[cfg_attr(feature = "schema", schemars(default))]
+		preserve_token: bool,
 		/// Expected token issuer. The JWT `iss` claim is required and must match.
 		issuer: String,
 		/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
@@ -171,6 +181,8 @@ struct LocalJwtMultiConfig {
 	mode: Mode,
 	#[serde(default)]
 	location: AuthorizationLocation,
+	#[serde(default)]
+	preserve_token: bool,
 	providers: Vec<ProviderConfig>,
 }
 
@@ -180,6 +192,8 @@ struct LocalJwtSingleConfig {
 	mode: Mode,
 	#[serde(default)]
 	location: AuthorizationLocation,
+	#[serde(default)]
+	preserve_token: bool,
 	issuer: String,
 	audiences: Option<Vec<String>>,
 	jwks: serdes::FileInlineOrRemote,
@@ -201,6 +215,7 @@ impl<'de> Deserialize<'de> for LocalJwtConfig {
 			Ok(Self::Multi {
 				mode: config.mode,
 				location: config.location,
+				preserve_token: config.preserve_token,
 				providers: config.providers,
 			})
 		} else {
@@ -209,6 +224,7 @@ impl<'de> Deserialize<'de> for LocalJwtConfig {
 			Ok(Self::Single {
 				mode: config.mode,
 				location: config.location,
+				preserve_token: config.preserve_token,
 				issuer: config.issuer,
 				audiences: config.audiences,
 				jwks: config.jwks,
@@ -305,15 +321,17 @@ impl LocalJwtConfig {
 		self,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> Result<Jwt, JwkError> {
-		let (mode, authorization_location, providers_cfg) = match self {
+		let (mode, authorization_location, preserve_token, providers_cfg) = match self {
 			LocalJwtConfig::Multi {
 				mode,
 				location: authorization_location,
+				preserve_token,
 				providers,
-			} => (mode, authorization_location, providers),
+			} => (mode, authorization_location, preserve_token, providers),
 			LocalJwtConfig::Single {
 				mode,
 				location: authorization_location,
+				preserve_token,
 				issuer,
 				audiences,
 				jwks,
@@ -321,6 +339,7 @@ impl LocalJwtConfig {
 			} => (
 				mode,
 				authorization_location,
+				preserve_token,
 				vec![ProviderConfig {
 					issuer,
 					audiences,
@@ -344,6 +363,7 @@ impl LocalJwtConfig {
 			mode,
 			providers,
 			location: authorization_location,
+			preserve_token,
 		})
 	}
 }
@@ -464,11 +484,13 @@ impl Jwt {
 		providers: Vec<Provider>,
 		mode: Mode,
 		authorization_location: AuthorizationLocation,
+		preserve_token: bool,
 	) -> Jwt {
 		Jwt {
 			mode,
 			providers,
 			location: authorization_location,
+			preserve_token,
 		}
 	}
 }
@@ -593,11 +615,12 @@ impl Jwt {
 		{
 			log.jwt_sub = Some(sub.to_string());
 		};
-		// Remove the token.
-		self
-			.location
-			.remove(req)
-			.map_err(|e| TokenError::CredentialRemoval(e.to_string()))?;
+		if !self.preserve_token {
+			self
+				.location
+				.remove(req)
+				.map_err(|e| TokenError::CredentialRemoval(e.to_string()))?;
+		}
 		// Insert the claims into extensions so we can reference it later
 		dtrace::pol_result!(
 			dtrace::Severity::Info,

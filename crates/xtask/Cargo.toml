@@ -5,9 +5,12 @@ version = "0.0.0"
 edition.workspace = true
 
 [dependencies]
+agent-core.workspace = true
+agent-xds.workspace = true
 agentgateway = {workspace = true, features = ["schema"]}
 anyhow.workspace = true
 cel.workspace = true
 fs-err.workspace = true
+prometheus-client.workspace = true
 serde_json.workspace = true
 schemars.workspace = true

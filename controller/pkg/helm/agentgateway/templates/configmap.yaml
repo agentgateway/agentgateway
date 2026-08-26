@@ -28,6 +28,13 @@ data:
     {{- if $typedRuntimeConfig }}
     {{- $_ := set $typedConfig "config" $typedRuntimeConfig }}
     {{- end }}
+    {{- if hasKey $gateway "spiffe" }}
+    {{- $spiffeSrc := ($gateway.spiffe).source | default dict }}
+    {{- $spiffeMount := $spiffeSrc.mountPath | default "/spiffe-workload-api" }}
+    {{- $spiffeSocketName := $spiffeSrc.socketName | default "spire-agent.sock" }}
+    {{- $spiffeConfig := dict "spiffe" (dict "endpoint" (printf "unix://%s/%s" $spiffeMount $spiffeSocketName)) }}
+    {{- $typedConfig = merge $typedConfig (dict "config" $spiffeConfig) }}
+    {{- end }}
     {{- /* Merge: typed config takes precedence over rawConfig */ -}}
     {{- $finalConfig := merge $typedConfig $baseConfig }}
     {{- if $finalConfig }}

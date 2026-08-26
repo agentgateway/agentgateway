@@ -97,9 +97,9 @@ where
 {
 	let mut builder = ::h2::server::Builder::new();
 	let mut conn = builder
-		.initial_window_size(cfg.window_size)
-		.initial_connection_window_size(cfg.connection_window_size)
-		.max_frame_size(cfg.frame_size)
+		.initial_window_size(cfg.h2.window_size)
+		.initial_connection_window_size(cfg.h2.connection_window_size)
+		.max_frame_size(cfg.h2.frame_size)
 		// 64KB max; default is 16MB driven from Golang's defaults
 		// Since we know we are going to receive a bounded set of headers, more is overkill.
 		.max_header_list_size(65536)

@@ -207,11 +207,9 @@ func inferencePoolAttachedGateways(
 	gateways := make(map[types.NamespacedName]struct{})
 
 	targetRef := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Name:      pool.Name,
-			Namespace: pool.Namespace,
-		},
-		Kind: wellknown.InferencePoolKind,
+		Name:      pool.Name,
+		Namespace: pool.Namespace,
+		Kind:      wellknown.InferencePoolKind,
 	}
 
 	for gateway := range references.LookupGatewaysForBackend(krtctx, targetRef) {
