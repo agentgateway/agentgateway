@@ -205,7 +205,7 @@ func staticBackend(name, host string, port int32, tlsPolicy *agentgateway.Backen
 }
 
 func remoteProvider(path string, backendRef gwv1.BackendObjectReference) agentgateway.RemoteJWKS {
-	jwksPath := agentgateway.LongString(path)
+	jwksPath := path
 	return agentgateway.RemoteJWKS{
 		JwksPath:   &jwksPath,
 		BackendRef: &backendRef,

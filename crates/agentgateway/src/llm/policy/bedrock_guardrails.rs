@@ -175,7 +175,7 @@ impl ApplyGuardrailResponse {
 		log: &GuardrailLog,
 		phase: GuardrailPhase,
 		config: &BedrockGuardrails,
-		masked: bool,
+		action: strng::Strng,
 	) {
 		let assessments = std::mem::take(&mut self.assessments)
 			.into_iter()
@@ -191,11 +191,7 @@ impl ApplyGuardrailResponse {
 					GuardrailPhase::Response => strng::literal!("response"),
 				},
 				guard: strng::literal!("bedrockGuardrails"),
-				action: if masked {
-					strng::literal!("mask")
-				} else {
-					strng::literal!("reject")
-				},
+				action,
 				guardrail_id: Some(config.guardrail_identifier.clone()),
 				guardrail_version: Some(config.guardrail_version.clone()),
 				action_reason: self.action_reason.take(),

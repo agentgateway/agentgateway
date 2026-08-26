@@ -1287,6 +1287,42 @@ impl TestBind {
 		client
 	}
 
+	/// Like [`Self::serve`], but the server-side socket already carries a downstream mTLS
+	/// identity, simulating a connection tunneled over HBONE where the outer Istio mTLS
+	/// layer authenticated the peer (see `Gateway::terminate_gateway_hbone`).
+	pub fn serve_with_src_identity(
+		&self,
+		bind_name: BindKey,
+		src_identity: crate::transport::tls::TlsInfo,
+	) -> DuplexStream {
+		let (client, server) = tokio::io::duplex(8192);
+		let mut server = Socket::from_memory(
+			server,
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse().unwrap(),
+				local_addr: "127.0.0.1:80".parse().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		);
+		server
+			.ext_mut()
+			.insert(crate::transport::stream::TLSConnectionInfo {
+				src_identity: Some(src_identity),
+				..Default::default()
+			});
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
+		let bind = Gateway::proxy_bind(
+			bind_name,
+			bind.protocol,
+			server,
+			self.pi.clone(),
+			self.drain_rx.clone(),
+		);
+		tokio::spawn(bind);
+		client
+	}
+
 	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
 		let server = Socket::from_memory(

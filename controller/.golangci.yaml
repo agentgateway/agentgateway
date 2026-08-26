@@ -1,6 +1,7 @@
 version: "2"
 run:
   concurrency: 4
+  go: '1.27'
   tests: true
 output:
   formats:
@@ -30,6 +31,7 @@ linters:
     - sloglint
     - spancheck
     - staticcheck
+    - unconvert
     - unparam
     - unused
     - usestdlibvars

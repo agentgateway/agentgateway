@@ -528,7 +528,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -546,8 +546,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -822,6 +824,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -1096,6 +1099,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -1368,6 +1372,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -1655,7 +1660,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -1673,10 +1678,12 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -1951,6 +1958,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -2223,6 +2231,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7292,7 +7301,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -7310,8 +7319,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7586,6 +7597,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7860,6 +7872,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -8132,6 +8145,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -8419,7 +8433,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -8437,10 +8451,12 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -8715,6 +8731,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -8987,6 +9004,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10644,7 +10662,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -10662,8 +10680,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10938,6 +10958,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11212,6 +11233,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11484,6 +11506,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11771,7 +11794,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -11789,10 +11812,12 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12067,6 +12092,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12339,6 +12365,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -13959,7 +13986,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -13977,8 +14004,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -14253,6 +14282,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -14527,6 +14557,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -14799,6 +14830,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -15086,7 +15118,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -15104,10 +15136,12 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -15382,6 +15416,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -15654,6 +15689,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19174,7 +19210,7 @@
 |`policies[].policy.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`policies[].policy.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`policies[].policy.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`policies[].policy.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`policies[].policy.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`policies[].policy.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`policies[].policy.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -19192,8 +19228,10 @@
 |`policies[].policy.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`policies[].policy.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`policies[].policy.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19468,6 +19506,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19742,6 +19781,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -20014,6 +20054,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -20301,7 +20342,7 @@
 |`policies[].policy.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`policies[].policy.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`policies[].policy.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`policies[].policy.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`policies[].policy.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`policies[].policy.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`policies[].policy.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -20319,10 +20360,12 @@
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`policies[].policy.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -20597,6 +20640,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -20869,6 +20913,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -25936,7 +25981,7 @@
 |`backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`backends[].ai.policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`backends[].ai.policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -25954,8 +25999,10 @@
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -26230,6 +26277,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -26504,6 +26552,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -26776,6 +26825,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -27063,7 +27113,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`backends[].ai.policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`backends[].ai.policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -27081,10 +27131,12 @@
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -27359,6 +27411,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -27631,6 +27684,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -29288,7 +29342,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -29306,8 +29360,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -29582,6 +29638,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -29856,6 +29913,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -30128,6 +30186,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -30415,7 +30474,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -30433,10 +30492,12 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -30711,6 +30772,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -30983,6 +31045,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -32601,7 +32664,7 @@
 |`backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`backends[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`backends[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -32619,8 +32682,10 @@
 |`backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -32895,6 +32960,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -33169,6 +33235,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -33441,6 +33508,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -33728,7 +33796,7 @@
 |`backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`backends[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`backends[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -33746,10 +33814,12 @@
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -34024,6 +34094,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -34296,6 +34367,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -35003,7 +35075,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -35021,8 +35093,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -35297,6 +35371,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -35571,6 +35646,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -35843,6 +35919,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -36130,7 +36207,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -36148,10 +36225,12 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -36426,6 +36505,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -36698,6 +36778,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -41767,7 +41848,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -41785,8 +41866,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -42061,6 +42144,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -42335,6 +42419,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -42607,6 +42692,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -42894,7 +42980,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -42912,10 +42998,12 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -43190,6 +43278,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -43462,6 +43551,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -45119,7 +45209,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -45137,8 +45227,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -45413,6 +45505,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -45687,6 +45780,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -45959,6 +46053,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -46246,7 +46341,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -46264,10 +46359,12 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -46542,6 +46639,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -46814,6 +46912,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -48434,7 +48533,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -48452,8 +48551,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -48728,6 +48829,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -49002,6 +49104,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -49274,6 +49377,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -49561,7 +49665,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -49579,10 +49683,12 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -49857,6 +49963,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -50129,6 +50236,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -53460,7 +53568,7 @@
 |`routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -53478,8 +53586,10 @@
 |`routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -53754,6 +53864,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -54028,6 +54139,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -54300,6 +54412,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -54587,7 +54700,7 @@
 |`routes[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -54605,10 +54718,12 @@
 |`routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -54883,6 +54998,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -55155,6 +55271,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -60224,7 +60341,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -60242,8 +60359,10 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -60518,6 +60637,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -60792,6 +60912,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -61064,6 +61185,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -61351,7 +61473,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -61369,10 +61491,12 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -61647,6 +61771,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -61919,6 +62044,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -63576,7 +63702,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -63594,8 +63720,10 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -63870,6 +63998,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -64144,6 +64273,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -64416,6 +64546,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -64703,7 +64834,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -64721,10 +64852,12 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -64999,6 +65132,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -65271,6 +65405,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -66891,7 +67026,7 @@
 |`routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].backends[].policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -66909,8 +67044,10 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -67185,6 +67322,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -67459,6 +67597,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -67731,6 +67870,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -68018,7 +68158,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`routes[].backends[].policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -68036,10 +68176,12 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -68314,6 +68456,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -68586,6 +68729,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -70645,7 +70789,7 @@
 |`llm.models[].guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`llm.models[].guardrails.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`llm.models[].guardrails.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`llm.models[].guardrails.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`llm.models[].guardrails.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`llm.models[].guardrails.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`llm.models[].guardrails.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`llm.models[].guardrails.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -70663,8 +70807,10 @@
 |`llm.models[].guardrails.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.models[].guardrails.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.models[].guardrails.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.models[].guardrails.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`llm.models[].guardrails.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`llm.models[].guardrails.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -70939,6 +71085,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`llm.models[].guardrails.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`llm.models[].guardrails.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.models[].guardrails.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -71213,6 +71360,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`llm.models[].guardrails.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`llm.models[].guardrails.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.models[].guardrails.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -71485,6 +71633,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.models[].guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.models[].guardrails.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -71772,7 +71921,7 @@
 |`llm.models[].guardrails.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`llm.models[].guardrails.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`llm.models[].guardrails.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`llm.models[].guardrails.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`llm.models[].guardrails.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`llm.models[].guardrails.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`llm.models[].guardrails.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`llm.models[].guardrails.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -71790,10 +71939,12 @@
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.models[].guardrails.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.models[].guardrails.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`llm.models[].guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`llm.models[].guardrails.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.models[].guardrails.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -72068,6 +72219,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`llm.models[].guardrails.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`llm.models[].guardrails.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.models[].guardrails.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -72340,6 +72492,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.models[].guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.models[].guardrails.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -73953,7 +74106,7 @@
 |`llm.policies.guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`llm.policies.guardrails.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`llm.policies.guardrails.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`llm.policies.guardrails.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`llm.policies.guardrails.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`llm.policies.guardrails.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`llm.policies.guardrails.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`llm.policies.guardrails.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -73971,8 +74124,10 @@
 |`llm.policies.guardrails.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.policies.guardrails.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.policies.guardrails.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.policies.guardrails.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`llm.policies.guardrails.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`llm.policies.guardrails.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -74247,6 +74402,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`llm.policies.guardrails.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`llm.policies.guardrails.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.policies.guardrails.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -74521,6 +74677,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`llm.policies.guardrails.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`llm.policies.guardrails.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.policies.guardrails.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -74793,6 +74950,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.policies.guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.policies.guardrails.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -75080,7 +75238,7 @@
 |`llm.policies.guardrails.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`llm.policies.guardrails.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`llm.policies.guardrails.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`llm.policies.guardrails.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`llm.policies.guardrails.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`llm.policies.guardrails.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`llm.policies.guardrails.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`llm.policies.guardrails.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -75098,10 +75256,12 @@
 |`llm.policies.guardrails.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.policies.guardrails.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.policies.guardrails.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.policies.guardrails.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`llm.policies.guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`llm.policies.guardrails.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.policies.guardrails.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -75376,6 +75536,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`llm.policies.guardrails.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`llm.policies.guardrails.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.policies.guardrails.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -75648,6 +75809,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.policies.guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.policies.guardrails.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -76911,7 +77073,7 @@
 |`mcp.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`mcp.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`mcp.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
-|`mcp.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`mcp.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.request[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`mcp.policies.ai.promptGuard.request[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`mcp.policies.ai.promptGuard.request[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -76929,8 +77091,10 @@
 |`mcp.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`mcp.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`mcp.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.ai.promptGuard.request[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -77205,6 +77369,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -77479,6 +77644,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -77751,6 +77917,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -78038,7 +78205,7 @@
 |`mcp.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`mcp.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`mcp.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
-|`mcp.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
+|`mcp.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.response[].regex.rules`|[]object|Regex or built-in patterns to evaluate.|
 |`mcp.policies.ai.promptGuard.response[].regex.rules[].builtin`|enum|Use a built-in sensitive data pattern.<br>Built-in pattern name.<br>Possible values: `ssn`, `creditCard`, `phoneNumber`, `email`, `caSin`.|
 |`mcp.policies.ai.promptGuard.response[].regex.rules[].pattern`|string|Use a custom regular expression.<br>Regular expression pattern to evaluate.|
@@ -78056,10 +78223,12 @@
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`mcp.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.ai.promptGuard.response[].webhook.action`|enum|Whether to enforce the webhook's verdict or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.action`|enum|Whether to enforce the guardrail's verdict or only observe it.<br><br>`reject` (the default) enforces the guardrail: a `BLOCKED` assessment<br>rejects the request/response and an `ANONYMIZED` assessment masks the<br>matched content, exactly as before.<br><br>`audit` records successful assessments without enforcing their verdict.<br>`audit` guarantees non-enforcement gateway-side even when the AWS resource<br>is configured to `BLOCK`/`ANONYMIZE`.<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -78334,6 +78503,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -78606,6 +78776,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.action`|enum|Whether to reject flagged content or only observe it.<br>Defaults to `reject` (enforce).<br>Possible values: `reject`, `audit`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|

@@ -232,6 +232,6 @@ func kindPtr(value string) *gwv1.Kind {
 }
 
 func port(value int32) *gwv1.PortNumber {
-	port := gwv1.PortNumber(value)
+	port := value
 	return &port
 }

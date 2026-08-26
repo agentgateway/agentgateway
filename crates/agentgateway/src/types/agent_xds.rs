@@ -35,7 +35,9 @@ use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
-use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
+use crate::types::proto::agent::backend_policy_spec::ai::{
+	ActionKind, RejectAuditAction, response_guard,
+};
 use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
 use crate::types::proto::agent::frontend_policy_spec::http::HttpHeaderCase;
 use crate::types::proto::agent::mcp_target::Protocol;
@@ -928,6 +930,7 @@ fn convert_backend_ai_policy(
 							.collect::<Result<Vec<_>, _>>()?;
 						let md = llm::policy::Moderation {
 							model: m.model.as_deref().map(strng::new),
+							action: convert_reject_audit(m.action),
 							policies: pols,
 						};
 						llm::policy::RequestGuardKind::OpenAIModeration(md)
@@ -942,6 +945,7 @@ fn convert_backend_ai_policy(
 							template_id: strng::new(&gma.template_id),
 							project_id: strng::new(&gma.project_id),
 							location: gma.location.as_ref().map(strng::new),
+							action: convert_reject_audit(gma.action),
 							policies: pols,
 						})
 					},
@@ -955,6 +959,7 @@ fn convert_backend_ai_policy(
 							guardrail_identifier: strng::new(&bg.identifier),
 							guardrail_version: strng::new(&bg.version),
 							region: strng::new(&bg.region),
+							action: convert_reject_audit(bg.action),
 							policies: pols,
 						})
 					},
@@ -966,6 +971,7 @@ fn convert_backend_ai_policy(
 							.collect::<Result<Vec<_>, _>>()?;
 						llm::policy::RequestGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 							endpoint: strng::new(&acs.endpoint),
+							action: convert_reject_audit(acs.action),
 							policies: pols,
 							cached_azure_auth: Default::default(),
 							analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -1029,6 +1035,7 @@ fn convert_backend_ai_policy(
 						template_id: strng::new(&gma.template_id),
 						project_id: strng::new(&gma.project_id),
 						location: gma.location.as_ref().map(strng::new),
+						action: convert_reject_audit(gma.action),
 						policies: pols,
 					})
 				},
@@ -1042,6 +1049,7 @@ fn convert_backend_ai_policy(
 						guardrail_identifier: strng::new(&bg.identifier),
 						guardrail_version: strng::new(&bg.version),
 						region: strng::new(&bg.region),
+						action: convert_reject_audit(bg.action),
 						policies: pols,
 					})
 				},
@@ -1053,6 +1061,7 @@ fn convert_backend_ai_policy(
 						.collect::<Vec<_>>();
 					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 						endpoint: strng::new(&acs.endpoint),
+						action: convert_reject_audit(acs.action),
 						policies: pols,
 						cached_azure_auth: Default::default(),
 						analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -3997,6 +4006,14 @@ fn convert_prompt_caching(
 	}
 }
 
+fn convert_reject_audit(action: i32) -> llm::policy::RejectAuditAction {
+	if action == RejectAuditAction::Audit as i32 {
+		llm::policy::RejectAuditAction::Audit
+	} else {
+		llm::policy::RejectAuditAction::Reject
+	}
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
@@ -4042,6 +4059,7 @@ fn convert_webhook(
 		headers,
 		forward_header_matches,
 		failure_mode,
+		action: convert_reject_audit(w.action),
 	})
 }
 
@@ -4055,6 +4073,7 @@ fn convert_regex_rules(
 			llm::policy::Action::Mask
 		},
 		Some(ActionKind::Reject) => llm::policy::Action::Reject,
+		Some(ActionKind::Audit) => llm::policy::Action::Audit,
 	};
 	let rules = rr
 		.rules
@@ -5800,6 +5819,7 @@ mod tests {
 			headers: Default::default(),
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5824,6 +5844,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5852,6 +5873,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5877,6 +5899,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		// convert_webhook returns Result, but invalid header names produce warnings not errors

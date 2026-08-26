@@ -1,0 +1,389 @@
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-release-agentgateway
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-0.0.2
+    agentgateway: agentgateway
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: agentgateway/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agentgateway-default
+rules:
+# Service discovery information
+- apiGroups: [""]
+  resources:
+  - namespaces
+  - nodes
+  - pods
+  - services
+  - configmaps # Used for reference configs in policies/TLS/API keys, etc
+  - secrets # Used for reference configs in policies/TLS/API keys, etc
+  verbs:
+  - get
+  - list
+  - watch
+
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+
+# Watches agentgateway configuration resources.
+- apiGroups:
+  - agentgateway.dev
+  resources:
+  - agentgatewaybackends
+  - agentgatewaymodels
+  - agentgatewayparameters
+  - agentgatewaypolicies
+  verbs:
+  - get
+  - list
+  - watch
+
+# Reports reconciliation status on agentgateway configuration resources.
+- apiGroups:
+  - agentgateway.dev
+  resources:
+  - agentgatewaybackends/status
+  - agentgatewaymodels/status
+  - agentgatewayparameters/status
+  - agentgatewaypolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+
+# Detects which optional Kubernetes APIs are installed in the cluster.
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+
+# Authenticates proxy service-account tokens presented to the xDS server.
+- apiGroups: [authentication.k8s.io]
+  resources: [tokenreviews]
+  verbs: [create]
+
+# Watches Gateway API configuration used to build proxy configuration.
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - backendtlspolicies
+  - gateways
+  - grpcroutes
+  - httproutes
+  - listenersets
+  - referencegrants
+  - tcproutes
+  - tlsroutes
+  verbs:
+  - get
+  - list
+  - watch
+
+# Status reports
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - backendtlspolicies/status
+  - gatewayclasses/status
+  - gateways/status
+  - grpcroutes/status
+  - httproutes/status
+  - listenersets/status
+  - tcproutes/status
+  - tlsroutes/status
+  verbs:
+  - patch
+  - update
+
+# Creates and maintains the GatewayClass owned by this controller.
+# Cluster scoped resource so must be in the cluster role.
+- apiGroups: [gateway.networking.k8s.io]
+  resources: [gatewayclasses]
+  verbs: [create, get, list, patch, update, watch]
+
+# Discovers Istio services and workloads when Istio integration is enabled.
+- apiGroups: [networking.istio.io]
+  resources:
+  - destinationrules
+  - serviceentries
+  - workloadentries
+  verbs: [get, list, watch]
+
+# While the deployer uses scoped roles under '-deployer' for writes, we cannot do a scoped watch
+# Without opening N watches. instead, just always watch all which is generally acceptable.
+- apiGroups: [policy]
+  resources: [poddisruptionbudgets]
+  verbs: [get, list, watch]
+- apiGroups: [""]
+  resources: [serviceaccounts, services]
+  verbs: [get, list, watch]
+- apiGroups: [apps]
+  resources:
+  - daemonsets
+  - deployments
+  verbs: [get, list, watch]
+- apiGroups: [autoscaling]
+  resources: [horizontalpodautoscalers]
+  verbs: [get, list, watch]
+---
+# Source: agentgateway/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agentgateway-default-deployer
+rules:
+# Objects created by the Gateway deployer.
+- apiGroups: [""]
+  resources:
+  - configmaps
+  - secrets
+  - serviceaccounts
+  - services
+  verbs: [create, delete, patch, update]
+- apiGroups: [apps]
+  resources:
+  - daemonsets
+  - deployments
+  verbs: [create, delete, patch, update]
+- apiGroups: [autoscaling]
+  resources: [horizontalpodautoscalers]
+  verbs: [create, delete, patch, update]
+- apiGroups: [policy]
+  resources: [poddisruptionbudgets]
+  verbs: [create, delete, patch, update]
+
+# Publishes warning Events on Gateways when a proxy NACKs xDS configuration.
+- apiGroups: [""]
+  resources: [events]
+  verbs: [create, patch]
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agentgateway-role-default
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agentgateway-write-role-default
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default-deployer
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: agentgateway/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentgateway-default-local
+  namespace: default
+rules:
+# Coordinates controller leader election in the controller namespace.
+- apiGroups: [coordination.k8s.io]
+  resources: [leases]
+  verbs: [create, get, update]
+# Creates the xDS TLS certificate Secret when it does not already exist.
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [create]
+# Persists fetched JWKS keysets in the controller namespace.
+- apiGroups: [""]
+  resources: [configmaps]
+  verbs: [create, delete, patch, update]
+
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentgateway-local-role-default
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: Role
+  name: agentgateway-default-local
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-release-agentgateway
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-0.0.2
+    agentgateway: agentgateway
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc-xds-agw
+    protocol: TCP
+    port: 9978
+    targetPort: grpc-xds-agw
+  - name: health
+    protocol: TCP
+    port: 9093
+    targetPort: health
+  - name: metrics
+    protocol: TCP
+    port: 9092
+    targetPort: metrics
+  selector:
+    agentgateway: agentgateway
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/instance: test-release
+
+---
+# Source: agentgateway/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-release-agentgateway
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-0.0.2
+    agentgateway: agentgateway
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      agentgateway: agentgateway
+      app.kubernetes.io/name: agentgateway
+      app.kubernetes.io/instance: test-release
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9092"
+        prometheus.io/scrape: "true"
+      labels:
+        agentgateway: agentgateway
+        app.kubernetes.io/name: agentgateway
+        app.kubernetes.io/instance: test-release
+    spec:
+      serviceAccountName: test-release-agentgateway
+      containers:
+        - name: controller
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+              - ALL
+          image: "cr.agentgateway.dev/controller:v0.0.0-dev"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9978
+              name: grpc-xds-agw
+              protocol: TCP
+            - containerPort: 9093
+              name: health
+              protocol: TCP
+            - containerPort: 9092
+              name: metrics
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9093
+            initialDelaySeconds: 1
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: 9093
+            initialDelaySeconds: 0
+            periodSeconds: 1
+            
+            failureThreshold: 120
+          env:
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "1"
+                  resource: limits.cpu
+            - name: AGW_PROXY_IMAGE_REGISTRY
+              value: cr.agentgateway.dev
+            - name: AGW_PROXY_IMAGE_REPOSITORY
+              value: agentgateway
+
+            - name: AGW_LOG_LEVEL
+              value: "info"
+            - name: AGW_XDS_SERVICE_NAME
+              value: test-release-agentgateway
+            - name: AGW_AGENTGATEWAY_XDS_SERVICE_PORT
+              value: "9978"
+            - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
+              value: "[]"
+            - name: AGW_XDS_MODE
+              value: "tls"
+            - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
+              value: "{}"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              agentgateway: agentgateway
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway

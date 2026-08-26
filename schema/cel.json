@@ -1108,13 +1108,13 @@
       "additionalProperties": true
     },
     "guardrails": {
-      "description": "`guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject),\nin either the request or response phase. Only present in CEL that runs after the request\ncompletes, such as log and metric fields.",
+      "description": "`guardrails` contains one entry per prompt-guard guardrail intervention, in either the\nrequest or response phase. Only present in CEL that runs after the request completes,\nsuch as log and metric fields.",
       "type": [
         "array",
         "null"
       ],
       "items": {
-        "description": "Records one prompt-guard guardrail intervention (mask or reject).",
+        "description": "Records one prompt-guard guardrail intervention.",
         "type": "object",
         "properties": {
           "phase": {
@@ -1126,7 +1126,7 @@
             "type": "string"
           },
           "action": {
-            "description": "The action the guardrail took: `mask` or `reject`.",
+            "description": "The action the guardrail took (mask/reject/audit).",
             "type": "string"
           },
           "guardrailId": {

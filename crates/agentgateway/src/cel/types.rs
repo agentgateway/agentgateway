@@ -1412,7 +1412,7 @@ impl PartialEq for RequestRef<'_> {
 	}
 }
 
-/// Records one prompt-guard guardrail intervention (mask or reject).
+/// Records one prompt-guard guardrail intervention.
 #[apply(schema!)]
 #[derive(Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
@@ -1421,7 +1421,7 @@ pub struct GuardrailInfo {
 	pub phase: Strng,
 	/// The guard kind that intervened, such as `bedrockGuardrails`.
 	pub guard: Strng,
-	/// The action the guardrail took: `mask` or `reject`.
+	/// The action the guardrail took (mask/reject/audit).
 	pub action: Strng,
 	/// The configured guardrail identifier.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2180,9 +2180,9 @@ pub struct ExecutorSerde {
 	)]
 	pub mcp_guardrails: Option<McpGuardrailsDynamicMetadata>,
 
-	/// `guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject),
-	/// in either the request or response phase. Only present in CEL that runs after the request
-	/// completes, such as log and metric fields.
+	/// `guardrails` contains one entry per prompt-guard guardrail intervention, in either the
+	/// request or response phase. Only present in CEL that runs after the request completes,
+	/// such as log and metric fields.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub guardrails: Option<Vec<GuardrailInfo>>,
 

@@ -126,12 +126,15 @@ pub trait RequestType: Send + Sync {
 }
 
 /// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans
-/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part (keeping its other
-/// fields, e.g. `cache_control`); untouched runs pass through unchanged.
+/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part; untouched runs pass
+/// through unchanged. `preserved_rest_keys`: when a text run is masked, which keys in `rest`
+/// should be preserved.
 pub(crate) fn scan_text_runs<T>(
 	parts: &mut Vec<T>,
 	sep: &str,
 	mut text_of: impl FnMut(&mut T) -> Option<&mut String>,
+	mut rest_of: impl FnMut(&mut T) -> Option<&mut serde_json::Value>,
+	preserved_rest_keys: &[&str],
 	f: &mut dyn FnMut(&mut String),
 ) {
 	if let [part] = parts.as_mut_slice() {
@@ -165,6 +168,34 @@ pub(crate) fn scan_text_runs<T>(
 		if joined == original {
 			i = end;
 			continue;
+		}
+
+		// a preserved key anywhere in the run must survive the collapse: the survivor's own
+		// value wins, else carry the latest drained one; JSON null counts as absent
+		for &key in preserved_rest_keys {
+			let survivor_has = rest_of(&mut parts[end - 1])
+				.and_then(|rest| rest.get(key))
+				.is_some_and(|v| !v.is_null());
+			if survivor_has {
+				continue;
+			}
+			let carried = parts[i..end - 1].iter_mut().rev().find_map(|p| {
+				rest_of(p)
+					.and_then(serde_json::Value::as_object_mut)
+					.and_then(|obj| obj.remove(key))
+					.filter(|v| !v.is_null())
+			});
+			if let Some(value) = carried
+				&& let Some(rest) = rest_of(&mut parts[end - 1])
+			{
+				// typed parts default `rest` to Null
+				if !rest.is_object() {
+					*rest = serde_json::Value::Object(Default::default());
+				}
+				if let Some(obj) = rest.as_object_mut() {
+					obj.insert(key.to_string(), value);
+				}
+			}
 		}
 
 		// collapse the run's text into the last part, and remove the others

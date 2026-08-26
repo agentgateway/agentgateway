@@ -804,7 +804,7 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 }
 
 func shortStringPtr(s string) *agentgateway.ShortString {
-	v := agentgateway.ShortString(s)
+	v := s
 	return &v
 }
 

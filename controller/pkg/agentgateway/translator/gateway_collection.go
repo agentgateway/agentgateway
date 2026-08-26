@@ -276,7 +276,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			obj.GetAnnotations()[annotations.InternalPorts],
 			func(p int32) bool {
 				for _, l := range kgw.Listeners {
-					if int32(l.Port) == p {
+					if l.Port == p {
 						return true
 					}
 				}
@@ -528,7 +528,7 @@ func ListenerSetBuilder(
 		obj.GetAnnotations()[annotations.InternalPorts],
 		func(p int32) bool {
 			for _, l := range ls.Listeners {
-				if port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port); err == nil && int32(port) == p {
+				if port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port); err == nil && port == p {
 					return true
 				}
 			}

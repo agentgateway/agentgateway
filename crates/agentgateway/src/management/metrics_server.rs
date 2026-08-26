@@ -10,7 +10,7 @@ use hyper::Request;
 use hyper::body::Incoming;
 use mediatype::{MediaType, ReadParams, WriteParams};
 use prometheus_client::encoding::prometheus_protobuf::encode_to_vec as encode_protobuf;
-use prometheus_client::encoding::text::encode as encode_text;
+use prometheus_client::encoding::text::encode as encode_openmetrics;
 use prometheus_client::registry::Registry;
 
 use super::hyper_helpers;
@@ -50,9 +50,9 @@ async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Re
 	let reg = reg.lock().expect("mutex");
 	let content_type = content_type(&req);
 	let result = match content_type {
-		ContentType::PlainText => {
+		ContentType::PlainText | ContentType::OpenMetrics => {
 			let mut str_buf = String::new();
-			encode_text(&mut str_buf, &reg)
+			encode_openmetrics(&mut str_buf, &reg)
 				.map(|_| str_buf.into_bytes())
 				.map_err(|err| err.to_string())
 		},
@@ -73,10 +73,11 @@ async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Re
 	.expect("builder with known status code should not fail")
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 enum ContentType {
 	#[default]
 	PlainText,
+	OpenMetrics,
 	Protobuf,
 }
 
@@ -84,8 +85,9 @@ impl From<ContentType> for &str {
 	fn from(c: ContentType) -> Self {
 		match c {
 			ContentType::PlainText => "text/plain;charset=utf-8",
+			ContentType::OpenMetrics => "application/openmetrics-text;version=1.0.0;charset=utf-8",
 			ContentType::Protobuf => {
-				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited"
 			},
 		}
 	}
@@ -95,17 +97,23 @@ fn content_type_from_media_type(m: &MediaType) -> Option<ContentType> {
 	let ty_str: &str = m.ty.as_str();
 	if ty_str == mediatype::names::TEXT.as_str() && m.subty == mediatype::names::PLAIN.as_str() {
 		return Some(ContentType::PlainText);
-	} else if ty_str != mediatype::names::APPLICATION.as_str() {
+	}
+	if ty_str != mediatype::names::APPLICATION.as_str() {
 		return None;
 	}
 	match m.subty.as_str() {
+		"openmetrics-text" => Some(ContentType::OpenMetrics),
 		"vnd.google.protobuf" | "protobuf" | "x-protobuf" => Some(ContentType::Protobuf),
 		_ => None,
 	}
 }
 
-const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 4] = [
+const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 5] = [
 	MediaType::new(mediatype::names::TEXT, mediatype::names::PLAIN),
+	MediaType::new(
+		mediatype::names::APPLICATION,
+		mediatype::Name::new_unchecked("openmetrics-text"),
+	),
 	MediaType::new(
 		mediatype::names::APPLICATION,
 		mediatype::Name::new_unchecked("vnd.google.protobuf"),
@@ -143,6 +151,7 @@ fn content_type<T>(req: &Request<T>) -> ContentType {
 		.unwrap_or_default()
 }
 
+#[cfg(test)]
 mod test {
 	#[test]
 	fn test_content_type() {
@@ -163,14 +172,23 @@ mod test {
 			"text/plain;charset=utf-8"
 		);
 
+		let openmetrics_req = http::Request::builder()
+			.header("Accept", "application/openmetrics-text;version=0.0.1")
+			.body("I would like OpenMetrics")
+			.unwrap();
+		assert_eq!(
+			Into::<&str>::into(super::content_type(&openmetrics_req)),
+			"application/openmetrics-text;version=1.0.0;charset=utf-8"
+		);
+
 		let mixed_req = http::Request::builder()
           .header("X-Custom-Beep", "boop")
-          .header("Accept", "application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;q=0.6,application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.5,application/openmetrics-text;version=0.0.1;q=0.4,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.3,text/plain;version=0.0.4;q=0.2,*/*;q=0.1")
+		  .header("Accept", "application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited;q=0.6,application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.5,application/openmetrics-text;version=0.0.1;q=0.4,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.3,text/plain;version=0.0.4;q=0.2,*/*;q=0.1")
           .body("I would like protobuf")
           .unwrap();
 		assert_eq!(
 			Into::<&str>::into(super::content_type(&mixed_req)),
-			"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
+			"application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited"
 		);
 
 		let unsupported_req_accept = http::Request::builder()
@@ -186,7 +204,7 @@ mod test {
 		let q_values_req = http::Request::builder()
 			.header(
 				"Accept",
-				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;q=0.1, text/plain;q=0.9",
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited;q=0.1, text/plain;q=0.9",
 			)
 			.body("text is preferred")
 			.unwrap();
@@ -198,7 +216,7 @@ mod test {
 		let q_zero_req = http::Request::builder()
 			.header(
 				"Accept",
-				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;q=0, text/plain;q=1",
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited;q=0, text/plain;q=1",
 			)
 			.body("protobuf is forbidden")
 			.unwrap();
@@ -210,13 +228,13 @@ mod test {
 		let parameterized_protobuf_req = http::Request::builder()
 			.header(
 				"Accept",
-				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited",
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited",
 			)
 			.body("protobuf parameters describe the representation")
 			.unwrap();
 		assert_eq!(
 			Into::<&str>::into(super::content_type(&parameterized_protobuf_req)),
-			"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
+			"application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited"
 		);
 	}
 }
