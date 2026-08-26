@@ -560,19 +560,15 @@ func TestBuildAIBackend(t *testing.T) {
 		{
 			name: "Valid Bedrock backend with MantleOnly endpoint preference",
 			backend: &agentgateway.AgentgatewayBackend{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bedrock-mantle-only",
-					Namespace: "test-ns",
-				},
+				Name:      "bedrock-mantle-only",
+				Namespace: "test-ns",
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
-								BedrockSettings: agentgateway.BedrockSettings{
-									Region:             "us-east-1",
-									EndpointPreference: agentgateway.BedrockEndpointPreferenceMantleOnly,
-								},
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								EndpointPreference: agentgateway.BedrockEndpointPreferenceMantleOnly,
 							},
 						},
 					},
@@ -582,19 +578,15 @@ func TestBuildAIBackend(t *testing.T) {
 		{
 			name: "Valid Bedrock backend with MantlePreferred endpoint preference",
 			backend: &agentgateway.AgentgatewayBackend{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bedrock-mantle-preferred",
-					Namespace: "test-ns",
-				},
+				Name:      "bedrock-mantle-preferred",
+				Namespace: "test-ns",
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
-								BedrockSettings: agentgateway.BedrockSettings{
-									Region:             "us-east-1",
-									EndpointPreference: agentgateway.BedrockEndpointPreferenceMantlePreferred,
-								},
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								EndpointPreference: agentgateway.BedrockEndpointPreferenceMantlePreferred,
 							},
 						},
 					},
@@ -604,19 +596,15 @@ func TestBuildAIBackend(t *testing.T) {
 		{
 			name: "Valid Bedrock backend with RuntimeOnly endpoint preference",
 			backend: &agentgateway.AgentgatewayBackend{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bedrock-runtime-only",
-					Namespace: "test-ns",
-				},
+				Name:      "bedrock-runtime-only",
+				Namespace: "test-ns",
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
-								BedrockSettings: agentgateway.BedrockSettings{
-									Region:             "us-east-1",
-									EndpointPreference: agentgateway.BedrockEndpointPreferenceRuntimeOnly,
-								},
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								EndpointPreference: agentgateway.BedrockEndpointPreferenceRuntimeOnly,
 							},
 						},
 					},
@@ -626,18 +614,14 @@ func TestBuildAIBackend(t *testing.T) {
 		{
 			name: "Valid Bedrock backend with default endpoint preference",
 			backend: &agentgateway.AgentgatewayBackend{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bedrock-default",
-					Namespace: "test-ns",
-				},
+				Name:      "bedrock-default",
+				Namespace: "test-ns",
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
-								BedrockSettings: agentgateway.BedrockSettings{
-									Region: "us-east-1",
-								},
+								Model:  new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region: "us-east-1",
 							},
 						},
 					},

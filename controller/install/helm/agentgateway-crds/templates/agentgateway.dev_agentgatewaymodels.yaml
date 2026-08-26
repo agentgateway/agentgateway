@@ -112,10 +112,9 @@ spec:
                     default: RuntimePreferred
                     description: |-
                       EndpointPreference selects which Bedrock API surface to prefer.
-                      `RuntimePreferred` (the default) uses Runtime and routes to Mantle only for
-                      models the catalog tags `mantle` but not `runtime`; `MantlePreferred` is the
-                      mirror, using Mantle and routing to Runtime only for models tagged `runtime`
-                      but not `mantle`; `MantleOnly` and `RuntimeOnly` force one endpoint.
+                      Defaults to preferring runtime over mantle.
+                      Decidees which endpoints to pick mainly based off the catalog tags
+                      `mantle` and `runtime`.
                     enum:
                     - MantleOnly
                     - MantlePreferred
