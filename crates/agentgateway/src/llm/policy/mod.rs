@@ -1008,8 +1008,15 @@ impl Policy {
 				.await
 			},
 			RequestGuardKind::AzureContentSafety(acs) => {
-				Self::evaluate_azure_content_safety_request(req, claims, client, acs, &guard.rejection)
-					.await
+				Self::evaluate_azure_content_safety_request(
+					req,
+					claims,
+					client,
+					acs,
+					&guard.rejection,
+					guardrail_log,
+				)
+				.await
 			},
 		}
 	}
@@ -1222,6 +1229,7 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		if let Some(ref analyze_text) = config.analyze_text {
 			let resp = azure_content_safety::send_analyze_text_for_request(
@@ -1234,6 +1242,7 @@ impl Policy {
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if resp.is_blocked(threshold) {
+				Self::record_azure_analyze(&resp, threshold, GuardrailPhase::Request, guardrail_log);
 				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
 			}
 		}
@@ -1247,10 +1256,53 @@ impl Policy {
 			)
 			.await?;
 			if resp.jailbreak_detected() {
+				record_guardrail_info(
+					guardrail_log,
+					cel::GuardrailInfo {
+						phase: guardrail_phase(GuardrailPhase::Request),
+						guard: strng::literal!("azureContentSafety"),
+						action: strng::literal!("reject"),
+						assessments: vec![serde_json::json!({"jailbreakDetected": true})],
+						..Default::default()
+					},
+				);
 				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
 			}
 		}
 		Ok(GuardrailOutcome::None)
+	}
+
+	/// Severities and blocklist names only; matched text is never included.
+	fn record_azure_analyze(
+		resp: &azure_content_safety::AnalyzeTextResponse,
+		threshold: i32,
+		phase: GuardrailPhase,
+		guardrail_log: Option<&GuardrailLog>,
+	) {
+		let categories: Vec<_> = resp
+			.categories_analysis
+			.iter()
+			.filter(|c| c.severity >= threshold)
+			.map(|c| serde_json::json!({"category": c.category, "severity": c.severity}))
+			.collect();
+		let blocklists: Vec<_> = resp
+			.blocklists_match
+			.iter()
+			.map(|b| b.blocklist_name.clone())
+			.collect();
+		record_guardrail_info(
+			guardrail_log,
+			cel::GuardrailInfo {
+				phase: guardrail_phase(phase),
+				guard: strng::literal!("azureContentSafety"),
+				action: strng::literal!("reject"),
+				assessments: vec![serde_json::json!({
+					"categoriesAnalysis": categories,
+					"blocklistMatches": blocklists,
+				})],
+				..Default::default()
+			},
+		);
 	}
 
 	async fn evaluate_google_model_armor_response(
@@ -1284,6 +1336,7 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		let content = Self::webhook_choice_texts(resp);
 
@@ -1302,6 +1355,12 @@ impl Policy {
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if guardrail_resp.is_blocked(threshold) {
+				Self::record_azure_analyze(
+					&guardrail_resp,
+					threshold,
+					GuardrailPhase::Response,
+					guardrail_log,
+				);
 				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
 			}
 		}
@@ -1867,8 +1926,15 @@ impl Policy {
 				.await
 			},
 			ResponseGuardKind::AzureContentSafety(acs) => {
-				Self::evaluate_azure_content_safety_response(resp, None, client, acs, &guard.rejection)
-					.await
+				Self::evaluate_azure_content_safety_response(
+					resp,
+					None,
+					client,
+					acs,
+					&guard.rejection,
+					guardrail_log,
+				)
+				.await
 			},
 		}
 	}

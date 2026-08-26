@@ -58,6 +58,41 @@ async fn webhook_fail_open_emits_single_metric() {
 }
 
 #[test]
+fn azure_blocked_records_guardrail_info_without_matched_text() {
+	let resp: azure_content_safety::AnalyzeTextResponse = serde_json::from_value(serde_json::json!({
+		"blocklistsMatch": [{
+			"blocklistName": "banned-terms",
+			"blocklistItemId": "item-1",
+			"blocklistItemText": "secretword"
+		}],
+		"categoriesAnalysis": [
+			{"category": "Violence", "severity": 4},
+			{"category": "Hate", "severity": 0}
+		]
+	}))
+	.unwrap();
+	let log = GuardrailLog::default();
+	Policy::record_azure_analyze(&resp, 2, GuardrailPhase::Request, Some(&log));
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.guard, "azureContentSafety");
+	assert_eq!(entry.action, "reject");
+	let assessment = &entry.assessments[0];
+	assert_eq!(
+		assessment["categoriesAnalysis"],
+		serde_json::json!([{"category": "Violence", "severity": 4}])
+	);
+	assert_eq!(
+		assessment["blocklistMatches"],
+		serde_json::json!(["banned-terms"])
+	);
+	assert!(
+		!serde_json::to_string(assessment)
+			.unwrap()
+			.contains("secretword")
+	);
+}
+
+#[test]
 fn model_armor_blocked_records_guardrail_info() {
 	let resp: google_model_armor::SanitizeResponse = serde_json::from_value(serde_json::json!({
 		"sanitizationResult": {
