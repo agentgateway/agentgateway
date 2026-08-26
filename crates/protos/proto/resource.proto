@@ -1282,21 +1282,11 @@ message BackendPolicySpec {
       ACTION_UNSPECIFIED = 0;
       MASK = 1;
       REJECT = 2;
-      // Audit (observe) mode: the guard is invoked and its verdict recorded
-      // (metrics + structured log), but the request/response is never blocked
-      // or masked.
-      //
-      // Version-skew hazard: data planes that predate this value map unknown
-      // ActionKind values to MASK and will *mutate* content. Upgrade all data
-      // planes before configuring a regex guard with AUDIT.
+      // Record the match without enforcing it.
       AUDIT = 3;
     }
 
-    // Action for guards that cannot mask (only reject or observe). REJECT (the
-    // default when unspecified) enforces the guard's native verdict; AUDIT
-    // invokes the guard and records what it would have done without enforcing.
-    // Value names are prefixed to avoid colliding with ActionKind's values,
-    // which share this message's enum-value namespace.
+    // Action for guards that can reject or audit, but cannot mask.
     enum RejectAuditAction {
       REJECT_AUDIT_ACTION_UNSPECIFIED = 0;
       REJECT_AUDIT_ACTION_REJECT = 1;

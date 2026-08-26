@@ -1607,13 +1607,7 @@ const (
 	BackendPolicySpec_Ai_ACTION_UNSPECIFIED BackendPolicySpec_Ai_ActionKind = 0
 	BackendPolicySpec_Ai_MASK               BackendPolicySpec_Ai_ActionKind = 1
 	BackendPolicySpec_Ai_REJECT             BackendPolicySpec_Ai_ActionKind = 2
-	// Audit (observe) mode: the guard is invoked and its verdict recorded
-	// (metrics + structured log), but the request/response is never blocked
-	// or masked.
-	//
-	// Version-skew hazard: data planes that predate this value map unknown
-	// ActionKind values to MASK and will *mutate* content. Upgrade all data
-	// planes before configuring a regex guard with AUDIT.
+	// Record the match without enforcing it.
 	BackendPolicySpec_Ai_AUDIT BackendPolicySpec_Ai_ActionKind = 3
 )
 
@@ -1660,11 +1654,7 @@ func (BackendPolicySpec_Ai_ActionKind) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{58, 0, 1}
 }
 
-// Action for guards that cannot mask (only reject or observe). REJECT (the
-// default when unspecified) enforces the guard's native verdict; AUDIT
-// invokes the guard and records what it would have done without enforcing.
-// Value names are prefixed to avoid colliding with ActionKind's values,
-// which share this message's enum-value namespace.
+// Action for guards that can reject or audit, but cannot mask.
 type BackendPolicySpec_Ai_RejectAuditAction int32
 
 const (

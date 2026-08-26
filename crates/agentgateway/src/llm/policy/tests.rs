@@ -1,13 +1,13 @@
 use ::http::{HeaderName, HeaderValue};
 
 use super::*;
+use crate::telemetry::metrics::{GuardrailAction, GuardrailLabels, GuardrailPhase};
 use crate::types::agent::HeaderValueMatch;
 
 /// When a webhook guard fails open, exactly one metric must be emitted (`FailOpen`); the caller
 /// must not additionally record `Allow`.
 #[tokio::test]
 async fn webhook_fail_open_emits_single_metric() {
-	use crate::telemetry::metrics::{GuardrailAction, GuardrailLabels, GuardrailPhase};
 	use crate::types::agent::SimpleBackendReference;
 
 	let guard = PromptGuard {
@@ -58,70 +58,21 @@ async fn webhook_fail_open_emits_single_metric() {
 	);
 }
 
-/// In audit mode a provider error must never affect traffic — even when the
-/// webhook is configured `failClosed` (the default). Audit overrides the
-/// failure mode: the request passes through and records `FailOpen`, not a
-/// rejection and not `Allow`.
-#[tokio::test]
-async fn audit_mode_fails_open_on_provider_error_despite_fail_closed() {
-	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
-	use crate::types::agent::SimpleBackendReference;
-
-	let guard = RequestGuard {
-		rejection: Default::default(),
-		scope: default_content_scope(),
-		kind: RequestGuardKind::Webhook(Webhook {
-			target: SimpleBackendReference::Invalid,
-			headers: Default::default(),
-			forward_header_matches: vec![],
-			failure_mode: FailureMode::FailClosed,
-			action: RejectAuditAction::Audit,
-		}),
-	};
-	let client = crate::test_helpers::policy_client();
-	let headers = ::http::HeaderMap::new();
-	let mut req = TextRequest {
-		content: "hello world".to_string(),
-	};
-
-	let result =
-		Policy::apply_single_request_guard(&guard, &mut req, &headers, &client, None, None).await;
-	let (action, rejection) = result.expect("audit mode must not propagate provider errors");
-	assert_eq!(
-		action,
-		GuardrailAction::FailOpen,
-		"an erroring audit guard records FailOpen, not Allow"
-	);
-	assert!(rejection.is_none(), "audit mode must never block traffic");
-	Policy::record_guardrail_trip(&client, GuardrailPhase::Request, action);
-	assert_eq!(
-		guardrail_metric(&client, GuardrailPhase::Request, GuardrailAction::FailOpen),
-		1
-	);
-}
-
-/// Reads a single `guardrail_checks` counter for `(phase, action)`.
-#[cfg(test)]
 fn guardrail_metric(
 	client: &crate::proxy::httpproxy::PolicyClient,
-	phase: crate::telemetry::metrics::GuardrailPhase,
-	action: crate::telemetry::metrics::GuardrailAction,
+	phase: GuardrailPhase,
+	action: GuardrailAction,
 ) -> u64 {
 	client
 		.inputs
 		.metrics
 		.guardrail_checks
-		.get_or_create(&crate::telemetry::metrics::GuardrailLabels { phase, action })
+		.get_or_create(&GuardrailLabels { phase, action })
 		.get()
 }
 
-/// A regex response guard in `Audit` mode that does not match records `Allow`,
-/// not `Audit`: audit mode only records `Audit` when the guard *would* have
-/// enforced, so the metric means the same thing across every guard kind.
 #[tokio::test]
 async fn audit_mode_records_allow_when_nothing_matches() {
-	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
-
 	let guard = ResponseGuard {
 		rejection: Default::default(),
 		kind: ResponseGuardKind::Regex(RegexRules {
@@ -155,12 +106,8 @@ async fn audit_mode_records_allow_when_nothing_matches() {
 	);
 }
 
-/// A regex response guard in `Audit` mode that *does* match records exactly one
-/// `Audit` and passes the content through unchanged (never Reject/Mask).
 #[tokio::test]
 async fn audit_mode_records_audit_and_passes_through_on_match() {
-	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
-
 	let guard = ResponseGuard {
 		rejection: Default::default(),
 		kind: ResponseGuardKind::Regex(RegexRules {
@@ -199,10 +146,6 @@ async fn audit_mode_records_audit_and_passes_through_on_match() {
 	);
 }
 
-/// The Bedrock audit decision, driven through the shared helper both the
-/// request and response paths call: enforce-worthy assessments (blocked or
-/// anonymized) yield `Audit`; detect-only and benign assessments yield `None`.
-/// Never a rejection or a mask, regardless of what AWS would have done.
 #[test]
 fn bedrock_audit_outcome_maps_would_enforce_to_audit() {
 	use serde_json::json;
@@ -241,8 +184,6 @@ fn bedrock_audit_outcome_maps_would_enforce_to_audit() {
 		"a would-mask assessment audits, never masks"
 	);
 
-	// A detect-mode resource (top-level NONE, per-filter detected) is logged
-	// but records Allow — it would not have enforced.
 	let detect_only = outcome(json!({
 		"action": "NONE",
 		"assessments": [{ "contentPolicy": {
@@ -255,13 +196,9 @@ fn bedrock_audit_outcome_maps_would_enforce_to_audit() {
 	assert!(matches!(benign, GuardrailOutcome::None));
 }
 
-/// A streamed response evaluated over many windows records exactly one metric
-/// for the stream, not one per window — the evaluator folds per-window actions
-/// and records once when dropped.
 #[tokio::test]
 async fn streaming_guard_records_one_metric_per_stream() {
 	use crate::llm::policy::streaming_guardrails::make_evaluator;
-	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
 
 	let guard = ResponseGuard {
 		rejection: Default::default(),
@@ -276,8 +213,6 @@ async fn streaming_guard_records_one_metric_per_stream() {
 	let headers = ::http::HeaderMap::new();
 	let mut evaluator = make_evaluator(&guard, client.clone(), headers, None);
 
-	// Three windows: two benign, one matching → would-enforce once. Nothing is
-	// recorded until the evaluator is dropped.
 	let _ = evaluator.evaluate("clean window one").await.unwrap();
 	let _ = evaluator.evaluate("this window has SECRET").await.unwrap();
 	let _ = evaluator.evaluate("clean window three").await.unwrap();
@@ -847,9 +782,6 @@ mod bedrock_guardrails_tests {
 		);
 	}
 
-	/// An intervention with no recognized assessment action (e.g. automated reasoning
-	/// findings carry no `action` field) must not be treated as maskable: its output
-	/// is a canned message, not per-block masked text.
 	#[test]
 	fn test_apply_guardrail_response_intervened_no_assessments() {
 		let json = json!({
@@ -894,8 +826,6 @@ mod bedrock_guardrails_tests {
 
 	#[test]
 	fn test_would_action_none() {
-		// Detect-only mode: AWS returns the detection with per-filter action NONE
-		// and a top-level action of NONE, so the gateway would take no action.
 		let json = json!({
 			"action": "NONE",
 			"assessments": [{
@@ -912,8 +842,6 @@ mod bedrock_guardrails_tests {
 
 	#[test]
 	fn test_audit_log_redacts_matched_pii() {
-		// The raw matched PII string lives in `match`; audit-mode logging must
-		// strip it while keeping the structural metadata (type/action/detected).
 		let json = json!({
 			"action": "NONE",
 			"assessments": [{
@@ -929,7 +857,6 @@ mod bedrock_guardrails_tests {
 		});
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		let redacted = serde_json::to_string(&response.redacted_assessments()).unwrap();
-		// The matched secret must be gone...
 		assert!(
 			!redacted.contains("jane.doe@example.com"),
 			"matched PII leaked into the redacted assessment: {redacted}"
@@ -938,7 +865,6 @@ mod bedrock_guardrails_tests {
 			!redacted.contains("\"match\""),
 			"the `match` key must be removed"
 		);
-		// ...but the useful metadata must survive.
 		assert!(redacted.contains("EMAIL"));
 		assert!(redacted.contains("detected"));
 		assert!(redacted.contains("piiEntities"));
@@ -946,11 +872,6 @@ mod bedrock_guardrails_tests {
 
 	#[test]
 	fn test_audit_log_redaction_is_allowlist_not_denylist() {
-		// Redaction keeps only known-safe metadata keys, so a content-bearing
-		// field the API adds later (here `match`'s neighbors: a hypothetical
-		// `matchedText`, a `regex` pattern, and a raw content echo) is dropped by
-		// default rather than passed through. This is the guarantee a `match`-only
-		// denylist could not make.
 		let json = json!({
 			"action": "NONE",
 			"assessments": [{
@@ -971,7 +892,6 @@ mod bedrock_guardrails_tests {
 						"match": "123-45-6789"
 					}]
 				},
-				// An entirely new, unknown policy block must not leak either.
 				"futurePolicy": {
 					"items": [{ "rawUserText": "some sensitive prompt content" }]
 				}
@@ -980,7 +900,6 @@ mod bedrock_guardrails_tests {
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		let redacted = serde_json::to_string(&response.redacted_assessments()).unwrap();
 
-		// Every content-bearing value — under known OR unknown keys — is gone.
 		for leaked in [
 			"jane.doe@example.com",
 			"my email is",
@@ -993,9 +912,6 @@ mod bedrock_guardrails_tests {
 				"content leaked through the allowlist: {leaked:?} in {redacted}"
 			);
 		}
-		// The unknown keys themselves are dropped, not just their values. (Note
-		// `regex` is not checked here: the allowlisted container `regexes` contains
-		// it as a substring; the raw pattern value is covered by `leaked` above.)
 		for dropped_key in [
 			"\"matchedText\"",
 			"\"originalContent\"",
@@ -1007,7 +923,6 @@ mod bedrock_guardrails_tests {
 				"non-allowlisted key {dropped_key:?} survived: {redacted}"
 			);
 		}
-		// Structural metadata still survives for the audit trail.
 		assert!(redacted.contains("EMAIL"));
 		assert!(redacted.contains("ssn-rule"));
 		assert!(redacted.contains("detected"));
@@ -1016,9 +931,6 @@ mod bedrock_guardrails_tests {
 
 	#[test]
 	fn test_would_enforce_matches_block_and_mask_only() {
-		// would_enforce gates the Audit metric, so it must be true exactly when the
-		// guardrail would block or anonymize in enforce mode — the same event the
-		// other guard kinds record as Audit.
 		let blocked: ApplyGuardrailResponse = serde_json::from_value(json!({
 			"action": "GUARDRAIL_INTERVENED",
 			"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
@@ -1034,8 +946,6 @@ mod bedrock_guardrails_tests {
 		.unwrap();
 		assert!(anonymized.would_enforce());
 
-		// Detect-mode resource: top-level NONE, per-filter detected. Would NOT
-		// enforce, so records Allow — the fix for the metric-inconsistency bug.
 		let detect_only: ApplyGuardrailResponse = serde_json::from_value(json!({
 			"action": "NONE",
 			"assessments": [{ "contentPolicy": {
@@ -1052,10 +962,6 @@ mod bedrock_guardrails_tests {
 
 	#[test]
 	fn test_has_detection_covers_detect_mode_but_not_benign() {
-		// has_detection gates the audit *log* and is deliberately broader than
-		// would_enforce: it fires on a detect-mode resource (top-level NONE with a
-		// per-filter `detected: true`) so the finding is still surfaced, but stays
-		// quiet on genuinely benign traffic so audit mode does not log every request.
 		let detect_only: ApplyGuardrailResponse = serde_json::from_value(json!({
 			"action": "NONE",
 			"assessments": [{ "contentPolicy": {
@@ -2051,7 +1957,6 @@ mod prompt_guard_config_tests {
 
 	#[test]
 	fn test_bedrock_action_defaults_to_reject() {
-		// Absent `action` must preserve the enforcing behavior (Reject).
 		let json = json!({
 			"promptGuard": {
 				"request": [{
@@ -2097,7 +2002,6 @@ mod prompt_guard_config_tests {
 
 	#[test]
 	fn test_reject_only_kinds_accept_audit_action() {
-		// The reject-only kinds expose Reject|Audit and default to Reject.
 		let json = json!({
 			"promptGuard": {
 				"request": [
@@ -2124,8 +2028,6 @@ mod prompt_guard_config_tests {
 
 	#[test]
 	fn test_reject_only_kind_rejects_mask_action() {
-		// A reject-only kind cannot express Mask: the value is not in its enum,
-		// so deserialization fails (illegal state unrepresentable at the boundary).
 		let json = json!({
 			"promptGuard": {
 				"request": [{ "openAIModeration": { "action": "mask" } }]

@@ -222,9 +222,6 @@ func processRegexRule(pattern string) *api.BackendPolicySpec_Ai_RegexRule {
 	}
 }
 
-// mapRejectAuditAction maps the CRD reject/audit action to its proto enum,
-// defaulting a nil pointer (field absent) to REJECT so the enforcing behavior
-// is preserved.
 func mapRejectAuditAction(action *agentgateway.RejectAuditAction) api.BackendPolicySpec_Ai_RejectAuditAction {
 	if action != nil && *action == agentgateway.RejectAuditAudit {
 		return api.BackendPolicySpec_Ai_REJECT_AUDIT_ACTION_AUDIT

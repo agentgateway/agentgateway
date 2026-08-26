@@ -103,9 +103,7 @@ const (
 
 // Action for guards that cannot mask (only reject or observe). `Reject` (the
 // default) enforces the guard's native verdict; `Audit` invokes the guard and
-// records what it would have done without enforcing. In `Audit` mode a guard
-// provider error also never affects traffic: it fails open and is recorded as
-// `FailOpen`.
+// records what it would have done without enforcing.
 // +k8s:enum
 type RejectAuditAction string
 
@@ -196,8 +194,7 @@ type Webhook struct {
 
 	// Action controls whether the webhook's verdict is enforced or only observed.
 	// `Reject` (the default) enforces it; `Audit` records the would-be action
-	// without blocking or masking. `Audit` overrides `failureMode`: webhook
-	// errors fail open so an observe-only guard never affects traffic.
+	// without blocking or masking.
 	// +kubebuilder:default=Reject
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`

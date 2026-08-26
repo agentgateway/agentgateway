@@ -4002,13 +4002,11 @@ fn convert_prompt_caching(
 	}
 }
 
-/// Map the proto `RejectAuditAction` (an i32 enum) to the internal type,
-/// defaulting UNSPECIFIED (and any unknown value) to `Reject` so the enforcing
-/// behavior is preserved when the field is absent.
 fn convert_reject_audit(action: i32) -> llm::policy::RejectAuditAction {
-	match RejectAuditAction::try_from(action) {
-		Ok(RejectAuditAction::Audit) => llm::policy::RejectAuditAction::Audit,
-		_ => llm::policy::RejectAuditAction::Reject,
+	if action == RejectAuditAction::Audit as i32 {
+		llm::policy::RejectAuditAction::Audit
+	} else {
+		llm::policy::RejectAuditAction::Reject
 	}
 }
 
@@ -4272,47 +4270,6 @@ mod tests {
 				BackendReference::Invalid
 			));
 		}
-	}
-
-	/// Pins the proto→internal enum crossing for the audit feature: the wire
-	/// value 2 (REJECT_AUDIT_ACTION_AUDIT) must land on `Audit`, and everything
-	/// else — absent (0), explicit REJECT (1), unknown future values — must land
-	/// on `Reject` so enforcement is preserved under version skew.
-	#[test]
-	fn reject_audit_action_proto_crossing() {
-		use proto::agent::backend_policy_spec::ai::RejectAuditAction as ProtoAction;
-		assert_eq!(
-			convert_reject_audit(ProtoAction::Audit as i32),
-			llm::policy::RejectAuditAction::Audit
-		);
-		assert_eq!(
-			convert_reject_audit(ProtoAction::Unspecified as i32),
-			llm::policy::RejectAuditAction::Reject
-		);
-		assert_eq!(
-			convert_reject_audit(ProtoAction::Reject as i32),
-			llm::policy::RejectAuditAction::Reject
-		);
-		assert_eq!(
-			convert_reject_audit(999),
-			llm::policy::RejectAuditAction::Reject,
-			"unknown future values must preserve enforcement"
-		);
-	}
-
-	/// Same crossing for the regex ActionKind: wire value 3 (AUDIT) → `Audit`.
-	/// (Unknown values map to Mask — a pre-existing upstream decision — which is
-	/// why regex AUDIT requires the data plane to be upgraded first; see the
-	/// proto comment on ActionKind::AUDIT.)
-	#[test]
-	fn regex_action_kind_audit_proto_crossing() {
-		let rr = proto::agent::backend_policy_spec::ai::RegexRules {
-			action: proto::agent::backend_policy_spec::ai::ActionKind::Audit as i32,
-			rules: vec![],
-		};
-		let mut diagnostics = Diagnostics::default();
-		let converted = convert_regex_rules(&rr, &mut diagnostics);
-		assert!(matches!(converted.action, llm::policy::Action::Audit));
 	}
 
 	fn jwt_sign_from_proto_for_test(

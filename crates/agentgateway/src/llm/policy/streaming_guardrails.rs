@@ -35,8 +35,9 @@ use super::{
 	FailureMode, ResponseGuard, ResponseGuardKind, StreamingEvaluator, StreamingGuardrailOutcome,
 };
 use crate::cel::RequestSnapshot;
-use crate::llm::policy::PromptGuard;
+use crate::llm::policy::{Policy, PromptGuard};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
 
 /// Text bytes accumulated before triggering a guardrail evaluation.
 /// Larger values reduce guardrail API calls but increase time-to-first-byte
@@ -101,7 +102,7 @@ pub fn make_evaluator(
 		client,
 		http_headers,
 		original,
-		worst_action: crate::telemetry::metrics::GuardrailAction::Allow,
+		worst_action: GuardrailAction::Allow,
 	})
 }
 
@@ -110,21 +111,11 @@ struct ResponseGuardEvaluator {
 	client: PolicyClient,
 	http_headers: HeaderMap,
 	original: Option<Arc<RequestSnapshot>>,
-	/// Most-significant metric action seen across every window of this stream.
-	/// A streamed response is evaluated over many overlapping windows, so we fold
-	/// them into a single label and record it once on `Drop` — matching the
-	/// non-streaming path's "exactly one metric per guard per response" and
-	/// avoiding one response inflating the counter by a window count.
-	worst_action: crate::telemetry::metrics::GuardrailAction,
+	// Fold window results into one metric for the stream.
+	worst_action: GuardrailAction,
 }
 
-/// Rank for folding many per-window actions into the single label a stream
-/// records. Higher wins: an enforcing verdict outranks a would-enforce audit,
-/// which outranks a fail-open, which outranks a benign allow. `Mask` never
-/// occurs on the streaming path (masking is unsupported) but is ranked for
-/// exhaustiveness.
-fn action_rank(a: crate::telemetry::metrics::GuardrailAction) -> u8 {
-	use crate::telemetry::metrics::GuardrailAction;
+fn action_rank(a: GuardrailAction) -> u8 {
 	match a {
 		GuardrailAction::Allow => 0,
 		GuardrailAction::Mask => 1,
@@ -135,7 +126,7 @@ fn action_rank(a: crate::telemetry::metrics::GuardrailAction) -> u8 {
 }
 
 impl ResponseGuardEvaluator {
-	fn observe_action(&mut self, action: crate::telemetry::metrics::GuardrailAction) {
+	fn observe_action(&mut self, action: GuardrailAction) {
 		if action_rank(action) > action_rank(self.worst_action) {
 			self.worst_action = action;
 		}
@@ -144,10 +135,7 @@ impl ResponseGuardEvaluator {
 
 impl Drop for ResponseGuardEvaluator {
 	fn drop(&mut self) {
-		// One metric per guard per stream, recorded when the stream ends (or the
-		// client disconnects). An evaluator that never saw an evaluable window
-		// records `Allow`, mirroring a response guard that ran and allowed.
-		PromptGuard::record_streaming_guardrail_metric(&self.client, self.worst_action);
+		Policy::record_guardrail_trip(&self.client, GuardrailPhase::Response, self.worst_action);
 	}
 }
 
@@ -174,12 +162,7 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 				self.observe_action(action);
 				Ok(outcome)
 			},
-			// An error here is turned into a fail-open/closed decision by
-			// `evaluate_window`. Record the metric that matches that decision, so an
-			// erroring guard is never silently counted as `Allow`: fail-closed blocks
-			// (`Reject`), fail-open passes (`FailOpen`).
 			Err(e) => {
-				use crate::telemetry::metrics::GuardrailAction;
 				let action = match self.failure_mode() {
 					FailureMode::FailClosed => GuardrailAction::Reject,
 					FailureMode::FailOpen => GuardrailAction::FailOpen,

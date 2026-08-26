@@ -3370,8 +3370,7 @@ spec:
                                   description: |-
                                     Action controls whether the webhook's verdict is enforced or only observed.
                                     `Reject` (the default) enforces it; `Audit` records the would-be action
-                                    without blocking or masking. `Audit` overrides `failureMode`: webhook
-                                    errors fail open so an observe-only guard never affects traffic.
+                                    without blocking or masking.
                                   enum:
                                   - Audit
                                   - Reject
@@ -4671,8 +4670,7 @@ spec:
                                   description: |-
                                     Action controls whether the webhook's verdict is enforced or only observed.
                                     `Reject` (the default) enforces it; `Audit` records the would-be action
-                                    without blocking or masking. `Audit` overrides `failureMode`: webhook
-                                    errors fail open so an observe-only guard never affects traffic.
+                                    without blocking or masking.
                                   enum:
                                   - Audit
                                   - Reject
