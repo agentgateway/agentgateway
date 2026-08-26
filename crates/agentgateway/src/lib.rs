@@ -674,6 +674,9 @@ pub struct Config {
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
+	/// Process-wide budget policy used by standalone configuration.
+	#[serde(skip)]
+	pub budget_policy: Arc<http::budget::BudgetPolicy>,
 
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
@@ -751,6 +754,8 @@ impl Config {
 		Some(local::AttachedPolicyContext {
 			oidc_policy_id: crate::http::oidc::PolicyId::policy(&policy_key),
 			oidc_cookie_encoder: self.oidc_cookie_encoder.as_ref(),
+			budget_policy: &self.budget_policy,
+			database_configured: self.database.is_some(),
 		})
 	}
 }

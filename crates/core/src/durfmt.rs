@@ -13,13 +13,47 @@ fn err_str(e: &go_parse_duration::Error) -> &str {
 }
 
 pub fn parse(string: &str) -> Result<Duration, Error> {
-	let d = go_parse_duration::parse_duration(string).map_err(Error::ParseError)?;
+	if string.is_empty() {
+		return Err(Error::ParseError(go_parse_duration::Error::ParseError(
+			"duration cannot be empty".to_string(),
+		)));
+	}
+	let day_digits = string.bytes().take_while(u8::is_ascii_digit).count();
+	let (days, remainder) = if day_digits > 0 && string.as_bytes().get(day_digits) == Some(&b'd') {
+		let days = string[..day_digits].parse::<u64>().map_err(|_| {
+			Error::ParseError(go_parse_duration::Error::ParseError(
+				"invalid day count".to_string(),
+			))
+		})?;
+		(days, &string[day_digits + 1..])
+	} else {
+		(0, string)
+	};
+	let day_duration = days
+		.checked_mul(24 * 60 * 60)
+		.map(Duration::from_secs)
+		.ok_or_else(|| {
+			Error::ParseError(go_parse_duration::Error::ParseError(
+				"duration overflow".to_string(),
+			))
+		})?;
+	if remainder.is_empty() {
+		return Ok(day_duration);
+	}
+
+	let d = go_parse_duration::parse_duration(remainder).map_err(Error::ParseError)?;
 	if d < 0 {
 		return Err(Error::ParseError(go_parse_duration::Error::ParseError(
 			"negative string not allowed".to_string(),
 		)));
 	}
-	Ok(Duration::from_nanos(d as u64))
+	day_duration
+		.checked_add(Duration::from_nanos(d as u64))
+		.ok_or_else(|| {
+			Error::ParseError(go_parse_duration::Error::ParseError(
+				"duration overflow".to_string(),
+			))
+		})
 }
 
 pub fn format(d: Duration) -> String {
@@ -49,6 +83,19 @@ fn round_to_3_figs(d: Duration) -> Duration {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_parse_days() {
+		assert!(parse("").is_err());
+		assert_eq!(parse("30d"), Ok(Duration::from_secs(30 * 24 * 60 * 60)));
+		assert_eq!(
+			parse("1d12h30m"),
+			Ok(Duration::from_secs((24 + 12) * 60 * 60 + 30 * 60))
+		);
+		assert_eq!(parse("1d"), parse("24h"));
+		assert!(parse("1.5d").is_err());
+		assert!(parse("1h1d").is_err());
+	}
 
 	#[test]
 	fn test_to_string() {

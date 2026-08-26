@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 
-use agent_core::metrics::{CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay};
+use agent_core::metrics::{
+	CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay, MetricRegistry,
+};
 use agent_core::strng::RichStrng;
 use agent_core::version;
 use frozen_collections::FzHashSet;
@@ -9,7 +11,7 @@ use prometheus_client::metrics::counter;
 use prometheus_client::metrics::family::{Family, MetricConstructor};
 use prometheus_client::metrics::histogram::{Histogram as PromHistogram, NativeHistogramConfig};
 use prometheus_client::metrics::info::Info;
-use prometheus_client::registry::{Metric, Registry, Unit};
+use prometheus_client::registry::{Metric, Unit};
 use tracing::{debug, trace};
 
 use crate::HistogramMode;
@@ -280,12 +282,12 @@ pub struct Metrics {
 // A more robust future solution would be to have a sort of `Disabled` metric that does not store;
 // note that even still, we would be computing the labels (and then dropping them), but in many cases
 // the same labels are shared by many metrics, and are cheap to construct, so likely not a major concern.
-struct FilteredRegistry<'a> {
-	registry: &'a mut Registry,
+struct FilteredRegistry<'a, R> {
+	registry: &'a mut R,
 	removes: FzHashSet<String>,
 }
 
-impl<'a> FilteredRegistry<'a> {
+impl<R: MetricRegistry> FilteredRegistry<'_, R> {
 	fn should_skip(&self, name: &str, unit: Option<&Unit>) -> bool {
 		let mut names = vec![
 			name.to_string(),
@@ -342,8 +344,8 @@ impl<'a> FilteredRegistry<'a> {
 }
 
 impl Metrics {
-	pub fn new(
-		registry: &mut Registry,
+	pub fn new<R: MetricRegistry>(
+		registry: &mut R,
 		removes: FzHashSet<String>,
 		histogram_mode: HistogramMode,
 	) -> Self {
@@ -426,7 +428,7 @@ impl Metrics {
 			mcp_requests: build(
 				&mut registry,
 				"mcp_requests",
-				"Total number of MCP tool calls",
+				"Total number of MCP requests",
 			),
 
 			gen_ai_token_usage,
@@ -541,8 +543,8 @@ where
 	Family::new_with_constructor(HistogramConstructor { mode, buckets })
 }
 
-fn build<'a, T: Clone + std::hash::Hash + Eq + Send + Sync + Debug + EncodeLabelSet + 'static>(
-	registry: &mut FilteredRegistry<'a>,
+fn build<T: Clone + std::hash::Hash + Eq + Send + Sync + Debug + EncodeLabelSet + 'static>(
+	registry: &mut FilteredRegistry<'_, impl MetricRegistry>,
 	name: &str,
 	help: &str,
 ) -> Family<T, counter::Counter> {

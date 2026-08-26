@@ -11,7 +11,11 @@ service Control {
 
 message Actor {
   ResourceMetadata metadata = 1;
-  WorkerAssignment worker_assignment = 5;
+  ActorStatus status = 7;
+}
+
+message ActorStatus {
+  WorkerAssignment worker_assignment = 2;
 }
 
 // The minimal running-actor assignment required by AgentGateway ingress.

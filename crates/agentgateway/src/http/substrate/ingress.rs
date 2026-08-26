@@ -309,11 +309,14 @@ impl SubstrateIngress {
 								"ResumeActor response did not include an actor".to_owned(),
 							)
 						})?;
-						let assignment = actor.worker_assignment.ok_or_else(|| {
-							ResumeError::InvalidResponse(
-								"ResumeActor response did not include a worker assignment".to_owned(),
-							)
-						})?;
+						let assignment = actor
+							.status
+							.and_then(|status| status.worker_assignment)
+							.ok_or_else(|| {
+								ResumeError::InvalidResponse(
+									"ResumeActor response did not include a worker assignment".to_owned(),
+								)
+							})?;
 						let ip = assignment
 							.worker_pod_ip
 							.parse::<IpAddr>()
@@ -365,7 +368,10 @@ impl SubstrateIngress {
 	fn retryable_while_parked(&self, code: Code) -> bool {
 		matches!(code, Code::Aborted)
 			|| (self.request_parking.enabled()
-				&& matches!(code, Code::FailedPrecondition | Code::Unavailable))
+				&& matches!(
+					code,
+					Code::FailedPrecondition | Code::ResourceExhausted | Code::Unavailable
+				))
 	}
 
 	async fn resolve(&self, client: &PolicyClient, actor: ActorRef) -> ResolutionResult {
@@ -636,7 +642,9 @@ mod tests {
 
 	use ::http::Method;
 	use protos::ateapi::control_server::{Control, ControlServer};
-	use protos::ateapi::{Actor, GetActorRequest, ResumeActorRequest, ResumeActorResponse};
+	use protos::ateapi::{
+		Actor, ActorStatus, GetActorRequest, ResumeActorRequest, ResumeActorResponse,
+	};
 	use tonic::{Request as GrpcRequest, Response as GrpcResponse, Status};
 	use wiremock::matchers::{header, method};
 	use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -679,8 +687,10 @@ mod tests {
 			self.calls.fetch_add(1, Ordering::Relaxed);
 			Ok(GrpcResponse::new(ResumeActorResponse {
 				actor: Some(Actor {
-					worker_assignment: Some(protos::ateapi::WorkerAssignment {
-						worker_pod_ip: self.pod_ip.clone(),
+					status: Some(ActorStatus {
+						worker_assignment: Some(protos::ateapi::WorkerAssignment {
+							worker_pod_ip: self.pod_ip.clone(),
+						}),
 					}),
 					..Default::default()
 				}),

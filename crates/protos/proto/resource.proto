@@ -1072,6 +1072,8 @@ message TrafficPolicySpec {
     repeated JWTProvider providers = 2;
     MCP mcp = 3;
     AuthorizationLocation authorization_location = 4;
+    // Keep a successfully validated JWT in its original location. Defaults to false.
+    bool preserve_token = 5;
   }
 
   // Basic authentication configuration using htpasswd file

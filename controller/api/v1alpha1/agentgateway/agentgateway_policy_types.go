@@ -1185,6 +1185,12 @@ type JWTAuthentication struct {
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 
+	// Keeps a successfully validated JWT in its original location. By default, the gateway removes
+	// the JWT after validation. When the token only needs to be forwarded to the selected backend,
+	// prefer `backendAuth.passthrough` so it is not exposed to other policies in the request path.
+	// +optional
+	PreserveToken bool `json:"preserveToken,omitempty"`
+
 	// Enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
 	// When set, the gateway will serve the MCP OAuth metadata discovery endpoints.

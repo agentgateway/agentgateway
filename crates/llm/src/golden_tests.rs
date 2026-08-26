@@ -42,6 +42,7 @@ const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
 const RESPONSES: &str = "responses";
+const VERTEX_EMBED_CONTENT: &str = "vertex-embed-content";
 
 mod requests {
 	use super::*;
@@ -136,6 +137,7 @@ mod requests {
 
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
@@ -169,7 +171,8 @@ mod requests {
 			"structured-output",
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX],
 		),
-		("cache_control", &[COMPLETIONS]),
+		("cache_control", &[ANTHROPIC, COMPLETIONS, BEDROCK]),
+		("cache_control_responses", &[RESPONSES]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_replay", &[BEDROCK]),
 		("tool_history_without_tools", &[BEDROCK]),
@@ -182,7 +185,7 @@ mod requests {
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
-		("cache_control", &[GEMINI]),
+		("cache_control", &[BEDROCK, GEMINI]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -196,6 +199,7 @@ mod requests {
 		("cohere-v4", &[BEDROCK_COHERE]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
 		("full", &[VERTEX]),
+		("embed-content", &[VERTEX]),
 	];
 	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COHERE, BEDROCK, VERTEX]),
@@ -330,6 +334,11 @@ mod requests {
 			guardrail_identifier: None,
 			guardrail_version: None,
 		};
+		let vertex = vertex::Provider {
+			model: None,
+			region: Some(strng::new("global")),
+			project_id: strng::new("test-project-123"),
+		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
 			for provider in *providers {
@@ -352,7 +361,7 @@ mod requests {
 						conversion::bedrock::from_embeddings::translate(i, &nova)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
-						conversion::vertex::from_embeddings::translate(i)
+						conversion::vertex::from_embeddings::translate(i, &vertex)
 					}),
 					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
 				}
@@ -554,6 +563,45 @@ mod requests {
 		);
 		extract::<types::gemini::Request>("requests/gemini/tools.json", "get-messages-gemini");
 		extract::<types::gemini::Request>("requests/gemini/image-inline.json", "get-messages-gemini");
+	}
+
+	#[test]
+	fn get_messages_v2() {
+		fn extract<R: RequestType + DeserializeOwned>(fixture: &str, provider: &str) {
+			let path = fixture_path(fixture);
+			let input_str = fs::read_to_string(&path).expect("failed to read input file");
+			let raw: Value = serde_json::from_str(&input_str).expect("failed to parse input JSON");
+			let request: R = serde_json::from_str(&input_str).expect("failed to parse JSON");
+
+			let (snapshot_path, snapshot_name) = snapshot_path_and_name(fixture, provider);
+			insta::with_settings!({
+				info => &raw,
+				description => path.to_string_lossy().to_string(),
+				omit_expression => true,
+				prepend_module_to_snapshot => false,
+				snapshot_path => snapshot_path,
+			}, {
+				insta::assert_json_snapshot!(snapshot_name, request.get_messages_v2());
+			});
+		}
+
+		extract::<types::completions::Request>(
+			"requests/completions/tool-call.json",
+			"get-messages-v2-completions",
+		);
+		extract::<types::messages::Request>(
+			"requests/messages/tool_result_error.json",
+			"get-messages-v2-messages",
+		);
+		extract::<types::responses::Request>(
+			"requests/responses/parallel-tool-call.json",
+			"get-messages-v2-responses",
+		);
+		extract::<types::responses::Request>(
+			"requests/responses/empty-message.json",
+			"get-messages-v2-responses",
+		);
+		extract::<types::gemini::Request>("requests/gemini/tools.json", "get-messages-v2-gemini");
 	}
 }
 
@@ -783,6 +831,7 @@ mod responses {
 		("response/bedrock-cohere/embeddings.json", BEDROCK_COHERE),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/vertex/embeddings.json", VERTEX),
+		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
 		("response/openai/embeddings.json", OPENAI),
 		("response/openai/gemini-embeddings.json", OPENAI),
 	];
@@ -987,6 +1036,11 @@ mod responses {
 
 	#[test]
 	fn embeddings() {
+		let vertex = vertex::Provider {
+			model: None,
+			region: Some(strng::new("global")),
+			project_id: strng::new("test-project-123"),
+		};
 		for (path, provider) in EMBEDDING_RESPONSES {
 			match *provider {
 				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => {
@@ -1004,7 +1058,10 @@ mod responses {
 					});
 				},
 				VERTEX => test_response(provider, path, |i| {
-					conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004")
+					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "text-embedding-004")
+				}),
+				VERTEX_EMBED_CONTENT => test_response(provider, path, |i| {
+					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "gemini-embedding-2")
 				}),
 				OPENAI => test_response(provider, path, |i| {
 					serde_json::from_slice::<types::embeddings::Response>(&i)

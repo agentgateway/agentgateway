@@ -22,6 +22,10 @@ info:
             type: ephemeral
     - role: user
       content:
+        - type: text
+          text: Cached user text
+          cache_control:
+            type: ephemeral
         - type: image
           source:
             type: base64
@@ -47,6 +51,8 @@ info:
           id: call_mixed
           name: lookup
           input: {}
+          cache_control:
+            type: ephemeral
     - role: user
       content:
         - type: tool_result
@@ -91,6 +97,14 @@ info:
           text: System-role block
           cache_control:
             type: ephemeral
+  tools:
+    - name: lookup
+      description: Look up information
+      input_schema:
+        type: object
+        properties: {}
+      cache_control:
+        type: ephemeral
 ---
 {
   "request": {
@@ -130,6 +144,13 @@ info:
       {
         "role": "user",
         "content": [
+          {
+            "type": "text",
+            "text": "Cached user text",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          },
           {
             "type": "image_url",
             "image_url": {
@@ -245,8 +266,22 @@ info:
       }
     ],
     "model": "gpt-5.6-terra",
+    "reasoning_effort": "none",
     "max_completion_tokens": 1024,
-    "stream": false
+    "stream": false,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup",
+          "description": "Look up information",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      }
+    ]
   },
   "parsed": {
     "input_format": "Messages",
@@ -268,7 +303,7 @@ info:
       },
       {
         "role": "user",
-        "content": ""
+        "content": "Cached user text"
       },
       {
         "role": "assistant",

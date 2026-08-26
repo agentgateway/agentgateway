@@ -58,6 +58,7 @@ chrono.workspace = true
 clocksource.workspace = true
 core_affinity.workspace = true
 crossbeam.workspace = true
+dashmap.workspace = true
 divan = { workspace = true, optional = true }
 frozen-collections.workspace = true
 fs-err = { workspace = true }

@@ -9562,6 +9562,12 @@ spec:
                         - Permissive
                         - Strict
                         type: string
+                      preserveToken:
+                        description: |-
+                          Keeps a successfully validated JWT in its original location. By default, the gateway removes
+                          the JWT after validation. When the token only needs to be forwarded to the selected backend,
+                          prefer `backendAuth.passthrough` so it is not exposed to other policies in the request path.
+                        type: boolean
                       providers:
                         items:
                           properties:

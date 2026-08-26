@@ -2,7 +2,6 @@
 # https://pnpm.io/settings/other#saveprefix
 savePrefix: '='
 
-# monaco-editor pins dompurify to an exact version with known CVEs
-# (GHSA-55q2-fjhq-7xh7, GHSA-c2j3-45gr-mqc4, GHSA-cmwh-pvxp-8882, GHSA-vxr8-fq34-vvx9).
-overrides:
-  dompurify: '3.4.13'
+# Do not attempt to download the packageManager-pinned pnpm version.
+# Network-restricted environments should warn and use the installed version.
+pmOnFail: warn

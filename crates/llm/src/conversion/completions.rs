@@ -81,54 +81,6 @@ pub(crate) fn parse_data_url(url: &str) -> Option<(&str, &str)> {
 	Some((media_type, data))
 }
 
-pub(crate) fn extract_system_text(
-	msg: &types::completions::typed::RequestMessage,
-) -> Option<String> {
-	fn normalize_text(text: &str) -> Option<String> {
-		if text.trim().is_empty() {
-			None
-		} else {
-			Some(text.to_string())
-		}
-	}
-
-	match msg {
-		types::completions::typed::RequestMessage::System(system) => match &system.content {
-			types::completions::typed::RequestSystemMessageContent::Text(text) => normalize_text(text),
-			types::completions::typed::RequestSystemMessageContent::Array(parts) => {
-				let text = parts
-					.iter()
-					.map(|part| match part {
-						types::completions::typed::RequestSystemMessageContentPart::Text(text) => {
-							text.text.as_str()
-						},
-					})
-					.filter(|text| !text.trim().is_empty())
-					.collect::<Vec<_>>()
-					.join("\n");
-				normalize_text(&text)
-			},
-		},
-		types::completions::typed::RequestMessage::Developer(developer) => match &developer.content {
-			types::completions::typed::RequestDeveloperMessageContent::Text(text) => normalize_text(text),
-			types::completions::typed::RequestDeveloperMessageContent::Array(parts) => {
-				let text = parts
-					.iter()
-					.map(|part| match part {
-						types::completions::typed::RequestDeveloperMessageContentPart::Text(text) => {
-							text.text.as_str()
-						},
-					})
-					.filter(|text| !text.trim().is_empty())
-					.collect::<Vec<_>>()
-					.join("\n");
-				normalize_text(&text)
-			},
-		},
-		_ => None,
-	}
-}
-
 pub mod from_messages {
 	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;

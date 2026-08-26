@@ -165,7 +165,7 @@ func TestTranslateBackendTLSCAErrorUpdatesPolicyStatus(t *testing.T) {
 		t.Fatalf("status ancestors = %#v, want one ancestor with conditions", status.Ancestors)
 	}
 	condition := status.Ancestors[0].Conditions[0]
-	if condition.Type != string(agentgateway.PolicyConditionAccepted) || condition.Status != metav1.ConditionTrue || condition.Reason != string(agentgateway.PolicyReasonPartiallyValid) {
+	if condition.Type != agentgateway.PolicyConditionAccepted || condition.Status != metav1.ConditionTrue || condition.Reason != agentgateway.PolicyReasonPartiallyValid {
 		t.Fatalf("accepted condition = %#v, want partially valid", condition)
 	}
 	if !strings.Contains(condition.Message, "Secret default/missing not found") {

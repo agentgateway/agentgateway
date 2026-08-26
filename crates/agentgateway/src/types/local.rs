@@ -85,10 +85,20 @@ impl NormalizedLocalConfig {
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
 		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
+		let mut registration_config = config.clone();
+		let registration_policy = Arc::new(config.budget_policy.registration_policy());
+		registration_config.budget_policy = registration_policy.clone();
 		let scope = resources.scope_full_computation();
-		let result = Box::pin(convert(resources, gateway_name, config, local_config)).await;
+		let result = Box::pin(convert(
+			resources,
+			gateway_name,
+			&registration_config,
+			local_config,
+		))
+		.await;
 		scope.finish(result.is_ok());
-		let t = result?;
+		let mut t = result?;
+		t.budget_registration = registration_policy.registration();
 		Ok(t)
 	}
 }
@@ -301,6 +311,8 @@ fn parse_deprecated_tracing_endpoint(endpoint: &str) -> anyhow::Result<(Target, 
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
+	#[serde(skip)]
+	pub(crate) budget_registration: crate::http::budget::BudgetRegistration,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model_catalog: Option<Vec<crate::ModelCatalogSource>>,
 	pub binds: Vec<BindSnapshot>,
@@ -2026,6 +2038,7 @@ fn ui_matches(oidc_redirect_path: Option<Strng>) -> Vec<RouteMatch> {
 		PathMatch::PathPrefix("/api/cel".into()),
 		PathMatch::PathPrefix("/api/logs".into()),
 		PathMatch::PathPrefix("/api/costs".into()),
+		PathMatch::PathPrefix("/api/budgets".into()),
 	];
 	if let Some(path) = oidc_redirect_path
 		&& !paths.iter().any(|existing| match existing {
@@ -3290,6 +3303,7 @@ async fn convert(
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
 	let normalized = NormalizedLocalConfig {
+		budget_registration: Default::default(),
 		model_catalog,
 		binds: all_binds,
 		listener_routes: all_listener_routes,
@@ -5037,6 +5051,8 @@ pub async fn convert_route(
 			Some(AttachedPolicyContext {
 				oidc_policy_id: crate::http::oidc::PolicyId::route(&key),
 				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
+				budget_policy: &config.budget_policy,
+				database_configured: config.database.is_some(),
 			}),
 		)
 		.await?
@@ -5076,6 +5092,8 @@ pub(crate) struct ResolvedPolicies {
 pub struct AttachedPolicyContext<'a> {
 	pub oidc_policy_id: crate::http::oidc::PolicyId,
 	pub oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
+	pub budget_policy: &'a Arc<crate::http::budget::BudgetPolicy>,
+	pub database_configured: bool,
 }
 
 async fn split_frontend_policies(
@@ -5174,6 +5192,12 @@ pub(crate) async fn split_policies_for_target(
 	attached: Option<AttachedPolicyContext<'_>>,
 	backend_target: bool,
 ) -> Result<ResolvedPolicies, Error> {
+	let budget_policy = attached.as_ref().map(|context| {
+		(
+			Arc::clone(context.budget_policy),
+			context.database_configured,
+		)
+	});
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
 		backend_policies,
@@ -5314,6 +5338,7 @@ pub(crate) async fn split_policies_for_target(
 		let Some(AttachedPolicyContext {
 			oidc_policy_id,
 			oidc_cookie_encoder,
+			..
 		}) = attached
 		else {
 			return Err(Error::msg("oidc policies must be attached"));
@@ -5337,7 +5362,14 @@ pub(crate) async fn split_policies_for_target(
 		)));
 	}
 	if let Some(p) = api_key {
-		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(p.compile()?)));
+		let (budget_policy, database_configured) =
+			budget_policy.ok_or_else(|| Error::msg("API key policies must be attached"))?;
+		let api_key = p.compile()?;
+		budget_policy.register(&api_key, database_configured)?;
+		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(api_key)));
+		route_policies.push(TrafficPolicy::Budget(RequestPolicy::single_arc(
+			budget_policy,
+		)));
 	}
 	if let Some(p) = transformations {
 		if backend_target {

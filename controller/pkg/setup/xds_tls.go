@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/subtle"
@@ -134,6 +135,9 @@ func (s *xdsTLSMaterialSyncer) refreshSecret(secret *corev1.Secret, force bool) 
 	cert.Leaf, err = parseCertificate(certPEM)
 	if err != nil {
 		return err
+	}
+	if err := checkFIPSRSAKeyParameters(cert.Leaf.PublicKey); err != nil {
+		return fmt.Errorf("xDS serving key: %w", err)
 	}
 	s.material.setCertificate(cert)
 	s.lastRV = secret.ResourceVersion
@@ -334,6 +338,9 @@ func generateLeafFromCA(caPEM, caKeyPEM []byte, hosts []string) ([]byte, []byte,
 	if !publicKeysEqual(caCert.PublicKey, caKey.Public()) {
 		return nil, nil, fmt.Errorf("CA certificate and key do not match")
 	}
+	if err := checkFIPSRSAKeyParameters(caKey.Public()); err != nil {
+		return nil, nil, fmt.Errorf("xDS CA key: %w", err)
+	}
 	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -366,6 +373,32 @@ func generateLeafFromCA(caPEM, caKeyPEM []byte, hosts []string) ([]byte, []byte,
 		return nil, nil, err
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM, nil
+}
+
+// checkFIPSRSAKeyParameters validates the RSA modulus and public exponent of
+// keys the controller uses to sign or serve xDS TLS material. It does not
+// validate non-RSA keys, certificate chains, or peer certificates. The fips140=on
+// setting restricts TLS algorithms but, unlike fips140=only, does not enforce
+// RSA key parameters itself. Keep standard builds backward compatible.
+func checkFIPSRSAKeyParameters(key crypto.PublicKey) error {
+	if !fips140.Enabled() {
+		return nil
+	}
+	rsaKey, ok := key.(*rsa.PublicKey)
+	if !ok {
+		return nil
+	}
+	bits := rsaKey.N.BitLen()
+	if bits < 2048 {
+		return fmt.Errorf("RSA modulus is %d bits; FIPS mode requires at least 2048 bits", bits)
+	}
+	if bits%2 != 0 {
+		return fmt.Errorf("RSA modulus is %d bits; FIPS mode requires an even modulus size", bits)
+	}
+	if rsaKey.E <= 1<<16 {
+		return fmt.Errorf("RSA public exponent is %d; FIPS mode requires an exponent greater than 2^16", rsaKey.E)
+	}
+	return nil
 }
 
 func parsePrivateKey(keyPEM []byte) (crypto.Signer, error) {

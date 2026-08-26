@@ -1,6 +1,6 @@
 use agentgateway::test_helpers::ateapimock;
 use agentgateway::types::agent::{Backend, BindMode, TunnelProtocol};
-use protos::ateapi::{Actor, ResumeActorResponse};
+use protos::ateapi::{Actor, ActorStatus, ResumeActorResponse};
 use tokio::sync::Notify;
 
 use crate::common::prelude::*;
@@ -23,8 +23,10 @@ impl ateapimock::Handler for IngressHandler {
 		self.calls.fetch_add(1, Ordering::Relaxed);
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
-				worker_assignment: Some(protos::ateapi::WorkerAssignment {
-					worker_pod_ip: self.pod_ip.clone(),
+				status: Some(ActorStatus {
+					worker_assignment: Some(protos::ateapi::WorkerAssignment {
+						worker_pod_ip: self.pod_ip.clone(),
+					}),
 				}),
 				..Default::default()
 			}),
@@ -37,6 +39,7 @@ struct ParkingHandler {
 	pod_ip: String,
 	calls: Arc<AtomicUsize>,
 	failures_before_success: usize,
+	failure_code: tonic::Code,
 	entered: Option<Arc<Notify>>,
 }
 
@@ -63,8 +66,10 @@ impl ateapimock::Handler for SelectiveParkingHandler {
 		}
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
-				worker_assignment: Some(protos::ateapi::WorkerAssignment {
-					worker_pod_ip: self.pod_ip.clone(),
+				status: Some(ActorStatus {
+					worker_assignment: Some(protos::ateapi::WorkerAssignment {
+						worker_pod_ip: self.pod_ip.clone(),
+					}),
 				}),
 				..Default::default()
 			}),
@@ -86,14 +91,17 @@ impl ateapimock::Handler for ParkingHandler {
 				.inspect(|entered| entered.notify_one());
 		}
 		if call < self.failures_before_success {
-			return Err(tonic::Status::failed_precondition(
+			return Err(tonic::Status::new(
+				self.failure_code,
 				"no free workers available",
 			));
 		}
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
-				worker_assignment: Some(protos::ateapi::WorkerAssignment {
-					worker_pod_ip: self.pod_ip.clone(),
+				status: Some(ActorStatus {
+					worker_assignment: Some(protos::ateapi::WorkerAssignment {
+						worker_pod_ip: self.pod_ip.clone(),
+					}),
 				}),
 				..Default::default()
 			}),
@@ -157,6 +165,7 @@ async fn actor_ingress_parks_while_worker_capacity_recovers() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			failures_before_success: 2,
+			failure_code: tonic::Code::ResourceExhausted,
 			entered: None,
 		}
 	})
@@ -207,6 +216,7 @@ async fn actor_ingress_sheds_when_request_parking_is_full() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			failures_before_success: 2,
+			failure_code: tonic::Code::FailedPrecondition,
 			entered: Some(entered.clone()),
 		}
 	})

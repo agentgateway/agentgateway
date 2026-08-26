@@ -97,7 +97,8 @@ impl ProxyError {
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
 			ProxyError::RateLimitFailed
 			| ProxyError::RateLimitExceeded { .. }
-			| ProxyError::RemoteRateLimitExceeded { .. } => ProxyResponseReason::RateLimit,
+			| ProxyError::RemoteRateLimitExceeded { .. }
+			| ProxyError::BudgetExceeded(_) => ProxyResponseReason::RateLimit,
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
 		}
 	}
@@ -250,6 +251,8 @@ pub enum ProxyError {
 		raw_body: Vec<u8>,
 		response_headers: Box<http::HeaderMap>,
 	},
+	#[error(transparent)]
+	BudgetExceeded(#[from] http::budget::BudgetExceeded),
 	#[error("rate limit failed")]
 	RateLimitFailed,
 	#[error("request rejected by {guardrail} guardrail")]
@@ -441,6 +444,7 @@ impl ProxyError {
 					.body(http::Body::from(raw_body))
 					.expect("static response must build");
 			},
+			ProxyError::BudgetExceeded(_) => StatusCode::TOO_MANY_REQUESTS,
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
 			ProxyError::RateLimitFailed => StatusCode::INTERNAL_SERVER_ERROR,
@@ -527,6 +531,23 @@ impl ProxyError {
 				)
 				.body(http::Body::empty())
 				.unwrap();
+		}
+
+		if let ProxyError::BudgetExceeded(exceeded) = &self {
+			return rb
+				.header(hyper::header::CONTENT_TYPE, "application/json")
+				.header(hyper::header::RETRY_AFTER, exceeded.retry_after.to_string())
+				.body(http::Body::from(
+					serde_json::json!({
+						"error": {
+							"message": exceeded.to_string(),
+							"type": "rate_limit_error",
+							"code": "budget_exceeded",
+						}
+					})
+					.to_string(),
+				))
+				.expect("budget exceeded response is valid");
 		}
 
 		// Add WWW-Authenticate header for MCP failures

@@ -200,6 +200,10 @@ async fn apply_request_policies(
 		.api_key
 		.apply_without_response("api key", c, l, req, rp.headers())
 		.await?;
+	pol
+		.budget
+		.apply_without_response("budget", c, l, req, rp.headers())
+		.await?;
 
 	pol
 		.ext_authz
@@ -451,6 +455,10 @@ async fn apply_gateway_policies(
 	policies
 		.api_key
 		.apply_without_response("gateway api key", c, l, req, response_policies.headers())
+		.await?;
+	policies
+		.budget
+		.apply_without_response("gateway budget", c, l, req, response_policies.headers())
 		.await?;
 
 	policies

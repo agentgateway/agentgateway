@@ -2785,6 +2785,7 @@ pub enum TrafficPolicy {
 	Oidc(RequestPolicy<crate::http::oidc::OidcPolicy>),
 	BasicAuth(RequestPolicy<crate::http::basicauth::BasicAuthentication>),
 	APIKey(RequestPolicy<crate::http::apikey::APIKeyAuthentication>),
+	Budget(RequestPolicy<crate::http::budget::BudgetPolicy>),
 	Transformation(RequestPolicy<crate::http::transformation_cel::Transformation>),
 	Csrf(RequestPolicy<crate::http::csrf::Csrf>),
 
@@ -3077,6 +3078,7 @@ impl LocalMcpAuthentication {
 		Ok(http::jwt::LocalJwtConfig::Single {
 			mode: self.mode.into(),
 			location: self.authorization_location.clone(),
+			preserve_token: false,
 			issuer: self.issuer.clone(),
 			audiences: Some(self.audiences.clone()),
 			jwks,

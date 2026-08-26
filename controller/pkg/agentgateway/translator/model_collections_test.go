@@ -247,7 +247,7 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 				Response: &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-response-policy", Value: "enabled"}}},
 			},
 			PromptGuard: &agentgateway.AIPromptGuard{Request: []agentgateway.PromptguardRequest{{
-				Regex: &agentgateway.Regex{Action: new(agentgateway.Action(agentgateway.REJECT)), Matches: []agentgateway.LongString{"blocked"}},
+				Regex: &agentgateway.Regex{Action: new(agentgateway.REJECT), Matches: []agentgateway.LongString{"blocked"}},
 			}}},
 		},
 	}
@@ -367,7 +367,7 @@ func TestTranslatePresetProviderBaseURL(t *testing.T) {
 	if provider.GetProviderPreset() != api.AIBackend_PROVIDER_PRESET_OLLAMA {
 		t.Fatalf("provider preset = %v, want Ollama", provider.GetProviderPreset())
 	}
-	if provider.GetBaseUrl() != string(baseURL) {
+	if provider.GetBaseUrl() != baseURL {
 		t.Errorf("base URL = %q, want %q", provider.GetBaseUrl(), baseURL)
 	}
 }

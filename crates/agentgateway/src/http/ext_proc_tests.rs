@@ -2791,16 +2791,35 @@ mod standalone_inference_routing {
 
 	#[tokio::test]
 	async fn standalone_inference_routing_requires_epp_selected_destination() {
+		let client_selected_backend = named_backend("client-selected-backend").await;
 		let request_headers_seen = Arc::new(AtomicUsize::new(0));
 		let (_ext_proc, _bind, io) =
 			setup_inference_routing_mock(None, request_headers_seen.clone(), Some("passthrough")).await;
 
-		let res = send_request(io, Method::GET, "http://lo").await;
+		let res = send_request_headers(
+			io,
+			Method::GET,
+			"http://lo",
+			&[(
+				"x-gateway-destination-endpoint",
+				&client_selected_backend.address().to_string(),
+			)],
+		)
+		.await;
 		assert_eq!(res.status(), 503);
 		assert_eq!(
 			request_headers_seen.load(Ordering::SeqCst),
 			1,
 			"gateway should consult EPP before rejecting the request",
+		);
+		assert_eq!(
+			client_selected_backend
+				.received_requests()
+				.await
+				.expect("backend recording should be enabled")
+				.len(),
+			0,
+			"a client-provided destination must not be used when EPP selects none",
 		);
 	}
 }

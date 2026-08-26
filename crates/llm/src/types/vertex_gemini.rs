@@ -1,10 +1,11 @@
 //! Wire DTOs for the Vertex native Gemini API (`:generateContent` /
-//! `:streamGenerateContent`).
+//! `:streamGenerateContent` / `:embedContent`).
 //!
 //! References:
 //! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/inference>
 //! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/generateContent>
 //! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/streamGenerateContent>
+//! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/embedContent>
 //!
 //! Deserialized types tolerate unknown fields (flattened into `rest`, no `deny_unknown_fields`)
 //! so Google's additive changes don't break parsing.
@@ -367,6 +368,49 @@ impl UsageMetadata {
 		let total = self.total_token_count.unwrap_or(prompt + completion);
 		(prompt, completion, total)
 	}
+}
+
+// ---------- embedContent ----------
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentRequest {
+	pub content: Content,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub embed_content_config: Option<EmbedContentConfig>,
+}
+
+/// embedContent also accepts these four fields at the top level of the request, but Vertex
+/// marks that form deprecated in favour of this nested config.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentConfig {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub task_type: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub title: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_dimensionality: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub auto_truncate: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentResponse {
+	pub embedding: EmbedContentEmbedding,
+	#[serde(default)]
+	pub usage_metadata: Option<UsageMetadata>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentEmbedding {
+	pub values: Vec<f32>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[cfg(test)]

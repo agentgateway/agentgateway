@@ -61,6 +61,120 @@ async fn llm_openai_tokenize() {
 }
 
 #[tokio::test]
+async fn llm_token_budget_persists_and_blocks_requests() {
+	let pool =
+		agentgateway::database::DatabasePool::connect_with_max_connections("sqlite::memory:", Some(1))
+			.await
+			.unwrap();
+	let policy = json!({
+		"apiKey": {
+			"keys": [
+				{
+					"key": "sk-budget",
+					"metadata": {"name": "budgeted-key"},
+					"budgets": [{
+						"name": "tokens",
+						"limit": {"unit": "Tokens", "amount": 40},
+						"window": {"rolling": "1h"},
+						"onBudgetExceeded": "Block"
+					}]
+				},
+				{
+					"key": "sk-other-budget",
+					"metadata": {"name": "budgeted-key"},
+					"budgets": [{
+						"name": "tokens",
+						"limit": {"unit": "Tokens", "amount": 40},
+						"window": {"rolling": "1h"},
+						"onBudgetExceeded": "Block"
+					}]
+				}
+			],
+			"mode": "strict"
+		}
+	});
+
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
+		false,
+	);
+	let config = agentgateway::config::parse_config("{}".to_string(), None).unwrap();
+	config.budget_policy.initialize(pool.clone()).await.unwrap();
+	let budget_policy = config.budget_policy.clone();
+	let (_mock, mut bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	bind.attach_route_policy(policy.clone()).await;
+
+	let response = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header("authorization", "Bearer sk-budget")
+		.body(Body::from(
+			include_bytes!("../../../llm/src/tests/requests/completions/basic.json").to_vec(),
+		))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(response.status(), StatusCode::OK);
+	response.into_body().collect().await.unwrap();
+
+	// Display names are not identities: another key with the same metadata name and budget name
+	// has an independent counter.
+	let response = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header("authorization", "Bearer sk-other-budget")
+		.body(Body::from(
+			include_bytes!("../../../llm/src/tests/requests/completions/basic.json").to_vec(),
+		))
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(response.status(), StatusCode::OK);
+	response.into_body().collect().await.unwrap();
+	budget_policy.flush().await.unwrap();
+
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
+		false,
+	);
+	let config = agentgateway::config::parse_config("{}".to_string(), None).unwrap();
+	config.budget_policy.initialize(pool).await.unwrap();
+	let (mock, mut bind, io) = setup_llm_named_provider_mock_with_config(mock, provider, config);
+	bind.attach_route_policy(policy).await;
+
+	let response = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header("authorization", "Bearer sk-budget")
+		.body(Body::from(
+			include_bytes!("../../../llm/src/tests/requests/completions/basic.json").to_vec(),
+		))
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert!(
+		response
+			.headers()
+			.get(::http::header::RETRY_AFTER)
+			.and_then(|value| value.to_str().ok())
+			.and_then(|value| value.parse::<u64>().ok())
+			.is_some_and(|seconds| seconds > 0)
+	);
+	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
+}
+
+#[tokio::test]
 async fn llm_detect_mode_passthrough_without_rewrite() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
 	let provider = agentgateway::types::local::LocalNamedAIProvider {

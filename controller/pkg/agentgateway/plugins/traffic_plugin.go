@@ -269,7 +269,7 @@ func TranslateAgentgatewayPolicy(
 		}
 		var portNum int32
 		if port != nil {
-			portNum = int32(*port)
+			portNum = *port
 		}
 		key := targetKey{Group: gk.Group, Kind: gk.Kind, Name: string(name), Namespace: targetNamespace, SectionName: section, Port: portNum}
 		if _, ok := seen[key]; ok {
@@ -323,35 +323,35 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 	if err != nil {
 		// If we produced some policies alongside errors, treat as partial validity
 		if hasTranslatedPolicies {
-			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
+			conds[agentgateway.PolicyConditionAccepted] = &Condition{
 				Status:  metav1.ConditionTrue,
-				Reason:  string(agentgateway.PolicyReasonPartiallyValid),
+				Reason:  agentgateway.PolicyReasonPartiallyValid,
 				Message: err.Error(),
 			}
 		} else {
 			// No policies produced and error present -> invalid
-			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
+			conds[agentgateway.PolicyConditionAccepted] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(agentgateway.PolicyReasonInvalid),
+				Reason:  agentgateway.PolicyReasonInvalid,
 				Message: err.Error(),
 			}
-			conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
+			conds[agentgateway.PolicyConditionAttached] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(agentgateway.PolicyReasonPending),
+				Reason:  agentgateway.PolicyReasonPending,
 				Message: "Policy is not attached due to invalid status",
 			}
 		}
 	} else {
 		// Check for partial validity
 		// Build success conditions per ancestor
-		conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
+		conds[agentgateway.PolicyConditionAccepted] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(agentgateway.PolicyReasonValid),
+			Reason:  agentgateway.PolicyReasonValid,
 			Message: reporter.PolicyAcceptedMsg,
 		}
-		conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
+		conds[agentgateway.PolicyConditionAttached] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(agentgateway.PolicyReasonAttached),
+			Reason:  agentgateway.PolicyReasonAttached,
 			Message: reporter.PolicyAttachedMsg,
 		}
 	}
@@ -360,9 +360,9 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 
 func attachmentErrorConditionMap(baseConds map[string]*Condition, attachmentErrors []string) map[string]*Condition {
 	conds := maps.Clone(baseConds)
-	conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
+	conds[agentgateway.PolicyConditionAttached] = &Condition{
 		Status:  metav1.ConditionFalse,
-		Reason:  string(agentgateway.PolicyReasonPending),
+		Reason:  agentgateway.PolicyReasonPending,
 		Message: strings.Join(attachmentErrors, "\n"),
 	}
 	return conds
@@ -748,6 +748,7 @@ func processDirectResponseTraffic(_ PolicyCtx, directResponse *agentgateway.Dire
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
 	p.AuthorizationLocation = translateAuthorizationExtractionLocation(jwt.Location)
+	p.PreserveToken = jwt.PreserveToken
 
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
@@ -1914,7 +1915,7 @@ func buildPolicyBackendEndpoint(ctx PolicyCtx, endpoint agentgateway.PolicyBacke
 	if endpoint.URL == nil {
 		return nil, nil, nil, fmt.Errorf("backendRef or url is required")
 	}
-	parsed, p, err := remotehttp.ParseHTTPURL(string(*endpoint.URL))
+	parsed, p, err := remotehttp.ParseHTTPURL(*endpoint.URL)
 	if err != nil {
 		return nil, nil, nil, err
 	}

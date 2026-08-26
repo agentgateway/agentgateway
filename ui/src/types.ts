@@ -2,6 +2,7 @@ import type { StoresDump } from '@/gateway-admin';
 import type {
 	BackendAuth,
 	BackendAuthCompat,
+	Budget,
 	CorsSerde,
 	ExtAuthz,
 	ExtProc,
@@ -53,6 +54,7 @@ export type LlmModel = LocalLLMModels;
 export type LlmVirtualModel = LocalLLMVirtualModel;
 export type LlmProvider = LocalLLMProvider;
 export type LlmGuardrail = PromptGuard;
+export type VirtualApiKeyBudget = Budget;
 export type VirtualApiKey = LocalAPIKey;
 export type LlmApiKeyPolicy = LocalAPIKeys;
 export type LlmPolicy = LocalLLMPolicy;
@@ -124,6 +126,11 @@ export interface LogEntry {
 	spanId?: string | null;
 	httpStatus?: number | null;
 	error?: string | null;
+	promptPreview?: string | null;
+	turn?: {
+		input?: 'user' | 'assistant' | 'toolCall' | 'toolResult' | null;
+		output?: 'user' | 'assistant' | 'toolCall' | 'toolResult' | null;
+	};
 	genAi: {
 		operationName?: string | null;
 		providerName?: string | null;

@@ -20,7 +20,7 @@ func (r *defaultResolver) serviceTargetSectionMatcher(
 	}
 
 	if port := ptr.OrEmpty(refPort); port != 0 {
-		appendPort(int32(port))
+		appendPort(port)
 	} else if defaultPort != "" {
 		if parsed, err := strconv.ParseInt(defaultPort, 10, 32); err == nil {
 			appendPort(int32(parsed))
@@ -45,7 +45,7 @@ func (r *defaultResolver) backendTLSServiceTargetSectionMatcher(
 	}
 
 	if port := ptr.OrEmpty(refPort); port != 0 {
-		appendPort(int32(port))
+		appendPort(port)
 	} else if defaultPort != "" {
 		if parsed, err := strconv.ParseInt(defaultPort, 10, 32); err == nil {
 			appendPort(int32(parsed))

@@ -11925,8 +11925,10 @@ type TrafficPolicySpec_JWT struct {
 	Providers             []*TrafficPolicySpec_JWTProvider `protobuf:"bytes,2,rep,name=providers,proto3" json:"providers,omitempty"`
 	Mcp                   *TrafficPolicySpec_JWT_MCP       `protobuf:"bytes,3,opt,name=mcp,proto3" json:"mcp,omitempty"`
 	AuthorizationLocation *AuthorizationLocation           `protobuf:"bytes,4,opt,name=authorization_location,json=authorizationLocation,proto3" json:"authorization_location,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Keep a successfully validated JWT in its original location. Defaults to false.
+	PreserveToken bool `protobuf:"varint,5,opt,name=preserve_token,json=preserveToken,proto3" json:"preserve_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TrafficPolicySpec_JWT) Reset() {
@@ -11985,6 +11987,13 @@ func (x *TrafficPolicySpec_JWT) GetAuthorizationLocation() *AuthorizationLocatio
 		return x.AuthorizationLocation
 	}
 	return nil
+}
+
+func (x *TrafficPolicySpec_JWT) GetPreserveToken() bool {
+	if x != nil {
+		return x.PreserveToken
+	}
+	return false
 }
 
 // Basic authentication configuration using htpasswd file
@@ -18243,7 +18252,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xe8U\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\x8fV\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -18372,12 +18381,13 @@ const file_resource_proto_rawDesc = "" +
 	"\taudiences\x18\x02 \x03(\tR\taudiences\x12\x18\n" +
 	"\x06inline\x18\x03 \x01(\tH\x00R\x06inline\x12e\n" +
 	"\x16jwt_validation_options\x18\x04 \x01(\v2/.agentgateway.dev.resource.JWTValidationOptionsR\x14jwtValidationOptionsB\r\n" +
-	"\vjwks_source\x1a\xe0\x05\n" +
+	"\vjwks_source\x1a\x87\x06\n" +
 	"\x03JWT\x12I\n" +
 	"\x04mode\x18\x01 \x01(\x0e25.agentgateway.dev.resource.TrafficPolicySpec.JWT.ModeR\x04mode\x12V\n" +
 	"\tproviders\x18\x02 \x03(\v28.agentgateway.dev.resource.TrafficPolicySpec.JWTProviderR\tproviders\x12F\n" +
 	"\x03mcp\x18\x03 \x01(\v24.agentgateway.dev.resource.TrafficPolicySpec.JWT.MCPR\x03mcp\x12g\n" +
-	"\x16authorization_location\x18\x04 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x1a\xd2\x02\n" +
+	"\x16authorization_location\x18\x04 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x12%\n" +
+	"\x0epreserve_token\x18\x05 \x01(\bR\rpreserveToken\x1a\xd2\x02\n" +
 	"\x03MCP\x12a\n" +
 	"\bprovider\x18\x01 \x01(\x0e2E.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDPR\bprovider\x12|\n" +
 	"\x11resource_metadata\x18\x02 \x01(\v2O.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadataR\x10resourceMetadata\x12 \n" +

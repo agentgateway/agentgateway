@@ -39,6 +39,8 @@ pub(crate) const EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE: &str =
 mod tests;
 
 const TRACE_POLICY_KIND: &str = "ext_proc";
+const INFERENCE_DESTINATION_HEADER: HeaderName =
+	HeaderName::from_static("x-gateway-destination-endpoint");
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -212,15 +214,16 @@ impl InferencePoolRouter {
 		let Some(ext_proc) = &mut self.ext_proc else {
 			return Ok(Default::default());
 		};
+		// The destination header is an EPP output, not a client-controlled input.
+		req.headers_mut().remove(&INFERENCE_DESTINATION_HEADER);
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		let failed_open = ext_proc.skipped;
 		*req = new_req;
 		let dest = req
-			.headers()
-			.get(HeaderName::from_static("x-gateway-destination-endpoint"))
-			.and_then(|v| v.to_str().ok())
-			.map(|v| v.parse::<SocketAddr>())
+			.headers_mut()
+			.remove(&INFERENCE_DESTINATION_HEADER)
+			.and_then(|v| v.to_str().ok().map(|v| v.parse::<SocketAddr>()))
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
 		Ok(InferenceRequestResult {

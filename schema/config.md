@@ -3770,6 +3770,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -3819,6 +3820,14 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -5055,7 +5064,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -5339,7 +5348,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -16283,6 +16292,7 @@
 |`binds[].listeners[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`binds[].listeners[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`binds[].listeners[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`binds[].listeners[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -17534,6 +17544,14 @@
 |`binds[].listeners[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`binds[].listeners[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -22398,6 +22416,7 @@
 |`policies[].policy.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`policies[].policy.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`policies[].policy.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`policies[].policy.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`policies[].policy.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -22447,6 +22466,14 @@
 |`policies[].policy.apiKey.keys[].key`|string|API key value to accept.|
 |`policies[].policy.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`policies[].policy.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`policies[].policy.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`policies[].policy.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`policies[].policy.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`policies[].policy.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`policies[].policy.apiKey.keys[].budgets[].limit.amount`|number||
+|`policies[].policy.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`policies[].policy.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`policies[].policy.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`policies[].policy.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`policies[].policy.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -23683,7 +23710,7 @@
 |`policies[].policy.substrateIngress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`policies[].policy.substrateIngress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.substrateIngress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`policies[].policy.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`policies[].policy.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`policies[].policy.substrateIngress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.substrateIngress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`policies[].policy.substrateIngress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -23967,7 +23994,7 @@
 |`policies[].policy.substrateEgress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`policies[].policy.substrateEgress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.substrateEgress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`policies[].policy.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`policies[].policy.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`policies[].policy.substrateEgress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.substrateEgress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`policies[].policy.substrateEgress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -38218,6 +38245,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`routeGroups[].routes[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`routeGroups[].routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -38267,6 +38295,14 @@
 |`routeGroups[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routeGroups[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`routeGroups[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routeGroups[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -39503,7 +39539,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -39787,7 +39823,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -50441,6 +50477,7 @@
 |`gateways.*.listeners[].jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`gateways.*.listeners[].jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`gateways.*.listeners[].jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`gateways.*.listeners[].jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`gateways.*.listeners[].jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.listeners[].jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -51692,6 +51729,14 @@
 |`gateways.*.listeners[].apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.listeners[].apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`gateways.*.listeners[].apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`gateways.*.listeners[].apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].limit.amount`|number||
+|`gateways.*.listeners[].apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.listeners[].apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.listeners[].apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -51741,6 +51786,7 @@
 |`gateways.*.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`gateways.*.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`gateways.*.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`gateways.*.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`gateways.*.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -52992,6 +53038,14 @@
 |`gateways.*.apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`gateways.*.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`gateways.*.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`gateways.*.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`gateways.*.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`gateways.*.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`gateways.*.apiKey.keys[].budgets[].limit.amount`|number||
+|`gateways.*.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`gateways.*.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`gateways.*.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -56648,6 +56702,7 @@
 |`routes[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`routes[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`routes[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -56697,6 +56752,14 @@
 |`routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -57933,7 +57996,7 @@
 |`routes[].policies.substrateIngress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`routes[].policies.substrateIngress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routes[].policies.substrateIngress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`routes[].policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`routes[].policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`routes[].policies.substrateIngress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.substrateIngress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`routes[].policies.substrateIngress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -58217,7 +58280,7 @@
 |`routes[].policies.substrateEgress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`routes[].policies.substrateEgress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routes[].policies.substrateEgress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`routes[].policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`routes[].policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`routes[].policies.substrateEgress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.substrateEgress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`routes[].policies.substrateEgress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -72615,6 +72678,7 @@
 |`llm.policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`llm.policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`llm.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`llm.policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`llm.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -73866,6 +73930,14 @@
 |`llm.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`llm.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`llm.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`llm.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`llm.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`llm.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`llm.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`llm.policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`llm.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`llm.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`llm.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`llm.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`llm.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -80081,6 +80153,7 @@
 |`mcp.policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`mcp.policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`mcp.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`mcp.policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`mcp.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -80130,6 +80203,14 @@
 |`mcp.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`mcp.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`mcp.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`mcp.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`mcp.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`mcp.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`mcp.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`mcp.policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`mcp.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`mcp.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`mcp.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`mcp.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`mcp.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -81366,7 +81447,7 @@
 |`mcp.policies.substrateIngress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`mcp.policies.substrateIngress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.substrateIngress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`mcp.policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`mcp.policies.substrateIngress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`mcp.policies.substrateIngress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.substrateIngress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`mcp.policies.substrateIngress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -81650,7 +81731,7 @@
 |`mcp.policies.substrateEgress.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`mcp.policies.substrateEgress.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.substrateEgress.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`mcp.policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
+|`mcp.policies.substrateEgress.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`mcp.policies.substrateEgress.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.substrateEgress.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`mcp.policies.substrateEgress.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
@@ -81962,6 +82043,7 @@
 |`ui.policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`ui.policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
 |`ui.policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.jwtAuth.preserveToken`|boolean|Keep a successfully validated JWT in its original location.|
 |`ui.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`ui.policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`ui.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
@@ -82598,6 +82680,14 @@
 |`ui.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`ui.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
 |`ui.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`ui.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
+|`ui.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
+|`ui.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
+|`ui.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
+|`ui.policies.apiKey.keys[].budgets[].limit.amount`|number||
+|`ui.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`ui.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
+|`ui.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`ui.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`ui.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|

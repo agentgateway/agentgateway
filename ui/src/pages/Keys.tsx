@@ -1,5 +1,7 @@
 import {
+	Bot,
 	Check,
+	CircleDollarSign,
 	Copy,
 	Eye,
 	EyeOff,
@@ -7,11 +9,13 @@ import {
 	Pencil,
 	Plus,
 	SlidersHorizontal,
+	Tags,
 	Trash2,
 	X
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
+import type { BudgetStatus, BudgetStatusResponse } from '@/api/budgetsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { EnumSelector } from '@/components/EnumSelector';
 import {
@@ -21,8 +25,11 @@ import {
 	EmptyState,
 	Field,
 	FieldGroup,
+	formatNumber,
+	formatRelativeTime,
 	PageHeader,
 	Panel,
+	SegmentedControl,
 	StatusBanner,
 	Tooltip
 } from '@/components/Primitives';
@@ -30,6 +37,7 @@ import { getApiKeyPolicy, isDatabaseConfigResource, upsertVirtualKey } from '@/c
 import { hasKeyValue, keyValue, maskKey } from '@/credentialDisplay';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import {
+	useBudgetStatus,
 	useDeleteConfigResource,
 	useLlmConfigData,
 	useUpsertConfigResource,
@@ -40,14 +48,16 @@ import {
 	authorizationLocationToValue,
 	CredentialLocationSetting
 } from '@/policies/AuthorizationLocation';
+import { ListEditor } from '@/policies/ListEditor';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
-import { AdvancedSettingRow } from '@/policies/PolicyLayout';
-import { randomUuid } from '@/randomUuid';
+import { AdvancedSettingRow, CollapsiblePolicySection } from '@/policies/PolicyLayout';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
-import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from '@/types';
+import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey, VirtualApiKeyBudget } from '@/types';
 
 const fileOwnedPolicyMessage =
 	'This API key policy is file-owned and cannot be modified in hybrid mode.';
+const managedMetadataPrefix = 'agentgateway.dev/';
+const apiKeyIdMetadata = 'agentgateway.dev/id';
 
 export function KeysPage() {
 	const {
@@ -63,6 +73,9 @@ export function KeysPage() {
 	const upsertResource = useUpsertConfigResource();
 	const upsertPolicy = useUpsertPolicyResource();
 	const deleteResource = useDeleteConfigResource();
+	const budgetStatus = useBudgetStatus({
+		enabled: keys.some(key => key.budgets?.length)
+	});
 	const help = useSchemaHelp();
 	const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
 	const filePolicyOwned = Boolean(
@@ -105,7 +118,7 @@ export function KeysPage() {
 		const previousId = previous ? keyId(previous) || `@index:${previousIndex}` : undefined;
 		const value = structuredClone(key);
 		if (value.metadata && typeof value.metadata === 'object') {
-			delete value.metadata.id;
+			value.metadata = withoutServerMetadata(metadataObject(value.metadata));
 		}
 		upsertResource.mutate({ kind: 'llm.apiKey', value, previousId }, { onSuccess: closeKeyDrawer });
 	}
@@ -261,19 +274,33 @@ export function KeysPage() {
 								<tr>
 									<th>Name</th>
 									<th>Key</th>
+									<th>Models</th>
 									<th>Metadata</th>
+									<th>Budgets</th>
 									<th />
 								</tr>
 							</thead>
 							<tbody>
 								{keys.map((item, index) => (
 									<tr key={keyValue(item)}>
-										<td className="strong key-name-cell">{keyName(item) || 'Unnamed key'}</td>
+										<td className="strong key-name-cell">
+											{keyName(item) || <span className="muted">Unnamed key</span>}
+										</td>
 										<td className="key-cell">
 											<VirtualKeyValue value={keyValue(item)} />
 										</td>
 										<td>
+											<AllowedModelsSummary value={item.allowedModels} />
+										</td>
+										<td>
 											<MetadataSummary value={item.metadata} />
+										</td>
+										<td>
+											<BudgetSummary
+												apiKeyName={keyName(item)}
+												value={item.budgets}
+												status={budgetStatus.data}
+											/>
 										</td>
 										<td className="key-action-cell">
 											<div className="key-actions">
@@ -555,6 +582,18 @@ function KeyEditor(props: {
 	const [metadataValues, setMetadataValues] = useState(() =>
 		stringMetadata(withoutManagedMetadata(initialMetadata))
 	);
+	const initialAllowedModels = props.initial.allowedModels ?? undefined;
+	const [modelAccess, setModelAccess] = useState<'unrestricted' | 'deny' | 'restricted'>(() =>
+		initialAllowedModels === undefined
+			? 'unrestricted'
+			: initialAllowedModels.length === 0
+				? 'deny'
+				: 'restricted'
+	);
+	const [allowedModels, setAllowedModels] = useState(initialAllowedModels ?? []);
+	const [budgets, setBudgets] = useState<VirtualApiKeyBudget[]>(() =>
+		structuredClone(props.initial.budgets ?? [])
+	);
 	const [submitted, setSubmitted] = useState(false);
 	const generatedKey = useRef<string | null>(null);
 	const draft = JSON.stringify({
@@ -562,20 +601,52 @@ function KeyEditor(props: {
 		keyMode,
 		key,
 		replaceKey,
-		metadataValues
+		metadataValues,
+		modelAccess,
+		allowedModels,
+		budgets
 	});
 	const [initialDraft] = useState(() => draft);
-	const nameRequired = isNew && !name.trim();
+	const nameRequired = (isNew || budgets.length > 0) && !name.trim();
 	const duplicateName = isNew ? duplicateKeyName(name, props.existingKeys) : false;
+	const modelError =
+		modelAccess !== 'restricted'
+			? null
+			: allowedModels.length === 0
+				? 'Add at least one model pattern or select Deny all.'
+				: allowedModels.includes('*') && allowedModels.length > 1
+					? "'*' cannot be combined with other model patterns."
+					: allowedModels.find(pattern => {
+								const firstWildcard = pattern.indexOf('*');
+								return (
+									pattern !== '*' &&
+									firstWildcard >= 0 &&
+									firstWildcard !== 0 &&
+									firstWildcard !== pattern.length - 1
+								);
+							})
+						? 'Wildcards are only supported at the beginning or end of a pattern.'
+						: allowedModels.some(pattern => pattern !== '*' && pattern.split('*').length > 2)
+							? 'A model pattern can contain at most one wildcard.'
+							: null;
+	const budgetNames = budgets.map(budget => budget.name.trim()).filter(Boolean);
+	const invalidBudgets =
+		budgets.some(
+			budget =>
+				!budget.name.trim() ||
+				!budget.window.rolling?.trim() ||
+				!Number.isFinite(budget.limit.amount) ||
+				budget.limit.amount < 0 ||
+				(budget.limit.unit === 'Tokens' && !Number.isInteger(budget.limit.amount))
+		) || new Set(budgetNames).size !== budgetNames.length;
+	const modelSuggestions = [
+		...(props.config?.llm?.models ?? []).map(model => model.name),
+		...(props.config?.llm?.virtualModels ?? []).map(model => model.name)
+	].filter((name): name is string => typeof name === 'string');
 
 	function virtualKey() {
-		const metadataId =
-			typeof initialMetadata.id === 'string' && initialMetadata.id.trim()
-				? initialMetadata.id.trim()
-				: randomUuid();
 		const metadata = {
 			...metadataValues,
-			id: metadataId,
 			...(name.trim() ? { name: name.trim() } : {})
 		};
 		const nextKey = isNew
@@ -585,12 +656,18 @@ function KeyEditor(props: {
 			: replaceKey
 				? key
 				: '';
-		return isNew || replaceKey ? { key: nextKey, metadata } : { ...props.initial, metadata };
+		const value: VirtualApiKey =
+			isNew || replaceKey ? { key: nextKey, metadata } : { ...props.initial, metadata };
+		if (modelAccess === 'unrestricted') delete value.allowedModels;
+		else value.allowedModels = modelAccess === 'deny' ? [] : allowedModels;
+		if (budgets.length) value.budgets = budgets;
+		else delete value.budgets;
+		return value;
 	}
 
 	function nextVirtualKey() {
 		setSubmitted(true);
-		return nameRequired ? null : virtualKey();
+		return nameRequired || modelError || invalidBudgets ? null : virtualKey();
 	}
 
 	function save() {
@@ -643,7 +720,7 @@ function KeyEditor(props: {
 			</Field>
 			{submitted && nameRequired ? (
 				<StatusBanner state="bad" title="Name is required">
-					Add a name before creating this virtual API key.
+					Add a metadata name before saving this virtual API key.
 				</StatusBanner>
 			) : null}
 			{duplicateName ? (
@@ -703,15 +780,104 @@ function KeyEditor(props: {
 					/>
 				</Field>
 			) : null}
-			<KeyValueEditor
-				label="Metadata"
-				tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'metadata')}
-				values={metadataValues}
-				quickKeys={['user', 'group']}
-				keyPlaceholder="owner"
-				valuePlaceholder="platform"
-				onChange={setMetadataValues}
-			/>
+			<CollapsiblePolicySection
+				icon={<CircleDollarSign size={17} />}
+				title="Budgets"
+				description="Cap how much this key can spend or consume during each rolling window."
+				summary={
+					submitted && invalidBudgets ? (
+						<span className="badge bad">Invalid</span>
+					) : budgets.length ? (
+						`${budgets.length} ${budgets.length === 1 ? 'budget' : 'budgets'}`
+					) : (
+						'None'
+					)
+				}
+			>
+				<BudgetEditor budgets={budgets} apiKeyName={keyName(props.initial)} onChange={setBudgets} />
+				{submitted && invalidBudgets ? (
+					<StatusBanner state="bad" title="Invalid budgets">
+						Budget names must be present and unique, rolling windows are required, and amounts must
+						be non-negative whole numbers.
+					</StatusBanner>
+				) : null}
+			</CollapsiblePolicySection>
+			<CollapsiblePolicySection
+				icon={<Bot size={17} />}
+				title="Model access"
+				description="Limit which requested model names this key can use."
+				summary={
+					submitted && modelError ? (
+						<span className="badge bad">Invalid</span>
+					) : modelAccess === 'unrestricted' ? (
+						'Unrestricted'
+					) : modelAccess === 'deny' ? (
+						<span className="badge bad">Deny all</span>
+					) : (
+						`${allowedModels.length} ${allowedModels.length === 1 ? 'pattern' : 'patterns'}`
+					)
+				}
+			>
+				<FieldGroup
+					label="Access mode"
+					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'allowedModels')}
+					hint={
+						modelAccess === 'unrestricted'
+							? 'This key can request any model.'
+							: modelAccess === 'restricted'
+								? 'Requests may only use models matching the patterns below.'
+								: 'This key cannot request any model.'
+					}
+				>
+					<SegmentedControl
+						ariaLabel="Model access"
+						value={modelAccess}
+						options={[
+							{ value: 'unrestricted', label: 'Unrestricted' },
+							{ value: 'restricted', label: 'Selected models' },
+							{ value: 'deny', label: 'Deny all' }
+						]}
+						onChange={setModelAccess}
+					/>
+				</FieldGroup>
+				{modelAccess === 'restricted' ? (
+					<ListEditor
+						label="Allowed model patterns"
+						tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'allowedModels')}
+						values={allowedModels}
+						onChange={setAllowedModels}
+						placeholder="gpt-5.5 or openai/*"
+						emptyText="No model patterns configured."
+						suggestions={modelSuggestions}
+					/>
+				) : null}
+				{submitted && modelError ? (
+					<StatusBanner state="bad" title="Invalid model access">
+						{modelError}
+					</StatusBanner>
+				) : null}
+			</CollapsiblePolicySection>
+			<CollapsiblePolicySection
+				icon={<Tags size={17} />}
+				title="Metadata"
+				description="Attach custom metadata to requests authenticated with this key."
+				summary={
+					Object.keys(metadataValues).length
+						? `${Object.keys(metadataValues).length} ${
+								Object.keys(metadataValues).length === 1 ? 'entry' : 'entries'
+							}`
+						: 'None'
+				}
+			>
+				<KeyValueEditor
+					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'metadata')}
+					values={metadataValues}
+					quickKeys={['user', 'group']}
+					keyPlaceholder="owner"
+					valuePlaceholder="platform"
+					onChange={setMetadataValues}
+				/>
+			</CollapsiblePolicySection>
 			{props.saveError ? (
 				<StatusBanner state="bad" title="Save failed">
 					{props.saveError}
@@ -721,10 +887,225 @@ function KeyEditor(props: {
 	);
 }
 
+function BudgetEditor(props: {
+	budgets: VirtualApiKeyBudget[];
+	apiKeyName: string;
+	onChange: (budgets: VirtualApiKeyBudget[]) => void;
+}) {
+	const [editingIndex, setEditingIndex] = useState<number | null>(null);
+	const status = useBudgetStatus({ enabled: props.budgets.length > 0 });
+
+	function addBudget() {
+		props.onChange([
+			...props.budgets,
+			{
+				name: '',
+				limit: { unit: 'USD', amount: 0 },
+				window: { rolling: '30d' },
+				onBudgetExceeded: 'Audit'
+			}
+		]);
+		setEditingIndex(props.budgets.length);
+	}
+
+	function updateBudget(index: number, value: VirtualApiKeyBudget) {
+		props.onChange(
+			props.budgets.map((budget, budgetIndex) => (budgetIndex === index ? value : budget))
+		);
+	}
+
+	function removeBudget(index: number) {
+		props.onChange(props.budgets.filter((_, budgetIndex) => budgetIndex !== index));
+		setEditingIndex(current =>
+			current === null || current === index ? null : current > index ? current - 1 : current
+		);
+	}
+
+	return (
+		<div className="api-key-budget-editor">
+			{props.budgets.length === 0 ? (
+				<div className="empty-inline">No budgets configured. Usage is unlimited.</div>
+			) : (
+				<div className="api-key-budget-list">
+					{props.budgets.map((budget, index) => {
+						const editing = editingIndex === index;
+						const live = status.data?.budgets.find(
+							item => item.apiKeyName === props.apiKeyName && item.name === budget.name.trim()
+						);
+						return (
+							<article className="api-key-budget-card" key={index}>
+								<header className="api-key-budget-card-header">
+									<div className="api-key-budget-card-title">
+										<strong>{budget.name.trim() || 'Untitled budget'}</strong>
+										{live?.usage.exceeded ? <span className="badge bad">Exceeded</span> : null}
+									</div>
+									<div className="button-row compact">
+										<button
+											className="table-action"
+											type="button"
+											onClick={() => setEditingIndex(editing ? null : index)}
+										>
+											{editing ? <Check size={14} /> : <Pencil size={14} />}
+											{editing ? 'Done' : 'Edit'}
+										</button>
+										<button
+											className="table-action danger"
+											type="button"
+											aria-label={`Remove budget ${index + 1}`}
+											onClick={() => removeBudget(index)}
+										>
+											<Trash2 size={14} />
+											Remove
+										</button>
+									</div>
+								</header>
+								{editing ? (
+									<div className="api-key-budget-form">
+										<Field label="Name" hint="Stable identifier used for accounting.">
+											<input
+												value={budget.name}
+												onChange={event =>
+													updateBudget(index, { ...budget, name: event.target.value })
+												}
+												placeholder="monthly-spend"
+											/>
+										</Field>
+										<Field label="Rolling window" hint="Examples: 24h, 7d, or 30d.">
+											<input
+												value={budget.window.rolling ?? ''}
+												onChange={event =>
+													updateBudget(index, {
+														...budget,
+														window: { rolling: event.target.value }
+													})
+												}
+												placeholder="30d"
+											/>
+										</Field>
+										<Field label="Limit amount">
+											<input
+												type="number"
+												min="0"
+												step={budget.limit.unit === 'USD' ? 'any' : '1'}
+												aria-label={`Budget ${index + 1} amount`}
+												value={Number.isFinite(budget.limit.amount) ? budget.limit.amount : ''}
+												onChange={event =>
+													updateBudget(index, {
+														...budget,
+														limit: { ...budget.limit, amount: event.target.valueAsNumber }
+													})
+												}
+											/>
+										</Field>
+										<FieldGroup label="Limit unit">
+											<SegmentedControl
+												ariaLabel={`Budget ${index + 1} unit`}
+												value={budget.limit.unit}
+												options={[
+													{ value: 'USD', label: 'USD' },
+													{ value: 'Tokens', label: 'Tokens' }
+												]}
+												onChange={unit =>
+													updateBudget(index, {
+														...budget,
+														limit: { ...budget.limit, unit }
+													})
+												}
+											/>
+										</FieldGroup>
+										<FieldGroup label="When limit is reached" className="api-key-budget-form-wide">
+											<SegmentedControl
+												ariaLabel={`Budget ${index + 1} enforcement`}
+												value={budget.onBudgetExceeded}
+												options={[
+													{ value: 'Block', label: 'Block requests', description: 'Return 429' },
+													{ value: 'Audit', label: 'Audit only', description: 'Continue serving' }
+												]}
+												onChange={onBudgetExceeded =>
+													updateBudget(index, { ...budget, onBudgetExceeded })
+												}
+											/>
+										</FieldGroup>
+									</div>
+								) : (
+									<BudgetUsage
+										budget={budget}
+										live={live}
+										loading={status.isLoading}
+										unavailable={Boolean(status.error)}
+									/>
+								)}
+							</article>
+						);
+					})}
+				</div>
+			)}
+			<div className="button-row">
+				<button className="button small" type="button" onClick={addBudget}>
+					<Plus size={15} />
+					Add budget
+				</button>
+			</div>
+		</div>
+	);
+}
+
+function BudgetUsage(props: {
+	budget: VirtualApiKeyBudget;
+	live?: BudgetStatus;
+	loading: boolean;
+	unavailable: boolean;
+}) {
+	const { budget, live } = props;
+	if (props.loading) {
+		return <div className="api-key-budget-usage muted">Loading usage…</div>;
+	}
+	if (props.unavailable) {
+		return <div className="api-key-budget-usage muted">Live usage is unavailable.</div>;
+	}
+	const { used, fraction, level } = budgetProgress(budget, live);
+	return (
+		<div className="api-key-budget-usage">
+			<div className="api-key-budget-usage-row">
+				<span>
+					<strong>{budgetAmountLabel(used, budget.limit.unit)}</strong> of{' '}
+					{budgetAmountLabel(budget.limit.amount, budget.limit.unit)} used
+				</span>
+				<span>
+					{live
+						? `${Math.round(fraction * 100)}% · resets ${formatRelativeTime(
+								new Date(live.window.end).toISOString()
+							)}`
+						: `No usage recorded yet · ${budget.window.rolling || 'unset'} rolling window`}
+				</span>
+			</div>
+			<div className="api-key-budget-meter">
+				<div className={level} style={{ width: `${fraction * 100}%` }} />
+			</div>
+		</div>
+	);
+}
+
+function budgetProgress(budget: VirtualApiKeyBudget, live?: BudgetStatus) {
+	const used = live ? Number(live.usage.used) : 0;
+	const limit =
+		Number.isFinite(budget.limit.amount) && budget.limit.amount > 0 ? budget.limit.amount : 0;
+	const fraction = limit > 0 ? Math.min(used / limit, 1) : 0;
+	const exceeded = Boolean(live?.usage.exceeded) || (limit > 0 && used >= limit);
+	return { used, fraction, level: exceeded ? 'bad' : fraction >= 0.8 ? 'warn' : '' };
+}
+
+function budgetAmountLabel(amount: number, unit: VirtualApiKeyBudget['limit']['unit']) {
+	if (!Number.isFinite(amount)) return unit === 'USD' ? '$0' : '0 tokens';
+	return unit === 'USD'
+		? `$${amount.toLocaleString(undefined, { maximumFractionDigits: 9 })}`
+		: `${formatNumber(amount)} tokens`;
+}
+
 function newVirtualKey(): VirtualApiKey {
 	return {
 		key: '',
-		metadata: { id: randomUuid(), name: '' }
+		metadata: { name: '' }
 	};
 }
 
@@ -766,13 +1147,14 @@ function normalizeKeyName(name: string) {
 
 function keyId(key: VirtualApiKey) {
 	const metadata = metadataObject(key.metadata);
-	return typeof metadata.id === 'string' && metadata.id.trim() ? metadata.id.trim() : '';
+	const id = metadata[apiKeyIdMetadata];
+	return typeof id === 'string' && id.trim() ? id.trim() : '';
 }
 
 function keyResourceForDisplay(key: VirtualApiKey) {
 	const value = structuredClone(key);
 	if (value.metadata && typeof value.metadata === 'object') {
-		delete value.metadata.id;
+		value.metadata = withoutServerMetadata(metadataObject(value.metadata));
 	}
 	return value;
 }
@@ -866,10 +1248,55 @@ function VirtualKeyValue(props: { value: string }) {
 	);
 }
 
+function AllowedModelsSummary(props: { value?: string[] | null }) {
+	if (props.value == null) return <span className="muted">unrestricted</span>;
+	if (props.value.length === 0) return <span className="badge bad">deny all</span>;
+	if (props.value.length === 1) {
+		return <span className="badge">{props.value[0] === '*' ? 'all models' : props.value[0]}</span>;
+	}
+	return <span className="badge">{props.value.length} patterns</span>;
+}
+
+function BudgetSummary(props: {
+	apiKeyName: string;
+	value?: VirtualApiKeyBudget[];
+	status?: BudgetStatusResponse;
+}) {
+	const budgets = props.value ?? [];
+	if (!budgets.length) return <span className="muted">—</span>;
+	return (
+		<div className="key-budget-summary">
+			{budgets.map((budget, index) => {
+				const live = props.status?.budgets.find(
+					item => item.apiKeyName === props.apiKeyName && item.name === budget.name
+				);
+				const { used, fraction, level } = budgetProgress(budget, live);
+				return (
+					<Tooltip
+						key={`${budget.name}:${index}`}
+						content={`${budgetAmountLabel(used, budget.limit.unit)} of ${budgetAmountLabel(
+							budget.limit.amount,
+							budget.limit.unit
+						)} per ${budget.window.rolling}`}
+					>
+						<div className="key-budget-summary-row">
+							<span className="key-budget-summary-name">{budget.name}</span>
+							<div className="api-key-budget-meter">
+								<div className={level} style={{ width: `${fraction * 100}%` }} />
+							</div>
+							<span className="key-budget-summary-pct">{Math.round(fraction * 100)}%</span>
+						</div>
+					</Tooltip>
+				);
+			})}
+		</div>
+	);
+}
+
 function MetadataSummary(props: { value: unknown }) {
 	const metadata = withoutManagedMetadata(metadataObject(props.value));
 	const entries = Object.entries(metadata);
-	if (!entries.length) return <span className="muted">none</span>;
+	if (!entries.length) return <span className="muted">—</span>;
 	return (
 		<div className="metadata-summary">
 			{entries.slice(0, 3).map(([key, value]) => (
@@ -889,10 +1316,15 @@ function metadataObject(value: unknown): Record<string, unknown> {
 }
 
 function withoutManagedMetadata(value: Record<string, unknown>) {
-	const next = { ...value };
+	const next = withoutServerMetadata(value);
 	delete next.name;
-	delete next.id;
 	return next;
+}
+
+function withoutServerMetadata(value: Record<string, unknown>) {
+	return Object.fromEntries(
+		Object.entries(value).filter(([key]) => !key.startsWith(managedMetadataPrefix))
+	);
 }
 
 function stringMetadata(value: Record<string, unknown>) {

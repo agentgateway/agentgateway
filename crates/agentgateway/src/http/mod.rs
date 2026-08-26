@@ -2,6 +2,7 @@ pub mod filters;
 pub mod health;
 pub mod timeout;
 
+pub mod budget;
 pub mod buffer;
 pub mod bufferbody;
 mod buflist;

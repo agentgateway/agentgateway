@@ -422,6 +422,7 @@ pub fn parse_config(
 		threading_mode,
 		backend: raw.backend,
 		admin_runtime_handle: None,
+		budget_policy: Arc::new(crate::http::budget::BudgetPolicy::default()),
 		termination_max_deadline: match termination_max_deadline {
 				Some(period) => period,
 				None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {

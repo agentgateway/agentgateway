@@ -6,11 +6,11 @@ export function maskKey(key: string) {
 }
 
 export function hasKeyValue<T extends { metadata?: unknown }>(key: T): key is T & { key: string } {
-	return 'key' in key;
+	return typeof (key as { key?: unknown }).key === 'string';
 }
 
 export function keyValue(key: VirtualApiKey) {
-	return hasKeyValue(key) ? key.key : key.keyHash;
+	return hasKeyValue(key) ? key.key : (key.keyHash ?? '');
 }
 
 export function keyLabel(key: VirtualApiKey) {

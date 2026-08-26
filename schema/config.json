@@ -6121,6 +6121,11 @@
                 }
               }
             },
+            "preserveToken": {
+              "description": "Keep a successfully validated JWT in its original location.",
+              "type": "boolean",
+              "default": false
+            },
             "providers": {
               "description": "Trusted issuers and their signing keys.",
               "type": "array",
@@ -6152,6 +6157,11 @@
                   "prefix": "Bearer "
                 }
               }
+            },
+            "preserveToken": {
+              "description": "Keep a successfully validated JWT in its original location.",
+              "type": "boolean",
+              "default": false
             },
             "issuer": {
               "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
@@ -6433,6 +6443,13 @@
                 "type": "string"
               },
               "default": null
+            },
+            "budgets": {
+              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Budget"
+              }
             }
           },
           "additionalProperties": false,
@@ -6460,6 +6477,13 @@
                 "type": "string"
               },
               "default": null
+            },
+            "budgets": {
+              "description": "Independent budgets charged after LLM responses. A request is not charged when its provider\ndoes not report the usage or cost required by the budget unit.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Budget"
+              }
             }
           },
           "additionalProperties": false,
@@ -6471,6 +6495,82 @@
     },
     "APIKey": {
       "type": "string"
+    },
+    "Budget": {
+      "description": "A named budget attached to a standalone API key.\n\nUsage is charged after an LLM response when the provider reports the tokens or cost required by\nthe configured unit. Requests with unavailable usage are logged but cannot be charged or blocked\nretroactively.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Stable name for this budget within its owning API key.",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Maximum usage allowed during the window.",
+          "$ref": "#/$defs/BudgetLimit"
+        },
+        "window": {
+          "description": "Rolling window over which usage will be accumulated.",
+          "$ref": "#/$defs/BudgetWindow"
+        },
+        "onBudgetExceeded": {
+          "description": "Action taken when the budget is exceeded.",
+          "$ref": "#/$defs/BudgetExceededAction"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "limit",
+        "window",
+        "onBudgetExceeded"
+      ]
+    },
+    "BudgetLimit": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "$ref": "#/$defs/BudgetLimitUnit"
+        },
+        "amount": {
+          "$ref": "#/$defs/BudgetAmount"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "amount"
+      ]
+    },
+    "BudgetLimitUnit": {
+      "type": "string",
+      "enum": [
+        "USD",
+        "Tokens"
+      ]
+    },
+    "BudgetAmount": {
+      "type": "number",
+      "format": "double"
+    },
+    "BudgetWindow": {
+      "type": "object",
+      "properties": {
+        "rolling": {
+          "description": "Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.\nWindows are aligned to the Unix epoch rather than starting with the first request: `1h`\nfollows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day\nperiods rather than calendar months.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "rolling"
+      ]
+    },
+    "BudgetExceededAction": {
+      "type": "string",
+      "enum": [
+        "Audit",
+        "Block"
+      ]
     },
     "APIKeyHash": {
       "type": "string"

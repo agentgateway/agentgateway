@@ -308,6 +308,17 @@ controllerName: example.com/custom-agentgateway
 `,
 		},
 		{
+			name: "topology-spread-constraints",
+			valuesYAML: `topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        agentgateway: agentgateway
+`,
+		},
+		{
 			name: "revision-history-limit",
 			valuesYAML: `controller:
   revisionHistoryLimit: 3

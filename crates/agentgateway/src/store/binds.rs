@@ -376,6 +376,7 @@ pub struct RoutePolicies {
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub budget: RequestPolicy<http::budget::BudgetPolicy>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
 	pub substrate_egress: RequestPolicy<substrate::SubstrateEgress>,
 	pub substrate_ingress: RequestPolicy<substrate::SubstrateIngress>,
@@ -411,6 +412,7 @@ pub struct GatewayPolicies {
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub budget: RequestPolicy<http::budget::BudgetPolicy>,
 	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
@@ -426,6 +428,7 @@ impl GatewayPolicies {
 			&self.transformation as &dyn PolicyExpressions,
 			&self.basic_auth as &dyn PolicyExpressions,
 			&self.api_key as &dyn PolicyExpressions,
+			&self.budget as &dyn PolicyExpressions,
 		]
 		.into_iter()
 	}
@@ -447,6 +450,7 @@ impl RoutePolicies {
 			&self.oidc as &dyn PolicyExpressions,
 			&self.basic_auth as &dyn PolicyExpressions,
 			&self.api_key as &dyn PolicyExpressions,
+			&self.budget as &dyn PolicyExpressions,
 			&self.ext_authz as &dyn PolicyExpressions,
 			&self.substrate_egress as &dyn PolicyExpressions,
 			&self.substrate_ingress as &dyn PolicyExpressions,
@@ -1069,6 +1073,9 @@ impl Store {
 				TrafficPolicy::APIKey(p) => {
 					pol.api_key.merge_with_inheritance(p, lock_inheritance);
 				},
+				TrafficPolicy::Budget(p) => {
+					pol.budget.merge_with_inheritance(p, lock_inheritance);
+				},
 				TrafficPolicy::Transformation(p) => {
 					pol
 						.transformation
@@ -1205,6 +1212,9 @@ impl Store {
 				},
 				TrafficPolicy::APIKey(p) => {
 					pol.api_key.set_if_unset(p);
+				},
+				TrafficPolicy::Budget(p) => {
+					pol.budget.set_if_unset(p);
 				},
 				TrafficPolicy::Authorization(p) => {
 					authz.push(p.clone().0);
