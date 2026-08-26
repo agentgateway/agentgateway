@@ -153,7 +153,7 @@
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
 |`extproc`|object|`extproc` contains dynamic metadata from ext_proc filters|
 |`mcpGuardrails`|object|`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.|
-|`guardrails`|[]object|`guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject)<br>during the request, currently populated for `bedrockGuardrails` guards. Only present in<br>CEL that runs after the request completes, such as log and metric fields.|
+|`guardrails`|[]object|`guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject),<br>in either the request or response phase. Only present in CEL that runs after the request<br>completes, such as log and metric fields.|
 |`guardrails[].phase`|string|The phase the guardrail intervened in: `request` or `response`.|
 |`guardrails[].guard`|string|The guard kind that intervened, such as `bedrockGuardrails`.|
 |`guardrails[].action`|string|The action the guardrail took: `mask` or `reject`.|

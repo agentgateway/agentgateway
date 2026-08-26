@@ -1108,7 +1108,7 @@
       "additionalProperties": true
     },
     "guardrails": {
-      "description": "`guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject)\nduring the request, currently populated for `bedrockGuardrails` guards. Only present in\nCEL that runs after the request completes, such as log and metric fields.",
+      "description": "`guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject),\nin either the request or response phase. Only present in CEL that runs after the request\ncompletes, such as log and metric fields.",
       "type": [
         "array",
         "null"

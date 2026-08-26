@@ -2164,9 +2164,9 @@ pub struct ExecutorSerde {
 	)]
 	pub mcp_guardrails: Option<McpGuardrailsDynamicMetadata>,
 
-	/// `guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject)
-	/// during the request, currently populated for `bedrockGuardrails` guards. Only present in
-	/// CEL that runs after the request completes, such as log and metric fields.
+	/// `guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject),
+	/// in either the request or response phase. Only present in CEL that runs after the request
+	/// completes, such as log and metric fields.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub guardrails: Option<Vec<GuardrailInfo>>,
 
