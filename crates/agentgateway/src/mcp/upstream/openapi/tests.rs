@@ -852,6 +852,51 @@ fn test_parse_openapi_schema_maps_summary_to_tool_title() {
 }
 
 #[test]
+fn test_parse_openapi_schema_body_without_schema_is_unconstrained() {
+	// GitHub's REST API spec has an operation (repos/get-content) whose
+	// application/json body declares only examples, no schema. That means an
+	// unconstrained payload, not a broken document.
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "SchemalessBody", "version": "1.0.0"},
+		"paths": {
+			"/echo": {
+				"post": {
+					"operationId": "echo",
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"examples": {"anything": {"value": {"hello": "world"}}}
+							}
+						}
+					},
+					"responses": {"200": {"description": "ok"}}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+
+	let (tool, _) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "echo")
+		.expect("tool should exist");
+	let properties = tool
+		.input_schema
+		.get("properties")
+		.and_then(|v| v.as_object())
+		.expect("input schema should have properties");
+	assert_eq!(properties.get("body"), Some(&json!({})));
+	assert_eq!(
+		tool.input_schema.get("required"),
+		Some(&json!(["body"])),
+		"required flag should be preserved"
+	);
+}
+
+#[test]
 fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
 	let raw = r#"{
 		"openapi": "3.0.0",

@@ -270,12 +270,13 @@ pub(crate) fn parse_openapi_schema(
 								Some(body) => {
 									let body = resolve_request_body(body, open_api)?;
 									if let Some(media_type) = body.content.get("application/json") {
-										let schema_ref = media_type
-											.schema
-											.as_ref()
-											.ok_or(ParseError::MissingReference("application/json".to_string()))?;
-										let body_schema =
-											serde_json::to_value(schema_ref).map_err(ParseError::SerdeError)?;
+										// No schema means an unconstrained payload per OpenAPI.
+										let body_schema = match media_type.schema.as_ref() {
+											Some(schema_ref) => {
+												serde_json::to_value(schema_ref).map_err(ParseError::SerdeError)?
+											},
+											None => json!({}),
+										};
 										Some((BODY_NAME.clone(), body_schema, body.required))
 									} else if body.content.contains_key("application/octet-stream") {
 										request_content_type = Some("application/octet-stream".to_string());
