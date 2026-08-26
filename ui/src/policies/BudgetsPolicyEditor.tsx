@@ -12,7 +12,7 @@ type ScopeKind = 'perKey' | 'groupBy' | 'selector';
 type Draft = {
 	name: string;
 	scope: ScopeKind;
-	field: string;
+	fields: string[];
 	selector: { field: string; value: string }[];
 	unit: 'USD' | 'Tokens';
 	amount: string;
@@ -62,13 +62,50 @@ export function BudgetsPolicyEditor(props: {
 					</Field>
 
 					{draft.scope === 'groupBy' ? (
-						<Field label="Metadata field" hint="Keys without this field are not budgeted.">
-							<input
-								value={draft.field}
-								placeholder="group"
-								onChange={e => update(index, { field: e.target.value })}
-							/>
-						</Field>
+						<FieldGroup
+							label="Metadata fields"
+							hint="One allowance per distinct combination. Keys missing any of these fields are not budgeted."
+						>
+							{draft.fields.map((field, fieldIndex) => (
+								<div className="budget-group-field-row" key={fieldIndex}>
+									<Field label={fieldIndex === 0 ? 'Field' : 'And'}>
+										<input
+											value={field}
+											placeholder="group"
+											onChange={e =>
+												update(index, {
+													fields: draft.fields.map((entry, i) =>
+														i === fieldIndex ? e.target.value : entry
+													)
+												})
+											}
+										/>
+									</Field>
+									{draft.fields.length > 1 ? (
+										<button
+											className="table-action danger"
+											type="button"
+											aria-label="Remove metadata field"
+											onClick={() =>
+												update(index, {
+													fields: draft.fields.filter((_, i) => i !== fieldIndex)
+												})
+											}
+										>
+											<Trash2 size={14} />
+										</button>
+									) : null}
+								</div>
+							))}
+							<button
+								className="button"
+								type="button"
+								onClick={() => update(index, { fields: [...draft.fields, ''] })}
+							>
+								<Plus size={16} />
+								Add field
+							</button>
+						</FieldGroup>
 					) : null}
 
 					{draft.scope === 'selector' ? (
@@ -190,7 +227,7 @@ function newDraft(): Draft {
 	return {
 		name: '',
 		scope: 'perKey',
-		field: '',
+		fields: [''],
 		selector: [],
 		unit: 'USD',
 		amount: '100',
@@ -206,7 +243,7 @@ function toDraft(budget: Budget): Draft {
 	return {
 		name: budget.name,
 		scope: isGroupBy ? 'groupBy' : isSelector ? 'selector' : 'perKey',
-		field: isGroupBy ? scope.groupBy : '',
+		fields: isGroupBy && scope.groupBy.length ? [...scope.groupBy] : [''],
 		selector: isSelector
 			? Object.entries(scope.selector).map(([field, value]) => ({ field, value }))
 			: [],
@@ -228,7 +265,11 @@ function toBudget(draft: Draft): Budget {
 }
 
 function buildScope(draft: Draft): Budget['scope'] {
-	if (draft.scope === 'groupBy') return { groupBy: draft.field.trim() };
+	if (draft.scope === 'groupBy') {
+		// Deduplicated because the gateway stores the fields as a set, so a repeat would be dropped
+		// server-side and the preview would stop matching what is written.
+		return { groupBy: [...new Set(draft.fields.map(field => field.trim()).filter(Boolean))] };
+	}
 	if (draft.scope === 'selector') {
 		const selector: Record<string, string> = {};
 		for (const row of draft.selector) {

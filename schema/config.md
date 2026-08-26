@@ -3829,7 +3829,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -5636,7 +5636,7 @@
 |`binds[].listeners[].routes[].policies.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].routes[].policies.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].routes[].policies.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`binds[].listeners[].routes[].policies.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`binds[].listeners[].routes[].policies.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`binds[].listeners[].routes[].policies.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`binds[].listeners[].routes[].backends`|[]object|Weighted backends this route forwards traffic to.|
 |`binds[].listeners[].routes[].backends[].service`|object|Route to a Service defined in the top-level `services` list.|
@@ -17567,7 +17567,7 @@
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`binds[].listeners[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`binds[].listeners[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -17589,7 +17589,7 @@
 |`binds[].listeners[].policies.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].policies.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].policies.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`binds[].listeners[].policies.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`binds[].listeners[].policies.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`binds[].listeners[].policies.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`binds[].tunnelProtocol`|enum|Protocol used to tunnel backend connections, such as Direct or HBONE.<br>Possible values: `direct`, `hboneWaypoint`, `hboneGateway`, `proxy`, `connect`.|
 |`binds[].mode`|enum|Whether the bind opens an OS listener socket. Defaults to `standard` (binds the port).<br>Set to `internal` to create a routing-only bind that does not bind a socket.<br>Possible values: `standard`, `internal`.|
@@ -22503,7 +22503,7 @@
 |`policies[].policy.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`policies[].policy.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`policies[].policy.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`policies[].policy.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`policies[].policy.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`policies[].policy.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`policies[].policy.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`policies[].policy.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -24310,7 +24310,7 @@
 |`policies[].policy.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`policies[].policy.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`policies[].policy.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`policies[].policy.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`policies[].policy.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`policies[].policy.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`workloads`|[]object|workloads defines the set of workloads that the proxy can serve. These are selected by `services`.<br>This is an advanced feature that is mostly for testing; usage of inline `backends` on routes and<br>policies is typically preferred.|
 |`services`|[]object|services defines the set of services that the proxy can route to. These consist of `workloads`.<br>This is an advanced feature that is mostly for testing; usage of inline `backends` on routes and<br>policies is typically preferred.|
@@ -38346,7 +38346,7 @@
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`routeGroups[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routeGroups[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -40153,7 +40153,7 @@
 |`routeGroups[].routes[].policies.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routeGroups[].routes[].policies.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routeGroups[].routes[].policies.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`routeGroups[].routes[].policies.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`routeGroups[].routes[].policies.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`routeGroups[].routes[].policies.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`routeGroups[].routes[].backends`|[]object|Weighted backends this route forwards traffic to.|
 |`routeGroups[].routes[].backends[].service`|object|Route to a Service defined in the top-level `services` list.|
@@ -51794,7 +51794,7 @@
 |`gateways.*.listeners[].apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`gateways.*.listeners[].apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`gateways.*.listeners[].apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.listeners[].apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -51816,7 +51816,7 @@
 |`gateways.*.listeners[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.listeners[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.listeners[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`gateways.*.listeners[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`gateways.*.listeners[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`gateways.*.listeners[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`gateways.*.tls`|object|tls enables HTTPS for this gateway. Maybe not be set with `listeners`|
 |`gateways.*.tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Unused when `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
@@ -53117,7 +53117,7 @@
 |`gateways.*.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`gateways.*.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`gateways.*.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`gateways.*.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`gateways.*.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -53139,7 +53139,7 @@
 |`gateways.*.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`gateways.*.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`gateways.*.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`gateways.*.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`routes`|[]object|routes defines HTTP routes attached to one or more named gateways.|
 |`routes[].gateways`|string|gateways attaches this route to named gateways or gateway listeners.<br>This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>If unset, the 'default' gateway will be used.|
@@ -56845,7 +56845,7 @@
 |`routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routes[].policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`routes[].policies.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`routes[].policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -58652,7 +58652,7 @@
 |`routes[].policies.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routes[].policies.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routes[].policies.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`routes[].policies.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`routes[].policies.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`routes[].policies.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`routes[].backends`|[]object|Weighted backends this route forwards traffic to.|
 |`routes[].backends[].service`|object|Route to a Service defined in the top-level `services` list.|
@@ -74037,7 +74037,7 @@
 |`llm.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`llm.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`llm.policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`llm.policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`llm.policies.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`llm.policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`llm.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`llm.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -74059,7 +74059,7 @@
 |`llm.policies.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`llm.policies.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`llm.policies.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`llm.policies.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`llm.policies.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`llm.policies.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`llm.policies.guardrails`|object|Guardrails to apply to every configured model.|
 |`llm.policies.guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
@@ -80324,7 +80324,7 @@
 |`mcp.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`mcp.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`mcp.policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`mcp.policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`mcp.policies.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`mcp.policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`mcp.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`mcp.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
@@ -82131,7 +82131,7 @@
 |`mcp.policies.budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`mcp.policies.budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`mcp.policies.budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`mcp.policies.budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`mcp.policies.budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`mcp.policies.budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`ui`|object|ui defines settings for how the UI and UI backend is exposed. By default, the UI is exposed only<br>on the admin interface (typically localhost:15000). This setting allows attaching to `gateways`<br>to serve externally, as well as attaching policies to UI traffic.<br>It is strongly recommended to utilize authentication (typically OIDC) when exposing the UI externally.|
 |`ui.gateways`|string|gateways attaches the UI and UI backend routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>When omitted and a gateway named `default` exists, the UI routes attach to it.|
@@ -82815,7 +82815,7 @@
 |`ui.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`ui.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`ui.policies.apiKey.keys[].budgets[].scope`|object|Which API keys share this budget's counter. Defaults to one counter per key.|
-|`ui.policies.apiKey.keys[].budgets[].scope.groupBy`|string|One counter per distinct value of this metadata field.|
+|`ui.policies.apiKey.keys[].budgets[].scope.groupBy`|[]string|One counter per distinct value group of this metadata field.|
 |`ui.policies.apiKey.keys[].budgets[].scope.selector`|object|One counter shared by every key whose metadata matches all of these fields.|
 |`ui.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`ui.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|

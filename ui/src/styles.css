@@ -5755,6 +5755,18 @@ textarea {
 	grid-column: 1 / -1;
 }
 
+/* One metadata field of a grouped budget: the input takes the row, the remove button only its own width. */
+.budget-group-field-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 12px;
+}
+
+.budget-group-field-row .field {
+	margin-bottom: 0;
+}
+
 .api-key-budget-usage {
 	display: grid;
 	gap: 7px;

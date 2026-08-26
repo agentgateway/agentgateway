@@ -29,7 +29,7 @@ pub struct BudgetStatus {
 /// Field order is also the sort order for reported budgets.
 #[derive(Debug, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
 // Camel case has no effect here, this is the standard in this file.
-#[serde(rename_all = "camelCase")] 
+#[serde(rename_all = "camelCase")]
 pub struct BudgetStatusScope {
 	/// `perKey`, `groupBy`, or `selector`.
 	pub kind: &'static str,
@@ -51,10 +51,10 @@ impl From<&ResolvedScope> for BudgetStatusScope {
 				field: None,
 				value: Some(api_key.clone()),
 			},
-			ResolvedScope::GroupBy { field, value } => Self {
+			ResolvedScope::GroupBy { fields, values } => Self {
 				kind,
-				field: Some(field.clone()),
-				value: Some(value.clone()),
+				field: Some(fields.join(".")),
+				value: Some(values.join(".")),
 			},
 			ResolvedScope::Selector => Self {
 				kind,

@@ -6591,11 +6591,15 @@
           "const": "perKey"
         },
         {
-          "description": "One counter per distinct value of this metadata field.",
+          "description": "One counter per distinct value group of this metadata field.",
           "type": "object",
           "properties": {
             "groupBy": {
-              "type": "string"
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": [

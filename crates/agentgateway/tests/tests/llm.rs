@@ -178,7 +178,7 @@ async fn llm_token_budget_persists_and_blocks_requests() {
 	assert_eq!(body["error"]["budget_kind"], "perKey");
 	assert_eq!(
 		body["error"]["message"],
-		"Budget 'tokens' (perKey) exceeded"
+		"Budget: 'tokens' of kind 'perKey' exceeded"
 	);
 	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
 }
@@ -1392,7 +1392,7 @@ async fn llm_group_scoped_budget_pools_spend_across_keys() {
 		},
 		"budgets": [{
 			"name": "team",
-			"scope": {"groupBy": "group"},
+			"scope": {"groupBy": ["group"]},
 			"limit": {"unit": "Tokens", "amount": 40},
 			"window": {"rolling": "1h"},
 			"onBudgetExceeded": "Block"

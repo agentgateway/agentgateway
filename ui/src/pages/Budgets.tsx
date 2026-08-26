@@ -380,7 +380,14 @@ function countingKeys(counter: BudgetStatus, rows: BudgetRow[], keys: VirtualApi
 		return keys.filter(key => metadataValue(key, 'name') === value);
 	}
 	if (kind === 'groupBy') {
-		return field ? keys.filter(key => metadataValue(key, field) === value) : [];
+		// The status API reports a grouped counter as its fields and values joined with dots, so a key
+		// belongs to the counter when its own values join to the same string.
+		if (!field) return [];
+		const fields = field.split('.');
+		return keys.filter(key => {
+			const values = fields.map(name => metadataValue(key, name));
+			return values.every(item => item !== undefined) && values.join('.') === value;
+		});
 	}
 	const row = rows.find(item => item.budget.name === counter.name && rowScopeKind(item) === kind);
 	if (!row) return [];
@@ -412,7 +419,7 @@ function BudgetEditor(props: {
 	const [targetKey, setTargetKey] = useState(
 		props.initial.source.kind === 'key' ? props.initial.source.key : (keyOf(props.keys[0]) ?? '')
 	);
-	const [field, setField] = useState(groupByField(props.initial.budget));
+	const [fields, setFields] = useState(groupByFields(props.initial.budget));
 	const [selector, setSelector] = useState(selectorRows(props.initial.budget));
 	const [unit, setUnit] = useState(props.initial.budget.limit.unit);
 	const [amount, setAmount] = useState(String(props.initial.budget.limit.amount));
@@ -429,18 +436,20 @@ function BudgetEditor(props: {
 				? 'Token limits must be whole numbers.'
 				: !rolling.trim()
 					? 'Window is required, for example 1h, 24h, or 30d.'
-					: kind === 'groupBy' && !field.trim()
-						? 'Choose the metadata field to group by.'
-						: kind === 'oneKey' && !targetKey
-							? 'Choose the API key this budget applies to.'
-							: null;
+					: kind === 'groupBy' && !namedFields(fields).length
+						? 'Choose at least one metadata field to group by.'
+						: kind === 'groupBy' && hasDuplicate(namedFields(fields))
+							? 'Each metadata field can only be used once.'
+							: kind === 'oneKey' && !targetKey
+								? 'Choose the API key this budget applies to.'
+								: null;
 
 	function submit() {
 		if (problem) return;
 		props.onSave(
 			{
 				name: name.trim(),
-				scope: buildScope(kind, field, selector),
+				scope: buildScope(kind, fields, selector),
 				limit: { unit, amount: amountValue },
 				window: { rolling: rolling.trim() },
 				onBudgetExceeded: action
@@ -496,18 +505,46 @@ function BudgetEditor(props: {
 			) : null}
 
 			{kind === 'groupBy' ? (
-				<Field
-					label="Metadata field"
-					hint="Each value gets its own allowance. Keys without the field are not budgeted."
+				<FieldGroup
+					label="Metadata fields"
+					hint={
+						namedFields(fields).length > 1
+							? 'Each distinct combination of these values gets its own allowance. Keys missing any of the fields are not budgeted.'
+							: 'Each value gets its own allowance. Keys without the field are not budgeted.'
+					}
 				>
-					<FreeformCombobox
-						ariaLabel="Metadata field"
-						value={field}
-						options={fieldOptions}
-						onChange={setField}
-						placeholder="group"
-					/>
-				</Field>
+					<div className="api-key-budget-list">
+						{fields.map((entry, index) => (
+							<div className="budget-group-field-row" key={`group-field-${index}`}>
+								<Field label={index === 0 ? 'Field' : 'And'}>
+									<FreeformCombobox
+										ariaLabel="Metadata field"
+										value={entry}
+										options={fieldOptions.filter(
+											option => option === entry || !fields.includes(option)
+										)}
+										onChange={value => setFields(fields.map((f, i) => (i === index ? value : f)))}
+										placeholder="group"
+									/>
+								</Field>
+								{fields.length > 1 ? (
+									<button
+										className="table-action danger"
+										type="button"
+										aria-label="Remove metadata field"
+										onClick={() => setFields(fields.filter((_, i) => i !== index))}
+									>
+										<Trash2 size={14} />
+									</button>
+								) : null}
+							</div>
+						))}
+						<button className="button" type="button" onClick={() => setFields([...fields, ''])}>
+							<Plus size={16} />
+							Add field
+						</button>
+					</div>
+				</FieldGroup>
 			) : null}
 
 			{kind === 'selector' ? (
@@ -688,10 +725,20 @@ function rowKey(row: BudgetRow) {
 	return `${owner}:${row.budget.name}`;
 }
 
-function groupByField(budget: Budget) {
-	return budget.scope && typeof budget.scope === 'object' && 'groupBy' in budget.scope
-		? budget.scope.groupBy
-		: '';
+/** The fields a budget groups by, always with at least one row so the editor has something to fill. */
+function groupByFields(budget: Budget): string[] {
+	const scope = budget.scope;
+	if (!scope || typeof scope !== 'object' || !('groupBy' in scope)) return [''];
+	return scope.groupBy.length ? [...scope.groupBy] : [''];
+}
+
+/** Editor rows the user actually filled in, ignoring the blank one a new row starts as. */
+function namedFields(fields: string[]) {
+	return fields.map(field => field.trim()).filter(Boolean);
+}
+
+function hasDuplicate(values: string[]) {
+	return new Set(values).size !== values.length;
 }
 
 function selectorRows(budget: Budget) {
@@ -709,10 +756,10 @@ function updateRow(
 
 function buildScope(
 	kind: ScopeKind,
-	field: string,
+	fields: string[],
 	selector: { field: string; value: string }[]
 ): Budget['scope'] {
-	if (kind === 'groupBy') return { groupBy: field.trim() };
+	if (kind === 'groupBy') return { groupBy: namedFields(fields) };
 	if (kind === 'selector') {
 		const match: Record<string, string> = {};
 		for (const row of selector) {
@@ -730,7 +777,8 @@ function scopeSummary(row: BudgetRow, keys: VirtualApiKey[]) {
 		return key ? keyLabel(key) : 'Unknown key';
 	}
 	const kind = rowScopeKind(row);
-	if (kind === 'groupBy') return `One allowance per ${groupByField(row.budget)}`;
+	if (kind === 'groupBy')
+		return `One allowance per ${namedFields(groupByFields(row.budget)).join(' + ')}`;
 	if (kind === 'selector') {
 		const entries = selectorRows(row.budget);
 		if (!entries.length) return 'All keys, pooled';

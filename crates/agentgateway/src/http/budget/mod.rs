@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -153,16 +153,23 @@ pub enum BudgetScope {
 	/// One counter per API key, identified by the key itself.
 	#[default]
 	PerKey,
-	/// One counter per distinct value of this metadata field.
-	GroupBy(String),
+	/// One counter per distinct value group of this metadata field.
+	// Use btreeset because its ordered we construct the budget id from it
+	GroupBy(BTreeSet<String>),
 	/// One counter shared by every key whose metadata matches all of these fields.
 	Selector(HashMap<String, String>),
 }
 
 #[derive(Debug, Clone)]
 pub enum ResolvedScope {
-	PerKey { api_key_id: String, api_key: String }, // hash for the id, name for status
-	GroupBy { field: String, value: String },
+	PerKey {
+		api_key_id: String,
+		api_key: String,
+	}, // hash for the id, name for status
+	GroupBy {
+		fields: Vec<String>,
+		values: Vec<String>,
+	},
 	Selector, // name comes from the Budget
 }
 
@@ -181,7 +188,7 @@ impl std::fmt::Display for ResolvedScope {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::PerKey { api_key, .. } => write!(f, "api-key {api_key}"),
-			Self::GroupBy { field, value } => write!(f, "{field}={value}"),
+			Self::GroupBy { fields, values } => write!(f, "{}={}", fields.join("."), values.join("."),),
 			Self::Selector => f.write_str("selector"),
 		}
 	}
@@ -225,9 +232,9 @@ pub fn validate_budgets(budgets: &[Budget], source: &str) -> anyhow::Result<()> 
 		);
 		match &budget.scope {
 			BudgetScope::PerKey => {},
-			BudgetScope::GroupBy(field) => anyhow::ensure!(
-				!field.is_empty(),
-				"budget {:?} must name the metadata field to group by",
+			BudgetScope::GroupBy(fields) => anyhow::ensure!(
+				!fields.is_empty(),
+				"budget {:?} must name the metadata fields to group by",
 				budget.name,
 			),
 			BudgetScope::Selector(selector) => {
@@ -291,6 +298,7 @@ pub fn resolve_budgets(
 	validate_budgets(inline, "api-key")?;
 	let mut budgets = Vec::new();
 	let mut counters = HashSet::new();
+
 	for budget in inline.iter().chain(policy_budgets) {
 		let Some(scope) = resolve_scope(budget, api_key_id, api_key, metadata)? else {
 			continue;
@@ -332,11 +340,19 @@ fn resolve_scope(
 				.context("API keys with per-key budgets must have a metadata.name")?
 				.to_owned(),
 		}),
-		BudgetScope::GroupBy(field) => {
-			metadata_scope_value(metadata, field).map(|value| ResolvedScope::GroupBy {
-				field: field.clone(),
-				value,
-			})
+		BudgetScope::GroupBy(fields) => {
+			let values = fields
+				.iter()
+				.filter_map(|field| metadata_scope_value(metadata, field))
+				.collect::<Vec<_>>();
+			if values.len() == fields.len() {
+				Some(ResolvedScope::GroupBy {
+					fields: fields.clone().into_iter().collect::<Vec<_>>(),
+					values,
+				})
+			} else {
+				None
+			}
 		},
 		BudgetScope::Selector(selector) => {
 			metadata_matches(selector, metadata).then_some(ResolvedScope::Selector)
@@ -524,14 +540,14 @@ fn budget_id(scope: &ResolvedScope, budget: &Budget) -> String {
 			budget.name.len(),
 			budget.name
 		),
-		ResolvedScope::GroupBy { field, value } => format!(
+		ResolvedScope::GroupBy { fields, values } => format!(
 			"group:{}:{}:{}:{}:{}:{}",
 			budget.name.len(),
 			budget.name,
-			field.len(),
-			field,
-			value.len(),
-			value
+			fields.len(),
+			fields.join("."),
+			values.len(),
+			values.join("sep")
 		),
 		// The selector is deliberately absent: editing membership must not reset accumulated usage.
 		ResolvedScope::Selector => format!("budget:{}:{}", budget.name.len(), budget.name),
@@ -1070,7 +1086,7 @@ CREATE TABLE budget_usage (
 		let policy_budgets = vec![scoped_budget(
 			"team",
 			100,
-			BudgetScope::GroupBy("group".to_string()),
+			BudgetScope::GroupBy(BTreeSet::from(["group".to_string()])),
 		)];
 		let authentication = local_keys(serde_json::json!({
 			"keys": [
@@ -1100,12 +1116,109 @@ CREATE TABLE budget_usage (
 		assert_eq!(reported.len(), 2);
 		assert_eq!(reported[0].scope.kind, "groupBy");
 		assert_eq!(reported[0].scope.field.as_deref(), Some("group"));
-		let mut values = reported
+		let values = reported
 			.iter()
 			.map(|budget| budget.scope.value.as_deref().unwrap())
 			.collect::<Vec<_>>();
-		values.sort();
 		assert_eq!(values, ["platform", "research"]);
+	}
+
+	#[test]
+	fn group_scoped_budgets_partition_on_every_field() {
+		let policy_budgets = vec![scoped_budget(
+			"team",
+			100,
+			BudgetScope::GroupBy(BTreeSet::from(["region".to_string(), "group".to_string()])),
+		)];
+		let authentication = local_keys(serde_json::json!({
+			"keys": [
+				{"key": "sk-a", "metadata": {"name": "alice", "group": "research", "region": "eu"}},
+				{"key": "sk-b", "metadata": {"name": "bob", "group": "research", "region": "eu"}},
+				// Same group, different region, so not the same counter.
+				{"key": "sk-c", "metadata": {"name": "carol", "group": "research", "region": "us"}},
+				// Same region, different group, likewise.
+				{"key": "sk-d", "metadata": {"name": "dave", "group": "platform", "region": "eu"}},
+			]
+		}))
+		.compile(&policy_budgets)
+		.unwrap();
+
+		let ids = counter_ids(&authentication);
+		assert_eq!(ids.len(), 4, "every key is budgeted");
+		let mut distinct = ids.clone();
+		distinct.dedup();
+		assert_eq!(
+			distinct.len(),
+			3,
+			"only the two eu/research keys share a counter: {ids:?}"
+		);
+
+		// Every value stays paired with the field it came from, in the scope's own field order.
+		let policy = BudgetPolicy::default();
+		policy.register(&authentication, true).unwrap();
+		let reported = policy.status(None).unwrap().budgets;
+		assert_eq!(reported.len(), 3);
+		let mut described = reported
+			.iter()
+			.map(|budget| {
+				(
+					budget.scope.field.as_deref().unwrap(),
+					budget.scope.value.as_deref().unwrap(),
+				)
+			})
+			.collect::<Vec<_>>();
+		described.sort();
+		assert_eq!(
+			described,
+			[
+				("group.region", "platform.eu"),
+				("group.region", "research.eu"),
+				("group.region", "research.us"),
+			]
+		);
+	}
+
+	#[test]
+	fn a_key_missing_one_group_field_is_unbudgeted() {
+		let policy_budgets = vec![scoped_budget(
+			"team",
+			100,
+			BudgetScope::GroupBy(BTreeSet::from(["region".to_string(), "group".to_string()])),
+		)];
+		let authentication = local_keys(serde_json::json!({
+			"keys": [
+				{"key": "sk-a", "metadata": {"name": "alice", "group": "research", "region": "eu"}},
+				{"key": "sk-b", "metadata": {"name": "bob", "group": "research"}},
+				{"key": "sk-c", "metadata": {"name": "carol"}},
+			]
+		}))
+		.compile(&policy_budgets)
+		.unwrap();
+
+		assert_eq!(
+			counter_ids(&authentication).len(),
+			1,
+			"only the key carrying both fields is budgeted"
+		);
+	}
+
+	#[test]
+	fn group_scoped_counter_ids_are_independent_of_field_order() {
+		let keys = serde_json::json!({
+			"keys": [{"key": "sk-a", "metadata": {"name": "alice", "group": "research", "region": "eu"}}]
+		});
+		let ids = |fields: [&str; 2]| {
+			counter_ids(
+				&local_keys(keys.clone())
+					.compile(&[scoped_budget(
+						"team",
+						100,
+						BudgetScope::GroupBy(fields.iter().map(|f| (*f).to_string()).collect()),
+					)])
+					.unwrap(),
+			)
+		};
+		assert_eq!(ids(["group", "region"]), ids(["region", "group"]));
 	}
 
 	#[test]
@@ -1187,7 +1300,7 @@ CREATE TABLE budget_usage (
 		let raised = vec![scoped_budget(
 			"team",
 			200,
-			BudgetScope::GroupBy("group".to_string()),
+			BudgetScope::GroupBy(BTreeSet::from(["group".to_string()])),
 		)];
 		let policy = BudgetPolicy::default();
 		policy
@@ -1196,7 +1309,7 @@ CREATE TABLE budget_usage (
 					.compile(&[scoped_budget(
 						"team",
 						100,
-						BudgetScope::GroupBy("group".to_string()),
+						BudgetScope::GroupBy(BTreeSet::from(["group".to_string()])),
 					)])
 					.unwrap(),
 				true,

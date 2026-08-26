@@ -49,6 +49,13 @@ export function findPerKeyBudget(
 
 export function budgetScopeLabel(scope: BudgetScope) {
 	if (scope.kind === 'perKey') return scope.value ?? 'One key';
-	if (scope.kind === 'groupBy') return `${scope.field} = ${scope.value}`;
+	if (scope.kind === 'groupBy') {
+		// Multi-field counters arrive as their fields and values joined with dots. Pair them back up
+		// when the two sides line up, falling back to the raw form if a value contained a dot.
+		const fields = (scope.field ?? '').split('.');
+		const values = (scope.value ?? '').split('.');
+		if (fields.length !== values.length) return `${scope.field} = ${scope.value}`;
+		return fields.map((field, index) => `${field} = ${values[index]}`).join(', ');
+	}
 	return 'All matching keys';
 }
