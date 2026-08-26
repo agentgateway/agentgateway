@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Agent Threat Rules (ATR) prompt-injection guard.
+#
+# The patterns below are copied verbatim from the open, MIT-licensed ATR corpus
+# (https://github.com/Agent-Threat-Rule/agent-threat-rules), prompt-injection
+# category. They are a curated, illustrative subset restricted to rules whose
+# regex is RE2-compatible, because agentgateway evaluates promptGuard patterns
+# with the Rust `regex` crate (no look-around or back-references). Each pattern
+# keeps its ATR rule id so it can be traced to the source and re-verified.
+#
+# Nothing agentgateway-side changes: this uses the built-in promptGuard.regex
+# slot. ATR is third-party content, not a dependency or an endorsed backend.
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - regex:
+                action: reject
+                rules:
+                - pattern: '(?i)\bI\s+have\s+been\s+PWNED\b'  # ATR-2026-00452 — Direct PWNED Payload Injection in User
+                - pattern: '(?i)\*{2,3}\s*NEW\s+IMPORTANT\s+INSTRUCTIONS\s*\*{2,3}'  # ATR-2026-01759 — DoS Injection: NEW IMPORTANT INSTRUCTI
+                - pattern: '(?i)answer\s*:\s*task\s+complete\.?[\s\n]+ignore'  # ATR-2026-01000 — Context-Ignore via Fake Completion Pre
+                - pattern: '(?i)(ignore\s+the\s+above\s+){8,}|(?:ignore\s+previous\s+instructions?\s+){6,}'  # ATR-2026-01007 — Token-Repeat Flooding Injection
+                - pattern: '(?i)<!--\s*(SYSTEM\s+OVERRIDE|CONSTITUTIONAL\s+AI|EMERGENCY\s+OVERRIDE)[^-]{0,50}-->'  # ATR-2026-01019 — System Prompt Override via Fake Diagno
+                - pattern: '(?i)<!--[^>]{0,200}(hypothetical(ly)?|ignore\s+the|we\s+might\s+state)[^>]{0,200}-->'  # ATR-2026-01758 — Hypothetical / Fictional-Story Framing
+                - pattern: '(?i)interlace\s+(part\s*(1|one|2|two)|"[^"]{3,60}"\s*,?\s+and\s+")'  # ATR-2026-01006 — Payload-Split String Concatenation Inj
+                - pattern: '["''][^"''\n]{1,15}["'']\s*\+\s*["''][^"''\n]{1,15}["'']\s*\+\s*["''][^"''\n]{1,15}["'']'  # ATR-2026-00443 — Word-Fragment Concatenation Assembly A
+                - pattern: '(密码|密碼|口令|暗码|暗碼|秘密|访问码|存取碼).{0,20}(是什么|是什麼|是多少|告诉我|告訴我|给我|給我|分享)'  # ATR-2026-01013 — Language-Evasion: Multilingual Credent
+                - pattern: '(?i)\bemojis?\b[^.\n]{0,40}\b(?:your|the)\s+(?:answer|reply|response|message)\b'  # ATR-2026-01902 — Output Emoji-Substitution Hijack of th
+                - pattern: '(?i)(\\u0{0,2}[0-9a-f]{2,4}\s*){5,}'  # ATR-2026-00080 — Encoding-Based Prompt Injection Evasio
+              rejection:
+                status: 400
+                headers:
+                  set:
+                    content-type: "application/json"
+                body: |
+                  {
+                    "error": {
+                      "message": "Request rejected: matched an Agent Threat Rules (ATR) prompt-injection pattern",
+                      "type": "invalid_request_error",
+                      "code": "prompt_injection_detected"
+                    }
+                  }
