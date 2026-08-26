@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 import {
+	configWithBudgets,
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
+	mockBudgetStatus,
 	mockGateway,
 	populatedConfig,
 	sameOriginGatewayConfig
@@ -17,6 +19,7 @@ const pages = [
 	['/llm/logs', 'Logs'],
 	['/llm/analytics', 'Analytics'],
 	['/llm/keys', 'Virtual API Keys'],
+	['/llm/budgets', 'Budgets'],
 	['/llm/playground', 'LLM Playground'],
 	['/llm/client-setup', 'Client Setup'],
 	['/mcp/servers', 'MCP Servers'],
@@ -1286,6 +1289,82 @@ test('Playground shows Claude subscription key warning', async ({ page }) => {
 
 	await expect(page.getByText('Claude subscription key detected')).toBeVisible();
 	await expect(page.getByText('sk-ant-oat')).toBeVisible();
+});
+
+test('virtual API keys list every budget that applies to them', async ({ page }) => {
+	await mockGateway(page, configWithBudgets());
+	await mockBudgetStatus(page);
+	await page.goto('/llm/keys');
+
+	const rows = page.locator('.keys-table tbody tr');
+	await expect(rows).toHaveCount(2);
+	await expect(rows.nth(0).locator('.key-budget-summary-name')).toHaveText([
+		'key only',
+		'per key',
+		'by team',
+		'everyone'
+	]);
+	await expect(rows.nth(1).locator('.key-budget-summary-name')).toHaveText([
+		'per key',
+		'by team',
+		'everyone'
+	]);
+});
+
+test('a budget declared on one key is not attributed to another key sharing its name', async ({
+	page
+}) => {
+	await mockGateway(page, configWithBudgets());
+	await mockBudgetStatus(page);
+	await page.goto('/llm/budgets');
+
+	const usage = page.locator('.panel', {
+		has: page.getByRole('heading', { name: 'Current usage' })
+	});
+	const counter = usage.locator('tbody tr', { hasText: 'key only' });
+	const keys = counter.locator('.counter-key-list summary');
+	await expect(keys).toContainText('1 key');
+
+	await keys.click();
+	await expect(counter.locator('.counter-key-list li')).toHaveText([
+		'shared name (agw_sk_...yone)'
+	]);
+});
+
+test('budgets are read from and written to the API key policy', async ({ page }) => {
+	const gateway = await mockGateway(page, configWithBudgets());
+	await mockBudgetStatus(page);
+	await page.goto('/llm/budgets');
+
+	const configured = page.locator('.panel', {
+		has: page.getByRole('heading', { name: 'Configured budgets' })
+	});
+	await expect(configured.locator('tbody tr td:first-child')).toHaveText([
+		'per key',
+		'by team',
+		'everyone',
+		'key only'
+	]);
+
+	await page.getByRole('button', { name: 'New budget' }).click();
+	const drawer = page.locator('.drawer');
+	await drawer.getByLabel(/^Name/).fill('added budget');
+	await drawer.getByRole('button', { name: 'Save budget' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBeGreaterThan(0);
+	const policies = (
+		gateway.postedConfigs.at(-1) as {
+			llm: { policies: Record<string, unknown> };
+		}
+	).llm.policies;
+	expect(policies.budgets).toBeUndefined();
+	const budgets = (policies.apiKey as { budgets: Array<{ name: string }> }).budgets;
+	expect(budgets.map(budget => budget.name)).toEqual([
+		'per key',
+		'by team',
+		'everyone',
+		'added budget'
+	]);
 });
 
 function emptyConfigWithModels() {

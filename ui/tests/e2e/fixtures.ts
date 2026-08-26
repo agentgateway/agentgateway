@@ -196,6 +196,106 @@ export function populatedConfig(): TestConfig {
 	};
 }
 
+export function configWithBudgets(): TestConfig {
+	const config = populatedConfig();
+	const llm = config.llm as { policies: Record<string, unknown> };
+	llm.policies.apiKey = {
+		keys: [
+			{
+				key: 'agw_sk_budgetkeyone',
+				metadata: { name: 'shared name', team: 'research' },
+				budgets: [
+					{
+						name: 'key only',
+						limit: { unit: 'USD', amount: 100 },
+						window: { rolling: '24h' },
+						onBudgetExceeded: 'Block'
+					}
+				]
+			},
+			{
+				key: 'agw_sk_budgetkeytwo',
+				metadata: { name: 'shared name', team: 'platform' }
+			}
+		],
+		mode: 'strict',
+		location: { header: { name: 'authorization', prefix: 'Bearer ' } },
+		budgets: [
+			{
+				name: 'per key',
+				scope: 'perKey',
+				limit: { unit: 'USD', amount: 50 },
+				window: { rolling: '24h' },
+				onBudgetExceeded: 'Audit'
+			},
+			{
+				name: 'by team',
+				scope: { groupBy: ['team'] },
+				limit: { unit: 'Tokens', amount: 1000 },
+				window: { rolling: '1h' },
+				onBudgetExceeded: 'Block'
+			},
+			{
+				name: 'everyone',
+				scope: { selector: {} },
+				limit: { unit: 'USD', amount: 500 },
+				window: { rolling: '30d' },
+				onBudgetExceeded: 'Audit'
+			}
+		]
+	};
+	return config;
+}
+
+export async function mockBudgetStatus(page: Page) {
+	await page.route('**/api/budgets/status', async route => {
+		await json(route, budgetStatusForBudgetConfig());
+	});
+}
+
+function budgetStatusForBudgetConfig() {
+	const now = Date.now();
+	const window = { start: now - 60_000, end: now + 60_000, durationMs: 120_000, expired: false };
+	const counter = (
+		name: string,
+		scope: { kind: string; field?: string; value?: string },
+		unit: string,
+		amount: string,
+		used: string
+	) => ({
+		scope,
+		name,
+		limit: { unit, amount },
+		usage: { used, remaining: String(Number(amount) - Number(used)), exceeded: false },
+		window,
+		onBudgetExceeded: 'Block',
+		updatedAt: now
+	});
+	return {
+		observedAt: now,
+		budgets: [
+			counter('key only', { kind: 'perKey', value: 'shared name' }, 'USD', '100', '25'),
+			counter('per key', { kind: 'perKey', value: 'shared name' }, 'USD', '50', '10'),
+			counter('per key', { kind: 'perKey', value: 'shared name' }, 'USD', '50', '5'),
+			counter(
+				'by team',
+				{ kind: 'groupBy', field: 'team', value: 'research' },
+				'Tokens',
+				'1000',
+				'100'
+			),
+			counter(
+				'by team',
+				{ kind: 'groupBy', field: 'team', value: 'platform' },
+				'Tokens',
+				'1000',
+				'200'
+			),
+			counter('everyone', { kind: 'selector' }, 'USD', '500', '50')
+		]
+	};
+}
+
 export function sameOriginGatewayConfig(): TestConfig {
 	const config = populatedConfig();
 	config.gateways = {
@@ -271,6 +371,10 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 
 	await page.route('**/api/config/effective', async route => {
 		await json(route, config);
+	});
+
+	await page.route('**/api/budgets/status', async route => {
+		await json(route, { observedAt: Date.now(), budgets: [] });
 	});
 
 	await page.route('**/config', async route => {
