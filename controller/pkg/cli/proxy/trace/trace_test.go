@@ -227,9 +227,40 @@ func TestTraceStreamURLEncodesExpression(t *testing.T) {
 
 func TestTraceStreamURLIncludesFollowDuration(t *testing.T) {
 	got := traceStreamURL("127.0.0.1:15000", "", true, 10*time.Minute)
-	want := "http://127.0.0.1:15000/debug/trace?follow=true&maxDurationMs=600000"
+	want := "http://127.0.0.1:15000/debug/trace?follow=10m0s"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestFollowOptionalDuration(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want time.Duration
+	}{
+		{name: "default", args: []string{"--follow"}, want: defaultFollowMaxDuration},
+		{name: "explicit", args: []string{"--follow=10m"}, want: 10 * time.Minute},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flags := &traceFlags{proxyAdminPort: 15000}
+			cmd := &cobra.Command{}
+			flags.attach(cmd)
+			if err := cmd.ParseFlags(tt.args); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := parseArgs(cmd, cmd.Flags().Args(), flags); err != nil {
+				t.Fatal(err)
+			}
+			if !cmd.Flags().Changed("follow") {
+				t.Fatal("follow flag was not marked as changed")
+			}
+			if flags.followDuration != tt.want {
+				t.Fatalf("got %s, want %s", flags.followDuration, tt.want)
+			}
+		})
 	}
 }
 

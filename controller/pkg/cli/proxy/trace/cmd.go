@@ -17,8 +17,7 @@ type traceFlags struct {
 	proxyAdminPort int
 	traceFile      string
 	expression     string
-	follow         bool
-	maxDuration    time.Duration
+	followDuration time.Duration
 	raw            bool
 	port           int
 	local          bool
@@ -56,7 +55,7 @@ func Command() flag.Command {
   agctl proxy trace --expression 'request.path == "/healthz"'
 
   # Follow matching requests for up to 10 minutes (JSONL includes requestId).
-  agctl proxy trace --follow --max-duration 10m --raw --expression 'request.path == "/v1/responses"'
+  agctl proxy trace --follow=10m --raw --expression 'request.path == "/v1/responses"'
   
   # Enable tracing and send a request to the gateway, with some curl arguments.
   agctl proxy trace gateway/my-gateway --raw --port 80 -- http://host/some/path -H "Authorization: Bearer sk-123"`,
@@ -82,8 +81,8 @@ func (f *traceFlags) attach(cmd *cobra.Command) {
 	cmd.Flags().IntVar(&f.proxyAdminPort, "proxy-admin-port", f.proxyAdminPort, "Agentgateway admin port")
 	cmd.Flags().StringVarP(&f.traceFile, "file", "f", "", "Trace JSONL file to render, or - for stdin")
 	cmd.Flags().StringVar(&f.expression, "expression", "", "CEL expression for selecting which request to trace")
-	cmd.Flags().BoolVar(&f.follow, "follow", false, "Continue tracing matching requests until the maximum duration or interruption")
-	cmd.Flags().DurationVar(&f.maxDuration, "max-duration", defaultFollowMaxDuration, "Maximum duration for --follow (maximum 1h)")
+	cmd.Flags().DurationVar(&f.followDuration, "follow", defaultFollowMaxDuration, "Continue tracing matching requests for this duration (maximum 1h)")
+	cmd.Flags().Lookup("follow").NoOptDefVal = defaultFollowMaxDuration.String()
 	cmd.Flags().BoolVar(&f.raw, "raw", false, "Print trace events as JSONL instead of opening the TUI")
 	cmd.Flags().IntVar(&f.port, "port", 0, "Gateway listener port to use when triggering a request")
 	cmd.Flags().BoolVar(&f.local, "local", false, "Trace against a local agentgateway instance on 127.0.0.1")
@@ -100,14 +99,12 @@ func parseArgs(cmd *cobra.Command, args []string, flags *traceFlags) (string, []
 	if flags.local && len(resourceArgs) > 0 {
 		return "", nil, fmt.Errorf("--local does not accept a resource argument")
 	}
-	if flags.maxDuration < time.Millisecond {
-		return "", nil, fmt.Errorf("--max-duration must be at least 1ms")
+	follow := cmd.Flags().Changed("follow")
+	if follow && flags.followDuration < time.Millisecond {
+		return "", nil, fmt.Errorf("--follow duration must be at least 1ms")
 	}
-	if flags.maxDuration > time.Hour {
-		return "", nil, fmt.Errorf("--max-duration must not exceed 1h")
-	}
-	if !flags.follow && cmd.Flags().Changed("max-duration") {
-		return "", nil, fmt.Errorf("--max-duration requires --follow")
+	if follow && flags.followDuration > time.Hour {
+		return "", nil, fmt.Errorf("--follow duration must not exceed 1h")
 	}
 	if flags.traceFile != "" {
 		if len(resourceArgs) > 0 {
@@ -119,7 +116,7 @@ func parseArgs(cmd *cobra.Command, args []string, flags *traceFlags) (string, []
 		if flags.expression != "" {
 			return "", nil, fmt.Errorf("--file does not accept --expression")
 		}
-		if flags.follow {
+		if follow {
 			return "", nil, fmt.Errorf("--file does not accept --follow")
 		}
 		if len(requestArgs) > 0 {

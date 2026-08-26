@@ -360,34 +360,12 @@ pub async fn handle_debug_trace(req: Request) -> Response {
 		})
 		.unwrap_or_default();
 	let expression = query.get("expression").cloned();
-	let follow = query.get("follow").is_some_and(|value| value == "true");
-	let max_duration_ms = query.get("maxDurationMs").cloned();
-	let requested_max_duration = match max_duration_ms {
-		Some(value) => match value.parse::<u64>() {
-			Ok(0) | Err(_) => {
-				return plaintext_response(
-					hyper::StatusCode::BAD_REQUEST,
-					"maxDurationMs must be a positive integer\n".into(),
-				);
-			},
-			Ok(value) => Some(Duration::from_millis(value)),
+	let max_duration = match parse_trace_follow_duration(query.get("follow").map(String::as_str)) {
+		Ok(duration) => duration,
+		Err(message) => {
+			return plaintext_response(hyper::StatusCode::BAD_REQUEST, message.into());
 		},
-		None => None,
 	};
-	if requested_max_duration.is_some() && !follow {
-		return plaintext_response(
-			hyper::StatusCode::BAD_REQUEST,
-			"maxDurationMs requires follow=true\n".into(),
-		);
-	}
-	let max_duration =
-		follow.then(|| requested_max_duration.unwrap_or(TRACE_FOLLOW_DEFAULT_DURATION));
-	if max_duration.is_some_and(|duration| duration > TRACE_FOLLOW_MAX_DURATION) {
-		return plaintext_response(
-			hyper::StatusCode::BAD_REQUEST,
-			"maxDurationMs must not exceed 3600000\n".into(),
-		);
-	}
 	let expression = match expression {
 		Some(expression) => match crate::cel::Expression::new_strict(&expression) {
 			Ok(expression) => Some(expression),
@@ -400,7 +378,7 @@ pub async fn handle_debug_trace(req: Request) -> Response {
 		},
 		None => None,
 	};
-	let rx = if follow {
+	let rx = if max_duration.is_some() {
 		crate::proxy::dtrace::track_expression_follow(expression)
 	} else {
 		crate::proxy::dtrace::track_expression(expression)
@@ -418,6 +396,24 @@ pub async fn handle_debug_trace(req: Request) -> Response {
 		.header("Cache-Control", "no-cache")
 		.body(body)
 		.expect("builder with known status code should not fail")
+}
+
+fn parse_trace_follow_duration(value: Option<&str>) -> Result<Option<Duration>, &'static str> {
+	match value {
+		None | Some("false") => Ok(None),
+		Some("") | Some("true") => Ok(Some(TRACE_FOLLOW_DEFAULT_DURATION)),
+		Some(value) => {
+			let duration = agent_core::durfmt::parse(value)
+				.map_err(|_| "follow must be empty, true, false, or a valid duration\n")?;
+			if duration < Duration::from_millis(1) {
+				return Err("follow duration must be at least 1ms\n");
+			}
+			if duration > TRACE_FOLLOW_MAX_DURATION {
+				return Err("follow duration must not exceed 1h\n");
+			}
+			Ok(Some(duration))
+		},
+	}
 }
 
 fn trace_sse_stream(

@@ -17,7 +17,6 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -155,8 +154,9 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 		}
 		return runTUI(cmd, target, body, nil, 0)
 	}
-	if flags.follow {
-		writeFollowWarning(cmd, flags.maxDuration)
+	follow := cmd.Flags().Changed("follow")
+	if follow {
+		writeFollowWarning(cmd, flags.followDuration)
 	}
 
 	var (
@@ -178,7 +178,7 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 	}
 	defer closeAdmin()
 
-	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression, flags.follow, flags.maxDuration)
+	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression, follow, flags.followDuration)
 	if err != nil {
 		return err
 	}
@@ -277,8 +277,7 @@ func traceStreamURL(adminAddress, expression string, follow bool, maxDuration ti
 	}
 	if follow {
 		q := u.Query()
-		q.Set("follow", "true")
-		q.Set("maxDurationMs", strconv.FormatInt(maxDuration.Milliseconds(), 10))
+		q.Set("follow", maxDuration.String())
 		u.RawQuery = q.Encode()
 	}
 	return u.String()
