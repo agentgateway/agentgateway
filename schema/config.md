@@ -109,11 +109,12 @@
 |`config.hbone.poolUnusedReleaseTimeout`|string|Duration after which unused pooled connections are released.|
 |`binds`|[]object|binds defines the low-level API for configuring the proxy.<br>Each bind represents a single port the proxy listens on, as well as the full set of configuration<br>(listeners, routes, backends) for that port.<br>Deprecated; usage of `gateways` and `routes` is recommended instead.|
 |`binds[].port`|integer|Port to bind on. Omit it for an internal wildcard bind (which serves any destination port<br>via in-process routing). A numeric port is required unless `mode` is `internal`.|
+|`binds[].protocol`|enum|Protocol handling for the entire bind. When omitted, it is inferred from the listeners.<br>Possible values: `HTTP`, `TLS`, `TCP`, `AUTO`.|
 |`binds[].listeners`|[]object|Named listeners bound on this port, which may use different protocols and TLS.|
 |`binds[].listeners[].name`|string|Name identifying this listener, referenced by `gateways: gateway-name/listener-name`.|
 |`binds[].listeners[].namespace`|string|Namespace scoping this listener.|
 |`binds[].listeners[].hostname`|string|Can be a wildcard|
-|`binds[].listeners[].protocol`|enum|Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, HBONE, or AUTO.<br>Possible values: `HTTP`, `HTTPS`, `TLS`, `TCP`, `HBONE`, `AUTO`.|
+|`binds[].listeners[].protocol`|enum|Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, or HBONE.<br>Possible values: `HTTP`, `HTTPS`, `TLS`, `TCP`, `HBONE`.|
 |`binds[].listeners[].tls`|object|TLS configuration, used with the HTTPS and TLS protocols.|
 |`binds[].listeners[].tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Unused when `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
 |`binds[].listeners[].tls.cert`|string|Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).<br>Required unless `spiffe` is set.|
@@ -5289,8 +5290,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`binds[].listeners[].routes[].policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`binds[].listeners[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`binds[].listeners[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`binds[].listeners[].routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`binds[].listeners[].routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`binds[].listeners[].routes[].policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -23935,8 +23935,7 @@
 |`policies[].policy.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`policies[].policy.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`policies[].policy.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`policies[].policy.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`policies[].policy.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`policies[].policy.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`policies[].policy.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`policies[].policy.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -39764,8 +39763,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`routeGroups[].routes[].policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`routeGroups[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`routeGroups[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`routeGroups[].routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`routeGroups[].routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`routeGroups[].routes[].policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -58221,8 +58219,7 @@
 |`routes[].policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routes[].policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`routes[].policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`routes[].policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -81672,8 +81669,7 @@
 |`mcp.policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`mcp.policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`mcp.policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`mcp.policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`mcp.policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`mcp.policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`mcp.policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`mcp.policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|

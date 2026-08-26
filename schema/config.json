@@ -1175,6 +1175,17 @@
           "maximum": 65535,
           "default": null
         },
+        "protocol": {
+          "description": "Protocol handling for the entire bind. When omitted, it is inferred from the listeners.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBindProtocol"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "listeners": {
           "description": "Named listeners bound on this port, which may use different protocols and TLS.",
           "type": "array",
@@ -1196,6 +1207,23 @@
       "additionalProperties": false,
       "required": [
         "listeners"
+      ]
+    },
+    "LocalBindProtocol": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "HTTP",
+            "TLS",
+            "TCP"
+          ]
+        },
+        {
+          "description": "EXPERIMENTAL: Detects TLS, plaintext HTTP, or opaque TCP from the first bytes of each\nconnection and chooses the appropriate listener. Use an explicit protocol whenever\npossible. AUTO requires client-first opaque protocols that look like a TLS or HTTP request.",
+          "type": "string",
+          "const": "AUTO"
+        }
       ]
     },
     "LocalListener": {
@@ -1225,7 +1253,7 @@
           ]
         },
         "protocol": {
-          "description": "Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, HBONE, or AUTO.",
+          "description": "Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, or HBONE.",
           "$ref": "#/$defs/LocalListenerProtocol"
         },
         "tls": {
@@ -1280,8 +1308,7 @@
         "HTTPS",
         "TLS",
         "TCP",
-        "HBONE",
-        "AUTO"
+        "HBONE"
       ]
     },
     "LocalTLSServerConfig": {
@@ -7463,21 +7490,13 @@
             }
           ]
         },
-        "targetPort": {
-          "description": "Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.\nThis is independent from `connect_target_port`, which is used for raw CONNECT tunnels.",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 1,
-          "maximum": 65535,
-          "default": 443
-        },
         "connectTargetPort": {
-          "description": "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.",
+          "description": "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.",
           "type": "integer",
           "format": "uint16",
           "minimum": 1,
           "maximum": 65535,
-          "default": 444
+          "default": 8443
         },
         "cacheTtl": {
           "description": "How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.",

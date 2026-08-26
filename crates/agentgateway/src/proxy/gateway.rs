@@ -46,7 +46,6 @@ mod tests;
 mod locality_tests;
 
 #[derive(Debug, Clone, PartialEq)]
-
 pub enum HboneAddress {
 	SocketAddr(SocketAddr),
 	SvcHostname(Arc<str>, u16),
@@ -1614,6 +1613,18 @@ impl Gateway {
 	}
 }
 
+const METHODS: &[&[u8]] = &[
+	b"GET ",
+	b"HEAD ",
+	b"POST ",
+	b"PUT ",
+	b"DELETE ",
+	b"CONNECT ",
+	b"OPTIONS ",
+	b"TRACE ",
+	b"PATCH ",
+];
+
 /// Recognizes the start of a plaintext HTTP/1.x request line (an uppercase
 /// method token followed by a space -- RFC 7230's `method SP request-target`)
 /// or the HTTP/2 prior-knowledge preface ("PRI * HTTP/2.0"). CONNECT and
@@ -1624,34 +1635,12 @@ impl Gateway {
 /// HTTPS-only listener, and by `BindProtocol::auto` to decide whether non-TLS
 /// bytes should be treated as HTTP or fall through to opaque TCP.
 fn looks_like_http(d: &[u8]) -> bool {
-	const METHODS: &[&[u8]] = &[
-		b"GET ",
-		b"HEAD ",
-		b"POST ",
-		b"PUT ",
-		b"DELETE ",
-		b"CONNECT ",
-		b"OPTIONS ",
-		b"TRACE ",
-		b"PATCH ",
-	];
 	METHODS.iter().any(|m| d.starts_with(m)) || d.starts_with(b"PRI *")
 }
 
 /// Returns whether `d` can still become a recognizable plaintext HTTP request
 /// line after reading more bytes.
 fn could_be_http_prefix(d: &[u8]) -> bool {
-	const METHODS: &[&[u8]] = &[
-		b"GET ",
-		b"HEAD ",
-		b"POST ",
-		b"PUT ",
-		b"DELETE ",
-		b"CONNECT ",
-		b"OPTIONS ",
-		b"TRACE ",
-		b"PATCH ",
-	];
 	METHODS.iter().any(|m| m.starts_with(d)) || b"PRI *".starts_with(d)
 }
 

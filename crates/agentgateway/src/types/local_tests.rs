@@ -361,49 +361,14 @@ binds:
 }
 
 #[tokio::test]
-async fn test_local_listener_protocol_auto_rejects_tcp_routes() {
-	let err = normalize_test_yaml(
-		r#"
-binds:
-- port: 1080
-  listeners:
-  - protocol: AUTO
-    routes:
-    - backends:
-      - dynamic: {}
-    tcpRoutes:
-    - backends:
-      - host: "127.0.0.1:1"
-"#,
-	)
-	.await
-	.expect_err("AUTO must use an explicit TCP listener for opaque TCP");
-	assert!(err.to_string().contains("explicit TCP listener"), "{err}");
-}
-
-#[tokio::test]
-async fn test_local_listener_protocol_auto_requires_a_route_set() {
-	let err = normalize_test_yaml(
-		r#"
-binds:
-- port: 1080
-  listeners:
-  - protocol: AUTO
-"#,
-	)
-	.await
-	.expect_err("an Auto listener without routes should be rejected");
-	assert!(err.to_string().contains("protocol AUTO"), "{err}");
-}
-
-#[tokio::test]
 async fn test_auto_bind_allows_tls_routes_and_one_explicit_tcp_listener() {
 	let normalized = normalize_test_yaml(
 		r#"
 binds:
 - port: 1080
+  protocol: AUTO
   listeners:
-  - protocol: AUTO
+  - protocol: HTTP
     routes:
     - backends:
       - dynamic: {}

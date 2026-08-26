@@ -13,24 +13,9 @@ const PROXY_AUTHORIZATION_HEADER: &str = "Proxy-Authorization";
 #[error("atunnel rejected a stale worker assignment")]
 struct StaleAssignment;
 
-pub fn is_stale_assignment_error(error: &anyhow::Error) -> bool {
-	if error.downcast_ref::<StaleAssignment>().is_some() {
-		return true;
-	}
-	error
-		.downcast_ref::<agent_hbone::client::UnexpectedConnectResponse>()
-		.is_some_and(|response| {
-			response.status == http::StatusCode::MISDIRECTED_REQUEST
-				&& response
-					.headers
-					.get(STALE_ASSIGNMENT_HEADER)
-					.is_some_and(|value| value == "true")
-		})
-}
-
 /// Establish an HTTP/1.1 CONNECT tunnel.
 ///
-/// This is the HTTP/1.1 fallback selected by [`handshake_proxy`] when its
+/// This is the HTTP/1.1 fallback selected by [`handshake`] when its
 /// connection does not negotiate ALPN.
 pub async fn handshake_h1(
 	conn: Socket,
@@ -107,44 +92,13 @@ fn h1_stale_assignment(response: &[u8]) -> bool {
 	})
 }
 
-/// Establish a configured backend proxy tunnel.
-///
-/// HTTP/1.1 is the established protocol for a plaintext proxy connection,
-/// which cannot negotiate ALPN. TLS proxy connections use their negotiated
-/// protocol when available.
-pub async fn handshake_proxy(
+/// Establish a configured backend proxy tunnel. TLS connections use
+/// ALPN to negotiate the protool and plaintext conections use HTTP 1
+pub(crate) async fn handshake(
 	conn: Socket,
 	dest: &str,
 	auth: Option<HeaderValue>,
 	h2_config: Arc<agent_hbone::H2Config>,
-) -> Result<Socket, anyhow::Error> {
-	handshake(conn, dest, auth, h2_config, AlpnRequirement::Optional).await
-}
-
-/// Establish a native atunnel CONNECT tunnel.
-///
-/// atunnel advertises both HTTP/2 and HTTP/1.1 over TLS. Require ALPN here so
-/// a misconfigured atunnel is rejected before sending an HTTP request.
-pub async fn handshake_atunnel(
-	conn: Socket,
-	dest: &str,
-	h2_config: Arc<agent_hbone::H2Config>,
-) -> Result<Socket, anyhow::Error> {
-	handshake(conn, dest, None, h2_config, AlpnRequirement::Required).await
-}
-
-#[derive(Clone, Copy)]
-enum AlpnRequirement {
-	Optional,
-	Required,
-}
-
-async fn handshake(
-	conn: Socket,
-	dest: &str,
-	auth: Option<HeaderValue>,
-	h2_config: Arc<agent_hbone::H2Config>,
-	alpn_requirement: AlpnRequirement,
 ) -> Result<Socket, anyhow::Error> {
 	// `TunnelConfig::token` has always authenticated configured HTTP proxies
 	// through Proxy-Authorization. Preserve that contract for either protocol
@@ -155,12 +109,7 @@ async fn handshake(
 	{
 		Some(stream::Alpn::H2) => handshake_h2(conn, dest, auth, h2_config).await,
 		Some(stream::Alpn::Http11) => handshake_h1(conn, dest, auth).await,
-		None if matches!(alpn_requirement, AlpnRequirement::Optional) => {
-			handshake_h1(conn, dest, auth).await
-		},
-		None => Err(anyhow::anyhow!(
-			"atunnel CONNECT requires a negotiated ALPN protocol"
-		)),
+		None => handshake_h1(conn, dest, auth).await,
 		Some(alpn) => Err(anyhow::anyhow!(
 			"CONNECT negotiated unsupported ALPN: {alpn:?}"
 		)),
@@ -284,22 +233,7 @@ mod tests {
 			Ok(_) => panic!("stale assignment must fail the tunnel handshake"),
 			Err(error) => error,
 		};
-		assert!(is_stale_assignment_error(&error));
+		assert!(error.downcast_ref::<StaleAssignment>().is_some());
 		server_task.await.expect("server task");
-	}
-
-	#[test]
-	fn handshake_h2_marks_stale_assignment() {
-		let mut headers = http::HeaderMap::new();
-		headers.insert(
-			"x-ate-assignment-stale",
-			http::HeaderValue::from_static("true"),
-		);
-		let error = anyhow::Error::from(agent_hbone::client::UnexpectedConnectResponse {
-			status: http::StatusCode::MISDIRECTED_REQUEST,
-			headers,
-		});
-
-		assert!(is_stale_assignment_error(&error));
 	}
 }

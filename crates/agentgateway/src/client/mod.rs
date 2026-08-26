@@ -351,7 +351,7 @@ impl Connector {
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.connection, false)).await?;
 
-				let con = connect_tunnel::handshake_proxy(con, &dest, tcfg.token, self.h2_config.clone())
+				let con = connect_tunnel::handshake(con, &dest, tcfg.token, self.h2_config.clone())
 					.await
 					.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");

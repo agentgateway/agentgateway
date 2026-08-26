@@ -1186,6 +1186,9 @@ struct LocalBind {
 	/// via in-process routing). A numeric port is required unless `mode` is `internal`.
 	#[serde(default)]
 	port: Option<u16>,
+	/// Protocol handling for the entire bind. When omitted, it is inferred from the listeners.
+	#[serde(default)]
+	protocol: Option<LocalBindProtocol>,
 	/// Named listeners bound on this port, which may use different protocols and TLS.
 	listeners: Vec<LocalListener>,
 	/// Protocol used to tunnel backend connections, such as Direct or HBONE.
@@ -1195,6 +1198,31 @@ struct LocalBind {
 	/// Set to `internal` to create a routing-only bind that does not bind a socket.
 	#[serde(default)]
 	mode: BindMode,
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "UPPERCASE", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[allow(clippy::upper_case_acronyms)]
+enum LocalBindProtocol {
+	HTTP,
+	TLS,
+	TCP,
+	/// EXPERIMENTAL: Detects TLS, plaintext HTTP, or opaque TCP from the first bytes of each
+	/// connection and chooses the appropriate listener. Use an explicit protocol whenever
+	/// possible. AUTO requires client-first opaque protocols that look like a TLS or HTTP request.
+	AUTO,
+}
+
+impl From<LocalBindProtocol> for BindProtocol {
+	fn from(protocol: LocalBindProtocol) -> Self {
+		match protocol {
+			LocalBindProtocol::HTTP => BindProtocol::http,
+			LocalBindProtocol::TLS => BindProtocol::tls,
+			LocalBindProtocol::TCP => BindProtocol::tcp,
+			LocalBindProtocol::AUTO => BindProtocol::auto,
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -1214,7 +1242,7 @@ struct LocalListener {
 	name: LocalListenerName,
 	/// Can be a wildcard
 	hostname: Option<Strng>,
-	/// Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, HBONE, or AUTO.
+	/// Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, or HBONE.
 	#[serde(default)]
 	protocol: LocalListenerProtocol,
 	/// TLS configuration, used with the HTTPS and TLS protocols.
@@ -1239,16 +1267,6 @@ enum LocalListenerProtocol {
 	TLS,
 	TCP,
 	HBONE,
-	// Detect TLS, HTTP, or raw TCP per connection (see `BindProtocol::auto`)
-	// instead of committing to one protocol ahead of time. Requires `routes`,
-	// `tcpRoutes`, or both -- whichever set applies is picked at runtime.
-	//
-	// Not a `///` doc comment: schemars gives a documented variant its own
-	// described oneOf branch instead of folding it into the flat enum list,
-	// which would turn this into a breaking JSON-schema shape change for
-	// anything that expects `LocalListenerProtocol` to stay a plain
-	// `{type: string, enum: [...]}`.
-	Auto,
 }
 
 #[derive(Default)]
@@ -3069,13 +3087,7 @@ async fn convert(
 			strng::format!("bind/{bind_port}")
 		};
 		let mut ls = ListenerSet::default();
-		// convert_listener collapses LocalListenerProtocol::Auto into the
-		// runtime ListenerProtocol::HTTP (see its own comment on why), so that
-		// distinction is gone by the time detect_bind_protocol inspects `ls`.
-		// Capture it here, off the pre-conversion protocol, instead.
-		let mut any_auto = false;
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			any_auto |= matches!(l.protocol, LocalListenerProtocol::Auto);
 			let (l, routes, tcp_routes, pol, backends) = Box::pin(convert_listener(
 				resources,
 				config,
@@ -3101,11 +3113,10 @@ async fn convert(
 			bind: Arc::new(Bind {
 				key: bind_name,
 				address: sockaddr,
-				protocol: if any_auto {
-					BindProtocol::auto
-				} else {
-					detect_bind_protocol(&ls)
-				},
+				protocol: b
+					.protocol
+					.map(BindProtocol::from)
+					.unwrap_or_else(|| detect_bind_protocol(&ls)),
 				tunnel_protocol: b.tunnel_protocol,
 				mode: b.mode,
 			}),
@@ -4891,7 +4902,6 @@ async fn convert_listener(
 		tcp_routes,
 	} = l;
 
-	let is_auto = matches!(protocol, LocalListenerProtocol::Auto);
 	let protocol = match protocol {
 		LocalListenerProtocol::HTTP => {
 			if routes.is_none() {
@@ -4930,25 +4940,9 @@ async fn convert_listener(
 			ListenerProtocol::TCP
 		},
 		LocalListenerProtocol::HBONE => ListenerProtocol::HBONE,
-		LocalListenerProtocol::Auto => {
-			if routes.is_none() {
-				bail!("protocol AUTO requires 'routes'")
-			}
-			if tcp_routes.is_some() {
-				bail!("protocol AUTO does not support 'tcpRoutes'; configure an explicit TCP listener")
-			}
-			// Auto-detection happens per connection (BindProtocol::auto), before
-			// either route set is consulted, so this listener must still be
-			// discoverable by the HTTP path's Host-based listener match
-			// (ListenerSet::best_match_http filters on exactly this variant). The
-			// TCP path doesn't filter by listener protocol at all -- it resolves
-			// the bind's one listener directly -- so mapping to HTTP costs it
-			// nothing.
-			ListenerProtocol::HTTP
-		},
 	};
 
-	if tcp_routes.is_some() && routes.is_some() && !is_auto {
+	if tcp_routes.is_some() && routes.is_some() {
 		bail!("only 'routes' or 'tcpRoutes' may be set");
 	}
 
