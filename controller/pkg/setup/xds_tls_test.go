@@ -426,7 +426,7 @@ func generateWeakRSAServingCert(t *testing.T) ([]byte, []byte) {
 
 func weakRSAKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	key, err := rsa.GenerateKey(rand.Reader, 1024) //nolint:gosec // G403: the weak key is the point; FIPS mode must reject it
 	if err != nil {
 		t.Skipf("1024-bit RSA keys are unavailable: %v", err)
 	}

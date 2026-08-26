@@ -375,9 +375,9 @@ func generateLeafFromCA(caPEM, caKeyPEM []byte, hosts []string) ([]byte, []byte,
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM, nil
 }
 
-// checkFIPSRSAKeyParameters validates RSA parameters on private keys the
-// controller uses to sign or serve xDS TLS material. It does not validate
-// non-RSA keys, certificate chains, or peer certificates. The fips140=on
+// checkFIPSRSAKeyParameters validates the RSA modulus and public exponent of
+// keys the controller uses to sign or serve xDS TLS material. It does not
+// validate non-RSA keys, certificate chains, or peer certificates. The fips140=on
 // setting restricts TLS algorithms but, unlike fips140=only, does not enforce
 // RSA key parameters itself. Keep standard builds backward compatible.
 func checkFIPSRSAKeyParameters(key crypto.PublicKey) error {
