@@ -2474,9 +2474,7 @@ struct LocalGatewayPolicy {
 	/// Authenticate incoming requests with API keys.
 	#[serde(default)]
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
-	/// Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one
-	/// key, every key individually, each distinct value of a metadata field such as a group or tier,
-	/// or a pool of keys decided by selectors sharing one allowance.
+	/// Limit LLM spend or token usage for the API keys authenticated here.
 	#[serde(default)]
 	budgets: Vec<Budget>,
 }
@@ -5386,9 +5384,7 @@ pub(crate) async fn split_policies_for_target(
 			budget_policy,
 		)));
 	} else if !budgets.is_empty() {
-		// Budgets are charged against authenticated API keys, so one attached without an apiKey
-		// policy would never apply to anything.
-		bail!("budgets require an apiKey policy on the same target");
+		bail!("API key policies must be attached in order to use budgets");
 	}
 	if let Some(p) = transformations {
 		if backend_target {

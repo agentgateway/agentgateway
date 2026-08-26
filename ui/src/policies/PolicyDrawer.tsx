@@ -3,10 +3,9 @@ import { useRef, useState } from 'react';
 
 import { ConfigDiffSaveActions, ConfigSaveButton } from '@/components/ConfigDiffDrawer';
 import { ConfirmDialog, Drawer, StatusBanner, Tooltip } from '@/components/Primitives';
-import type { BackendAuth, Budget } from '@/gateway-config';
+import type { BackendAuth } from '@/gateway-config';
 import { takeHybridFileWriteOverride } from '@/hooks';
 import { AuthorizationPolicyEditor } from '@/policies/AuthorizationPolicyEditor';
-import { BudgetsPolicyEditor } from '@/policies/BudgetsPolicyEditor';
 import { BackendAuthPolicyEditor } from '@/policies/backendAuth';
 import { CorsPolicyEditor } from '@/policies/CorsPolicyEditor';
 import { ExtAuthzPolicyEditor } from '@/policies/ExtAuthzPolicyEditor';
@@ -251,14 +250,6 @@ export function PolicyEditorBody(props: {
 				<JwtPolicyEditor
 					formId={props.formId}
 					jwt={props.policyValue as JwtPolicy | null | undefined}
-					help={props.help}
-					saving={props.saving}
-					onSave={props.onSave}
-				/>
-			) : props.customEditor === 'budgets' ? (
-				<BudgetsPolicyEditor
-					formId={props.formId}
-					budgets={props.policyValue as Budget[] | null | undefined}
 					help={props.help}
 					saving={props.saving}
 					onSave={props.onSave}

@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import type { BudgetStatus } from '@/api/budgetsApi';
 import { budgetScopeLabel } from '@/api/budgetsApi';
-import { ConfigSaveButton } from '@/components/ConfigDiffDrawer';
+import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { FreeformCombobox } from '@/components/FreeformCombobox';
 import {
 	ConfirmDialog,
@@ -38,8 +38,8 @@ const scopeKinds: { value: ScopeKind; label: string; description: string }[] = [
 	{ value: 'perKey', label: 'Each key', description: 'Every key gets its own allowance.' },
 	{
 		value: 'groupBy',
-		label: 'Per metadata value',
-		description: 'One allowance per distinct value.'
+		label: 'Per api key metadata value',
+		description: 'One allowance per distinct values.'
 	},
 	{ value: 'selector', label: 'Shared pool', description: 'Matching keys split one allowance.' }
 ];
@@ -63,11 +63,15 @@ export function BudgetsPage() {
 		updateConfig.mutate(mutate, { onSuccess: close });
 	}
 
-	function saveBudget(budget: Budget, source: Source, original: BudgetRow | null) {
-		write(draft => {
-			if (original) removeBudget(draft, original);
-			addBudget(draft, source, budget);
-		});
+	/** The edit itself, shared by the save and by the diff preview so both show the same change. */
+	function applyBudget(
+		draft: GatewayConfig,
+		budget: Budget,
+		source: Source,
+		original: BudgetRow | null
+	) {
+		if (original) removeBudget(draft, original);
+		addBudget(draft, source, budget);
 	}
 
 	function startNew() {
@@ -201,11 +205,15 @@ export function BudgetsPage() {
 				<BudgetEditor
 					key={rowKey(editing)}
 					initial={editing}
+					config={config.data}
 					keys={apiKeys}
 					saving={updateConfig.isPending}
 					onCancel={close}
+					onApply={(draft, budget, source) =>
+						applyBudget(draft, budget, source, editing.budget.name ? editing : null)
+					}
 					onSave={(budget, source) =>
-						saveBudget(budget, source, editing.budget.name ? editing : null)
+						write(draft => applyBudget(draft, budget, source, editing.budget.name ? editing : null))
 					}
 				/>
 			) : null}
@@ -409,11 +417,14 @@ function metadataValue(key: VirtualApiKey, field: string) {
 
 function BudgetEditor(props: {
 	initial: BudgetRow;
+	config?: GatewayConfig;
 	keys: VirtualApiKey[];
 	saving: boolean;
 	onCancel: () => void;
+	onApply: (draft: GatewayConfig, budget: Budget, source: Source) => void;
 	onSave: (budget: Budget, source: Source) => void;
 }) {
+	const [submitted, setSubmitted] = useState(false);
 	const [name, setName] = useState(props.initial.budget.name);
 	const [kind, setKind] = useState<ScopeKind>(rowScopeKind(props.initial));
 	const [targetKey, setTargetKey] = useState(
@@ -444,18 +455,26 @@ function BudgetEditor(props: {
 								? 'Choose the API key this budget applies to.'
 								: null;
 
-	function submit() {
-		if (problem) return;
-		props.onSave(
-			{
+	/** The budget the form describes, or null when it is not complete enough to write. */
+	function draftBudget(): { budget: Budget; source: Source } | null {
+		setSubmitted(true);
+		if (problem) return null;
+		return {
+			budget: {
 				name: name.trim(),
 				scope: buildScope(kind, fields, selector),
 				limit: { unit, amount: amountValue },
 				window: { rolling: rolling.trim() },
 				onBudgetExceeded: action
 			},
-			kind === 'oneKey' ? { kind: 'key', key: targetKey } : { kind: 'policy' }
-		);
+			source: kind === 'oneKey' ? { kind: 'key', key: targetKey } : { kind: 'policy' }
+		};
+	}
+
+	function submit() {
+		const next = draftBudget();
+		if (!next) return;
+		props.onSave(next.budget, next.source);
 	}
 
 	return (
@@ -463,21 +482,28 @@ function BudgetEditor(props: {
 			title={props.initial.budget.name ? `Edit ${props.initial.budget.name}` : 'New budget'}
 			onClose={props.onCancel}
 			saving={props.saving}
-			footer={
-				<div className="button-row">
-					<button className="button" type="button" onClick={props.onCancel}>
-						Cancel
-					</button>
-					<Tooltip content={problem ?? 'Save budget'}>
-						<span>
-							<ConfigSaveButton disabled={Boolean(problem) || props.saving} onClick={submit}>
-								Save budget
-							</ConfigSaveButton>
-						</span>
-					</Tooltip>
-				</div>
-			}
+			footer={requestClose => (
+				<ConfigDiffSaveActions
+					config={props.config}
+					diffTitle="Budget config diff"
+					saveLabel="Save budget"
+					saving={props.saving}
+					onCancel={requestClose}
+					onSave={submit}
+					beforeDiff={() => Boolean(draftBudget())}
+					applyDiff={next => {
+						const budget = draftBudget();
+						if (budget) props.onApply(next, budget.budget, budget.source);
+					}}
+				/>
+			)}
 		>
+			{submitted && problem ? (
+				<StatusBanner state="bad" title="Cannot save budget">
+					{problem}
+				</StatusBanner>
+			) : null}
+
 			<Field label="Name" hint="Renaming a budget restarts its usage from zero.">
 				<input value={name} onChange={event => setName(event.target.value)} />
 			</Field>

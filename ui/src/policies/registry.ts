@@ -9,7 +9,6 @@ import {
 	ShieldCheck,
 	SlidersHorizontal,
 	Timer,
-	Wallet,
 	Workflow
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -24,7 +23,6 @@ export const policyUi: Partial<
 			icon: ComponentType<{ size?: number }>;
 			customEditor?:
 				| 'authorization'
-				| 'budgets'
 				| 'backendAuth'
 				| 'cors'
 				| 'extAuthz'
@@ -63,7 +61,6 @@ export const policyUi: Partial<
 		icon: SlidersHorizontal,
 		customEditor: 'extProc'
 	},
-	budgets: { title: 'Budgets', icon: Wallet, customEditor: 'budgets' },
 	jwtAuth: { title: 'JWT auth', icon: FileKey2, customEditor: 'jwtAuth' },
 	localRateLimit: {
 		title: 'Local rate limit',

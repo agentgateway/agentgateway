@@ -9668,7 +9668,7 @@
           ]
         },
         "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Budget"
@@ -11050,7 +11050,7 @@
           ]
         },
         "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Budget"
@@ -11210,7 +11210,7 @@
           ]
         },
         "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Budget"
@@ -12314,7 +12314,7 @@
           ]
         },
         "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one\nkey, every key individually, each distinct value of a metadata field such as a group or tier,\nor a pool of keys decided by selectors sharing one allowance.",
+          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Budget"

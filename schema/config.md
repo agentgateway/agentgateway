@@ -17580,7 +17580,7 @@
 |`binds[].listeners[].policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`binds[].listeners[].policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`binds[].listeners[].policies.budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one<br>key, every key individually, each distinct value of a metadata field such as a group or tier,<br>or a pool of keys decided by selectors sharing one allowance.|
+|`binds[].listeners[].policies.budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here.|
 |`binds[].listeners[].policies.budgets[].name`|string|Stable name for this budget within the API key or configuration that declares it. The name<br>identifies the counter that accumulates usage, so renaming a budget starts a new one.|
 |`binds[].listeners[].policies.budgets[].limit`|object|Maximum usage allowed during the window.|
 |`binds[].listeners[].policies.budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
@@ -51807,7 +51807,7 @@
 |`gateways.*.listeners[].apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`gateways.*.listeners[].apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`gateways.*.listeners[].apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`gateways.*.listeners[].budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one<br>key, every key individually, each distinct value of a metadata field such as a group or tier,<br>or a pool of keys decided by selectors sharing one allowance.|
+|`gateways.*.listeners[].budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here.|
 |`gateways.*.listeners[].budgets[].name`|string|Stable name for this budget within the API key or configuration that declares it. The name<br>identifies the counter that accumulates usage, so renaming a budget starts a new one.|
 |`gateways.*.listeners[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`gateways.*.listeners[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
@@ -53130,7 +53130,7 @@
 |`gateways.*.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`gateways.*.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`gateways.*.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`gateways.*.budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one<br>key, every key individually, each distinct value of a metadata field such as a group or tier,<br>or a pool of keys decided by selectors sharing one allowance.|
+|`gateways.*.budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here.|
 |`gateways.*.budgets[].name`|string|Stable name for this budget within the API key or configuration that declares it. The name<br>identifies the counter that accumulates usage, so renaming a budget starts a new one.|
 |`gateways.*.budgets[].limit`|object|Maximum usage allowed during the window.|
 |`gateways.*.budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
@@ -74050,7 +74050,7 @@
 |`llm.policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`llm.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`llm.policies.budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here. A budget can cover one<br>key, every key individually, each distinct value of a metadata field such as a group or tier,<br>or a pool of keys decided by selectors sharing one allowance.|
+|`llm.policies.budgets`|[]object|Limit LLM spend or token usage for the API keys authenticated here.|
 |`llm.policies.budgets[].name`|string|Stable name for this budget within the API key or configuration that declares it. The name<br>identifies the counter that accumulates usage, so renaming a budget starts a new one.|
 |`llm.policies.budgets[].limit`|object|Maximum usage allowed during the window.|
 |`llm.policies.budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
