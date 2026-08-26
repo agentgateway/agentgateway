@@ -393,6 +393,9 @@ pub mod from_completions {
 						"image_url" => {
 							parts.push(image_part(p.rest.get("image_url"))?);
 						},
+						"file" => {
+							parts.push(file_part(p.rest.get("file"))?);
+						},
 						_ => {},
 					}
 				}
@@ -402,6 +405,28 @@ pub mod from_completions {
 		Ok(parts)
 	}
 
+	fn inline_data_part(mime: &str, data: &str) -> vg::Part {
+		vg::Part::InlineData(vg::InlineDataPart {
+			inline_data: vg::Blob {
+				mime_type: canonical_mime(mime).to_string(),
+				data: data.to_string(),
+				rest: Value::Null,
+			},
+			rest: Value::Null,
+		})
+	}
+
+	fn file_data_part(mime: &str, uri: &str) -> vg::Part {
+		vg::Part::FileData(vg::FileDataPart {
+			file_data: vg::FileData {
+				mime_type: Some(canonical_mime(mime).to_string()),
+				file_uri: uri.to_string(),
+				rest: Value::Null,
+			},
+			rest: Value::Null,
+		})
+	}
+
 	fn image_part(image_url: Option<&Value>) -> Result<vg::Part, AIError> {
 		let url = image_url
 			.and_then(|u| u.get("url"))
@@ -409,14 +434,7 @@ pub mod from_completions {
 			.unwrap_or_default();
 
 		if let Some((mime, data)) = parse_data_url(url) {
-			return Ok(vg::Part::InlineData(vg::InlineDataPart {
-				inline_data: vg::Blob {
-					mime_type: canonical_mime(mime).to_string(),
-					data: data.to_string(),
-					rest: Value::Null,
-				},
-				rest: Value::Null,
-			}));
+			return Ok(inline_data_part(mime, data));
 		}
 
 		if url.starts_with("gs://") {
@@ -424,24 +442,87 @@ pub mod from_completions {
 			let Some(mime) =
 				explicit_mime_hint(image_url).or_else(|| mime_from_extension(url).map(str::to_string))
 			else {
-				return Err(AIError::InvalidResponse(strng::new(format!(
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
 					"gs:// image_url ({url}) has no recognised extension or MIME hint; pass image_url.format (or mime_type/content_type), or use an object with a known extension"
 				))));
 			};
-			return Ok(vg::Part::FileData(vg::FileDataPart {
-				file_data: vg::FileData {
-					mime_type: Some(canonical_mime(&mime).to_string()),
-					file_uri: url.to_string(),
-					rest: Value::Null,
-				},
-				rest: Value::Null,
-			}));
+			return Ok(file_data_part(&mime, url));
 		}
 
 		// http(s) and anything else are not fetchable by Vertex.
-		Err(AIError::InvalidResponse(strng::new(format!(
+		Err(AIError::UnsupportedConversion(strng::new(format!(
 			"native Gemini path rejects http(s) image_url ({url}); upload to gs:// or send inline data:"
 		))))
+	}
+
+	/// Convert an OpenAI `file` content part into a Gemini part.
+	///
+	/// Mirrors [`image_part`]: inline `data:` payloads become `inlineData`, `gs://`
+	/// objects become `fileData`, and anything Vertex cannot fetch is rejected rather
+	/// than dropped.
+	fn file_part(file: Option<&Value>) -> Result<vg::Part, AIError> {
+		let field = |k: &str| {
+			file
+				.and_then(|f| f.get(k))
+				.and_then(Value::as_str)
+				.unwrap_or_default()
+		};
+		let file_data = field("file_data");
+		let file_id = field("file_id");
+
+		if let Some((mime, data)) = parse_data_url(file_data) {
+			if !mime.is_empty() {
+				return Ok(inline_data_part(mime, data));
+			}
+			// RFC 2397 allows an absent media type; Vertex rejects an empty mimeType.
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"data: file_data has no media type; pass file.filename with a known extension (or mime_type/content_type)"
+				)));
+			};
+			return Ok(inline_data_part(&mime, data));
+		}
+
+		// Clients carry a gs:// object in either field; Vertex fetches those directly.
+		if let Some(uri) = [file_data, file_id]
+			.into_iter()
+			.find(|u| u.starts_with("gs://"))
+		{
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+				.or_else(|| mime_from_extension(uri).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
+					"gs:// file ({uri}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use an object with a known extension"
+				))));
+			};
+			return Ok(file_data_part(&mime, uri));
+		}
+
+		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
+		// A malformed `data:` value must not reach here, or its header becomes payload.
+		if !file_data.is_empty() && !file_data.contains("://") && !file_data.starts_with("data:") {
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"raw base64 file_data has no MIME source; pass file.filename with a known extension (or mime_type/content_type), or wrap it in a data: URI"
+				)));
+			};
+			return Ok(inline_data_part(&mime, file_data));
+		}
+
+		if !file_id.is_empty() {
+			return Err(AIError::UnsupportedConversion(strng::new(format!(
+				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or reference a gs:// object"
+			))));
+		}
+
+		Err(AIError::UnsupportedConversion(strng::new(
+			"file content part has neither an inline data: file_data nor a gs:// reference",
+		)))
 	}
 
 	fn text_part(text: &str) -> vg::Part {

@@ -1,0 +1,18 @@
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What is this document about?" },
+        {
+          "type": "file",
+          "file": {
+            "filename": "report.pdf",
+            "file_data": "data:application/pdf;base64,JVBERi0xLjQK"
+          }
+        }
+      ]
+    }
+  ]
+}

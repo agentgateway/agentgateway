@@ -23,7 +23,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::types::{
-	ContentScope, OutputMessage, OutputMessagePart, ResponseType, vertex_gemini as vg,
+	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
+	ResponseType, vertex_gemini as vg,
 };
 use crate::{
 	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
@@ -246,6 +247,10 @@ impl RequestType for Request {
 		get_messages_helper(&self.inner.contents, &self.inner.system_instruction)
 	}
 
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		get_messages_v2_helper(&self.inner.contents, &self.inner.system_instruction)
+	}
+
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		set_messages_helper(
 			&mut self.inner.contents,
@@ -269,6 +274,71 @@ impl RequestType for Request {
 			visit_content_text(content, &mut |text| f(ContentScope::Messages, text));
 		}
 	}
+}
+
+fn get_messages_v2_helper(
+	contents: &[vg::Content],
+	system: &Option<vg::Content>,
+) -> Vec<NormalizedMessage> {
+	let mut messages = system
+		.as_ref()
+		.map(|content| normalized_gemini_message(content, Some(strng::literal!("system"))))
+		.into_iter()
+		.collect::<Vec<_>>();
+	messages.extend(
+		contents
+			.iter()
+			.map(|content| normalized_gemini_message(content, None)),
+	);
+	messages
+}
+
+fn normalized_gemini_message(content: &vg::Content, role: Option<Strng>) -> NormalizedMessage {
+	let role = role.unwrap_or_else(|| match content.role.as_deref() {
+		Some("model") => strng::literal!("assistant"),
+		Some(role) => strng::new(role),
+		None => strng::literal!("user"),
+	});
+	let parts = content
+		.parts
+		.iter()
+		.filter_map(|part| match part {
+			vg::Part::Text(part) if part.thought == Some(true) => Some(NormalizedMessagePart::reasoning(
+				serde_json::Value::String(part.text.clone()),
+			)),
+			vg::Part::Text(part) => Some(NormalizedMessagePart::text(strng::new(&part.text))),
+			vg::Part::FunctionCall(part) => {
+				let call = &part.function_call;
+				Some(NormalizedMessagePart::tool_call(
+					strng::new(call.id.as_deref().unwrap_or(&call.name)),
+					strng::new(&call.name),
+					call.args.clone(),
+				))
+			},
+			vg::Part::FunctionResponse(part) => {
+				let response = &part.function_response;
+				Some(NormalizedMessagePart::tool_result(
+					Some(strng::new(response.id.as_deref().unwrap_or(&response.name))),
+					Some(strng::new(&response.name)),
+					response.response.clone(),
+					None,
+				))
+			},
+			vg::Part::ExecutableCode(part) => Some(NormalizedMessagePart::tool_call(
+				strng::literal!("code_execution"),
+				strng::literal!("code_execution"),
+				part.executable_code.clone(),
+			)),
+			vg::Part::CodeExecutionResult(part) => Some(NormalizedMessagePart::tool_result(
+				Some(strng::literal!("code_execution")),
+				Some(strng::literal!("code_execution")),
+				part.code_execution_result.clone(),
+				None,
+			)),
+			vg::Part::InlineData(_) | vg::Part::FileData(_) | vg::Part::Unknown(_) => None,
+		})
+		.collect();
+	NormalizedMessage { role, parts }
 }
 
 /// Inbound native Gemini `countTokens` body. Passthrough in both directions, so only the
@@ -328,6 +398,10 @@ impl RequestType for CountTokensRequest {
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
 		get_messages_helper(&self.contents, &self.system_instruction)
+	}
+
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		get_messages_v2_helper(&self.contents, &self.system_instruction)
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {

@@ -1355,6 +1355,7 @@ async fn incoming_connect_uses_backend_tunnel_proxy() {
 			proxy: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
 				proxy_addr,
 			))),
+			mode: backend::TunnelMode::Auto,
 			policies: vec![],
 		})
 		.into(),

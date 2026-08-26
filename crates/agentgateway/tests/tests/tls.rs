@@ -56,6 +56,7 @@ async fn serve_https_http1_connection(
 			alpn: None,
 			subject_alt_names: None,
 			key_exchange_groups: None,
+			spiffe: false,
 		}
 		.try_into()
 		.unwrap();

@@ -4,7 +4,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{
-	ContentScope, OutputMessage, OutputMessagePart, ResponseType, SimpleChatCompletionMessage,
+	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
+	ResponseType, SimpleChatCompletionMessage,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, json};
@@ -397,6 +398,73 @@ impl super::RequestType for Request {
 				}
 			})
 			.collect()
+	}
+
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		let mut messages = self
+			.messages
+			.iter()
+			.map(|message| {
+				let mut parts = Vec::new();
+				if let Some(rest) = message.rest.as_object() {
+					let reasoning = rest
+						.iter()
+						.filter(|(key, _)| {
+							key.as_str() == "reasoning"
+								|| key.starts_with("reasoning_")
+								|| key.as_str() == "thinking_blocks"
+						})
+						.map(|(key, value)| (key.clone(), value.clone()))
+						.collect::<serde_json::Map<_, _>>();
+					if !reasoning.is_empty() {
+						parts.push(NormalizedMessagePart::reasoning(serde_json::Value::Object(
+							reasoning,
+						)));
+					}
+				}
+				if matches!(message.role.as_str(), "tool" | "function") {
+					if let Some(content) = &message.content
+						&& let Ok(content) = serde_json::to_value(content)
+					{
+						parts.push(NormalizedMessagePart::tool_result(
+							message.tool_call_id.as_deref().map(strng::new),
+							message.name.as_deref().map(strng::new),
+							content,
+							None,
+						));
+					}
+				} else {
+					match &message.content {
+						Some(Content::Text(text)) => parts.push(NormalizedMessagePart::text(strng::new(text))),
+						Some(Content::Array(content)) => parts.extend(
+							content
+								.iter()
+								.filter_map(|part| part.text.as_deref())
+								.map(|text| NormalizedMessagePart::text(strng::new(text))),
+						),
+						None => {},
+					}
+				}
+				parts.extend(
+					message
+						.tool_calls
+						.iter()
+						.flatten()
+						.filter_map(crate::types::normalized_tool_call),
+				);
+				if let Some(function_call) = message.rest.get("function_call")
+					&& let Some(call) = crate::types::normalized_tool_call(function_call)
+				{
+					parts.push(call);
+				}
+				NormalizedMessage {
+					role: strng::new(&message.role),
+					parts,
+				}
+			})
+			.collect::<Vec<_>>();
+		crate::types::attach_tool_result_names(&mut messages);
+		messages
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {

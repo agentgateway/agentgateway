@@ -357,6 +357,14 @@ export function mergeAnalyticsFilterOptions(
 			...activeFilters[dimension]
 		]);
 	}
+	if (
+		ANALYTICS_DIMENSIONS.every(
+			({ value }) =>
+				next[value].length === current[value].length &&
+				next[value].every((option, index) => option === current[value][index])
+		)
+	)
+		return current;
 	return next;
 }
 

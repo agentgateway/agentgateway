@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
+import { getBudgetStatus } from '@/api/budgetsApi';
 import { getConfig, getEffectiveConfig, writeConfig } from '@/api/configApi';
 import { getConfigDump } from '@/api/configDumpApi';
 import {
@@ -95,9 +96,12 @@ export function useLlmConfigData(options?: { enabled?: boolean }) {
 		[rawConfig.data?.llm?.policies]
 	);
 	const policies = (config.data?.llm?.policies ?? {}) as NonNullable<LlmConfig['policies']>;
-	const models = config.data?.llm?.models ?? [];
-	const virtualModels = config.data?.llm?.virtualModels ?? [];
-	const providers = config.data?.llm?.providers ?? [];
+	const models = useMemo(() => config.data?.llm?.models ?? [], [config.data?.llm?.models]);
+	const virtualModels = useMemo(
+		() => config.data?.llm?.virtualModels ?? [],
+		[config.data?.llm?.virtualModels]
+	);
+	const providers = useMemo(() => config.data?.llm?.providers ?? [], [config.data?.llm?.providers]);
 	const apiKeys = (policies.apiKey as LlmApiKeyPolicy | null | undefined)?.keys ?? [];
 	const warnings = useMemo(
 		() =>
@@ -164,6 +168,16 @@ export function useTrafficConfigData(options?: { enabled?: boolean }) {
 		isLoading: config.isLoading || runtime.isLoading || configResources.isLoading,
 		error: config.error ?? runtime.error ?? configResources.error
 	};
+}
+
+export function useBudgetStatus(options?: { enabled?: boolean }) {
+	return useQuery({
+		queryKey: ['budgetStatus'],
+		queryFn: getBudgetStatus,
+		enabled: options?.enabled ?? true,
+		refetchInterval: 15_000,
+		retry: false
+	});
 }
 
 export function useConfigDumpMode() {

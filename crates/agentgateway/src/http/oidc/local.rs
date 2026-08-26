@@ -304,6 +304,7 @@ impl PreparedOidcProvider {
 				vec![provider],
 				crate::http::jwt::Mode::Strict,
 				crate::http::auth::AuthorizationLocation::bearer_header(),
+				false,
 			),
 		})
 	}

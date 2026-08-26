@@ -147,6 +147,10 @@ pub enum ExpectedCapacity {
 pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {
 	fn expected_capacity(&self) -> ExpectedCapacity;
 
+	fn connect_timeout(&self) -> Option<Duration> {
+		None
+	}
+
 	fn shard(&self) -> usize {
 		let mut hasher = DefaultHasher::new();
 		self.hash(&mut hasher);

@@ -72,12 +72,10 @@ func GatewaysForDeployerTransformationFunc(
 		}, nil)))
 
 		ir := &GatewayForDeployer{
-			ObjectSource: ObjectSource{
-				Group:     gwv1.GroupVersion.Group,
-				Kind:      wellknown.GatewayKind,
-				Namespace: gw.Namespace,
-				Name:      gw.Name,
-			},
+			Group:           gwv1.GroupVersion.Group,
+			Kind:            wellknown.GatewayKind,
+			Namespace:       gw.Namespace,
+			Name:            gw.Name,
 			ControllerName:  string(gwClass.Spec.ControllerName),
 			Ports:           smallset.New(ports.UnsortedList()...),
 			InternalPorts:   ComputeInternalPorts(gw, lsets),

@@ -85,10 +85,20 @@ impl NormalizedLocalConfig {
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
 		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
+		let mut registration_config = config.clone();
+		let registration_policy = Arc::new(config.budget_policy.registration_policy());
+		registration_config.budget_policy = registration_policy.clone();
 		let scope = resources.scope_full_computation();
-		let result = Box::pin(convert(resources, gateway_name, config, local_config)).await;
+		let result = Box::pin(convert(
+			resources,
+			gateway_name,
+			&registration_config,
+			local_config,
+		))
+		.await;
 		scope.finish(result.is_ok());
-		let t = result?;
+		let mut t = result?;
+		t.budget_registration = registration_policy.registration();
 		Ok(t)
 	}
 }
@@ -301,6 +311,8 @@ fn parse_deprecated_tracing_endpoint(endpoint: &str) -> anyhow::Result<(Target, 
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
+	#[serde(skip)]
+	pub(crate) budget_registration: crate::http::budget::BudgetRegistration,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model_catalog: Option<Vec<crate::ModelCatalogSource>>,
 	pub binds: Vec<BindSnapshot>,
@@ -1238,14 +1250,21 @@ enum LocalListenerProtocol {
 pub struct LocalTLSServerConfig {
 	/// Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA
 	/// mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.
+	/// Unused when `spiffe` is set.
 	#[serde(default)]
 	pub mode: LocalTLSServerMode,
 	/// Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).
-	pub cert: PathBuf,
+	/// Required unless `spiffe` is set.
+	pub cert: Option<PathBuf>,
 	/// Path to the TLS private key file.
-	pub key: PathBuf,
-	/// Path to a root CA certificate file used to validate client certificates.
+	pub key: Option<PathBuf>,
+	/// Path to a root CA certificate file used to validate client certificates (mTLS).
+	/// Omit for one-way server TLS. Not used when `spiffe` is set.
 	pub root: Option<PathBuf>,
+	/// Source the serving identity from the SPIFFE Workload API.
+	/// Mutually exclusive with `cert`/`key`/`root`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub spiffe: Option<LocalSpiffeConfig>,
 	/// Optional cipher suite allowlist (order is preserved).
 	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1279,6 +1298,9 @@ pub enum LocalTLSServerMode {
 	Static,
 	DynamicCa,
 }
+
+#[apply(schema_de!)]
+pub struct LocalSpiffeConfig {}
 
 #[apply(schema_de!)]
 pub struct LocalRouteName {
@@ -1352,6 +1374,11 @@ pub enum FullLocalBackendSpec {
 	/// Hostname or IP address of the upstream to route to.
 	#[serde(rename = "host")]
 	Opaque(Target),
+	/// Resolve the dial target from request metadata using a CEL expression.
+	Dynamic {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		target: Option<Arc<crate::cel::Expression>>,
+	},
 	/// Route to the in-process admin service instead of a network upstream.
 	#[serde(rename = "internal")]
 	Internal(InternalBackend),
@@ -1367,6 +1394,7 @@ impl From<FullLocalBackendSpec> for LocalBackend {
 	fn from(spec: FullLocalBackendSpec) -> Self {
 		match spec {
 			FullLocalBackendSpec::Opaque(t) => LocalBackend::Opaque(t),
+			FullLocalBackendSpec::Dynamic { target } => LocalBackend::Dynamic { target },
 			FullLocalBackendSpec::Internal(t) => LocalBackend::Internal(t),
 			FullLocalBackendSpec::MCP(m) => LocalBackend::MCP(m),
 			FullLocalBackendSpec::AI(a) => LocalBackend::AI(a),
@@ -2014,6 +2042,7 @@ fn ui_matches(oidc_redirect_path: Option<Strng>) -> Vec<RouteMatch> {
 		PathMatch::PathPrefix("/api/cel".into()),
 		PathMatch::PathPrefix("/api/logs".into()),
 		PathMatch::PathPrefix("/api/costs".into()),
+		PathMatch::PathPrefix("/api/budgets".into()),
 	];
 	if let Some(path) = oidc_redirect_path
 		&& !paths.iter().any(|existing| match existing {
@@ -2270,16 +2299,15 @@ where
 enum BackendAuthCompat {
 	PlainKey {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-		#[serde(deserialize_with = "deser_key_from_file")]
-		key: SecretString,
+		key: FileOrInline,
 	},
 	FullWithCredentials {
 		#[serde(flatten)]
 		auth: LocalBackendAuthKind,
-		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+		credentials: Vec<LocalBackendAuthCredential>,
 	},
 	CredentialsOnly {
-		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+		credentials: Vec<LocalBackendAuthCredential>,
 	},
 	Full(LocalBackendAuthKind),
 }
@@ -2287,7 +2315,21 @@ enum BackendAuthCompat {
 #[derive(Debug, Clone)]
 pub struct LocalBackendAuth {
 	kind: Option<LocalBackendAuthKind>,
-	credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	credentials: Vec<LocalBackendAuthCredential>,
+}
+
+// Mirrors BackendAuthCredential but holds the credential unresolved, so a
+// file-backed value is loaded through the resource manager rather than at
+// deserialization time.
+/// An additional credential to inject on the backend request.
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(rename = "BackendAuthCredential"))]
+pub struct LocalBackendAuthCredential {
+	/// Where the credential is inserted on the backend request.
+	pub location: crate::http::auth::AuthorizationLocation,
+	/// Credential value.
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+	pub key: FileOrInline,
 }
 
 impl LocalBackendAuth {
@@ -2299,9 +2341,10 @@ impl LocalBackendAuth {
 			Some(LocalBackendAuthKind::Passthrough { location }) => {
 				Some(BackendAuthKind::Passthrough { location })
 			},
-			Some(LocalBackendAuthKind::Key { value, location }) => {
-				Some(BackendAuthKind::Key { value, location })
-			},
+			Some(LocalBackendAuthKind::Key { value, location }) => Some(BackendAuthKind::Key {
+				value: load_secret(&value, resources).await?,
+				location,
+			}),
 			Some(LocalBackendAuthKind::Gcp(auth)) => Some(BackendAuthKind::Gcp(auth)),
 			Some(LocalBackendAuthKind::Aws(auth)) => Some(BackendAuthKind::Aws(auth)),
 			Some(LocalBackendAuthKind::Azure(auth)) => Some(BackendAuthKind::Azure(auth)),
@@ -2317,11 +2360,28 @@ impl LocalBackendAuth {
 			},
 			None => None,
 		};
-		Ok(BackendAuth {
-			kind,
-			credentials: self.credentials,
-		})
+		let mut credentials = Vec::with_capacity(self.credentials.len());
+		for credential in self.credentials {
+			credentials.push(crate::http::auth::BackendAuthCredential {
+				location: credential.location,
+				key: load_secret(&credential.key, resources).await?,
+			});
+		}
+		Ok(BackendAuth { kind, credentials })
 	}
+}
+
+/// Loads a secret through the resource manager, so a file-backed one is watched
+/// and a change to it triggers a config reload rather than being read once at
+/// parse time. Values are trimmed, matching the previous deserialize-time
+/// behaviour: a file written by `echo` or a Kubernetes Secret commonly carries a
+/// trailing newline.
+async fn load_secret(
+	value: &FileOrInline,
+	resources: &crate::resource_manager::ResourceFetcher,
+) -> anyhow::Result<SecretString> {
+	let loaded = crate::serdes::load_file_or_inline(value, resources).await?;
+	Ok(SecretString::from(loaded.trim().to_string()))
 }
 
 #[apply(schema_de!)]
@@ -2335,10 +2395,10 @@ enum LocalBackendAuthKind {
 	},
 	/// Send a configured secret value to the backend.
 	Key {
-		/// Secret value to send to the backend.
+		/// Secret value to send to the backend. File references are watched, so
+		/// rotating the file reloads it without a restart.
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-		#[serde(deserialize_with = "deser_key_from_file")]
-		value: SecretString,
+		value: FileOrInline,
 		/// Where to place the secret in the backend request.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		location: Option<crate::http::auth::AuthorizationLocation>,
@@ -2897,6 +2957,12 @@ pub struct FilterOrPolicy {
 	/// Send request and response data to an external processing service.
 	#[serde(default)]
 	ext_proc: Option<LocalExtProcPolicy>,
+	/// Resolve Substrate actor hostnames for dynamic route backends on ingress.
+	#[serde(default)]
+	substrate_ingress: Option<crate::http::substrate::SubstrateIngress>,
+	/// Authorize CONNECT egress using the originating actor's dynamic policy.
+	#[serde(default)]
+	substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
 	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
@@ -3241,6 +3307,7 @@ async fn convert(
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
 	let normalized = NormalizedLocalConfig {
+		budget_registration: Default::default(),
 		model_catalog,
 		binds: all_binds,
 		listener_routes: all_listener_routes,
@@ -4989,6 +5056,8 @@ pub async fn convert_route(
 			Some(AttachedPolicyContext {
 				oidc_policy_id: crate::http::oidc::PolicyId::route(&key),
 				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
+				budget_policy: &config.budget_policy,
+				database_configured: config.database.is_some(),
 			}),
 		)
 		.await?
@@ -5028,6 +5097,8 @@ pub(crate) struct ResolvedPolicies {
 pub struct AttachedPolicyContext<'a> {
 	pub oidc_policy_id: crate::http::oidc::PolicyId,
 	pub oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
+	pub budget_policy: &'a Arc<crate::http::budget::BudgetPolicy>,
+	pub database_configured: bool,
 }
 
 async fn split_frontend_policies(
@@ -5126,6 +5197,12 @@ pub(crate) async fn split_policies_for_target(
 	attached: Option<AttachedPolicyContext<'_>>,
 	backend_target: bool,
 ) -> Result<ResolvedPolicies, Error> {
+	let budget_policy = attached.as_ref().map(|context| {
+		(
+			Arc::clone(context.budget_policy),
+			context.database_configured,
+		)
+	});
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
 		backend_policies,
@@ -5158,6 +5235,8 @@ pub(crate) async fn split_policies_for_target(
 		csrf,
 		ext_authz,
 		ext_proc,
+		substrate_ingress,
+		substrate_egress,
 		buffer,
 		timeout,
 		retry,
@@ -5264,6 +5343,7 @@ pub(crate) async fn split_policies_for_target(
 		let Some(AttachedPolicyContext {
 			oidc_policy_id,
 			oidc_cookie_encoder,
+			..
 		}) = attached
 		else {
 			return Err(Error::msg("oidc policies must be attached"));
@@ -5287,7 +5367,14 @@ pub(crate) async fn split_policies_for_target(
 		)));
 	}
 	if let Some(p) = api_key {
-		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(p.compile()?)));
+		let (budget_policy, database_configured) =
+			budget_policy.ok_or_else(|| Error::msg("API key policies must be attached"))?;
+		let api_key = p.compile()?;
+		budget_policy.register(&api_key, database_configured)?;
+		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(api_key)));
+		route_policies.push(TrafficPolicy::Budget(RequestPolicy::single_arc(
+			budget_policy,
+		)));
 	}
 	if let Some(p) = transformations {
 		if backend_target {
@@ -5327,6 +5414,12 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = ext_proc {
 		route_policies.push(TrafficPolicy::ExtProc(p.into_policy()?))
+	}
+	if let Some(p) = substrate_ingress {
+		route_policies.push(TrafficPolicy::SubstrateIngress(RequestPolicy::single(p)))
+	}
+	if let Some(p) = substrate_egress {
+		route_policies.push(TrafficPolicy::SubstrateEgress(RequestPolicy::single(p)))
 	}
 	if let Some(p) = local_rate_limit
 		&& !p.is_empty()
@@ -5453,12 +5546,47 @@ impl LocalTLSServerConfig {
 		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> anyhow::Result<ServerTLSConfig> {
+		// SPIFFE sources its identity from the Workload API, so it carries no cert/key/root files
+		// and is selected by the `spiffe` field rather than `mode`.
+		if self.spiffe.is_some() {
+			if self.cert.is_some() || self.key.is_some() || self.root.is_some() {
+				anyhow::bail!("'spiffe' is mutually exclusive with 'cert'/'key'/'root'");
+			}
+			if self.mode != LocalTLSServerMode::Static {
+				anyhow::bail!(
+					"'spiffe' cannot be combined with tls.mode (SPIFFE sources its own identity)"
+				);
+			}
+			// SPIFFE-sourced TLS uses its own negotiation profile; these knobs are not threaded into
+			// the SPIFFE config builders, so reject them rather than silently ignoring them.
+			if self.cipher_suites.is_some()
+				|| self.min_tls_version.is_some()
+				|| self.max_tls_version.is_some()
+				|| self.key_exchange_groups.is_some()
+			{
+				anyhow::bail!(
+					"'spiffe' cannot be combined with tls cipherSuites/minTLSVersion/maxTLSVersion/keyExchangeGroups"
+				);
+			}
+			return Ok(ServerTLSConfig::spiffe(vec![
+				b"h2".to_vec(),
+				b"http/1.1".to_vec(),
+			]));
+		}
 		let cert_pem = resources
-			.fetch(crate::resource_manager::ResourceRef::File(self.cert))
+			.fetch(crate::resource_manager::ResourceRef::File(
+				self
+					.cert
+					.ok_or_else(|| anyhow::anyhow!("tls requires 'cert' (or 'spiffe')"))?,
+			))
 			.await?
 			.to_vec();
 		let key_pem = resources
-			.fetch(crate::resource_manager::ResourceRef::File(self.key))
+			.fetch(crate::resource_manager::ResourceRef::File(
+				self
+					.key
+					.ok_or_else(|| anyhow::anyhow!("tls requires 'key' (or 'spiffe')"))?,
+			))
 			.await?
 			.to_vec();
 		let root_pem = match self.root {

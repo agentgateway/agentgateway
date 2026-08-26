@@ -12,6 +12,7 @@ spec:
     phase: PreRouting
     jwtAuthentication:
       mode: Strict
+      preserveToken: true
       location:
         queryParameter:
           name: access_token
@@ -56,6 +57,7 @@ output:
             queryParameter:
               name: access_token
           mode: STRICT
+          preserveToken: true
           providers:
           - audiences:
             - my-app

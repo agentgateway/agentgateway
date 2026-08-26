@@ -35,23 +35,23 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 		{
 			name: "secret wins same-name collision",
 			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
-			configMap: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string]string{
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
 				"ca.crt": string(configMapCA),
 			}},
 			secret: &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"},
-				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"ca.crt": secretCA},
+				Name: "ca", Namespace: "default",
+				Type: corev1.SecretTypeTLS,
+				Data: map[string][]byte{"ca.crt": secretCA},
 			},
 			wantRoot: secretCA,
 		},
 		{
 			name: "explicit configmap",
 			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "ConfigMap"},
-			configMap: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string]string{
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
 				"ca.crt": string(configMapCA),
 			}},
-			secret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string][]byte{
+			secret: &corev1.Secret{Name: "ca", Namespace: "default", Data: map[string][]byte{
 				"ca.crt": secretCA,
 			}},
 			wantRoot: configMapCA,
@@ -59,10 +59,10 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 		{
 			name: "omitted kind defaults to configmap",
 			ref:  agentgateway.LocalCACertificateRef{Name: "ca"},
-			configMap: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string]string{
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
 				"ca.crt": string(configMapCA),
 			}},
-			secret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string][]byte{
+			secret: &corev1.Secret{Name: "ca", Namespace: "default", Data: map[string][]byte{
 				"ca.crt": secretCA,
 			}},
 			wantRoot: configMapCA,
@@ -70,7 +70,7 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 		{
 			name: "missing selected secret does not fall back",
 			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
-			configMap: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string]string{
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
 				"ca.crt": string(configMapCA),
 			}},
 			wantErr: "Secret default/ca not found",
@@ -78,7 +78,7 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 		{
 			name: "missing selected configmap does not fall back",
 			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "ConfigMap"},
-			secret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string][]byte{
+			secret: &corev1.Secret{Name: "ca", Namespace: "default", Data: map[string][]byte{
 				"ca.crt": secretCA,
 			}},
 			wantErr: "ConfigMap default/ca not found",
@@ -86,13 +86,13 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 		{
 			name:    "secret missing ca key",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
-			secret:  &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}},
+			secret:  &corev1.Secret{Name: "ca", Namespace: "default"},
 			wantErr: "missing ca.crt",
 		},
 		{
 			name: "secret has invalid pem",
 			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
-			secret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string][]byte{
+			secret: &corev1.Secret{Name: "ca", Namespace: "default", Data: map[string][]byte{
 				"ca.crt": []byte("not pem"),
 			}},
 			wantErr: "invalid ca.crt in Secret default/ca",
@@ -100,7 +100,7 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 		{
 			name: "configmap has invalid pem",
 			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "ConfigMap"},
-			configMap: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"}, Data: map[string]string{
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
 				"ca.crt": "not pem",
 			}},
 			wantErr: "invalid ca.crt in ConfigMap default/ca",
@@ -116,9 +116,7 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := backendTLSContext(t, tt.configMap, tt.secret)
 			policies, err := TranslateInlineBackendPolicy(ctx, "default", &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{tt.ref}},
-				},
+				TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{tt.ref}},
 			})
 
 			if tt.wantErr != "" {
@@ -143,21 +141,18 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 func TestTranslateBackendTLSCAErrorUpdatesPolicyStatus(t *testing.T) {
 	collections := backendTLSContext(t, nil, nil).Collections
 	collections.Gateways = krt.NewStaticCollection[*gwv1.Gateway](nil, []*gwv1.Gateway{{
-		ObjectMeta: metav1.ObjectMeta{Name: "gateway", Namespace: "default"},
+		Name: "gateway", Namespace: "default",
 	}}, krt.WithName("plugins/backendTLSStatusGateways"))
 	policy := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: "default", Generation: 1},
+		Name: "policy", Namespace: "default", Generation: 1,
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
-					Group: wellknown.GatewayGroup,
-					Kind:  wellknown.GatewayKind,
-					Name:  "gateway",
-				},
+				Group: wellknown.GatewayGroup,
+				Kind:  wellknown.GatewayKind,
+				Name:  "gateway",
 			}},
-			Backend: &agentgateway.BackendFull{BackendSimple: agentgateway.BackendSimple{
-				TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "missing", Kind: "Secret"}}},
-			}},
+			Backend: &agentgateway.BackendFull{
+				TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "missing", Kind: "Secret"}}}},
 		},
 	}
 

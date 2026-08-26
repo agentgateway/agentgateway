@@ -534,10 +534,31 @@ type LocalCACertificateRef struct {
 	Kind string `json:"kind,omitempty"`
 }
 
+// BackendTLSCertificateSource selects where the gateway's client identity and trust roots come
+// from when originating TLS to a backend.
+// +k8s:enum
+type BackendTLSCertificateSource string
+
+const (
+	// BackendTLSCertificateSourceInline uses the inline `mtlsCertificateRef`/`caCertificateRefs`
+	// (or the system trust roots when unset). This is the default.
+	BackendTLSCertificateSourceInline BackendTLSCertificateSource = "Inline"
+	// BackendTLSCertificateSourceSPIFFE sources the gateway's X.509-SVID and trust bundle from
+	// the SPIFFE Workload API (mutual TLS).
+	BackendTLSCertificateSourceSPIFFE BackendTLSCertificateSource = "SPIFFE"
+)
+
 // +kubebuilder:validation:AtMostOneOf=verifySubjectAltNames;insecureSkipVerify
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
+// +kubebuilder:validation:XValidation:rule="!has(self.certificateSource) || self.certificateSource != 'SPIFFE' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))",message="certificateSource SPIFFE may not be combined with mtlsCertificateRef, caCertificateRefs, or insecureSkipVerify"
 type BackendTLS struct {
+	// Source for the gateway's client identity and trust roots (`Inline` default, or `SPIFFE`).
+	//
+	// +optional
+	// +kubebuilder:default=Inline
+	CertificateSource *BackendTLSCertificateSource `json:"certificateSource,omitempty"`
+
 	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
 	// referenced credential source (defaulting to a Kubernetes `Secret`). An
 	// optional `ca.cert`, if present, verifies the server certificate, but
@@ -1163,6 +1184,12 @@ type JWTAuthentication struct {
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
+
+	// Keeps a successfully validated JWT in its original location. By default, the gateway removes
+	// the JWT after validation. When the token only needs to be forwarded to the selected backend,
+	// prefer `backendAuth.passthrough` so it is not exposed to other policies in the request path.
+	// +optional
+	PreserveToken bool `json:"preserveToken,omitempty"`
 
 	// Enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
@@ -2462,6 +2489,16 @@ const (
 	Entra     McpIDP = "Entra"
 )
 
+// +k8s:enum
+type BackendTunnelMode string
+
+const (
+	// Auto uses CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
+	BackendTunnelModeAuto BackendTunnelMode = "Auto"
+	// Connect uses CONNECT for all transports, including plaintext HTTP.
+	BackendTunnelModeConnect BackendTunnelMode = "Connect"
+)
+
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
 type BackendTunnel struct {
 	// Proxy server to reach.
@@ -2469,6 +2506,12 @@ type BackendTunnel struct {
 	// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path for backend tunnel"
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
+
+	// How requests are sent through the proxy.
+	// Defaults to `Auto`.
+	// +kubebuilder:default=Auto
+	// +optional
+	Mode BackendTunnelMode `json:"mode,omitempty"`
 }
 
 type BackendHTTP struct {

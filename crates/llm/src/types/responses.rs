@@ -547,6 +547,33 @@ impl RequestType for Request {
 		messages
 	}
 
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		let mut messages = self
+			.instructions
+			.as_ref()
+			.map(|instructions| NormalizedMessage {
+				role: strng::literal!("system"),
+				parts: vec![NormalizedMessagePart::text(strng::new(instructions))],
+			})
+			.into_iter()
+			.collect::<Vec<_>>();
+		match &self.input {
+			RequestInput::Text(text) => messages.push(NormalizedMessage {
+				role: strng::literal!("user"),
+				parts: vec![NormalizedMessagePart::text(strng::new(text))],
+			}),
+			RequestInput::Items(items) => {
+				messages.extend(
+					items
+						.iter()
+						.filter_map(|item| normalized_response_item(&item.0)),
+				);
+			},
+		}
+		crate::types::attach_tool_result_names(&mut messages);
+		messages
+	}
+
 	fn set_messages(&mut self, mut messages: Vec<SimpleChatCompletionMessage>) {
 		if self.instructions.is_some() {
 			self.instructions = messages
@@ -578,6 +605,126 @@ impl RequestType for Request {
 			},
 		}
 	}
+}
+
+fn normalized_response_item(item: &Value) -> Option<NormalizedMessage> {
+	if let Some(role) = item.get("role").and_then(Value::as_str) {
+		let mut parts = match item.get("content") {
+			Some(Value::String(text)) => vec![NormalizedMessagePart::text(strng::new(text))],
+			Some(Value::Array(content)) => content
+				.iter()
+				.filter_map(|part| {
+					part
+						.get("text")
+						.or_else(|| part.get("refusal"))
+						.and_then(Value::as_str)
+						.map(|text| NormalizedMessagePart::text(strng::new(text)))
+				})
+				.collect(),
+			_ => Vec::new(),
+		};
+		parts.extend(
+			item
+				.get("tool_calls")
+				.and_then(Value::as_array)
+				.into_iter()
+				.flatten()
+				.filter_map(crate::types::normalized_tool_call),
+		);
+		return (!parts.is_empty()).then(|| NormalizedMessage {
+			role: strng::new(role),
+			parts,
+		});
+	}
+
+	let item_type = item.get("type").and_then(Value::as_str)?;
+	if item_type == "reasoning" {
+		return Some(NormalizedMessage {
+			role: strng::literal!("assistant"),
+			parts: vec![NormalizedMessagePart::reasoning(item.clone())],
+		});
+	}
+
+	let is_call = item_type.ends_with("_call")
+		|| matches!(
+			item_type,
+			"program" | "mcp_approval_request" | "tool_search_call"
+		);
+	if is_call {
+		let name = item
+			.get("name")
+			.and_then(Value::as_str)
+			.or_else(|| item_type.strip_suffix("_call"))
+			.unwrap_or(item_type);
+		let id = item
+			.get("call_id")
+			.or_else(|| item.get("id"))
+			.and_then(Value::as_str)
+			.unwrap_or(name);
+		let arguments = [
+			"arguments",
+			"input",
+			"action",
+			"actions",
+			"operation",
+			"queries",
+			"code",
+		]
+		.into_iter()
+		.find_map(|key| item.get(key))
+		.cloned()
+		.unwrap_or_else(|| Value::Object(Default::default()));
+		let mut parts = vec![NormalizedMessagePart::tool_call(
+			strng::new(id),
+			strng::new(name),
+			crate::types::parse_json_string(arguments),
+		)];
+		if let Some(content) = item
+			.get("output")
+			.or_else(|| item.get("outputs"))
+			.or_else(|| item.get("results"))
+			.or_else(|| item.get("error"))
+		{
+			parts.push(NormalizedMessagePart::tool_result(
+				Some(strng::new(id)),
+				Some(strng::new(name)),
+				content.clone(),
+				item.get("error").map(|_| true),
+			));
+		}
+		return Some(NormalizedMessage {
+			role: strng::literal!("assistant"),
+			parts,
+		});
+	}
+
+	let is_result = item_type.ends_with("_call_output")
+		|| matches!(
+			item_type,
+			"program_output" | "tool_search_output" | "mcp_list_tools"
+		);
+	if is_result {
+		let id = item
+			.get("call_id")
+			.or_else(|| item.get("id"))
+			.and_then(Value::as_str)
+			.map(strng::new);
+		let content = ["output", "result", "tools", "error"]
+			.into_iter()
+			.find_map(|key| item.get(key))
+			.cloned()
+			.unwrap_or(Value::Null);
+		return Some(NormalizedMessage {
+			role: strng::literal!("tool"),
+			parts: vec![NormalizedMessagePart::tool_result(
+				id,
+				item.get("name").and_then(Value::as_str).map(strng::new),
+				content,
+				item.get("error").map(|_| true),
+			)],
+		});
+	}
+	None
 }
 
 fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {

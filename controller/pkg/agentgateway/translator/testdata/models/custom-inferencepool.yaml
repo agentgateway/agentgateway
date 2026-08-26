@@ -61,6 +61,7 @@ spec:
     sectionName: llm
   provider: Custom
   custom:
+    providerOverride: team-a
     backendRef:
       group: inference.networking.k8s.io
       kind: InferencePool
@@ -82,6 +83,7 @@ output:
           - custom:
               formats:
               - format: COMPLETIONS
+              providerOverride: team-a
             name: backend
             providerBackend:
               port: 8000

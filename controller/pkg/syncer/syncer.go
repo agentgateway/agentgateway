@@ -213,11 +213,9 @@ func (s *Syncer) buildFinalGatewayStatus(
 		gatewayStatuses,
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus]) *krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus] {
 			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
-				Kind: wellknown.GatewayGVK.Kind,
-				NamespacedName: types.NamespacedName{
-					Namespace: i.Obj.Namespace,
-					Name:      i.Obj.Name,
-				},
+				Kind:      wellknown.GatewayGVK.Kind,
+				Namespace: i.Obj.Namespace,
+				Name:      i.Obj.Name,
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -247,10 +245,8 @@ func (s *Syncer) buildFinalListenerSetStatus(
 
 	gatewayIndex := krt.NewIndex(gateways, "gateway-parent-section-name", func(gwl *translator.GatewayListener) []utils.SectionedNamespacedName {
 		return []utils.SectionedNamespacedName{{
-			NamespacedName: types.NamespacedName{
-				Namespace: gwl.ParentObject.Namespace,
-				Name:      gwl.ParentObject.Name,
-			},
+			Namespace:   gwl.ParentObject.Namespace,
+			Name:        gwl.ParentObject.Name,
 			SectionName: gwl.ParentInfo.SectionName,
 		}}
 	}).AsCollection(append(krtopts.ToOptions("translator/ListenerSetListenersByParentSection"), utils.SectionedNamespacedNameIndexCollectionFunc)...)
@@ -264,11 +260,9 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			invalidListenerCount := 0
 			lsStatus := i.Status.DeepCopy()
 			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
-				Kind: wellknown.ListenerSetGVK.Kind,
-				NamespacedName: types.NamespacedName{
-					Namespace: i.Obj.Namespace,
-					Name:      i.Obj.Name,
-				},
+				Kind:      wellknown.ListenerSetGVK.Kind,
+				Namespace: i.Obj.Namespace,
+				Name:      i.Obj.Name,
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -276,10 +270,8 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			}
 			for idx, l := range i.Obj.Spec.Listeners {
 				gatewayListeners := krtutil.FetchIndexObjects(ctx, gatewayIndex, utils.SectionedNamespacedName{
-					NamespacedName: types.NamespacedName{
-						Namespace: i.Obj.Namespace,
-						Name:      i.Obj.Name,
-					},
+					Namespace:   i.Obj.Namespace,
+					Name:        i.Obj.Name,
 					SectionName: l.Name,
 				})
 				if len(gatewayListeners) == 0 {
@@ -676,6 +668,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 			tlsConfig.CertificateSource = api.TLSConfig_ISTIO_WORKLOAD
 		} else if obj.TLSInfo.DynamicCA {
 			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
+		} else if obj.TLSInfo.Spiffe {
+			tlsConfig.CertificateSource = api.TLSConfig_SPIFFE
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
@@ -685,6 +679,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 			tlsConfig.MtlsMode = api.TLSConfig_STRICT
 		} else if obj.TLSInfo.IstioWorkloadCert {
 			tlsConfig.MtlsMode = api.TLSConfig_DISABLE
+		} else if obj.TLSInfo.Spiffe {
+			tlsConfig.MtlsMode = api.TLSConfig_STRICT
 		} else if obj.TLSInfo.MtlsFallbackEnabled {
 			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
 		}

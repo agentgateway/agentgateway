@@ -86,12 +86,20 @@ pub mod from_completions {
 	use axum_core::body::Body;
 	use bytes::Bytes;
 
-	use crate::conversion::completions::{extract_system_text, parse_data_url};
+	use crate::conversion::completions::parse_data_url;
 	use crate::types::ResponseType;
 	use crate::types::completions::typed as completions;
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::types::messages::typed as messages;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
+
+	fn cache_control(
+		breakpoint: &Option<completions::PromptCacheBreakpointParam>,
+	) -> Option<messages::CacheControlEphemeral> {
+		breakpoint
+			.as_ref()
+			.map(|_| messages::CacheControlEphemeral::Ephemeral { ttl: None })
+	}
 
 	fn user_content_to_messages(
 		content: &completions::RequestUserMessageContent,
@@ -115,7 +123,7 @@ pub mod from_completions {
 								out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
 									text: text.text.clone(),
 									citations: None,
-									cache_control: None,
+									cache_control: cache_control(&text.prompt_cache_breakpoint),
 								}));
 							}
 						},
@@ -134,7 +142,7 @@ pub mod from_completions {
 							};
 							out.push(messages::ContentBlock::Image(messages::ContentImageBlock {
 								source,
-								cache_control: None,
+								cache_control: cache_control(&image.prompt_cache_breakpoint),
 							}));
 						},
 						completions::RequestUserMessageContentPart::InputAudio(_)
@@ -169,7 +177,7 @@ pub mod from_completions {
 									out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
 										text: text.text.clone(),
 										citations: None,
-										cache_control: None,
+										cache_control: cache_control(&text.prompt_cache_breakpoint),
 									}));
 								}
 							},
@@ -238,7 +246,7 @@ pub mod from_completions {
 							messages::ToolResultContentPart::Text {
 								text: text.text.clone(),
 								citations: None,
-								cache_control: None,
+								cache_control: cache_control(&text.prompt_cache_breakpoint),
 							}
 						},
 					})
@@ -259,13 +267,71 @@ pub mod from_completions {
 	fn translate_internal(req: completions::Request, model_id: String) -> messages::Request {
 		let max_tokens = req.max_tokens();
 		let stop_sequences = req.stop_sequence();
-		// Anthropic has all system prompts in a single field. Join them
-		let system = req
-			.messages
-			.iter()
-			.filter_map(extract_system_text)
-			.collect::<Vec<String>>()
-			.join("\n");
+		let mut system_blocks = Vec::new();
+		for message in &req.messages {
+			match message {
+				completions::RequestMessage::System(message) => match &message.content {
+					completions::RequestSystemMessageContent::Text(text) => {
+						if !text.trim().is_empty() {
+							system_blocks.push(messages::SystemContentBlock::Text {
+								text: text.clone(),
+								cache_control: None,
+							});
+						}
+					},
+					completions::RequestSystemMessageContent::Array(parts) => {
+						for part in parts {
+							let completions::RequestSystemMessageContentPart::Text(text) = part;
+							if !text.text.trim().is_empty() {
+								system_blocks.push(messages::SystemContentBlock::Text {
+									text: text.text.clone(),
+									cache_control: cache_control(&text.prompt_cache_breakpoint),
+								});
+							}
+						}
+					},
+				},
+				completions::RequestMessage::Developer(message) => match &message.content {
+					completions::RequestDeveloperMessageContent::Text(text) => {
+						if !text.trim().is_empty() {
+							system_blocks.push(messages::SystemContentBlock::Text {
+								text: text.clone(),
+								cache_control: None,
+							});
+						}
+					},
+					completions::RequestDeveloperMessageContent::Array(parts) => {
+						for part in parts {
+							let completions::RequestDeveloperMessageContentPart::Text(text) = part;
+							if !text.text.trim().is_empty() {
+								system_blocks.push(messages::SystemContentBlock::Text {
+									text: text.text.clone(),
+									cache_control: cache_control(&text.prompt_cache_breakpoint),
+								});
+							}
+						}
+					},
+				},
+				_ => {},
+			}
+		}
+		let system = if system_blocks.is_empty() {
+			None
+		} else if system_blocks.iter().any(|block| match block {
+			messages::SystemContentBlock::Text { cache_control, .. } => cache_control.is_some(),
+		}) {
+			Some(messages::SystemPrompt::Blocks(system_blocks))
+		} else {
+			Some(messages::SystemPrompt::Text(
+				system_blocks
+					.into_iter()
+					.map(|block| match block {
+						messages::SystemContentBlock::Text { text, .. } => text,
+					})
+					.collect::<Vec<_>>()
+					.join("\n"),
+			))
+		};
 
 		// Convert messages to Anthropic format
 		let messages = req
@@ -407,11 +473,7 @@ pub mod from_completions {
 		};
 		messages::Request {
 			messages,
-			system: if system.is_empty() {
-				None
-			} else {
-				Some(messages::SystemPrompt::Text(system))
-			},
+			system,
 			model: model_id,
 			max_tokens,
 			stop_sequences,

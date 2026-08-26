@@ -2,6 +2,7 @@ pub mod filters;
 pub mod health;
 pub mod timeout;
 
+pub mod budget;
 pub mod buffer;
 pub mod bufferbody;
 mod buflist;
@@ -30,6 +31,7 @@ mod recordbody;
 pub mod remoteratelimit;
 pub mod sessionaffinity;
 pub mod sessionpersistence;
+pub mod substrate;
 pub mod tests_common;
 pub mod transformation_cel;
 

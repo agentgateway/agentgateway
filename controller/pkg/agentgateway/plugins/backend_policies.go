@@ -14,7 +14,6 @@ import (
 	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -123,11 +122,9 @@ func TranslateInlineBackendPolicy(
 	policy *agentgateway.BackendFull,
 ) ([]*api.BackendPolicySpec, error) {
 	dummy := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "inline_policy",
-			Namespace: namespace,
-		},
-		Spec: agentgateway.AgentgatewayPolicySpec{Backend: policy},
+		Name:      "inline_policy",
+		Namespace: namespace,
+		Spec:      agentgateway.AgentgatewayPolicySpec{Backend: policy},
 	}
 	res, err := translateBackendPolicyToAgw(ctx, dummy)
 	return slices.MapFilter(res, func(e *api.Policy) **api.BackendPolicySpec {
@@ -429,50 +426,55 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 
 	p := &api.BackendPolicySpec_BackendTLS{}
 
-	if len(tls.MtlsCertificateRef) > 0 {
-		// Currently we only support one, and enforce this in the API
-		mtls := tls.MtlsCertificateRef[0]
-		nn := types.NamespacedName{
-			Namespace: policy.Namespace,
-			Name:      string(mtls.Name),
-		}
-		data, err := ctx.ResolveCredentialRef(mtls, policy.Namespace)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
-			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, data); err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
+	// SPIFFE gets the client identity at connection time, so there's nothing to resolve from Secrets or ConfigMaps
+	if tls.CertificateSource != nil && *tls.CertificateSource == agentgateway.BackendTLSCertificateSourceSPIFFE {
+		p.CertificateSource = api.BackendPolicySpec_BackendTLS_SPIFFE
+	} else {
+		if len(tls.MtlsCertificateRef) > 0 {
+			// Currently we only support one, and enforce this in the API
+			mtls := tls.MtlsCertificateRef[0]
+			nn := types.NamespacedName{
+				Namespace: policy.Namespace,
+				Name:      string(mtls.Name),
 			}
-			p.Cert = data[corev1.TLSCertKey]
-			p.Key = data[corev1.TLSPrivateKeyKey]
-			if ca, f := data[corev1.ServiceAccountRootCAKey]; f {
-				p.Root = ca
-			}
-		}
-	}
-
-	// Explicit CA refs take precedence over mTLS CA material.
-	if len(tls.CACertificateRefs) > 0 {
-		var sb strings.Builder
-		for _, ref := range tls.CACertificateRefs {
-			pem, err := cacert.Resolve(
-				ctx.Krt,
-				ctx.Collections.ConfigMaps,
-				ctx.Collections.Secrets,
-				policy.Namespace,
-				ref,
-			)
+			data, err := ctx.ResolveCredentialRef(mtls, policy.Namespace)
 			if err != nil {
 				errs = append(errs, err)
-				continue
+			} else {
+				if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, data); err != nil {
+					errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
+				}
+				p.Cert = data[corev1.TLSCertKey]
+				p.Key = data[corev1.TLSPrivateKeyKey]
+				if ca, f := data[corev1.ServiceAccountRootCAKey]; f {
+					p.Root = ca
+				}
 			}
-			if sb.Len() > 0 {
-				sb.WriteString("\n")
-			}
-			sb.WriteString(pem)
 		}
-		// An explicit but invalid source trusts nothing rather than system certs.
-		p.Root = []byte(sb.String())
+
+		// Explicit CA refs take precedence over mTLS CA material.
+		if len(tls.CACertificateRefs) > 0 {
+			var sb strings.Builder
+			for _, ref := range tls.CACertificateRefs {
+				pem, err := cacert.Resolve(
+					ctx.Krt,
+					ctx.Collections.ConfigMaps,
+					ctx.Collections.Secrets,
+					policy.Namespace,
+					ref,
+				)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				if sb.Len() > 0 {
+					sb.WriteString("\n")
+				}
+				sb.WriteString(pem)
+			}
+			// An explicit but invalid source trusts nothing rather than system certs.
+			p.Root = []byte(sb.String())
+		}
 	}
 
 	if len(tls.VerifySubjectAltNames) > 0 {
@@ -546,6 +548,10 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 
 func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	tunnel := policy.Spec.Backend.Tunnel
+	mode := api.BackendPolicySpec_BackendTunnel_AUTO
+	if tunnel.Mode == agentgateway.BackendTunnelModeConnect {
+		mode = api.BackendPolicySpec_BackendTunnel_CONNECT
+	}
 
 	proxy, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, tunnel.PolicyBackendEndpoint, policy.Namespace)
 
@@ -558,6 +564,7 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 					BackendTunnel: &api.BackendPolicySpec_BackendTunnel{
 						Proxy:          proxy,
 						InlinePolicies: inlinePolicies,
+						Mode:           mode,
 					},
 				},
 			},

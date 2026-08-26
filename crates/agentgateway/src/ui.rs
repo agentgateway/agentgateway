@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_core::version::BuildInfo;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{StatusCode, Uri};
 use axum::response::sse::Event;
 use axum::response::{IntoResponse, Redirect, Response, Sse};
@@ -109,6 +109,7 @@ pub fn router(
 		.route("/api/logs/analytics/summary", post(analytics_summary))
 		.route("/api/costs/models", get(cost_models))
 		.route("/api/costs/refresh-base", post(refresh_base_costs))
+		.route("/api/budgets/status", get(budget_status))
 		.nest_service("/ui", ui_service)
 		.route("/", get(|| async { Redirect::permanent("/ui") }))
 		.with_state(App {
@@ -451,6 +452,11 @@ async fn update_config_resource(
 	let kind = kind
 		.parse::<ConfigResourceKind>()
 		.map_err(resource_api_error)?;
+	let file_config = if app.state.storage.mode == ConfigStoreMode::File {
+		Some(read_file_config(&app).await?)
+	} else {
+		None
+	};
 	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind == ConfigResourceKind::McpSettings {
 		remove_file_owned_mcp_settings(&read_file_config(&app).await?, &mut resource.value)?;
 	}
@@ -477,11 +483,26 @@ async fn update_config_resource(
 					"config resource not found: {kind}/{id}"
 				))));
 			}
+			let created_at = if let Some(config) = file_config.as_ref() {
+				crate::config_store::file_api_key_created_at(config, &id)
+			} else {
+				stored_resources
+					.as_ref()
+					.and_then(|resources| {
+						resources
+							.iter()
+							.find(|resource| resource.kind == kind && resource.id == id)
+					})
+					.and_then(|resource| {
+						crate::config_store::api_key_created_at(&resource.value)
+							.or_else(|| Some(resource.created_at.timestamp()))
+					})
+			};
 			vec![if app.state.storage.mode == ConfigStoreMode::File {
-				crate::config_store::prepare_file_api_key_update(id.clone(), resource.value)
+				crate::config_store::prepare_file_api_key_update(id.clone(), resource.value, created_at)
 					.map_err(resource_api_error)?
 			} else {
-				crate::config_store::prepare_api_key_update(id.clone(), resource.value)
+				crate::config_store::prepare_api_key_update(id.clone(), resource.value, created_at)
 					.map_err(resource_api_error)?
 			}]
 		},
@@ -496,7 +517,7 @@ async fn update_config_resource(
 		},
 	};
 	if app.state.storage.mode == ConfigStoreMode::File {
-		let mut config = read_file_config(&app).await?;
+		let mut config = file_config.expect("file mode loads the file config");
 		for resource in &prepared {
 			crate::config_store::upsert_file_config_resource(&mut config, resource, Some(id.as_str()))
 				.map_err(resource_api_error)?;
@@ -732,6 +753,24 @@ async fn cost_models(
 	State(app): State<App>,
 ) -> Result<Json<crate::llm::catalog::ModelCatalogModels>, ErrorResponse> {
 	Ok(Json(app.model_catalog.list_models()))
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BudgetStatusQuery {
+	api_key_name: Option<String>,
+}
+
+async fn budget_status(
+	State(app): State<App>,
+	Query(query): Query<BudgetStatusQuery>,
+) -> Result<Json<crate::http::budget::BudgetStatusResponse>, ErrorResponse> {
+	Ok(Json(
+		app
+			.state
+			.budget_policy
+			.status(query.api_key_name.as_deref())?,
+	))
 }
 
 #[derive(serde::Deserialize)]

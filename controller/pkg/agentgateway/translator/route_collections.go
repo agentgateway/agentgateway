@@ -332,11 +332,9 @@ func buildDelegatedHTTPRoutes(
 			return nil
 		}
 		source := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{
-				Namespace: obj.Namespace,
-				Name:      obj.Name,
-			},
-			Kind: wellknown.HTTPRouteKind,
+			Namespace: obj.Namespace,
+			Name:      obj.Name,
+			Kind:      wellknown.HTTPRouteKind,
 		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, binding := range matchingBindings(krtctx, obj) {
@@ -356,11 +354,9 @@ func buildDelegatedHTTPRoutes(
 					continue
 				}
 				backends.Insert(utils.TypedNamespacedName{
-					NamespacedName: types.NamespacedName{
-						Namespace: defaultString(refNs, obj.Namespace),
-						Name:      string(refName),
-					},
-					Kind: ref.Kind,
+					Namespace: defaultString(refNs, obj.Namespace),
+					Name:      string(refName),
+					Kind:      ref.Kind,
 				})
 			}
 		}
@@ -1120,8 +1116,8 @@ func delegatedGatewayRouteAttachmentCountCollection(
 		//ctx := inputs.WithCtx(krtctx)
 		n := obj.Resource.GetRoute().GetName()
 		from := utils.TypedNamespacedName{
-			Kind:           wellknown.HTTPRouteKind,
-			NamespacedName: types.NamespacedName{Namespace: n.Namespace, Name: n.Name},
+			Kind:      wellknown.HTTPRouteKind,
+			Namespace: n.Namespace, Name: n.Name,
 		}
 		return []*plugins.RouteAttachment{{
 			From: from,
@@ -1137,11 +1133,9 @@ func delegatedGatewayRouteAttachmentCountCollection(
 
 func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext, obj T, kind string, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
 	source := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.GetName(),
-		},
-		Kind: kind,
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+		Kind:      kind,
 	}
 	gateways := sets.Set[types.NamespacedName]{}
 	for _, parent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, obj)) {
@@ -1155,11 +1149,9 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 				continue
 			}
 			be := utils.TypedNamespacedName{
-				NamespacedName: types.NamespacedName{
-					Namespace: defaultString(refNs, obj.GetNamespace()),
-					Name:      string(refName),
-				},
-				Kind: ref.Kind,
+				Namespace: defaultString(refNs, obj.GetNamespace()),
+				Name:      string(refName),
+				Kind:      ref.Kind,
 			}
 			backends.Insert(be)
 		}

@@ -161,7 +161,16 @@ pub fn setup_llm_named_provider_mock(
 	provider: LocalNamedAIProvider,
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
-	let t = setup_proxy_test(config).unwrap();
+	let config = crate::config::parse_config(config.to_string(), None).unwrap();
+	setup_llm_named_provider_mock_with_config(mock, provider, config)
+}
+
+pub fn setup_llm_named_provider_mock_with_config(
+	mock: MockServer,
+	provider: LocalNamedAIProvider,
+	config: crate::Config,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let t = setup_proxy_test_with_config(config);
 	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
 	let be = futures::executor::block_on(
 		crate::types::local::LocalAIBackend::Provider(provider).translate(&resources),
@@ -976,6 +985,7 @@ impl TestBind {
 			});
 		}
 	}
+
 	pub async fn attach_gateway_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("pol/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
@@ -1038,6 +1048,12 @@ impl TestBind {
 		)
 		.await
 		.unwrap();
+		self
+			.pi
+			.cfg
+			.budget_policy
+			.apply_registration(normalized.budget_registration.clone())
+			.unwrap();
 		for v in normalized.policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
@@ -1128,6 +1144,7 @@ impl TestBind {
 			alpn: None,
 			subject_alt_names: None,
 			key_exchange_groups: None,
+			spiffe: false,
 		}
 		.try_into()
 		.unwrap();
@@ -1138,6 +1155,46 @@ impl TestBind {
 				io: Arc::new(Mutex::new(Some(io))),
 			})
 	}
+
+	/// Like [`serve_https`], but lets the caller supply the trust root and an optional client
+	/// certificate, so tests can drive mutual TLS — e.g. a SPIFFE listener that requires a client
+	/// SVID. Hostname verification is skipped (`insecure_host`) because SPIFFE SVIDs carry a
+	/// `spiffe://` URI SAN and no DNS SAN.
+	pub fn serve_https_client_auth(
+		&self,
+		bind_name: BindKey,
+		sni: Option<&str>,
+		root_pem: Vec<u8>,
+		client_cert_key_pem: Option<(Vec<u8>, Vec<u8>)>,
+	) -> Client<MemoryConnector, Body> {
+		let io = self.serve(bind_name);
+		let (cert, key) = match client_cert_key_pem {
+			Some((c, k)) => (Some(c), Some(k)),
+			None => (None, None),
+		};
+		let tls: BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
+			cert,
+			key,
+			root: Some(root_pem),
+			hostname: sni.map(|s| s.to_string()),
+			insecure: false,
+			insecure_host: true,
+			alpn: None,
+			subject_alt_names: None,
+			key_exchange_groups: None,
+			spiffe: false,
+		}
+		.try_into()
+		.unwrap();
+
+		Client::builder(TokioExecutor::new())
+			.timer(TokioTimer::new())
+			.build(MemoryConnector {
+				tls_config: Some(tls),
+				io: Arc::new(Mutex::new(Some(io))),
+			})
+	}
+
 	// The need to split http/http2 is a hyper limit, not our proxy
 	pub fn serve_http2(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
 		let io = self.serve(bind_name);
@@ -1298,6 +1355,24 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 }
 
 pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
+	setup_proxy_test_with_config_and_spiffe(config, None)
+}
+
+/// Like [`setup_proxy_test`], but injects a `SpiffeClient` into [`ProxyInputs`] so SPIFFE-sourced
+/// listeners/backends can be exercised (e.g. a `tls: spiffe` listener that requires a client SVID).
+pub fn setup_proxy_test_with_spiffe(
+	cfg: &str,
+	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
+) -> anyhow::Result<TestBind> {
+	agent_core::telemetry::testing::setup_test_logging();
+	let config = crate::config::parse_config(cfg.to_string(), None)?;
+	Ok(setup_proxy_test_with_config_and_spiffe(config, spiffe))
+}
+
+pub fn setup_proxy_test_with_config_and_spiffe(
+	config: crate::Config,
+	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
+) -> TestBind {
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
 	let histogram_mode = config.histograms;
@@ -1316,6 +1391,7 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
+		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
 	});

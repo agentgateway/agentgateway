@@ -17,11 +17,14 @@ use tower::Service;
 
 use crate::client::{ApplicationTransport, Transport};
 use crate::http::HeaderValue;
-use crate::http::backendtls::{BackendTLS, BackendTLSInfo, PerAlpnConfig, SYSTEM_TRUST};
+use crate::http::backendtls::{
+	BackendTLS, BackendTLSInfo, BackendTLSSource, PerAlpnConfig, SYSTEM_TRUST,
+};
 use crate::types::agent::Target;
 use crate::*;
 
 pub mod caclient;
+pub mod spiffe;
 
 #[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
 pub enum RootCert {
@@ -62,7 +65,7 @@ impl RootCert {
 		ccb.alpn_protocols = vec![b"h2".to_vec()];
 		Ok(BackendTLS {
 			hostname_override: None,
-			config: PerAlpnConfig::new(Arc::new(ccb), false),
+			source: BackendTLSSource::Static(PerAlpnConfig::new(Arc::new(ccb), false)),
 			metadata,
 		})
 	}
@@ -270,7 +273,7 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcChannel {
 					.call(client::Call {
 						req,
 						target,
-						transport,
+						connection: transport.into(),
 					})
 					.await?,
 			)

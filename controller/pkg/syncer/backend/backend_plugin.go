@@ -69,8 +69,8 @@ func BuildAgwBackendReferences(
 ) []*plugins.PolicyAttachment {
 	var attachments []*plugins.PolicyAttachment
 	self := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{Namespace: backend.Namespace, Name: backend.Name},
-		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
+		Namespace: backend.Namespace, Name: backend.Name,
+		Kind: wellknown.AgentgatewayBackendGVK.Kind,
 	}
 	app := func(ref gwv1.BackendObjectReference) {
 		attachments = append(attachments, &plugins.PolicyAttachment{
@@ -570,8 +570,9 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		}
 		provider.Provider = &api.AIBackend_Provider_Custom{
 			Custom: &api.AIBackend_Custom{
-				Formats: formats,
-				Model:   llm.Custom.Model,
+				Formats:          formats,
+				Model:            llm.Custom.Model,
+				ProviderOverride: llm.Custom.ProviderOverride,
 			},
 		}
 		if llm.Custom.BackendRef != nil {

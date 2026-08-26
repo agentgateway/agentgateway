@@ -267,9 +267,10 @@ impl Gateway {
 		let name = bind_config.borrow().key.clone();
 		let pi = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
 			let mut pi = Arc::unwrap_or_clone(pi);
-			let client = client::Client::new(
+			let client = client::Client::new_with_h2_config(
 				&pi.cfg.dns,
 				None,
+				Arc::new(pi.cfg.hbone.h2.clone()),
 				pi.cfg.backend.clone(),
 				Some(pi.metrics.clone()),
 			);
@@ -1151,7 +1152,11 @@ impl Gateway {
 			let best = listeners
 				.best_match_tls(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls(tls_pol, inp.ca.as_ref()).await {
+			match best
+				.protocol
+				.tls(tls_pol, inp.ca.as_ref(), inp.spiffe.as_ref())
+				.await
+			{
 				Some(Err(e)) => {
 					// There is a TLS config for this listener, but its invalid. Reject the connection
 					Err(e)

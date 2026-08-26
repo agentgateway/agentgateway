@@ -278,6 +278,10 @@ impl LocalClient {
 				.discovery
 				.sync_local(config.services, config.workloads, prev.discovery)?;
 		let next_binds = bind_result?;
+		self
+			.config
+			.budget_policy
+			.apply_registration(config.budget_registration)?;
 
 		Ok(PreviousState {
 			binds: next_binds,

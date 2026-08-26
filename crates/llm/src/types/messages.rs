@@ -4,8 +4,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
-	SimpleChatCompletionMessage, visit_json_at,
+	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
+	RequestType, ResponseType, SimpleChatCompletionMessage, visit_json_at,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
@@ -244,6 +244,41 @@ impl RequestType for Request {
 		get_messages_helper(&self.messages, &self.system)
 	}
 
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		let mut messages = self
+			.system
+			.as_ref()
+			.map(|system| NormalizedMessage {
+				role: strng::literal!("system"),
+				parts: match system {
+					TextBlock::Text(text) => {
+						vec![NormalizedMessagePart::text(strng::new(text))]
+					},
+					TextBlock::Array(parts) => parts
+						.iter()
+						.filter_map(TextPart::text)
+						.map(|text| NormalizedMessagePart::text(strng::new(text)))
+						.collect(),
+				},
+			})
+			.into_iter()
+			.collect::<Vec<_>>();
+		messages.extend(self.messages.iter().map(|message| NormalizedMessage {
+			role: strng::new(&message.role),
+			parts: match &message.content {
+				Some(ContentBlock::Text(text)) => {
+					vec![NormalizedMessagePart::text(strng::new(text))]
+				},
+				Some(ContentBlock::Array(parts)) => {
+					parts.iter().filter_map(normalized_anthropic_part).collect()
+				},
+				None => Vec::new(),
+			},
+		}));
+		crate::types::attach_tool_result_names(&mut messages);
+		messages
+	}
+
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = messages
 			.into_iter()
@@ -292,6 +327,39 @@ impl RequestType for Request {
 				None => {},
 			}
 		}
+	}
+}
+
+fn normalized_anthropic_part(part: &ContentPart) -> Option<NormalizedMessagePart> {
+	match part {
+		ContentPart::Text { text, .. } => Some(NormalizedMessagePart::text(strng::new(text))),
+		ContentPart::Unknown(value) => match value.get("type").and_then(serde_json::Value::as_str) {
+			Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
+				crate::types::normalized_tool_call(value)
+			},
+			Some(item_type) if item_type == "tool_result" || item_type.ends_with("_tool_result") => {
+				Some(NormalizedMessagePart::tool_result(
+					value
+						.get("tool_use_id")
+						.or_else(|| value.get("id"))
+						.and_then(serde_json::Value::as_str)
+						.map(strng::new),
+					value
+						.get("name")
+						.and_then(serde_json::Value::as_str)
+						.map(strng::new),
+					value
+						.get("content")
+						.cloned()
+						.unwrap_or_else(|| serde_json::Value::Null),
+					value.get("is_error").and_then(serde_json::Value::as_bool),
+				))
+			},
+			Some("thinking" | "redacted_thinking") => {
+				Some(NormalizedMessagePart::reasoning(value.clone()))
+			},
+			_ => None,
+		},
 	}
 }
 

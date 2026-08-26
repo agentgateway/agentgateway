@@ -14,7 +14,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -27,8 +26,8 @@ func TestResolveSecretCAReactsToRotation(t *testing.T) {
 	const namespace = "default"
 	stop := test.NewStop(t)
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace},
-		Data:       map[string][]byte{"ca.crt": testCAPEM(t)},
+		Name: "ca", Namespace: namespace,
+		Data: map[string][]byte{"ca.crt": testCAPEM(t)},
 	}
 	services := krt.NewStaticCollection(nil, []*corev1.Service{
 		testService([]corev1.ServicePort{{Name: "https", Port: 8443}}),
@@ -36,14 +35,13 @@ func TestResolveSecretCAReactsToRotation(t *testing.T) {
 	secrets := krt.NewStaticCollection(nil, []*corev1.Secret{secret}, krt.WithStop(stop))
 	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, nil, krt.WithStop(stop))
 	policies := krt.NewStaticCollection(nil, []*agentgateway.AgentgatewayPolicy{{
-		ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: namespace},
+		Name: "backend-policy", Namespace: namespace,
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{Kind: "Service", Name: "oauth2-discovery"},
+				Kind: "Service", Name: "oauth2-discovery",
 			}},
-			Backend: &agentgateway.BackendFull{BackendSimple: agentgateway.BackendSimple{
-				TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca", Kind: "Secret"}}},
-			}},
+			Backend: &agentgateway.BackendFull{
+				TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca", Kind: "Secret"}}}},
 		},
 	}}, krt.WithStop(stop))
 	backendTLSPolicies := krt.NewStaticCollection[*gwv1.BackendTLSPolicy](nil, nil, krt.WithStop(stop))
@@ -100,22 +98,19 @@ func TestResolveSecretCA(t *testing.T) {
 	ctx := testutils.BuildMockPolicyContext(t, []any{
 		testService([]corev1.ServicePort{{Name: "https", Port: 8443}}),
 		// A same-name ConfigMap must not be used for an explicit Secret ref.
-		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace}},
+		&corev1.ConfigMap{Name: "ca", Namespace: namespace},
 		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace},
-			Data:       map[string][]byte{"ca.crt": testCAPEM(t)},
+			Name: "ca", Namespace: namespace,
+			Data: map[string][]byte{"ca.crt": testCAPEM(t)},
 		},
 		&agentgateway.AgentgatewayPolicy{
-			ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: namespace},
+			Name: "backend-policy", Namespace: namespace,
 			Spec: agentgateway.AgentgatewayPolicySpec{
 				TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-					LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
-						Group: "", Kind: "Service", Name: "oauth2-discovery",
-					},
+					Group: "", Kind: "Service", Name: "oauth2-discovery",
 				}},
-				Backend: &agentgateway.BackendFull{BackendSimple: agentgateway.BackendSimple{
-					TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca", Kind: "Secret"}}},
-				}},
+				Backend: &agentgateway.BackendFull{
+					TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca", Kind: "Secret"}}}},
 			},
 		},
 	})
@@ -142,12 +137,12 @@ func TestResolveCAReferenceKindsAndErrors(t *testing.T) {
 		{
 			name:   "name-only ConfigMap",
 			ref:    agentgateway.LocalCACertificateRef{Name: "ca"},
-			source: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace}, Data: map[string]string{"ca.crt": string(validCA)}},
+			source: &corev1.ConfigMap{Name: "ca", Namespace: namespace, Data: map[string]string{"ca.crt": string(validCA)}},
 		},
 		{
 			name:   "explicit ConfigMap",
 			ref:    agentgateway.LocalCACertificateRef{Name: "ca", Kind: "ConfigMap"},
-			source: &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace}, Data: map[string]string{"ca.crt": string(validCA)}},
+			source: &corev1.ConfigMap{Name: "ca", Namespace: namespace, Data: map[string]string{"ca.crt": string(validCA)}},
 		},
 		{
 			name:    "missing Secret",
@@ -157,19 +152,19 @@ func TestResolveCAReferenceKindsAndErrors(t *testing.T) {
 		{
 			name:    "Secret missing ca.crt",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
-			source:  &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace}},
+			source:  &corev1.Secret{Name: "ca", Namespace: namespace},
 			wantErr: "missing ca.crt",
 		},
 		{
 			name:    "Secret with invalid PEM",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
-			source:  &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace}, Data: map[string][]byte{"ca.crt": []byte("invalid")}},
+			source:  &corev1.Secret{Name: "ca", Namespace: namespace, Data: map[string][]byte{"ca.crt": []byte("invalid")}},
 			wantErr: "invalid ca.crt in Secret default/ca",
 		},
 		{
 			name:    "Secret does not fall back to ConfigMap",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
-			source:  &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: namespace}, Data: map[string]string{"ca.crt": string(validCA)}},
+			source:  &corev1.ConfigMap{Name: "ca", Namespace: namespace, Data: map[string]string{"ca.crt": string(validCA)}},
 			wantErr: "Secret default/ca not found",
 		},
 		{
@@ -184,14 +179,13 @@ func TestResolveCAReferenceKindsAndErrors(t *testing.T) {
 			inputs := []any{
 				testService([]corev1.ServicePort{{Name: "https", Port: 8443}}),
 				&agentgateway.AgentgatewayPolicy{
-					ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: namespace},
+					Name: "backend-policy", Namespace: namespace,
 					Spec: agentgateway.AgentgatewayPolicySpec{
 						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{Kind: "Service", Name: "oauth2-discovery"},
+							Kind: "Service", Name: "oauth2-discovery",
 						}},
-						Backend: &agentgateway.BackendFull{BackendSimple: agentgateway.BackendSimple{
-							TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{tt.ref}},
-						}},
+						Backend: &agentgateway.BackendFull{
+							TLS: &agentgateway.BackendTLS{CACertificateRefs: []agentgateway.LocalCACertificateRef{tt.ref}}},
 					},
 				},
 			}

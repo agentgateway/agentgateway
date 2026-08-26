@@ -256,7 +256,12 @@
       ]
     },
     "ServerTLSConfig": {
-      "type": "null"
+      "type": "object",
+      "properties": {
+        "certificateSource": {
+          "type": "string"
+        }
+      }
     },
     "Route": {
       "type": "object",

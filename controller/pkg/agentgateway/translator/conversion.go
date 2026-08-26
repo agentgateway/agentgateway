@@ -720,11 +720,9 @@ func ToInternalParentReference(p gwv1.ParentReference, localNamespace string, al
 	}
 	return utils.TypedNamespacedName{
 		Kind: ref.Kind,
-		NamespacedName: types.NamespacedName{
-			Name: string(p.Name),
-			// Unset namespace means "same namespace"
-			Namespace: defaultString(p.Namespace, localNamespace),
-		},
+		Name: string(p.Name),
+		// Unset namespace means "same namespace"
+		Namespace: defaultString(p.Namespace, localNamespace),
 	}, nil
 }
 
@@ -1233,7 +1231,7 @@ const (
 )
 
 func validateTLS(certInfo *TLSInfo) *ConfigError {
-	if certInfo.IstioWorkloadCert {
+	if certInfo.IstioWorkloadCert || certInfo.Spiffe {
 		return nil
 	}
 	if _, err := tls.X509KeyPair(certInfo.Cert, certInfo.Key); err != nil {
@@ -1331,7 +1329,27 @@ func buildTLS(
 	switch mode {
 	case gwv1.TLSModeTerminate:
 		if tls.Options != nil {
-			switch tls.Options[gatewayTLSTerminateModeKey] {
+			terminateMode := tls.Options[gatewayTLSTerminateModeKey]
+			if tls.Options[agentgatewayTLSCertificateSourceKey] == "SPIFFE" {
+				if terminateMode != "" {
+					return dummyTls, &ConfigError{
+						Reason:  InvalidTLS,
+						Message: fmt.Sprintf("TLS certificate source SPIFFE cannot be combined with the %s termination mode", terminateMode),
+					}
+				} else if gatewayTLS != nil && gatewayTLS.Validation != nil && len(gatewayTLS.Validation.CACertificateRefs) > 0 {
+					return dummyTls, &ConfigError{
+						Reason:  InvalidTLSCA,
+						Message: "GatewayTLSConfig validation caCertificateRefs cannot be configured with SPIFFE TLS certificate source",
+					}
+				} else if len(tls.CertificateRefs) > 0 {
+					return dummyTls, &ConfigError{
+						Reason:  InvalidTLS,
+						Message: "certificateRefs cannot be configured with SPIFFE TLS certificate source",
+					}
+				}
+				return &TLSInfo{Spiffe: true}, nil
+			}
+			switch terminateMode {
 			case "ISTIO_SIMPLE":
 				return &TLSInfo{IstioWorkloadCert: true}, nil
 			case "ISTIO_MUTUAL":

@@ -11,7 +11,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
@@ -186,11 +185,9 @@ func TestStoreLoadsPersistedKeysetsBeforeServing(t *testing.T) {
 	}
 
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "jwks-store-legacy-name",
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
+		Name:      "jwks-store-legacy-name",
+		Namespace: "agentgateway-system",
+		Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
@@ -341,11 +338,9 @@ func TestStoreClearsCacheWhenPolicyDeletedAfterWarmStart(t *testing.T) {
 		JwksJSON:   `{"keys":[]}`,
 	}
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      JwksConfigMapName(DefaultJwksStorePrefix, requestKey),
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
+		Name:      JwksConfigMapName(DefaultJwksStorePrefix, requestKey),
+		Namespace: "agentgateway-system",
+		Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, persistedKeyset))
 
@@ -405,11 +400,9 @@ func TestStoreClearsOrphanCacheAtStartup(t *testing.T) {
 		JwksJSON:   `{"keys":[]}`,
 	}
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      JwksConfigMapName(DefaultJwksStorePrefix, requestKey),
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
+		Name:      JwksConfigMapName(DefaultJwksStorePrefix, requestKey),
+		Namespace: "agentgateway-system",
+		Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, persistedKeyset))
 
@@ -483,10 +476,8 @@ func testKrtOptions(t *testing.T) krtutil.KrtOptions {
 
 func testRemotePolicy(name, uri string, ttl time.Duration) *agentgateway.AgentgatewayPolicy {
 	return &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      name,
-		},
+		Namespace: "default",
+		Name:      name,
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			TargetRefs: make([]agentgateway.LocalPolicyTargetReferenceWithSectionName, 1),
 			Traffic: &agentgateway.Traffic{
@@ -519,10 +510,8 @@ func jwksPath(s *agentgateway.LongString) string {
 
 func testBackend(name, uri string, ttl time.Duration) *agentgateway.AgentgatewayBackend {
 	return &agentgateway.AgentgatewayBackend{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      name,
-		},
+		Namespace: "default",
+		Name:      name,
 		Spec: agentgateway.AgentgatewayBackendSpec{
 			MCP: &agentgateway.MCPBackend{},
 			Policies: &agentgateway.BackendFull{

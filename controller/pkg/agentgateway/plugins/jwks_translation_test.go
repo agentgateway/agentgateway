@@ -37,10 +37,8 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProvider
 			JWKS: agentgateway.JWKS{
 				Remote: &agentgateway.RemoteJWKS{
 					JwksPath: longStringPtr("/keys"),
-					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
-						BackendRef: &gwv1.BackendObjectReference{
-							Name: "jwks-backend",
-						},
+					BackendRef: &gwv1.BackendObjectReference{
+						Name: "jwks-backend",
 					},
 				},
 			},
