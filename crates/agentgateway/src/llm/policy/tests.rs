@@ -58,6 +58,41 @@ async fn webhook_fail_open_emits_single_metric() {
 }
 
 #[test]
+fn model_armor_blocked_records_guardrail_info() {
+	let resp: google_model_armor::SanitizeResponse = serde_json::from_value(serde_json::json!({
+		"sanitizationResult": {
+			"filterResults": [
+				{"raiFilterResult": {"matchState": "MATCH_FOUND"}},
+				{"piAndJailbreakFilterResult": {"matchState": "MATCH_FOUND"}}
+			]
+		}
+	}))
+	.unwrap();
+	let config = GoogleModelArmor {
+		template_id: strng::new("templates/my-template"),
+		project_id: strng::new("proj"),
+		location: None,
+		policies: vec![],
+	};
+	let log = GuardrailLog::default();
+	let outcome: GuardrailOutcome<RequestGuardMutation> = Policy::model_armor_outcome(
+		resp,
+		&config,
+		GuardrailPhase::Request,
+		&RequestRejection::default(),
+		Some(&log),
+	);
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.guard, "googleModelArmor");
+	assert_eq!(entry.guardrail_id.as_deref(), Some("templates/my-template"));
+	assert_eq!(
+		entry.assessments[0]["matchedFilters"],
+		serde_json::json!(["raiFilterResult", "piAndJailbreakFilterResult"])
+	);
+}
+
+#[test]
 fn moderation_flagged_records_guardrail_info() {
 	let cats = [
 		"hate",

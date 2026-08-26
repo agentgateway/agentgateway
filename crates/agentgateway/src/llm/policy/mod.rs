@@ -997,7 +997,15 @@ impl Policy {
 				.await
 			},
 			RequestGuardKind::GoogleModelArmor(gma) => {
-				Self::evaluate_google_model_armor_request(req, claims, client, gma, &guard.rejection).await
+				Self::evaluate_google_model_armor_request(
+					req,
+					claims,
+					client,
+					gma,
+					&guard.rejection,
+					guardrail_log,
+				)
+				.await
 			},
 			RequestGuardKind::AzureContentSafety(acs) => {
 				Self::evaluate_azure_content_safety_request(req, claims, client, acs, &guard.rejection)
@@ -1171,13 +1179,41 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		let resp = google_model_armor::send_request(req, claims, client, model_armor).await?;
-		if resp.is_blocked() {
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else {
-			Ok(GuardrailOutcome::None)
+		Ok(Self::model_armor_outcome(
+			resp,
+			model_armor,
+			GuardrailPhase::Request,
+			rejection,
+			guardrail_log,
+		))
+	}
+
+	fn model_armor_outcome<M>(
+		resp: google_model_armor::SanitizeResponse,
+		model_armor: &GoogleModelArmor,
+		phase: GuardrailPhase,
+		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
+	) -> GuardrailOutcome<M> {
+		let matched = resp.matched_filters();
+		if matched.is_empty() {
+			return GuardrailOutcome::None;
 		}
+		record_guardrail_info(
+			guardrail_log,
+			cel::GuardrailInfo {
+				phase: guardrail_phase(phase),
+				guard: strng::literal!("googleModelArmor"),
+				action: strng::literal!("reject"),
+				guardrail_id: Some(model_armor.template_id.clone()),
+				assessments: vec![serde_json::json!({"matchedFilters": matched})],
+				..Default::default()
+			},
+		);
+		GuardrailOutcome::Rejected(rejection.as_response())
 	}
 
 	async fn evaluate_azure_content_safety_request(
@@ -1223,6 +1259,7 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		let content = Self::webhook_choice_texts(resp);
 
@@ -1232,11 +1269,13 @@ impl Policy {
 
 		let guardrail_resp =
 			google_model_armor::send_response(content, claims, client, model_armor).await?;
-		if guardrail_resp.is_blocked() {
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else {
-			Ok(GuardrailOutcome::None)
-		}
+		Ok(Self::model_armor_outcome(
+			guardrail_resp,
+			model_armor,
+			GuardrailPhase::Response,
+			rejection,
+			guardrail_log,
+		))
 	}
 
 	async fn evaluate_azure_content_safety_response(
@@ -1817,7 +1856,15 @@ impl Policy {
 				.await
 			},
 			ResponseGuardKind::GoogleModelArmor(gma) => {
-				Self::evaluate_google_model_armor_response(resp, None, client, gma, &guard.rejection).await
+				Self::evaluate_google_model_armor_response(
+					resp,
+					None,
+					client,
+					gma,
+					&guard.rejection,
+					guardrail_log,
+				)
+				.await
 			},
 			ResponseGuardKind::AzureContentSafety(acs) => {
 				Self::evaluate_azure_content_safety_response(resp, None, client, acs, &guard.rejection)

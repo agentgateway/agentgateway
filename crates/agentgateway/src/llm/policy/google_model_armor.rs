@@ -170,57 +170,74 @@ pub struct SanitizeResponse {
 impl SanitizeResponse {
 	/// Returns true if any filter found a match indicating content should be blocked
 	pub fn is_blocked(&self) -> bool {
+		!self.matched_filters().is_empty()
+	}
+
+	/// Names (API field names) of the filters that found a match.
+	pub fn matched_filters(&self) -> Vec<&'static str> {
 		let Some(result) = &self.sanitization_result else {
-			return false;
+			return Vec::new();
 		};
-
+		let mut matched = Vec::new();
 		for entry in result.filter_results.entries() {
-			if let Some(rai) = &entry.rai_filter_result
-				&& rai.match_state == Some(MatchState::MatchFound)
-			{
-				return true;
-			}
-
-			if let Some(pi) = &entry.pi_and_jailbreak_filter_result
-				&& pi.match_state == Some(MatchState::MatchFound)
-			{
-				return true;
-			}
-
-			if let Some(uri) = &entry.malicious_uri_filter_result
-				&& uri.match_state == Some(MatchState::MatchFound)
-			{
-				return true;
-			}
-
-			if let Some(csam) = &entry.csam_filter_result
-				&& csam.match_state == Some(MatchState::MatchFound)
-			{
-				return true;
-			}
-
-			if let Some(virus) = &entry.virus_scan_filter_result
-				&& virus.match_state == Some(MatchState::MatchFound)
-			{
-				return true;
-			}
-
-			// Check SDP filter (both inspect and deidentify results)
+			let mut found = |state: Option<&MatchState>, name: &'static str| {
+				if state == Some(&MatchState::MatchFound) && !matched.contains(&name) {
+					matched.push(name);
+				}
+			};
+			found(
+				entry
+					.rai_filter_result
+					.as_ref()
+					.and_then(|f| f.match_state.as_ref()),
+				"raiFilterResult",
+			);
+			found(
+				entry
+					.pi_and_jailbreak_filter_result
+					.as_ref()
+					.and_then(|f| f.match_state.as_ref()),
+				"piAndJailbreakFilterResult",
+			);
+			found(
+				entry
+					.malicious_uri_filter_result
+					.as_ref()
+					.and_then(|f| f.match_state.as_ref()),
+				"maliciousUriFilterResult",
+			);
+			found(
+				entry
+					.csam_filter_result
+					.as_ref()
+					.and_then(|f| f.match_state.as_ref()),
+				"csamFilterResult",
+			);
+			found(
+				entry
+					.virus_scan_filter_result
+					.as_ref()
+					.and_then(|f| f.match_state.as_ref()),
+				"virusScanFilterResult",
+			);
 			if let Some(sdp) = &entry.sdp_filter_result {
-				if let Some(inspect) = &sdp.inspect_result
-					&& inspect.match_state == Some(MatchState::MatchFound)
-				{
-					return true;
-				}
-				if let Some(deidentify) = &sdp.deidentify_result
-					&& deidentify.match_state == Some(MatchState::MatchFound)
-				{
-					return true;
-				}
+				found(
+					sdp
+						.inspect_result
+						.as_ref()
+						.and_then(|f| f.match_state.as_ref()),
+					"sdpFilterResult",
+				);
+				found(
+					sdp
+						.deidentify_result
+						.as_ref()
+						.and_then(|f| f.match_state.as_ref()),
+					"sdpFilterResult",
+				);
 			}
 		}
-
-		false
+		matched
 	}
 }
 
