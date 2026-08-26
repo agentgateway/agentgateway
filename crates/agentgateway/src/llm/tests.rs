@@ -2275,8 +2275,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)
@@ -2333,8 +2332,7 @@ async fn upstream_encoding_is_applied_after_messages_response_translation() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			upstream,
 		)
@@ -2491,8 +2489,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			},
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)

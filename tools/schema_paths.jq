@@ -16,7 +16,9 @@ def unique_preserve_order(items):
   reduce items[] as $item ([]; if index($item) == null then . + [$item] else . end);
 
 def enum_info:
-  if .const? != null then
+  if type != "object" then
+    {"kind": "other", "values": []}
+  elif .const? != null then
     {"kind": "enum", "values": [.const]}
   elif .enum? then
     {"kind": "enum", "values": .enum}
@@ -211,7 +213,7 @@ def schema_paths(prefix):
     $entry,
     (.value | select(type != "boolean") | schema_paths($path + "."))
   elif (.type // [] | if type == "array" then . else [.] end | contains(["array"])) and .items then
-    .items | schema_paths(prefix + "[].")
+    .items | select(type != "boolean") | schema_paths(prefix + "[].")
   elif (.type // [] | if type == "array" then . else [.] end | contains(["object"])) and (.additionalProperties | type == "object") then
     .additionalProperties | schema_paths(prefix + "*.")
   elif .properties then

@@ -37,6 +37,7 @@ use super::{
 use crate::cel::RequestSnapshot;
 use crate::llm::policy::PromptGuard;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::GuardrailLog;
 
 /// Text bytes accumulated before triggering a guardrail evaluation.
 /// Larger values reduce guardrail API calls but increase time-to-first-byte
@@ -95,12 +96,14 @@ pub fn make_evaluator(
 	client: PolicyClient,
 	http_headers: HeaderMap,
 	original: Option<Arc<RequestSnapshot>>,
+	guardrail_log: GuardrailLog,
 ) -> Box<dyn StreamingEvaluator> {
 	Box::new(ResponseGuardEvaluator {
 		guard: guard.clone(),
 		client,
 		http_headers,
 		original,
+		guardrail_log,
 	})
 }
 
@@ -109,6 +112,7 @@ struct ResponseGuardEvaluator {
 	client: PolicyClient,
 	http_headers: HeaderMap,
 	original: Option<Arc<RequestSnapshot>>,
+	guardrail_log: GuardrailLog,
 }
 
 #[async_trait::async_trait]
@@ -127,6 +131,7 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 			&self.client,
 			&self.http_headers,
 			self.original.as_deref(),
+			Some(&self.guardrail_log),
 		)
 		.await
 	}

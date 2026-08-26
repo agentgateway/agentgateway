@@ -2,12 +2,14 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use crate::cel;
 use crate::http::auth::{AwsAuth, BackendAuthKind};
 use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::{BedrockGuardrails, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
+use crate::telemetry::log::GuardrailLog;
+use crate::telemetry::metrics::{GuardrailPhase, OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -27,7 +29,7 @@ pub struct GuardrailTextBlock {
 
 /// Content block for guardrail evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct GuardrailContentBlock {
 	pub text: GuardrailTextBlock,
 }
@@ -40,7 +42,7 @@ pub struct GuardrailOutputContent {
 
 /// Request body for ApplyGuardrail API
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct ApplyGuardrailRequest {
 	/// The source of the content (INPUT for requests, OUTPUT for responses)
 	pub source: GuardrailSource,
@@ -60,10 +62,13 @@ pub enum GuardrailAction {
 
 /// Response from ApplyGuardrail API
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct ApplyGuardrailResponse {
 	/// The action taken by the guardrail
 	pub action: GuardrailAction,
+	/// The reason the guardrail reported for its action
+	#[serde(default)]
+	pub action_reason: Option<String>,
 	/// Outputs with masked text (if configured with mask)
 	#[serde(default)]
 	pub outputs: Vec<GuardrailOutputContent>,
@@ -115,6 +120,88 @@ impl ApplyGuardrailResponse {
 			serde_json::Value::Array(arr) => arr.iter().any(|v| Self::value_contains_action(v, action)),
 			_ => false,
 		}
+	}
+}
+
+/// Assessment keys that are safe to log. Assessments are recursively filtered to
+/// this allowlist, so content-bearing fields (notably `match` values holding the
+/// flagged text) and anything the API adds later never reach logs or CEL.
+const ASSESSMENT_METADATA_KEYS: &[&str] = &[
+	// policy containers
+	"topicPolicy",
+	"topics",
+	"contentPolicy",
+	"filters",
+	"sensitiveInformationPolicy",
+	"piiEntities",
+	"regexes",
+	"wordPolicy",
+	"customWords",
+	"managedWordLists",
+	"contextualGroundingPolicy",
+	"invocationMetrics",
+	"appliedGuardrailDetails",
+	// metadata leaves
+	"name",
+	"type",
+	"action",
+	"detected",
+	"confidence",
+	"filterStrength",
+	"threshold",
+	"score",
+	"guardrailProcessingLatency",
+	"guardrailId",
+	"guardrailVersion",
+	"guardrailOrigin",
+];
+
+fn redact_assessment(value: &mut serde_json::Value) {
+	match value {
+		serde_json::Value::Object(map) => {
+			map.retain(|k, _| ASSESSMENT_METADATA_KEYS.contains(&k.as_str()));
+			map.values_mut().for_each(redact_assessment);
+		},
+		serde_json::Value::Array(arr) => arr.iter_mut().for_each(redact_assessment),
+		_ => {},
+	}
+}
+
+impl ApplyGuardrailResponse {
+	/// Record a log entry for this intervention. Assessments are redacted to
+	/// metadata-only keys so flagged content never reaches logs or CEL.
+	pub fn log_outcome(
+		&mut self,
+		log: &GuardrailLog,
+		phase: GuardrailPhase,
+		config: &BedrockGuardrails,
+		masked: bool,
+	) {
+		let assessments = std::mem::take(&mut self.assessments)
+			.into_iter()
+			.map(|mut a| {
+				redact_assessment(&mut a);
+				a
+			})
+			.collect();
+		log.mutate_or_default(|entries| {
+			entries.push(cel::GuardrailInfo {
+				phase: match phase {
+					GuardrailPhase::Request => strng::literal!("request"),
+					GuardrailPhase::Response => strng::literal!("response"),
+				},
+				guard: strng::literal!("bedrockGuardrails"),
+				action: if masked {
+					strng::literal!("mask")
+				} else {
+					strng::literal!("reject")
+				},
+				guardrail_id: Some(config.guardrail_identifier.clone()),
+				guardrail_version: Some(config.guardrail_version.clone()),
+				action_reason: self.action_reason.take(),
+				assessments,
+			});
+		});
 	}
 }
 

@@ -440,10 +440,12 @@ pub async fn guarded_realtime_proxy<C, S>(
 		async move {
 			let mut accum = WsFrameAccumulator::new();
 			let mut read_buf = [0u8; 4096];
+			// The realtime path does not surface guardrail detail in the access log.
 			let mut evaluators = guard_clone.begin_streaming_response_guard(
 				&policy_client_clone,
 				&req_headers,
 				original_clone,
+				Default::default(),
 			);
 			let mut delta_hold: Vec<Bytes> = Vec::new();
 			let mut pending_text = String::new();

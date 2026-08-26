@@ -2847,14 +2847,14 @@ async fn make_backend_call(
 	let span_target = backend_call.span_target;
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));
 	let upstream = inputs.upstream.clone();
-	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
-	let log_content = log
-		.as_ref()
-		.map(|l| llm::LogContentFields {
+	let llm_logging = log.as_ref().map(|l| llm::LLMLogging {
+		response: l.llm_response.clone(),
+		guardrails: l.guardrails.clone(),
+		content: llm::LogContentFields {
 			completion: l.cel.cel_context.needs_llm_completion(),
 			tool_calls: l.cel.cel_context.needs_llm_tool_calls(),
-		})
-		.unwrap_or_default();
+		},
+	});
 	let a2a_type = response_policies.a2a_type.clone();
 
 	let outbound_subtype = if backend_call.backend_policies.llm_provider.is_some() {
@@ -2963,8 +2963,7 @@ async fn make_backend_call(
 					llm_request,
 					llm_response_policies,
 					log.as_ref().expect("must be set").request_snapshot.clone(),
-					llm_response_log.expect("must be set"),
-					log_content,
+					llm_logging.expect("must be set"),
 					Some(&inputs.model_catalog),
 					resp,
 				)

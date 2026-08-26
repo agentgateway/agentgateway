@@ -75,6 +75,8 @@ pub struct Executor<'a> {
 	#[dynamic(rename = "mcpGuardrails")]
 	pub mcp_guardrails: ExtensionOrDirect<'a, McpGuardrailsDynamicMetadata>,
 
+	pub guardrails: Option<&'a Vec<GuardrailInfo>>,
+
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
@@ -638,6 +640,7 @@ impl<'a> Executor<'a> {
 		resp: Option<&'a ResponseSnapshot>,
 		llm: Option<&'a LLMContext>,
 		mcp: Option<&'a MCPInfo>,
+		guardrails: Option<&'a Vec<GuardrailInfo>>,
 		end_time: Option<&'a RequestTime>,
 		proxy: Option<&'a ProxyContext>,
 	) -> Self {
@@ -650,6 +653,7 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
+		this.guardrails = guardrails;
 		if let Some(proxy) = proxy {
 			this.proxy = ExtensionOrDirect::Direct(Some(proxy));
 		}
@@ -1408,6 +1412,32 @@ impl PartialEq for RequestRef<'_> {
 	}
 }
 
+/// Records one prompt-guard guardrail intervention (mask or reject).
+#[apply(schema!)]
+#[derive(Default, cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct GuardrailInfo {
+	/// The phase the guardrail intervened in: `request` or `response`.
+	pub phase: Strng,
+	/// The guard kind that intervened, such as `bedrockGuardrails`.
+	pub guard: Strng,
+	/// The action the guardrail took: `mask` or `reject`.
+	pub action: Strng,
+	/// The configured guardrail identifier.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrail_id: Option<Strng>,
+	/// The configured guardrail version.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrail_version: Option<Strng>,
+	/// The reason the guardrail reported for its action.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub action_reason: Option<String>,
+	/// Assessment detail reported by the guardrail provider, redacted to metadata
+	/// only. Content-bearing fields (such as the matched text) are never included.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub assessments: Vec<serde_json::Value>,
+}
+
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct LLMContext {
@@ -2134,6 +2164,12 @@ pub struct ExecutorSerde {
 	)]
 	pub mcp_guardrails: Option<McpGuardrailsDynamicMetadata>,
 
+	/// `guardrails` contains one entry per prompt-guard guardrail intervention (mask or reject)
+	/// during the request, currently populated for `bedrockGuardrails` guards. Only present in
+	/// CEL that runs after the request completes, such as log and metric fields.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrails: Option<Vec<GuardrailInfo>>,
+
 	/// `metadata` contains values set by transformation metadata expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<TransformationMetadata>,
@@ -2229,6 +2265,7 @@ impl ExecutorSerde {
 		exec.extauthz = ExtensionOrDirect::Direct(self.extauthz.as_ref());
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
 		exec.mcp_guardrails = ExtensionOrDirect::Direct(self.mcp_guardrails.as_ref());
+		exec.guardrails = self.guardrails.as_ref();
 		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
 		exec.mcp = self.mcp.as_ref();
 
@@ -2416,6 +2453,15 @@ pub fn full_example_executor() -> ExecutorSerde {
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),
 		mcp_guardrails: Some(McpGuardrailsDynamicMetadata::default()),
+		guardrails: Some(vec![GuardrailInfo {
+			phase: "request".into(),
+			guard: "bedrockGuardrails".into(),
+			action: "reject".into(),
+			guardrail_id: Some("gr-abc123".into()),
+			guardrail_version: Some("1".into()),
+			action_reason: Some("Guardrail blocked.".into()),
+			assessments: vec![],
+		}]),
 		metadata: Some(TransformationMetadata::default()),
 	}
 }

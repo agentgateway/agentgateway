@@ -11,7 +11,7 @@ use crate::http::{HeaderOrPseudo, Response, StatusCode};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::{AIError, ContentScope, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::RequestLog;
+use crate::telemetry::log::{GuardrailLog, RequestLog};
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
 use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
 use crate::*;
@@ -525,6 +525,7 @@ impl PromptGuard {
 				client,
 				claims.clone(),
 				original,
+				None,
 			)
 			.await
 			{
@@ -576,6 +577,7 @@ impl PromptGuard {
 		client: &crate::proxy::httpproxy::PolicyClient,
 		http_headers: &HeaderMap,
 		original: Option<Arc<cel::RequestSnapshot>>,
+		guardrail_log: GuardrailLog,
 	) -> Vec<Box<dyn StreamingEvaluator>> {
 		self
 			.response
@@ -586,6 +588,7 @@ impl PromptGuard {
 					client.clone(),
 					http_headers.clone(),
 					original.clone(),
+					guardrail_log.clone(),
 				)
 			})
 			.collect()
@@ -597,6 +600,7 @@ impl PromptGuard {
 		client: &crate::proxy::httpproxy::PolicyClient,
 		http_headers: &HeaderMap,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
 		if window.is_empty() {
 			return Ok(None);
@@ -604,8 +608,15 @@ impl PromptGuard {
 		let mut resp = TextResponse {
 			content: window.to_string(),
 		};
-		let (action, rejection) =
-			Policy::apply_single_response_guard(guard, &mut resp, http_headers, client, original).await?;
+		let (action, rejection) = Policy::apply_single_response_guard(
+			guard,
+			&mut resp,
+			http_headers,
+			client,
+			original,
+			guardrail_log,
+		)
+		.await?;
 		match rejection {
 			Some(rejected) => {
 				let body = rejected.into_body().collect().await?.to_bytes();
@@ -878,6 +889,7 @@ impl Policy {
 		})
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn apply_prompt_guard(
 		&self,
 		client: &PolicyClient,
@@ -885,6 +897,7 @@ impl Policy {
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<Option<(Response, &'static str)>> {
 		for g in self
 			.prompt_guard
@@ -892,9 +905,16 @@ impl Policy {
 			.iter()
 			.flat_map(|g| g.request.iter())
 		{
-			let (action, rejection) =
-				Self::apply_single_request_guard(g, req, http_headers, client, claims.clone(), original)
-					.await?;
+			let (action, rejection) = Self::apply_single_request_guard(
+				g,
+				req,
+				http_headers,
+				client,
+				claims.clone(),
+				original,
+				guardrail_log,
+			)
+			.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Request, action);
 			if let Some(res) = rejection {
 				return Ok(Some((res, g.kind.name())));
@@ -912,13 +932,22 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
-		let outcome =
-			Self::evaluate_single_request_guard(guard, req, http_headers, client, claims, original)
-				.await?;
+		let outcome = Self::evaluate_single_request_guard(
+			guard,
+			req,
+			http_headers,
+			client,
+			claims,
+			original,
+			guardrail_log,
+		)
+		.await?;
 		Self::apply_request_guard_outcome(outcome, req)
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn evaluate_single_request_guard(
 		guard: &RequestGuard,
 		req: &mut dyn RequestType,
@@ -926,6 +955,7 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		match &guard.kind {
 			RequestGuardKind::Regex(rg) => Ok(Self::evaluate_regex_request(
@@ -948,6 +978,7 @@ impl Policy {
 					bg,
 					&guard.rejection,
 					&guard.scope,
+					guardrail_log,
 				)
 				.await
 			},
@@ -976,6 +1007,7 @@ impl Policy {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn evaluate_bedrock_guardrails_request(
 		req: &mut dyn RequestType,
 		claims: Option<Claims>,
@@ -983,6 +1015,7 @@ impl Policy {
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
 		guard_scope: &[ContentScope],
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		let (content, in_scope) = Self::scoped_request_texts(req, guard_scope);
 		if content.is_empty() {
@@ -998,8 +1031,15 @@ impl Policy {
 		)
 		.await?;
 		Ok(
-			Self::bedrock_guardrail_outcome(resp, sent_count, rejection)
-				.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope))),
+			Self::bedrock_guardrail_outcome(
+				resp,
+				sent_count,
+				rejection,
+				GuardrailPhase::Request,
+				guardrails,
+				guardrail_log,
+			)
+			.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope))),
 		)
 	}
 
@@ -1009,6 +1049,7 @@ impl Policy {
 		client: &PolicyClient,
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		let content = Self::response_texts(resp);
 
@@ -1026,33 +1067,48 @@ impl Policy {
 		)
 		.await?;
 		Ok(
-			Self::bedrock_guardrail_outcome(guardrail_resp, sent_count, rejection)
-				.map_mask(ResponseGuardMutation::Texts),
+			Self::bedrock_guardrail_outcome(
+				guardrail_resp,
+				sent_count,
+				rejection,
+				GuardrailPhase::Response,
+				guardrails,
+				guardrail_log,
+			)
+			.map_mask(ResponseGuardMutation::Texts),
 		)
 	}
 
 	/// Mask only when anonymized with one output per block sent; any other
 	/// intervention rejects (its outputs are a canned message, not masks).
 	fn bedrock_guardrail_outcome(
-		resp: bedrock_guardrails::ApplyGuardrailResponse,
+		mut resp: bedrock_guardrails::ApplyGuardrailResponse,
 		sent_count: usize,
 		rejection: &RequestRejection,
+		phase: GuardrailPhase,
+		guardrails: &BedrockGuardrails,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> GuardrailOutcome<TextReplacements> {
 		if !resp.is_intervened() {
 			return GuardrailOutcome::None;
 		}
-		if resp.is_anonymized() {
-			let outputs = resp.into_output_texts();
-			if outputs.len() == sent_count {
-				return GuardrailOutcome::Masked(TextReplacements::replace_all(outputs));
-			}
+		let anonymized = resp.is_anonymized();
+		let masked = anonymized && resp.outputs.len() == sent_count;
+		if anonymized && !masked {
 			tracing::warn!(
 				expected = sent_count,
-				got = outputs.len(),
+				got = resp.outputs.len(),
 				"Bedrock guardrail masked output count mismatch; rejecting content"
 			);
 		}
-		GuardrailOutcome::Rejected(rejection.as_response())
+		if let Some(log) = guardrail_log {
+			resp.log_outcome(log, phase, guardrails, masked);
+		}
+		if masked {
+			GuardrailOutcome::Masked(TextReplacements::replace_all(resp.into_output_texts()))
+		} else {
+			GuardrailOutcome::Rejected(rejection.as_response())
+		}
 	}
 
 	async fn evaluate_google_model_armor_request(
@@ -1578,10 +1634,12 @@ impl Policy {
 		http_headers: &HeaderMap,
 		guards: &Vec<ResponseGuard>,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<Option<Response>> {
 		for g in guards {
 			let (action, rejection) =
-				Self::apply_single_response_guard(g, resp, http_headers, client, original).await?;
+				Self::apply_single_response_guard(g, resp, http_headers, client, original, guardrail_log)
+					.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Response, action);
 			if let Some(res) = rejection {
 				return Ok(Some(res));
@@ -1596,9 +1654,17 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
-		let outcome =
-			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original).await?;
+		let outcome = Self::evaluate_single_response_guard(
+			guard,
+			resp,
+			http_headers,
+			client,
+			original,
+			guardrail_log,
+		)
+		.await?;
 		Self::apply_response_guard_outcome(outcome, resp)
 	}
 
@@ -1608,6 +1674,7 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		match &guard.kind {
 			ResponseGuardKind::Regex(rg) => Ok(Self::evaluate_regex_response(resp, rg, &guard.rejection)),
@@ -1615,7 +1682,15 @@ impl Policy {
 				Self::evaluate_webhook_response(resp, http_headers, client, wh, original).await
 			},
 			ResponseGuardKind::BedrockGuardrails(bg) => {
-				Self::evaluate_bedrock_guardrails_response(resp, None, client, bg, &guard.rejection).await
+				Self::evaluate_bedrock_guardrails_response(
+					resp,
+					None,
+					client,
+					bg,
+					&guard.rejection,
+					guardrail_log,
+				)
+				.await
 			},
 			ResponseGuardKind::GoogleModelArmor(gma) => {
 				Self::evaluate_google_model_armor_response(resp, None, client, gma, &guard.rejection).await
