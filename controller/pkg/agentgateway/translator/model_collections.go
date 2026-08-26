@@ -567,7 +567,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	}
 	provider := &api.AIBackend_Provider{Name: providerName, InlinePolicies: inlinePolicies}
 	if model.BaseURL != nil {
-		provider.BaseUrl = new(string(*model.BaseURL))
+		provider.BaseUrl = new(*model.BaseURL)
 	}
 	if model.Provider != nil {
 		if preset, ok := modelProviderPreset(*model.Provider); ok {
@@ -586,15 +586,15 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	}
 	if provider.HostOverride == nil && llm.Host != "" {
 		provider.HostOverride = &api.AIBackend_HostOverride{
-			Host: string(llm.Host),
+			Host: llm.Host,
 			Port: ptr.NonEmptyOrDefault(llm.Port, 443),
 		}
 	}
 	if provider.PathOverride == nil && llm.Path != "" {
-		provider.PathOverride = new(string(llm.Path))
+		provider.PathOverride = new(llm.Path)
 	}
 	if provider.PathPrefix == nil && llm.PathPrefix != "" {
-		provider.PathPrefix = new(string(llm.PathPrefix))
+		provider.PathPrefix = new(llm.PathPrefix)
 	}
 
 	switch {
@@ -606,7 +606,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 			resourceType = api.AIBackend_FOUNDRY
 		}
 		provider.Provider = &api.AIBackend_Provider_Azure{Azure: &api.AIBackend_Azure{
-			ResourceName: string(llm.Azure.ResourceName),
+			ResourceName: llm.Azure.ResourceName,
 			ResourceType: resourceType,
 			Model:        providerModel(selectedModel, llm.Azure.Model),
 			ApiVersion:   stringPtr(llm.Azure.ApiVersion),
@@ -618,15 +618,15 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 		provider.Provider = &api.AIBackend_Provider_Gemini{Gemini: &api.AIBackend_Gemini{Model: providerModel(selectedModel, llm.Gemini.Model)}}
 	case llm.VertexAI != nil:
 		provider.Provider = &api.AIBackend_Provider_Vertex{Vertex: &api.AIBackend_Vertex{
-			Region:    string(llm.VertexAI.Region),
+			Region:    llm.VertexAI.Region,
 			Model:     providerModel(selectedModel, llm.VertexAI.Model),
-			ProjectId: string(llm.VertexAI.ProjectId),
+			ProjectId: llm.VertexAI.ProjectId,
 		}}
 	case llm.Bedrock != nil:
 		var guardrailIdentifier, guardrailVersion *string
 		if llm.Bedrock.Guardrail != nil {
-			guardrailIdentifier = new(string(llm.Bedrock.Guardrail.GuardrailIdentifier))
-			guardrailVersion = new(string(llm.Bedrock.Guardrail.GuardrailVersion))
+			guardrailIdentifier = new(llm.Bedrock.Guardrail.GuardrailIdentifier)
+			guardrailVersion = new(llm.Bedrock.Guardrail.GuardrailVersion)
 		}
 		provider.Provider = &api.AIBackend_Provider_Bedrock{Bedrock: &api.AIBackend_Bedrock{
 			Model:               providerModel(selectedModel, llm.Bedrock.Model),
@@ -758,7 +758,7 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
 	var baseURL string
 	if model.BaseURL != nil {
-		baseURL = string(*model.BaseURL)
+		baseURL = *model.BaseURL
 	}
 	if model.Provider != nil && *model.Provider == agentgateway.ModelProviderOllama && baseURL == "" {
 		return fmt.Errorf("ollama requires baseURL")
@@ -846,7 +846,7 @@ func resolveModelTarget(ctx RouteContext, namespace string, target agentgateway.
 		return nil, "", fmt.Errorf("model target %s/%s not found", namespace, target.ModelRef.Name)
 	}
 	if target.Model != nil {
-		return ref, string(*target.Model), nil
+		return ref, *target.Model, nil
 	}
 	modelName := effectiveModelName(ref)
 	if strings.Contains(modelName, "*") {
@@ -881,7 +881,7 @@ func stringPtr[T ~string](v *T) *string {
 
 func effectiveModelName(model *agentgateway.AgentgatewayModel) string {
 	if model.Spec.Match != nil && model.Spec.Match.Model != nil {
-		return string(*model.Spec.Match.Model)
+		return *model.Spec.Match.Model
 	}
 	return model.Name
 }

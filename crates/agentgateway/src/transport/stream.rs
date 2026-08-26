@@ -580,7 +580,7 @@ impl Extension {
 	pub fn new() -> Self {
 		Extension::Single(http::Extensions::new())
 	}
-	fn wrap(ext: Arc<Extension>) -> Self {
+	pub(crate) fn wrap(ext: Arc<Extension>) -> Self {
 		Extension::Wrapped(http::Extensions::new(), ext)
 	}
 

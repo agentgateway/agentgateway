@@ -320,11 +320,7 @@ impl TCPProxy {
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default().to_string();
 			start.io.rewind();
-			let existing = ext.remove().unwrap_or_default();
-			ext.insert(TLSConnectionInfo {
-				server_name: Some(sni),
-				..existing
-			});
+			set_sniffed_tls_server_name(&mut ext, sni);
 			Ok(Socket::from_rewind(ext, counter, start.io))
 		};
 		tokio::time::timeout(to, handshake).await?
@@ -340,6 +336,55 @@ fn resolve_tunnel_backend_call(
 	let backend = super::resolve_tunnel_backend(&tunnel.proxy, inputs)?;
 	let policies = get_backend_policies(inputs, &backend, &tunnel.policies, None);
 	TCPProxy::build_backend_call(log, destination, inputs, &backend.backend, policies, None)
+}
+
+// Preserve TLS metadata authenticated by an outer transport layer while recording
+// information observed from the inner TLS ClientHello.
+fn set_sniffed_tls_server_name(ext: &mut crate::transport::stream::Extension, server_name: String) {
+	let existing = ext.get::<TLSConnectionInfo>().cloned().unwrap_or_default();
+	ext.insert(TLSConnectionInfo {
+		server_name: Some(server_name),
+		..existing
+	});
+}
+
+#[cfg(test)]
+mod sniff_tls_sni_tests {
+	use std::sync::Arc;
+
+	use agent_core::strng;
+
+	use crate::transport::stream::{Extension, TLSConnectionInfo};
+	use crate::transport::tls::{IstioIdentity, TlsInfo};
+
+	#[test]
+	fn preserves_identity_from_wrapped_hbone_extension() {
+		let src_identity = TlsInfo {
+			identity: Some(IstioIdentity::new(
+				strng::literal!("cluster.local"),
+				strng::literal!("default"),
+				strng::literal!("client"),
+			)),
+			spiffe_id: Some(strng::literal!(
+				"spiffe://cluster.local/ns/default/sa/client"
+			)),
+			..Default::default()
+		};
+		let mut hbone = Extension::new();
+		hbone.insert(TLSConnectionInfo {
+			src_identity: Some(src_identity.clone()),
+			..Default::default()
+		});
+		let mut stream = Extension::wrap(Arc::new(hbone));
+
+		super::set_sniffed_tls_server_name(&mut stream, "backend.example.com".to_string());
+
+		let info = stream
+			.get::<TLSConnectionInfo>()
+			.expect("sniffed TLS info must be present");
+		assert_eq!(info.src_identity.as_ref(), Some(&src_identity));
+		assert_eq!(info.server_name.as_deref(), Some("backend.example.com"));
+	}
 }
 
 fn select_best_route(

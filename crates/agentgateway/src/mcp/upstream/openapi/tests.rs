@@ -1097,6 +1097,117 @@ fn test_parse_openapi_schema_ignores_path_level_cookie_parameters() {
 	assert!(path_properties.contains_key("workspace_gid"));
 }
 
+#[test]
+fn test_parse_openapi_schema_bundles_recursive_component_schemas() {
+	let raw = r##"{
+		"openapi": "3.0.0",
+		"info": {"title": "Recursive schemas", "version": "1.0.0"},
+		"paths": {
+			"/nodes": {
+				"post": {
+					"operationId": "createNode",
+					"parameters": [{
+						"name": "root",
+						"in": "query",
+						"required": true,
+						"schema": {"$ref": "#/components/schemas/A"}
+					}],
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"schema": {"$ref": "#/components/schemas/Node"}
+							}
+						}
+					},
+					"responses": {"200": {"description": "ok"}}
+				}
+			}
+		},
+		"components": {
+			"schemas": {
+				"Node": {
+					"type": "object",
+					"properties": {
+						"children": {
+							"type": "array",
+							"items": {"$ref": "#/components/schemas/Node"}
+						}
+					}
+				},
+				"A": {
+					"type": "object",
+					"properties": {"b": {"$ref": "#/components/schemas/B"}}
+				},
+				"B": {
+					"type": "object",
+					"properties": {"a": {"$ref": "#/components/schemas/A"}}
+				},
+				"Unused": {"type": "string"}
+			}
+		}
+	}"##;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("recursive schemas should parse");
+
+	assert_eq!(
+		Value::Object(tool_schema_for(&tools, "createNode").clone()),
+		json!({
+			"type": "object",
+			"required": ["body", "query"],
+			"properties": {
+				"body": {"$ref": "#/$defs/Node"},
+				"query": {
+					"type": "object",
+					"required": ["root"],
+					"properties": {"root": {"$ref": "#/$defs/A"}}
+				}
+			},
+			"$defs": {
+				"Node": {
+					"type": "object",
+					"properties": {
+						"children": {
+							"type": "array",
+							"items": {"$ref": "#/$defs/Node"}
+						}
+					}
+				},
+				"A": {
+					"type": "object",
+					"properties": {"b": {"$ref": "#/$defs/B"}}
+				},
+				"B": {
+					"type": "object",
+					"properties": {"a": {"$ref": "#/$defs/A"}}
+				}
+			}
+		})
+	);
+}
+
+#[test]
+fn test_bundle_component_schema_refs_rejects_other_component_refs() {
+	let open_api: OpenAPI = serde_json::from_value(json!({
+		"openapi": "3.0.0",
+		"info": {"title": "Invalid schema ref", "version": "1.0.0"},
+		"paths": {},
+		"components": {
+			"schemas": {
+				"A": {"$ref": "#/components/parameters/not-a-schema"}
+			}
+		}
+	}))
+	.expect("valid OpenAPI document");
+	let mut schema = json!({"$ref": "#/components/schemas/A"});
+
+	assert!(matches!(
+		super::bundle_component_schema_refs(&mut schema, &open_api),
+		Err(ParseError::UnsupportedReference(reference))
+			if reference == "#/components/parameters/not-a-schema"
+	));
+}
+
 #[rstest]
 #[case::empty_string(json!({"verbose": ""}), vec![("verbose", "")])]
 #[case::string_value(json!({"verbose": "true"}), vec![("verbose", "true")])]

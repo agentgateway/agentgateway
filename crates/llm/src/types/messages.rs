@@ -90,6 +90,13 @@ impl TextPart {
 			TextPart::Unknown(_) => None,
 		}
 	}
+
+	fn rest_mut(&mut self) -> Option<&mut serde_json::Value> {
+		match self {
+			TextPart::Text { rest, .. } => Some(rest),
+			TextPart::Unknown(_) => None,
+		}
+	}
 }
 
 impl ContentPart {
@@ -103,6 +110,13 @@ impl ContentPart {
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
 			ContentPart::Text { text, .. } => Some(text),
+			ContentPart::Unknown(_) => None,
+		}
+	}
+
+	fn rest_mut(&mut self) -> Option<&mut serde_json::Value> {
+		match self {
+			ContentPart::Text { rest, .. } => Some(rest),
 			ContentPart::Unknown(_) => None,
 		}
 	}
@@ -186,6 +200,12 @@ pub fn get_messages_helper(
 	}));
 	out
 }
+
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic prompt-cache breakpoint
+	"cache_control",
+];
 
 impl RequestType for Request {
 	fn body_is_json(&self) -> bool {
@@ -305,9 +325,14 @@ impl RequestType for Request {
 		match &mut self.system {
 			Some(TextBlock::Text(text)) => f(ContentScope::SystemPrompt, text),
 			Some(TextBlock::Array(parts)) => {
-				crate::types::scan_text_runs(parts, "\n", TextPart::text_mut, &mut |text| {
-					f(ContentScope::SystemPrompt, text)
-				});
+				crate::types::scan_text_runs(
+					parts,
+					"\n",
+					TextPart::text_mut,
+					TextPart::rest_mut,
+					PRESERVED_REST_KEYS,
+					&mut |text| f(ContentScope::SystemPrompt, text),
+				);
 			},
 			None => {},
 		}
@@ -320,9 +345,14 @@ impl RequestType for Request {
 							visit_tool_part_text(value, f);
 						}
 					}
-					crate::types::scan_text_runs(parts, " ", ContentPart::text_mut, &mut |text| {
-						f(ContentScope::Messages, text)
-					});
+					crate::types::scan_text_runs(
+						parts,
+						" ",
+						ContentPart::text_mut,
+						ContentPart::rest_mut,
+						PRESERVED_REST_KEYS,
+						&mut |text| f(ContentScope::Messages, text),
+					);
 				},
 				None => {},
 			}

@@ -23,7 +23,7 @@ func (s stubJWKSLookup) InlineForOwner(krt.HandlerContext, jwks.RemoteJwksOwner)
 }
 
 func longStringPtr(s string) *agentgateway.LongString {
-	v := agentgateway.LongString(s)
+	v := s
 	return &v
 }
 

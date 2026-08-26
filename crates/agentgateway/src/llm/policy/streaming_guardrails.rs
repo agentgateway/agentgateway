@@ -35,8 +35,9 @@ use super::{
 	FailureMode, ResponseGuard, ResponseGuardKind, StreamingEvaluator, StreamingGuardrailOutcome,
 };
 use crate::cel::RequestSnapshot;
-use crate::llm::policy::PromptGuard;
+use crate::llm::policy::{Policy, PromptGuard};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
 
 /// Text bytes accumulated before triggering a guardrail evaluation.
 /// Larger values reduce guardrail API calls but increase time-to-first-byte
@@ -101,6 +102,7 @@ pub fn make_evaluator(
 		client,
 		http_headers,
 		original,
+		worst_action: GuardrailAction::Allow,
 	})
 }
 
@@ -109,6 +111,20 @@ struct ResponseGuardEvaluator {
 	client: PolicyClient,
 	http_headers: HeaderMap,
 	original: Option<Arc<RequestSnapshot>>,
+	// Fold window results into one metric for the stream.
+	worst_action: GuardrailAction,
+}
+
+impl ResponseGuardEvaluator {
+	fn observe_action(&mut self, action: GuardrailAction) {
+		self.worst_action = self.worst_action.max(action);
+	}
+}
+
+impl Drop for ResponseGuardEvaluator {
+	fn drop(&mut self) {
+		Policy::record_guardrail_trip(&self.client, GuardrailPhase::Response, self.worst_action);
+	}
 }
 
 #[async_trait::async_trait]
@@ -121,7 +137,7 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 	}
 
 	async fn evaluate(&mut self, window: &str) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
-		PromptGuard::evaluate_streaming_response_window(
+		match PromptGuard::evaluate_streaming_response_window(
 			&self.guard,
 			window,
 			&self.client,
@@ -129,6 +145,20 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 			self.original.as_deref(),
 		)
 		.await
+		{
+			Ok((outcome, action)) => {
+				self.observe_action(action);
+				Ok(outcome)
+			},
+			Err(e) => {
+				let action = match self.failure_mode() {
+					FailureMode::FailClosed => GuardrailAction::Reject,
+					FailureMode::FailOpen => GuardrailAction::FailOpen,
+				};
+				self.observe_action(action);
+				Err(e)
+			},
+		}
 	}
 }
 

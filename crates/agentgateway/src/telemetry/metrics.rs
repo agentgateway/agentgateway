@@ -38,14 +38,26 @@ pub enum GuardrailPhase {
 }
 
 #[derive(
-	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
+	Copy,
+	Clone,
+	Hash,
+	Debug,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	prometheus_client::encoding::EncodeLabelValue,
+	Default,
 )]
+// Ordered by severity so streaming guards can retain the strongest window result.
 pub enum GuardrailAction {
 	#[default]
 	Allow,
+	FailOpen,
+	/// Guard ran in observe mode: the verdict was recorded but not enforced.
+	Audit,
 	Mask,
 	Reject,
-	FailOpen,
 }
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]

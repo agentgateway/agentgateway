@@ -1573,11 +1573,11 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 	var sessionToken *string
 	var serviceName string
 	if auth.ServiceName != nil {
-		serviceName = string(*auth.ServiceName)
+		serviceName = *auth.ServiceName
 	}
 	var region string
 	if auth.Region != nil {
-		region = string(*auth.Region)
+		region = *auth.Region
 	}
 	var assumeRole *api.AwsAssumeRole
 	if auth.AssumeRole != nil {

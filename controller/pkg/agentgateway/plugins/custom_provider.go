@@ -22,7 +22,7 @@ func TranslateCustomProviderFormats(formats []agentgateway.ProviderFormatConfig)
 		}
 		var path *string
 		if format.Path != "" {
-			path = new(string(format.Path))
+			path = new(format.Path)
 		}
 		translated = append(translated, &api.AIBackend_ProviderFormatConfig{Format: formatType, Path: path})
 	}
@@ -84,7 +84,7 @@ func TranslateCustomProviderBackendRef(
 
 	var port *gwv1.PortNumber
 	if ref.Port != nil {
-		port = new(gwv1.PortNumber(*ref.Port))
+		port = new(*ref.Port)
 	}
 	return routeBackend(krtctx, namespace, gk, gwv1.ObjectName(ref.Name), nil, port)
 }

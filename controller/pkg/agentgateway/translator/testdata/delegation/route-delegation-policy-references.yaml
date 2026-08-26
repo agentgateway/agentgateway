@@ -33,6 +33,24 @@ spec:
     backendRefs:
     - name: httpbin
       port: 8000
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/pool/with-grant
+    backendRefs:
+    - name: pool-with-grant
+      namespace: pool-ns
+      group: inference.networking.k8s.io
+      kind: InferencePool
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1/pool/without-grant
+    backendRefs:
+    - name: pool-without-grant
+      namespace: pool-ns
+      group: inference.networking.k8s.io
+      kind: InferencePool
 ---
 apiVersion: v1
 kind: Service
@@ -42,6 +60,68 @@ metadata:
 spec:
   ports:
   - port: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pool-endpoint-picker
+  namespace: pool-ns
+spec:
+  ports:
+  - port: 9002
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: pool-with-grant
+  namespace: pool-ns
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: with-grant
+  targetPorts:
+  - number: 8080
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: pool-without-grant
+  namespace: pool-ns
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: without-grant
+  targetPorts:
+  - number: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-child-pool
+  namespace: pool-ns
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: team1
+  to:
+  - group: inference.networking.k8s.io
+    kind: InferencePool
+    name: pool-with-grant
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
@@ -107,6 +187,46 @@ output:
     Namespace: default
   resource:
     policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: pool-endpoint-picker.pool-ns.svc.cluster.local
+              namespace: pool-ns
+          failureMode: FAIL_CLOSED
+      key: pool-ns/pool-with-grant:inference
+      name:
+        kind: InferencePool
+        name: pool-with-grant
+        namespace: pool-ns
+      target:
+        service:
+          hostname: pool-with-grant.pool-ns.inference.cluster.local
+          namespace: pool-ns
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: pool-ns/pool-with-grant:inferencetls
+      name:
+        kind: InferencePool
+        name: pool-with-grant
+        namespace: pool-ns
+      target:
+        service:
+          hostname: pool-endpoint-picker.pool-ns.svc.cluster.local
+          namespace: pool-ns
+          port: 9002
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
       key: traffic/team1/agw:extauth:team1/child-team1-foo
       name:
         kind: AgentgatewayPolicy
@@ -162,7 +282,60 @@ output:
         name: child-team1-foo
         namespace: team1
       routeGroupKey: default/parent/team1/*
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: pool-with-grant.pool-ns.inference.cluster.local
+            namespace: pool-ns
+        weight: 1
+      key: team1/child-team1-foo.01.routegroup.default.parent.team1.wildcard
+      matches:
+      - path:
+          pathPrefix: /anything/team1/pool/with-grant
+      name:
+        kind: HTTPRoute
+        name: child-team1-foo
+        namespace: team1
+      routeGroupKey: default/parent/team1/*
 status:
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: pool-with-grant
+    namespace: pool-ns
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: pool-without-grant
+    namespace: pool-ns
+  spec: null
+  status: {}
 - apiVersion: gateway.networking.k8s.io/v1
   kind: HTTPRoute
   metadata:

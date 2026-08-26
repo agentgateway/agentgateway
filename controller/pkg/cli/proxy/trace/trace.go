@@ -53,6 +53,7 @@ var (
 )
 
 type traceEnvelope struct {
+	RequestID  uint64     `json:"requestId"`
 	EventStart *uint64    `json:"eventStart"`
 	EventEnd   uint64     `json:"eventEnd"`
 	Severity   string     `json:"severity"`
@@ -154,6 +155,10 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 		}
 		return runTUI(cmd, target, body, nil, 0)
 	}
+	follow := cmd.Flags().Changed("follow")
+	if follow {
+		writeFollowWarning(cmd, flags.followDuration)
+	}
 
 	var (
 		target *traceTarget
@@ -174,7 +179,7 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 	}
 	defer closeAdmin()
 
-	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression)
+	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression, follow, flags.followDuration)
 	if err != nil {
 		return err
 	}
@@ -184,6 +189,14 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 		return runRaw(cmd, target, traceResp.Body, requestArgs, flags.port)
 	}
 	return runTUI(cmd, target, traceResp.Body, requestArgs, flags.port)
+}
+
+func writeFollowWarning(cmd *cobra.Command, maxDuration time.Duration) {
+	fmt.Fprintf(
+		cmd.ErrOrStderr(),
+		"Warning: --follow continuously traces matching requests and may impact gateway performance; tracing will stop after %s.\n",
+		maxDuration,
+	)
 }
 
 type traceTarget struct {
@@ -252,7 +265,7 @@ func traceAdminAddress(target *traceTarget, adminPort int) (string, func(), erro
 	return adminForwarder.Address(), adminForwarder.Close, nil
 }
 
-func traceStreamURL(adminAddress, expression string) string {
+func traceStreamURL(adminAddress, expression string, follow bool, maxDuration time.Duration) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   adminAddress,
@@ -263,11 +276,16 @@ func traceStreamURL(adminAddress, expression string) string {
 		q.Set("expression", expression)
 		u.RawQuery = q.Encode()
 	}
+	if follow {
+		q := u.Query()
+		q.Set("follow", maxDuration.String())
+		u.RawQuery = q.Encode()
+	}
 	return u.String()
 }
 
-func openTraceStream(ctx context.Context, adminAddress, expression string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression), nil)
+func openTraceStream(ctx context.Context, adminAddress, expression string, follow bool, maxDuration time.Duration) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression, follow, maxDuration), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct trace request: %w", err)
 	}
@@ -610,23 +628,28 @@ func consumeTrace(body io.Reader, readErrorsAsEvents bool, onEvent func(raw stri
 }
 
 func streamTraceRows(body io.Reader, onRow func(traceRow)) error {
-	var currentSnapshot json.RawMessage
-	var previousSnapshot json.RawMessage
+	type snapshotState struct {
+		current  json.RawMessage
+		previous json.RawMessage
+	}
+	states := map[uint64]snapshotState{}
 
 	return consumeTrace(body, true, func(raw string, envelope traceEnvelope) error {
+		state := states[envelope.RequestID]
 		row := traceRow{
 			RawJSON:          raw,
 			Envelope:         envelope,
 			Summary:          summarizeEnvelope(envelope),
-			CurrentSnapshot:  currentSnapshot,
-			PreviousSnapshot: previousSnapshot,
+			CurrentSnapshot:  state.current,
+			PreviousSnapshot: state.previous,
 		}
 
 		if snapshot := eventSnapshot(envelope.Message); len(snapshot) > 0 {
 			row.CurrentSnapshot = cloneRaw(snapshot)
-			row.PreviousSnapshot = cloneRaw(currentSnapshot)
-			previousSnapshot = cloneRaw(currentSnapshot)
-			currentSnapshot = cloneRaw(snapshot)
+			row.PreviousSnapshot = cloneRaw(state.current)
+			state.previous = cloneRaw(state.current)
+			state.current = cloneRaw(snapshot)
+			states[envelope.RequestID] = state
 		}
 
 		onRow(row)
@@ -1378,7 +1401,7 @@ func (m *traceModel) root() tview.Primitive {
 }
 
 func (m *traceModel) setHeader() {
-	headers := []string{"#", "Type", "Summary"}
+	headers := []string{"#", "Request", "Type", "Summary"}
 	for col, header := range headers {
 		m.table.SetCell(
 			0,
@@ -1431,6 +1454,7 @@ func (m *traceModel) renderRow(rowIndex int) {
 	textColor := traceSeverityColor(row.Envelope.Severity)
 	for col, text := range []string{
 		fmt.Sprintf("%d", rowIndex+1),
+		fmt.Sprintf("%d", row.Envelope.RequestID),
 		displayEventType(row.Envelope.Message.Type),
 		row.Summary,
 	} {

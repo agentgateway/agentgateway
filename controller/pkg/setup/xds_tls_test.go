@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -333,4 +334,101 @@ func generateCACert(t *testing.T, commonName string, publicKey, privateKey any) 
 	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, publicKey, privateKey)
 	require.NoError(t, err)
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+}
+
+func TestGenerateLeafFromCARejectsWeakRSAKeyUnderFIPS(t *testing.T) {
+	caCert, caKey := generateWeakRSACA(t)
+
+	_, _, err := generateLeafFromCA(caCert, caKey, []string{"xds.default.svc"})
+	if fips140.Enabled() {
+		require.ErrorContains(t, err, "requires at least 2048 bits")
+		return
+	}
+	require.NoError(t, err)
+}
+
+func TestRefreshSecretRejectsWeakRSAServingKeyUnderFIPS(t *testing.T) {
+	certPEM, keyPEM := generateWeakRSAServingCert(t)
+	syncer := &xdsTLSMaterialSyncer{material: &xdsTLSMaterial{}, hosts: []string{"xds.default.svc"}}
+
+	err := syncer.refreshSecret(xdsSecret(map[string][]byte{
+		xdsCertKey:   certPEM,
+		xdsKeyKey:    keyPEM,
+		xdsCACertKey: certPEM,
+	}), true)
+	if fips140.Enabled() {
+		require.ErrorContains(t, err, "requires at least 2048 bits")
+		return
+	}
+	require.NoError(t, err)
+}
+
+func TestFIPSRSAKeyParameters(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	valid := key.PublicKey
+	oddModulusSize := valid
+	oddModulusSize.N = new(big.Int).Set(valid.N)
+	oddModulusSize.N.SetBit(oddModulusSize.N, 2048, 1)
+	smallExponent := valid
+	smallExponent.E = 3
+
+	tests := []struct {
+		name string
+		key  *rsa.PublicKey
+		want string
+	}{
+		{name: "approved", key: &valid},
+		{name: "odd modulus size", key: &oddModulusSize, want: "even modulus size"},
+		{name: "small exponent", key: &smallExponent, want: "greater than 2^16"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkFIPSRSAKeyParameters(tt.key)
+			if !fips140.Enabled() || tt.want == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.want)
+		})
+	}
+}
+
+func generateWeakRSACA(t *testing.T) ([]byte, []byte) {
+	t.Helper()
+	key := weakRSAKey(t)
+	cert := generateCACert(t, "weak-rsa-ca", &key.PublicKey, key)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	return cert, keyPEM
+}
+
+func generateWeakRSAServingCert(t *testing.T) ([]byte, []byte) {
+	t.Helper()
+	key := weakRSAKey(t)
+	serial, err := rand.Int(rand.Reader, big.NewInt(1<<62))
+	require.NoError(t, err)
+	tpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "weak-rsa-leaf"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"xds.default.svc"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	return certPEM, keyPEM
+}
+
+func weakRSAKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 1024) //nolint:gosec // G403: the weak key is the point; FIPS mode must reject it
+	if err != nil {
+		t.Skipf("1024-bit RSA keys are unavailable: %v", err)
+	}
+	return key
 }

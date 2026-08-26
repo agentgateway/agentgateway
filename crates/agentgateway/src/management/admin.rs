@@ -41,6 +41,8 @@ const PPROF_DEFAULT_SECONDS: u64 = 10;
 const PPROF_MIN_SECONDS: u64 = 1;
 #[cfg(target_os = "linux")]
 const PPROF_MAX_SECONDS: u64 = 300;
+const TRACE_FOLLOW_DEFAULT_DURATION: Duration = Duration::from_secs(5);
+const TRACE_FOLLOW_MAX_DURATION: Duration = Duration::from_secs(60 * 60);
 // Default matches Go's CPU profiler. Higher rates severely under-report on a
 // multi-core-busy process: SIGPROF is non-queuing, so expirations coalesce, and
 // pprof-rs's handler serializes all threads through one lock and drops samples
@@ -348,11 +350,22 @@ async fn handle_server_shutdown(AxumState(state): AxumState<Arc<AdminState>>) ->
 }
 
 pub async fn handle_debug_trace(req: Request) -> Response {
-	let expression = req.uri().query().and_then(|query| {
-		url::form_urlencoded::parse(query.as_bytes())
-			.find(|(key, _)| key == "expression")
-			.map(|(_, value)| value.into_owned())
-	});
+	let query: HashMap<String, String> = req
+		.uri()
+		.query()
+		.map(|query| {
+			url::form_urlencoded::parse(query.as_bytes())
+				.into_owned()
+				.collect()
+		})
+		.unwrap_or_default();
+	let expression = query.get("expression").cloned();
+	let max_duration = match parse_trace_follow_duration(query.get("follow").map(String::as_str)) {
+		Ok(duration) => duration,
+		Err(message) => {
+			return plaintext_response(hyper::StatusCode::BAD_REQUEST, message.into());
+		},
+	};
 	let expression = match expression {
 		Some(expression) => match crate::cel::Expression::new_strict(&expression) {
 			Ok(expression) => Some(expression),
@@ -365,14 +378,42 @@ pub async fn handle_debug_trace(req: Request) -> Response {
 		},
 		None => None,
 	};
-	let rx = crate::proxy::dtrace::track_expression(expression);
+	let rx = if max_duration.is_some() {
+		crate::proxy::dtrace::track_expression_follow(expression)
+	} else {
+		crate::proxy::dtrace::track_expression(expression)
+	};
 	let sse_stream = trace_sse_stream(rx);
+	let body = match max_duration {
+		Some(max_duration) => {
+			crate::http::Body::from_stream(sse_stream.take_until(time::sleep(max_duration)))
+		},
+		None => crate::http::Body::from_stream(sse_stream),
+	};
 	::http::Response::builder()
 		.status(hyper::StatusCode::OK)
 		.header("Content-Type", "text/event-stream")
 		.header("Cache-Control", "no-cache")
-		.body(crate::http::Body::from_stream(sse_stream))
+		.body(body)
 		.expect("builder with known status code should not fail")
+}
+
+fn parse_trace_follow_duration(value: Option<&str>) -> Result<Option<Duration>, &'static str> {
+	match value {
+		None | Some("false") => Ok(None),
+		Some("") | Some("true") => Ok(Some(TRACE_FOLLOW_DEFAULT_DURATION)),
+		Some(value) => {
+			let duration = agent_core::durfmt::parse(value)
+				.map_err(|_| "follow must be empty, true, false, or a valid duration\n")?;
+			if duration < Duration::from_millis(1) {
+				return Err("follow duration must be at least 1ms\n");
+			}
+			if duration > TRACE_FOLLOW_MAX_DURATION {
+				return Err("follow duration must not exceed 1h\n");
+			}
+			Ok(Some(duration))
+		},
+	}
 }
 
 fn trace_sse_stream(
