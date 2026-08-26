@@ -2,14 +2,13 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::cel;
+use crate::cel::GuardDetail;
 use crate::http::auth::{AwsAuth, BackendAuthKind};
 use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::{BedrockGuardrails, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::GuardrailLog;
-use crate::telemetry::metrics::{GuardrailPhase, OutboundCallKind, OutboundCallSubtype};
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -123,9 +122,10 @@ impl ApplyGuardrailResponse {
 	}
 }
 
-/// Assessment keys that are safe to log. Assessments are recursively filtered to
-/// this allowlist, so content-bearing fields (notably `match` values holding the
-/// flagged text) and anything the API adds later never reach logs or CEL.
+/// Assessment keys that are safe to log. Top-level keys are policy names (fixed
+/// API schema), so an unknown policy is kept as `"[redacted]"` to show what
+/// fired; below that, unknown keys are dropped wholesale so content — and key
+/// names that could carry it in future API shapes — never reaches logs or CEL.
 const ASSESSMENT_METADATA_KEYS: &[&str] = &[
 	// policy containers
 	"topicPolicy",
@@ -157,26 +157,33 @@ const ASSESSMENT_METADATA_KEYS: &[&str] = &[
 ];
 
 fn redact_assessment(value: &mut serde_json::Value) {
+	let serde_json::Value::Object(map) = value else {
+		*value = serde_json::Value::String("[redacted]".to_string());
+		return;
+	};
+	for (k, v) in map.iter_mut() {
+		if ASSESSMENT_METADATA_KEYS.contains(&k.as_str()) {
+			filter_assessment_fields(v);
+		} else {
+			*v = serde_json::Value::String("[redacted]".to_string());
+		}
+	}
+}
+
+fn filter_assessment_fields(value: &mut serde_json::Value) {
 	match value {
 		serde_json::Value::Object(map) => {
 			map.retain(|k, _| ASSESSMENT_METADATA_KEYS.contains(&k.as_str()));
-			map.values_mut().for_each(redact_assessment);
+			map.values_mut().for_each(filter_assessment_fields);
 		},
-		serde_json::Value::Array(arr) => arr.iter_mut().for_each(redact_assessment),
+		serde_json::Value::Array(arr) => arr.iter_mut().for_each(filter_assessment_fields),
 		_ => {},
 	}
 }
 
 impl ApplyGuardrailResponse {
-	/// Record a log entry for this intervention. Assessments are redacted to
-	/// metadata-only keys so flagged content never reaches logs or CEL.
-	pub fn log_outcome(
-		&mut self,
-		log: &GuardrailLog,
-		phase: GuardrailPhase,
-		config: &BedrockGuardrails,
-		action: strng::Strng,
-	) {
+	/// Guardrail-log detail for this intervention, with assessments redacted.
+	pub(super) fn build_detail(&mut self, config: &BedrockGuardrails) -> GuardDetail {
 		let assessments = std::mem::take(&mut self.assessments)
 			.into_iter()
 			.map(|mut a| {
@@ -184,20 +191,12 @@ impl ApplyGuardrailResponse {
 				a
 			})
 			.collect();
-		log.mutate_or_default(|entries| {
-			entries.push(cel::GuardrailInfo {
-				phase: match phase {
-					GuardrailPhase::Request => strng::literal!("request"),
-					GuardrailPhase::Response => strng::literal!("response"),
-				},
-				guard: strng::literal!("bedrockGuardrails"),
-				action,
-				guardrail_id: Some(config.guardrail_identifier.clone()),
-				guardrail_version: Some(config.guardrail_version.clone()),
-				action_reason: self.action_reason.take(),
-				assessments,
-			});
-		});
+		GuardDetail {
+			guardrail_id: Some(config.guardrail_identifier.clone()),
+			guardrail_version: Some(config.guardrail_version.clone()),
+			action_reason: self.action_reason.take(),
+			assessments,
+		}
 	}
 }
 

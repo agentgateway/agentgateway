@@ -671,14 +671,16 @@ fn log_guardrails_binding() {
 		phase: "request".into(),
 		guard: "bedrockGuardrails".into(),
 		action: "reject".into(),
-		guardrail_id: Some("gr-1".into()),
-		guardrail_version: Some("3".into()),
-		action_reason: Some("Guardrail blocked.".into()),
-		assessments: vec![serde_json::json!({
-			"sensitiveInformationPolicy": {
-				"piiEntities": [{"type": "EMAIL", "action": "BLOCKED", "detected": true}]
-			}
-		})],
+		detail: crate::cel::GuardDetail {
+			guardrail_id: Some("gr-1".into()),
+			guardrail_version: Some("3".into()),
+			action_reason: Some("Guardrail blocked.".into()),
+			assessments: vec![serde_json::json!({
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{"type": "EMAIL", "action": "BLOCKED", "detected": true}]
+				}
+			})],
+		},
 	}];
 	let exec = Executor::new_logger(None, None, None, None, Some(&entries), None, None);
 

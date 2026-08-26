@@ -1421,8 +1421,17 @@ pub struct GuardrailInfo {
 	pub phase: Strng,
 	/// The guard kind that intervened, such as `bedrockGuardrails`.
 	pub guard: Strng,
-	/// The action the guardrail took (mask/reject/audit).
+	/// The action the guardrail took (mask/reject/audit/failOpen).
 	pub action: Strng,
+	#[serde(flatten, default)]
+	#[dynamic(flatten)]
+	pub detail: GuardDetail,
+}
+
+#[apply(schema!)]
+#[derive(Default, cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct GuardDetail {
 	/// The configured guardrail identifier.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub guardrail_id: Option<Strng>,
@@ -1447,7 +1456,7 @@ impl GuardrailInfo {
 			"guard": self.guard,
 			"action": self.action,
 		});
-		if let Some(id) = &self.guardrail_id {
+		if let Some(id) = &self.detail.guardrail_id {
 			entry["guardrailId"] = id.as_str().into();
 		}
 		entry
@@ -2473,10 +2482,12 @@ pub fn full_example_executor() -> ExecutorSerde {
 			phase: "request".into(),
 			guard: "bedrockGuardrails".into(),
 			action: "reject".into(),
-			guardrail_id: Some("gr-abc123".into()),
-			guardrail_version: Some("1".into()),
-			action_reason: Some("Guardrail blocked.".into()),
-			assessments: vec![],
+			detail: GuardDetail {
+				guardrail_id: Some("gr-abc123".into()),
+				guardrail_version: Some("1".into()),
+				action_reason: Some("Guardrail blocked.".into()),
+				assessments: vec![],
+			},
 		}]),
 		metadata: Some(TransformationMetadata::default()),
 	}

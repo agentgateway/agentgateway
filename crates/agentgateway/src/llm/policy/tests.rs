@@ -27,10 +27,14 @@ async fn webhook_fail_open_emits_single_metric() {
 	};
 
 	let client = crate::test_helpers::policy_client();
+	let log = GuardrailLog::default();
 	let blocked = guard
-		.apply_realtime_request_guards("hello world", &client, None)
+		.apply_realtime_request_guards("hello world", &client, None, Some(&log))
 		.await;
 	assert!(blocked.is_none(), "FailOpen must not block the request");
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.guard, "webhook");
+	assert_eq!(entry.action, "failOpen");
 
 	let fail_open = client
 		.inputs
@@ -88,7 +92,7 @@ async fn audit_mode_records_allow_when_nothing_matches() {
 	};
 	let headers = ::http::HeaderMap::new();
 	let (action, rejection) =
-		Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client, None, None)
+		Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client, None, None, true)
 			.await
 			.unwrap();
 	assert!(rejection.is_none(), "audit mode must never reject");
@@ -124,7 +128,7 @@ async fn audit_mode_records_audit_and_passes_through_on_match() {
 	};
 	let headers = ::http::HeaderMap::new();
 	let (action, rejection) =
-		Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client, None, None)
+		Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client, None, None, true)
 			.await
 			.unwrap();
 	assert_eq!(
@@ -149,18 +153,13 @@ async fn audit_mode_records_audit_and_passes_through_on_match() {
 #[test]
 fn bedrock_audit_outcome_maps_interventions_to_audit() {
 	use serde_json::json;
-	let log = GuardrailLog::default();
-	let outcome = |v: serde_json::Value| -> GuardrailOutcome<RequestGuardMutation> {
-		let resp: bedrock_guardrails::ApplyGuardrailResponse = serde_json::from_value(v).unwrap();
-		Policy::bedrock_audit_outcome(
-			resp,
-			GuardrailPhase::Request,
-			&bedrock_test_config(),
-			Some(&log),
-		)
-	};
+	let outcome =
+		|v: serde_json::Value| -> (GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>) {
+			let resp: bedrock_guardrails::ApplyGuardrailResponse = serde_json::from_value(v).unwrap();
+			Policy::bedrock_audit_outcome(resp, &bedrock_test_config())
+		};
 
-	let blocked = outcome(json!({
+	let (blocked, detail) = outcome(json!({
 		"action": "GUARDRAIL_INTERVENED",
 		"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
 	}));
@@ -168,14 +167,12 @@ fn bedrock_audit_outcome_maps_interventions_to_audit() {
 		matches!(blocked, GuardrailOutcome::Audit),
 		"a would-block assessment audits, never rejects"
 	);
-	let entry = &log.take().unwrap()[0];
-	assert_eq!(entry.action, "audit");
 	assert_eq!(
-		entry.assessments[0]["contentPolicy"]["filters"][0]["type"],
+		detail.unwrap().assessments[0]["contentPolicy"]["filters"][0]["type"],
 		"HATE"
 	);
 
-	let anonymized = outcome(json!({
+	let (anonymized, _) = outcome(json!({
 		"action": "GUARDRAIL_INTERVENED",
 		"outputs": [{"text": "redacted {NAME}"}],
 		"assessments": [{ "sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] } }]
@@ -185,15 +182,16 @@ fn bedrock_audit_outcome_maps_interventions_to_audit() {
 		"a would-mask assessment audits, never masks"
 	);
 
-	let detect_only = outcome(json!({
+	let (detect_only, detail) = outcome(json!({
 		"action": "NONE",
 		"assessments": [{ "contentPolicy": {
 			"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
 		} }]
 	}));
 	assert!(matches!(detect_only, GuardrailOutcome::None));
+	assert!(detail.is_none());
 
-	let benign = outcome(json!({ "action": "NONE", "assessments": [{}] }));
+	let (benign, _) = outcome(json!({ "action": "NONE", "assessments": [{}] }));
 	assert!(matches!(benign, GuardrailOutcome::None));
 }
 
@@ -250,18 +248,8 @@ fn azure_blocked_records_guardrail_info_without_matched_text() {
 		]
 	}))
 	.unwrap();
-	let log = GuardrailLog::default();
-	Policy::record_azure_analyze(
-		&resp,
-		2,
-		GuardrailPhase::Request,
-		Some(&log),
-		strng::literal!("reject"),
-	);
-	let entry = &log.take().unwrap()[0];
-	assert_eq!(entry.guard, "azureContentSafety");
-	assert_eq!(entry.action, "reject");
-	let assessment = &entry.assessments[0];
+	let detail = Policy::azure_analyze_detail(&resp, 2);
+	let assessment = &detail.assessments[0];
 	assert_eq!(
 		assessment["categoriesAnalysis"],
 		serde_json::json!([{"category": "Violence", "severity": 4}])
@@ -295,20 +283,16 @@ fn model_armor_blocked_records_guardrail_info() {
 		policies: vec![],
 		action: Default::default(),
 	};
-	let log = GuardrailLog::default();
-	let outcome: GuardrailOutcome<RequestGuardMutation> = Policy::model_armor_outcome(
-		resp,
-		&config,
-		GuardrailPhase::Request,
-		&RequestRejection::default(),
-		Some(&log),
-	);
+	let (outcome, detail): (GuardrailOutcome<RequestGuardMutation>, _) =
+		Policy::model_armor_outcome(resp, &config, &RequestRejection::default());
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
-	let entry = &log.take().unwrap()[0];
-	assert_eq!(entry.guard, "googleModelArmor");
-	assert_eq!(entry.guardrail_id.as_deref(), Some("templates/my-template"));
+	let detail = detail.unwrap();
 	assert_eq!(
-		entry.assessments[0]["matchedFilters"],
+		detail.guardrail_id.as_deref(),
+		Some("templates/my-template")
+	);
+	assert_eq!(
+		detail.assessments[0]["matchedFilters"],
 		serde_json::json!(["raiFilterResult", "piAndJailbreakFilterResult"])
 	);
 }
@@ -346,14 +330,10 @@ fn moderation_flagged_records_guardrail_info() {
 		}))
 		.unwrap();
 
-	let log = GuardrailLog::default();
-	let outcome = Policy::moderation_outcome(resp, &RequestRejection::default(), false, Some(&log));
+	let (outcome, detail) = Policy::moderation_outcome(resp, &RequestRejection::default(), false);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
-	let entry = &log.take().unwrap()[0];
-	assert_eq!(entry.guard, "openAIModeration");
-	assert_eq!(entry.action, "reject");
 	assert_eq!(
-		entry.assessments[0]["flaggedCategories"],
+		detail.unwrap().assessments[0]["flaggedCategories"],
 		serde_json::json!(["violence"])
 	);
 }
@@ -362,21 +342,17 @@ fn moderation_flagged_records_guardrail_info() {
 fn webhook_reject_records_guardrail_info() {
 	use crate::llm::policy::webhook::{RejectAction, RequestAction};
 
-	let log = GuardrailLog::default();
-	let outcome = Policy::webhook_request_outcome(
-		RequestAction::Reject(RejectAction {
-			body: "blocked".to_string(),
-			status_code: 403,
-			reason: Some("policy violation".to_string()),
-		}),
-		Some(&log),
-	)
+	let (outcome, detail) = Policy::webhook_request_outcome(RequestAction::Reject(RejectAction {
+		body: "blocked".to_string(),
+		status_code: 403,
+		reason: Some("policy violation".to_string()),
+	}))
 	.unwrap();
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
-	let entry = &log.take().unwrap()[0];
-	assert_eq!(entry.guard, "webhook");
-	assert_eq!(entry.action, "reject");
-	assert_eq!(entry.action_reason.as_deref(), Some("policy violation"));
+	assert_eq!(
+		detail.unwrap().action_reason.as_deref(),
+		Some("policy violation")
+	);
 }
 
 #[test]
@@ -979,13 +955,11 @@ fn bedrock_test_config() -> BedrockGuardrails {
 /// the real outcome path and apply the resulting mask to the request.
 fn apply_bedrock_request_mask(req: &mut dyn RequestType, sent: &[&str], masked: &[&str]) {
 	assert_eq!(Policy::request_texts(req), sent);
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
 		bedrock_intervened(masked, bedrock_anonymized_assessments()),
 		sent.len(),
 		&RequestRejection::default(),
-		GuardrailPhase::Request,
 		&bedrock_test_config(),
-		None,
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
 	let (_, rejection) =
@@ -997,13 +971,11 @@ fn apply_bedrock_request_mask(req: &mut dyn RequestType, sent: &[&str], masked: 
 /// Same as `apply_bedrock_request_mask`, but for responses.
 fn apply_bedrock_response_mask(resp: &mut dyn ResponseType, sent: &[&str], masked: &[&str]) {
 	assert_eq!(Policy::response_texts(resp), sent);
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
 		bedrock_intervened(masked, bedrock_anonymized_assessments()),
 		sent.len(),
 		&RequestRejection::default(),
-		GuardrailPhase::Response,
 		&bedrock_test_config(),
-		None,
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
 	let (_, rejection) =
@@ -1115,13 +1087,11 @@ fn bedrock_blocked_intervention_with_canned_output_rejects() {
 			"topicPolicy": {"topics": [{"action": "BLOCKED", "name": "Finance", "type": "DENY"}]}
 		}]),
 	);
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
 		resp,
 		3,
 		&RequestRejection::default(),
-		GuardrailPhase::Request,
 		&bedrock_test_config(),
-		None,
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 }
@@ -1136,13 +1106,11 @@ fn bedrock_unrecognized_intervention_rejects_instead_of_masking() {
 			"automatedReasoningPolicy": {"findings": [{"impossible": {}}]}
 		}]),
 	);
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
 		resp,
 		1,
 		&RequestRejection::default(),
-		GuardrailPhase::Request,
 		&bedrock_test_config(),
-		None,
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 }
@@ -1151,44 +1119,33 @@ fn bedrock_unrecognized_intervention_rejects_instead_of_masking() {
 /// rather than misalign replacements or fail the whole request.
 #[test]
 fn bedrock_masked_output_count_mismatch_rejects() {
-	let log = GuardrailLog::default();
 	let resp = bedrock_intervened(&["Email {EMAIL}"], bedrock_anonymized_assessments());
-	let outcome = Policy::bedrock_guardrail_outcome(
+	// The final decision is a rejection despite the anonymize verdict.
+	let (outcome, detail) = Policy::bedrock_guardrail_outcome(
 		resp,
 		2,
 		&RequestRejection::default(),
-		GuardrailPhase::Request,
 		&bedrock_test_config(),
-		Some(&log),
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
-	// The recorded action reflects the final decision, not the anonymize verdict.
-	assert_eq!(log.take().unwrap()[0].action, "reject");
+	assert!(detail.is_some());
 }
 
-/// A masked intervention must record a mask entry with its assessment metadata.
+/// A masked intervention must carry detail with its assessment metadata.
 #[test]
 fn bedrock_masked_intervention_records_guardrail_info() {
-	let log = GuardrailLog::default();
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (outcome, detail) = Policy::bedrock_guardrail_outcome(
 		bedrock_intervened(&["My name is {NAME}"], bedrock_anonymized_assessments()),
 		1,
 		&RequestRejection::default(),
-		GuardrailPhase::Request,
 		&bedrock_test_config(),
-		Some(&log),
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
-	let entries = log.take().unwrap();
-	assert_eq!(entries.len(), 1);
-	let entry = &entries[0];
-	assert_eq!(entry.phase, "request");
-	assert_eq!(entry.guard, "bedrockGuardrails");
-	assert_eq!(entry.action, "mask");
-	assert_eq!(entry.guardrail_id.as_deref(), Some("gr-test"));
-	assert_eq!(entry.guardrail_version.as_deref(), Some("1"));
+	let detail = detail.unwrap();
+	assert_eq!(detail.guardrail_id.as_deref(), Some("gr-test"));
+	assert_eq!(detail.guardrail_version.as_deref(), Some("1"));
 	assert_eq!(
-		entry.assessments[0]["sensitiveInformationPolicy"]["piiEntities"][0]["type"],
+		detail.assessments[0]["sensitiveInformationPolicy"]["piiEntities"][0]["type"],
 		"NAME"
 	);
 }
@@ -1197,7 +1154,6 @@ fn bedrock_masked_intervention_records_guardrail_info() {
 /// and the assessment metadata, without matched content or unknown fields.
 #[test]
 fn bedrock_blocked_intervention_records_guardrail_info() {
-	let log = GuardrailLog::default();
 	let resp: bedrock_guardrails::ApplyGuardrailResponse =
 		serde_json::from_value(serde_json::json!({
 			"action": "GUARDRAIL_INTERVENED",
@@ -1210,6 +1166,7 @@ fn bedrock_blocked_intervention_records_guardrail_info() {
 					"regexes": [{"name": "acct", "regex": "a-[0-9]+", "match": "a-42", "action": "BLOCKED"}]
 				},
 				"wordPolicy": {"customWords": [{"match": "secretword", "action": "BLOCKED"}]},
+				"automatedReasoningPolicy": {"findings": [{"claim": "user text"}]},
 				"invocationMetrics": {"guardrailProcessingLatency": 128},
 				"appliedGuardrailDetails": {
 					"guardrailId": "gr-test",
@@ -1219,21 +1176,16 @@ fn bedrock_blocked_intervention_records_guardrail_info() {
 			}]
 		}))
 		.unwrap();
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (outcome, detail) = Policy::bedrock_guardrail_outcome(
 		resp,
 		1,
 		&RequestRejection::default(),
-		GuardrailPhase::Response,
 		&bedrock_test_config(),
-		Some(&log),
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
-	let entries = log.take().unwrap();
-	let entry = &entries[0];
-	assert_eq!(entry.phase, "response");
-	assert_eq!(entry.action, "reject");
-	assert_eq!(entry.action_reason.as_deref(), Some("Guardrail blocked."));
-	let assessment = &entry.assessments[0];
+	let detail = detail.unwrap();
+	assert_eq!(detail.action_reason.as_deref(), Some("Guardrail blocked."));
+	let assessment = &detail.assessments[0];
 	assert_eq!(assessment["topicPolicy"]["topics"][0]["name"], "Finance");
 	assert_eq!(
 		assessment["sensitiveInformationPolicy"]["piiEntities"][0]["type"],
@@ -1247,10 +1199,19 @@ fn bedrock_blocked_intervention_records_guardrail_info() {
 		assessment["appliedGuardrailDetails"]["guardrailId"],
 		"gr-test"
 	);
-	let json = serde_json::to_string(&entry.assessments).unwrap();
-	assert!(!json.contains("match"));
+	// An unknown policy keeps only a top-level marker; nested content and keys
+	// under it are gone, as are matched-text fields under known policies.
+	assert_eq!(assessment["automatedReasoningPolicy"], "[redacted]");
+	assert!(
+		assessment["sensitiveInformationPolicy"]["piiEntities"][0]
+			.get("match")
+			.is_none()
+	);
+	let json = serde_json::to_string(&detail.assessments).unwrap();
 	assert!(!json.contains("john.doe"));
 	assert!(!json.contains("secretword"));
+	assert!(!json.contains("a-42"));
+	assert!(!json.contains("findings"));
 }
 
 #[test]
@@ -1277,10 +1238,9 @@ fn bedrock_default_scope_skips_tool_texts_and_keeps_mask_aligned() {
 		),
 		sent.len(),
 		&RequestRejection::default(),
-		GuardrailPhase::Request,
 		&bedrock_test_config(),
-		None,
 	)
+	.0
 	.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope)));
 	let (_, rejection) = Policy::apply_request_guard_outcome(outcome, &mut req).unwrap();
 	assert!(rejection.is_none());
@@ -2413,27 +2373,36 @@ fn all_scopes() -> Vec<ContentScope> {
 	]
 }
 
-#[test]
-fn regex_reject_records_guardrail_info() {
+#[tokio::test]
+async fn regex_reject_records_guardrail_info() {
 	let mut req: crate::llm::types::completions::Request =
 		serde_json::from_value(serde_json::json!({
 			"model": "gpt-4o",
 			"messages": [{"role": "user", "content": "my ssn is 123-45-6789"}]
 		}))
 		.unwrap();
-	let rules = RegexRules {
-		action: Action::Reject,
-		rules: ssn_only(),
+	let guard = RequestGuard {
+		rejection: Default::default(),
+		scope: default_content_scope(),
+		kind: RequestGuardKind::Regex(RegexRules {
+			action: Action::Reject,
+			rules: ssn_only(),
+		}),
 	};
+	let client = crate::test_helpers::policy_client();
 	let log = GuardrailLog::default();
-	let result = Policy::evaluate_regex_request(
+	let (_, rejection) = Policy::apply_single_request_guard(
+		&guard,
 		&mut req,
-		&rules,
-		&RequestRejection::default(),
-		&default_content_scope(),
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+		None,
 		Some(&log),
-	);
-	assert!(matches!(&result, GuardrailOutcome::Rejected(_)));
+	)
+	.await
+	.unwrap();
+	assert!(rejection.is_some());
 	let entry = &log.take().unwrap()[0];
 	assert_eq!(entry.phase, "request");
 	assert_eq!(entry.guard, "regex");
@@ -2456,7 +2425,7 @@ fn regex_evaluation_does_not_mutate_until_enforced() {
 
 	let rejection = RequestRejection::default();
 	let result =
-		Policy::evaluate_regex_request(&mut req, &rules, &rejection, &default_content_scope(), None);
+		Policy::evaluate_regex_request(&mut req, &rules, &rejection, &default_content_scope());
 	assert!(matches!(&result, GuardrailOutcome::Masked(_)));
 	assert_eq!(serde_json::to_value(&req).unwrap(), before);
 

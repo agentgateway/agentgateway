@@ -1596,6 +1596,7 @@ async fn handle_upgrade(
 					llm,
 					guard_context.req_headers,
 					guard_context.request_snapshot,
+					log.guardrails.clone(),
 				)
 				.await;
 				return;

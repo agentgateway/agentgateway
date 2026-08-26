@@ -1126,7 +1126,7 @@
             "type": "string"
           },
           "action": {
-            "description": "The action the guardrail took (mask/reject/audit).",
+            "description": "The action the guardrail took (mask/reject/audit/failOpen).",
             "type": "string"
           },
           "guardrailId": {
