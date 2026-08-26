@@ -94,87 +94,6 @@ impl ApplyGuardrailResponse {
 		self.outputs.into_iter().map(|o| o.text).collect()
 	}
 
-	/// The action the guardrail would have enforced.
-	pub fn would_action(&self) -> &'static str {
-		if self.is_blocked() {
-			"BLOCKED"
-		} else if self.is_anonymized() {
-			"ANONYMIZED"
-		} else {
-			"NONE"
-		}
-	}
-
-	pub fn would_enforce(&self) -> bool {
-		self.is_blocked() || self.is_anonymized()
-	}
-
-	pub fn has_detection(&self) -> bool {
-		self.action == GuardrailAction::GuardrailIntervened
-			|| self.assessments.iter().any(Self::value_indicates_detection)
-	}
-
-	pub fn log_audit(&self, guardrail_id: &str, guardrail_version: &str, source: GuardrailSource) {
-		let assessments = serde_json::to_string(&self.redacted_assessments()).unwrap_or_default();
-		tracing::info!(
-			target: "agentgateway::guardrail::audit",
-			guardrail_id = %guardrail_id,
-			guardrail_version = %guardrail_version,
-			source = ?source,
-			would_action = %self.would_action(),
-			assessments = %assessments,
-			"bedrock guardrail audit evaluation"
-		);
-	}
-
-	/// Returns an allowlisted subset of the assessment for logging.
-	/// Matched content and unknown fields are omitted.
-	pub(crate) fn redacted_assessments(&self) -> Vec<serde_json::Value> {
-		self.assessments.iter().map(Self::redact_value).collect()
-	}
-
-	const SAFE_ASSESSMENT_KEYS: &'static [&'static str] = &[
-		"topicPolicy",
-		"contentPolicy",
-		"wordPolicy",
-		"sensitiveInformationPolicy",
-		"contextualGroundingPolicy",
-		"topics",
-		"filters",
-		"customWords",
-		"managedWordLists",
-		"piiEntities",
-		"regexes",
-		"type",
-		"action",
-		"confidence",
-		"detected",
-		"name",
-		"filterStrength",
-		"threshold",
-		"score",
-	];
-
-	fn redact_value(value: &serde_json::Value) -> serde_json::Value {
-		match value {
-			serde_json::Value::Object(map) => serde_json::Value::Object(
-				map
-					.iter()
-					.filter(|(k, _)| {
-						Self::SAFE_ASSESSMENT_KEYS
-							.iter()
-							.any(|safe| k.eq_ignore_ascii_case(safe))
-					})
-					.map(|(k, v)| (k.clone(), Self::redact_value(v)))
-					.collect(),
-			),
-			serde_json::Value::Array(arr) => {
-				serde_json::Value::Array(arr.iter().map(Self::redact_value).collect())
-			},
-			other => other.clone(),
-		}
-	}
-
 	fn has_assessment_action(&self, action: &str) -> bool {
 		self
 			.assessments
@@ -194,24 +113,6 @@ impl ApplyGuardrailResponse {
 				map.values().any(|v| Self::value_contains_action(v, action))
 			},
 			serde_json::Value::Array(arr) => arr.iter().any(|v| Self::value_contains_action(v, action)),
-			_ => false,
-		}
-	}
-
-	fn value_indicates_detection(value: &serde_json::Value) -> bool {
-		match value {
-			serde_json::Value::Object(map) => {
-				if map.get("detected") == Some(&serde_json::Value::Bool(true)) {
-					return true;
-				}
-				if let Some(serde_json::Value::String(action)) = map.get("action")
-					&& (action == "BLOCKED" || action == "ANONYMIZED")
-				{
-					return true;
-				}
-				map.values().any(Self::value_indicates_detection)
-			},
-			serde_json::Value::Array(arr) => arr.iter().any(Self::value_indicates_detection),
 			_ => false,
 		}
 	}

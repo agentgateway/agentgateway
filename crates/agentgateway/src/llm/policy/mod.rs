@@ -23,16 +23,16 @@ fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
 }
 
-fn log_guardrail_audit(
-	guard: &'static str,
-	phase: crate::telemetry::metrics::GuardrailPhase,
-	would_action: &str,
-) {
+fn log_guardrail_audit(kind: &'static str, phase: GuardrailPhase, verdict: &'static str) {
+	let phase = match phase {
+		GuardrailPhase::Request => "request",
+		GuardrailPhase::Response => "response",
+	};
 	tracing::info!(
 		target: "agentgateway::guardrail::audit",
-		guard = %guard,
-		phase = ?phase,
-		would_action = %would_action,
+		%kind,
+		%phase,
+		%verdict,
 		"guardrail audit evaluation"
 	);
 }
@@ -988,7 +988,7 @@ impl Policy {
 		let resp = moderation::send_request(req, claims, client, moderation).await?;
 		if resp.results.iter().any(|r| r.flagged) {
 			if moderation.action == RejectAuditAction::Audit {
-				log_guardrail_audit("openAIModeration", GuardrailPhase::Request, "REJECT");
+				log_guardrail_audit("openai-moderation", GuardrailPhase::Request, "reject");
 				return Ok(GuardrailOutcome::Audit);
 			}
 			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
@@ -1019,11 +1019,7 @@ impl Policy {
 		)
 		.await?;
 		if guardrails.action == RejectAuditAction::Audit {
-			return Ok(Self::bedrock_audit_outcome(
-				&resp,
-				guardrails,
-				bedrock_guardrails::GuardrailSource::Input,
-			));
+			return Ok(Self::bedrock_audit_outcome(&resp, GuardrailPhase::Request));
 		}
 		Ok(
 			Self::bedrock_guardrail_outcome(resp, sent_count, rejection)
@@ -1056,8 +1052,7 @@ impl Policy {
 		if guardrails.action == RejectAuditAction::Audit {
 			return Ok(Self::bedrock_audit_outcome(
 				&guardrail_resp,
-				guardrails,
-				bedrock_guardrails::GuardrailSource::Output,
+				GuardrailPhase::Response,
 			));
 		}
 		Ok(
@@ -1100,7 +1095,7 @@ impl Policy {
 		let resp = google_model_armor::send_request(req, claims, client, model_armor).await?;
 		if resp.is_blocked() {
 			if model_armor.action == RejectAuditAction::Audit {
-				log_guardrail_audit("googleModelArmor", GuardrailPhase::Request, "REJECT");
+				log_guardrail_audit("google-model-armor", GuardrailPhase::Request, "reject");
 				return Ok(GuardrailOutcome::Audit);
 			}
 			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
@@ -1129,7 +1124,7 @@ impl Policy {
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if resp.is_blocked(threshold) {
 				if audit {
-					log_guardrail_audit("azureContentSafety", GuardrailPhase::Request, "REJECT");
+					log_guardrail_audit("azure-content-safety", GuardrailPhase::Request, "reject");
 					return Ok(GuardrailOutcome::Audit);
 				}
 				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
@@ -1146,7 +1141,7 @@ impl Policy {
 			.await?;
 			if resp.jailbreak_detected() {
 				if audit {
-					log_guardrail_audit("azureContentSafety", GuardrailPhase::Request, "REJECT");
+					log_guardrail_audit("azure-content-safety", GuardrailPhase::Request, "reject");
 					return Ok(GuardrailOutcome::Audit);
 				}
 				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
@@ -1172,7 +1167,7 @@ impl Policy {
 			google_model_armor::send_response(content, claims, client, model_armor).await?;
 		if guardrail_resp.is_blocked() {
 			if model_armor.action == RejectAuditAction::Audit {
-				log_guardrail_audit("googleModelArmor", GuardrailPhase::Response, "REJECT");
+				log_guardrail_audit("google-model-armor", GuardrailPhase::Response, "reject");
 				return Ok(GuardrailOutcome::Audit);
 			}
 			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
@@ -1206,7 +1201,7 @@ impl Policy {
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if guardrail_resp.is_blocked(threshold) {
 				if config.action == RejectAuditAction::Audit {
-					log_guardrail_audit("azureContentSafety", GuardrailPhase::Response, "REJECT");
+					log_guardrail_audit("azure-content-safety", GuardrailPhase::Response, "reject");
 					return Ok(GuardrailOutcome::Audit);
 				}
 				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
@@ -1218,22 +1213,17 @@ impl Policy {
 
 	fn bedrock_audit_outcome<Mask>(
 		resp: &bedrock_guardrails::ApplyGuardrailResponse,
-		guardrails: &BedrockGuardrails,
-		source: bedrock_guardrails::GuardrailSource,
+		phase: GuardrailPhase,
 	) -> GuardrailOutcome<Mask> {
-		// Detect-only findings are logged but did not trigger enforcement.
-		if resp.has_detection() {
-			resp.log_audit(
-				&guardrails.guardrail_identifier,
-				&guardrails.guardrail_version,
-				source,
-			);
-		}
-		if resp.would_enforce() {
-			GuardrailOutcome::Audit
+		let verdict = if resp.is_blocked() {
+			"reject"
+		} else if resp.is_anonymized() {
+			"mask"
 		} else {
-			GuardrailOutcome::None
-		}
+			return GuardrailOutcome::None;
+		};
+		log_guardrail_audit("aws-bedrock", phase, verdict);
+		GuardrailOutcome::Audit
 	}
 
 	/// One flattened text per choice; masking guards must use `response_texts`
@@ -1321,7 +1311,7 @@ impl Policy {
 			}
 		});
 		if audited {
-			log_guardrail_audit("regex", GuardrailPhase::Request, "MASK_OR_REJECT");
+			log_guardrail_audit("regex", GuardrailPhase::Request, "match");
 			return GuardrailOutcome::Audit;
 		}
 		if rejected {
@@ -1371,7 +1361,7 @@ impl Policy {
 			}
 		});
 		if audited {
-			log_guardrail_audit("regex", GuardrailPhase::Response, "MASK_OR_REJECT");
+			log_guardrail_audit("regex", GuardrailPhase::Response, "match");
 			return GuardrailOutcome::Audit;
 		}
 		if rejected {
@@ -1413,16 +1403,12 @@ impl Policy {
 			},
 		};
 		if webhook.action == RejectAuditAction::Audit {
-			let would = match &whr.action {
-				RequestAction::Mask(_) => "MASK",
-				RequestAction::Reject(_) => "REJECT",
+			let verdict = match &whr.action {
+				RequestAction::Mask(_) => "mask",
+				RequestAction::Reject(_) => "reject",
 				RequestAction::Pass(_) => return Ok(GuardrailOutcome::None),
 			};
-			log_guardrail_audit(
-				"webhook",
-				crate::telemetry::metrics::GuardrailPhase::Request,
-				would,
-			);
+			log_guardrail_audit("webhook", GuardrailPhase::Request, verdict);
 			return Ok(GuardrailOutcome::Audit);
 		}
 		match whr.action {
@@ -1495,16 +1481,12 @@ impl Policy {
 			},
 		};
 		if webhook.action == RejectAuditAction::Audit {
-			let would = match &whr.action {
-				ResponseAction::Mask(_) => "MASK",
-				ResponseAction::Reject(_) => "REJECT",
+			let verdict = match &whr.action {
+				ResponseAction::Mask(_) => "mask",
+				ResponseAction::Reject(_) => "reject",
 				ResponseAction::Pass(_) => return Ok(GuardrailOutcome::None),
 			};
-			log_guardrail_audit(
-				"webhook",
-				crate::telemetry::metrics::GuardrailPhase::Response,
-				would,
-			);
+			log_guardrail_audit("webhook", GuardrailPhase::Response, verdict);
 			return Ok(GuardrailOutcome::Audit);
 		}
 		match whr.action {
