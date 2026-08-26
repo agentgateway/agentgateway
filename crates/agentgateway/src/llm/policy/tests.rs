@@ -1987,6 +1987,33 @@ fn all_scopes() -> Vec<ContentScope> {
 }
 
 #[test]
+fn regex_reject_records_guardrail_info() {
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "my ssn is 123-45-6789"}]
+		}))
+		.unwrap();
+	let rules = RegexRules {
+		action: Action::Reject,
+		rules: ssn_only(),
+	};
+	let log = GuardrailLog::default();
+	let result = Policy::evaluate_regex_request(
+		&mut req,
+		&rules,
+		&RequestRejection::default(),
+		&default_content_scope(),
+		Some(&log),
+	);
+	assert!(matches!(&result, GuardrailOutcome::Rejected(_)));
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.phase, "request");
+	assert_eq!(entry.guard, "regex");
+	assert_eq!(entry.action, "reject");
+}
+
+#[test]
 fn regex_evaluation_does_not_mutate_until_enforced() {
 	let mut req: crate::llm::types::completions::Request =
 		serde_json::from_value(serde_json::json!({
@@ -2002,7 +2029,7 @@ fn regex_evaluation_does_not_mutate_until_enforced() {
 
 	let rejection = RequestRejection::default();
 	let result =
-		Policy::evaluate_regex_request(&mut req, &rules, &rejection, &default_content_scope());
+		Policy::evaluate_regex_request(&mut req, &rules, &rejection, &default_content_scope(), None);
 	assert!(matches!(&result, GuardrailOutcome::Masked(_)));
 	assert_eq!(serde_json::to_value(&req).unwrap(), before);
 

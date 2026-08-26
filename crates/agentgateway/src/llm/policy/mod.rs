@@ -23,6 +23,19 @@ fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
 }
 
+fn guardrail_phase(phase: GuardrailPhase) -> Strng {
+	match phase {
+		GuardrailPhase::Request => strng::literal!("request"),
+		GuardrailPhase::Response => strng::literal!("response"),
+	}
+}
+
+fn record_guardrail_info(log: Option<&GuardrailLog>, info: cel::GuardrailInfo) {
+	if let Some(log) = log {
+		log.mutate_or_default(|entries| entries.push(info));
+	}
+}
+
 pub mod webhook;
 
 mod azure_content_safety;
@@ -963,6 +976,7 @@ impl Policy {
 				rg,
 				&guard.rejection,
 				&guard.scope,
+				guardrail_log,
 			)),
 			RequestGuardKind::Webhook(wh) => {
 				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
@@ -1264,7 +1278,7 @@ impl Policy {
 		rej: &RequestRejection,
 		guard_scope: &[ContentScope],
 	) -> anyhow::Result<GuardrailAction> {
-		let outcome = Self::evaluate_regex_request(req, rgx, rej, guard_scope);
+		let outcome = Self::evaluate_regex_request(req, rgx, rej, guard_scope, None);
 		let (action, _) = Self::apply_request_guard_outcome(outcome, req)?;
 		Ok(action)
 	}
@@ -1274,6 +1288,7 @@ impl Policy {
 		rgx: &RegexRules,
 		rejection: &RequestRejection,
 		guard_scope: &[ContentScope],
+		guardrail_log: Option<&GuardrailLog>,
 	) -> GuardrailOutcome<RequestGuardMutation> {
 		let mut replacements = Vec::new();
 		let mut rejected = false;
@@ -1296,12 +1311,25 @@ impl Policy {
 				None => replacements.push(None),
 			}
 		});
+		let record = |action: Strng| {
+			record_guardrail_info(
+				guardrail_log,
+				cel::GuardrailInfo {
+					phase: guardrail_phase(GuardrailPhase::Request),
+					guard: strng::literal!("regex"),
+					action,
+					..Default::default()
+				},
+			)
+		};
 		if rejected {
+			record(strng::literal!("reject"));
 			return GuardrailOutcome::Rejected(rejection.as_response());
 		}
 		if replacements.iter().all(Option::is_none) {
 			GuardrailOutcome::None
 		} else {
+			record(strng::literal!("mask"));
 			GuardrailOutcome::Masked(RequestGuardMutation::Texts(TextReplacements(replacements)))
 		}
 	}
@@ -1312,7 +1340,7 @@ impl Policy {
 		rgx: &RegexRules,
 		rej: &RequestRejection,
 	) -> anyhow::Result<GuardrailAction> {
-		let outcome = Self::evaluate_regex_response(resp, rgx, rej);
+		let outcome = Self::evaluate_regex_response(resp, rgx, rej, None);
 		let (action, _) = Self::apply_response_guard_outcome(outcome, resp)?;
 		Ok(action)
 	}
@@ -1321,6 +1349,7 @@ impl Policy {
 		resp: &mut dyn ResponseType,
 		rgx: &RegexRules,
 		rejection: &RequestRejection,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> GuardrailOutcome<ResponseGuardMutation> {
 		let mut replacements = Vec::new();
 		let mut rejected = false;
@@ -1338,12 +1367,25 @@ impl Policy {
 				None => replacements.push(None),
 			}
 		});
+		let record = |action: Strng| {
+			record_guardrail_info(
+				guardrail_log,
+				cel::GuardrailInfo {
+					phase: guardrail_phase(GuardrailPhase::Response),
+					guard: strng::literal!("regex"),
+					action,
+					..Default::default()
+				},
+			)
+		};
 		if rejected {
+			record(strng::literal!("reject"));
 			return GuardrailOutcome::Rejected(rejection.as_response());
 		}
 		if replacements.iter().all(Option::is_none) {
 			GuardrailOutcome::None
 		} else {
+			record(strng::literal!("mask"));
 			GuardrailOutcome::Masked(ResponseGuardMutation::Texts(TextReplacements(replacements)))
 		}
 	}
@@ -1677,7 +1719,12 @@ impl Policy {
 		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		match &guard.kind {
-			ResponseGuardKind::Regex(rg) => Ok(Self::evaluate_regex_response(resp, rg, &guard.rejection)),
+			ResponseGuardKind::Regex(rg) => Ok(Self::evaluate_regex_response(
+				resp,
+				rg,
+				&guard.rejection,
+				guardrail_log,
+			)),
 			ResponseGuardKind::Webhook(wh) => {
 				Self::evaluate_webhook_response(resp, http_headers, client, wh, original).await
 			},
