@@ -23,6 +23,7 @@ import { getApiKeyPolicy, getLlmBudgets, setLlmBudgets, upsertVirtualKey } from 
 import { isServerMetadata, keyLabel, keyValue } from '@/credentialDisplay';
 import type { Budget } from '@/gateway-config';
 import { useBudgetStatus, useLlmConfigData, useUpdateConfig } from '@/hooks';
+import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
 import type { GatewayConfig, VirtualApiKey } from '@/types';
 
 /** Where a budget is declared, which also decides how it is written back to the configuration. */
@@ -32,22 +33,50 @@ type BudgetRow = { budget: Budget; source: Source };
 
 type ScopeKind = 'oneKey' | 'perKey' | 'groupBy' | 'selector';
 
-/** The four ways a budget can decide which keys share its counter, in the order they are offered. */
-const scopeKinds: { value: ScopeKind; label: string; description: string }[] = [
-	{ value: 'oneKey', label: 'One key', description: 'One key gets this allowance.' },
-	{ value: 'perKey', label: 'Each key', description: 'Every key gets its own allowance.' },
-	{
-		value: 'groupBy',
-		label: 'Per api key metadata value',
-		description: 'One allowance per distinct values.'
-	},
-	{ value: 'selector', label: 'Shared pool', description: 'Matching keys split one allowance.' }
-];
+const scopeSchemaPath: Record<Exclude<ScopeKind, 'oneKey'>, Array<string | number>> = {
+	perKey: ['$defs', 'BudgetScope', 'oneOf', 0],
+	groupBy: ['$defs', 'BudgetScope', 'oneOf', 1],
+	selector: ['$defs', 'BudgetScope', 'oneOf', 2]
+};
+
+function scopeKinds(help: SchemaHelp): { value: ScopeKind; label: string; description: string }[] {
+	return [
+		{ value: 'oneKey', label: 'One key budget', description: 'Budget for a specific key' },
+		{
+			value: 'perKey',
+			label: 'Each key budget',
+			description: scopeDescription(help, 'perKey', 'Budget applied to each key individually')
+		},
+		{
+			value: 'groupBy',
+			label: 'Per api key metadata values',
+			description: scopeDescription(
+				help,
+				'groupBy',
+				'Budget applied to each distinct metadata fields'
+			)
+		},
+		{
+			value: 'selector',
+			label: 'Shared pool',
+			description: scopeDescription(help, 'selector', 'Matching keys split one allowance.')
+		}
+	];
+}
+
+function scopeDescription(
+	help: SchemaHelp,
+	kind: Exclude<ScopeKind, 'oneKey'>,
+	fallback: string
+): string {
+	return help.description(scopeSchemaPath[kind], fallback) ?? fallback;
+}
 
 export function BudgetsPage() {
 	const { config, apiKeys, isLoading, error } = useLlmConfigData();
 	const status = useBudgetStatus();
 	const updateConfig = useUpdateConfig();
+	const help = useSchemaHelp();
 	const [editing, setEditing] = useState<BudgetRow | null>(null);
 	const [deleting, setDeleting] = useState<BudgetRow | null>(null);
 
@@ -206,6 +235,7 @@ export function BudgetsPage() {
 					key={rowKey(editing)}
 					initial={editing}
 					config={config.data}
+					help={help}
 					keys={apiKeys}
 					saving={updateConfig.isPending}
 					onCancel={close}
@@ -418,6 +448,7 @@ function metadataValue(key: VirtualApiKey, field: string) {
 function BudgetEditor(props: {
 	initial: BudgetRow;
 	config?: GatewayConfig;
+	help: SchemaHelp;
 	keys: VirtualApiKey[];
 	saving: boolean;
 	onCancel: () => void;
@@ -504,14 +535,18 @@ function BudgetEditor(props: {
 				</StatusBanner>
 			) : null}
 
-			<Field label="Name" hint="Renaming a budget restarts its usage from zero.">
+			<Field
+				label="Name"
+				hint="Renaming a budget restarts its usage from zero."
+				tooltip={props.help.field<Budget>('Budget', 'name')}
+			>
 				<input value={name} onChange={event => setName(event.target.value)} />
 			</Field>
 
-			<FieldGroup label="Applies to">
+			<FieldGroup label="Applies to" tooltip={props.help.field<Budget>('Budget', 'scope')}>
 				<SegmentedControl
 					value={kind}
-					options={scopeKinds}
+					options={scopeKinds(props.help)}
 					onChange={setKind}
 					ariaLabel="Budget scope"
 				/>
@@ -533,6 +568,7 @@ function BudgetEditor(props: {
 			{kind === 'groupBy' ? (
 				<FieldGroup
 					label="Metadata fields"
+					tooltip={scopeDescription(props.help, 'groupBy', '')}
 					hint={
 						namedFields(fields).length > 1
 							? 'Each distinct combination of these values gets its own allowance. Keys missing any of the fields are not budgeted.'
@@ -576,6 +612,7 @@ function BudgetEditor(props: {
 			{kind === 'selector' ? (
 				<FieldGroup
 					label="Api Key metadata selector"
+					tooltip={scopeDescription(props.help, 'selector', '')}
 					hint="A key joins when its metadata matches every entry. Leave empty to pool every key."
 				>
 					<div className="api-key-budget-list">
@@ -644,7 +681,8 @@ function BudgetEditor(props: {
 
 			<Field
 				label="Limit"
-				hint={unit === 'USD' ? 'Dollars per window.' : 'Whole tokens per window.'}
+				hint={unit === 'USD' ? 'Dollars per window.' : 'Tokens per window.'}
+				tooltip={props.help.field<Budget>('Budget', 'limit')}
 			>
 				<input
 					inputMode="decimal"
@@ -656,11 +694,16 @@ function BudgetEditor(props: {
 			<Field
 				label="Window"
 				hint="For example 1h, 24h, or 30d. Aligned to the Unix epoch, so 24h starts at midnight UTC."
+				tooltip={props.help.field<Budget>('Budget', 'window.rolling')}
 			>
 				<input value={rolling} onChange={event => setRolling(event.target.value)} />
 			</Field>
 
-			<Field label="When exceeded" hint="Applies until the window resets.">
+			<Field
+				label="When exceeded"
+				hint="Applies until the window resets."
+				tooltip={props.help.field<Budget>('Budget', 'onBudgetExceeded')}
+			>
 				<SegmentedControl
 					value={action}
 					options={[

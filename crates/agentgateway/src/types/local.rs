@@ -18,7 +18,6 @@ use secrecy::SecretString;
 use crate::http::auth::jwt_sign::LocalJwtSignAuth;
 use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
-use crate::http::budget::{Budget, validate_budgets};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
@@ -2474,9 +2473,6 @@ struct LocalGatewayPolicy {
 	/// Authenticate incoming requests with API keys.
 	#[serde(default)]
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
-	/// Limit LLM spend or token usage for the API keys authenticated here.
-	#[serde(default)]
-	budgets: Vec<Budget>,
 }
 
 impl From<LocalGatewayPolicy> for FilterOrPolicy {
@@ -2491,7 +2487,6 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			transformations,
 			basic_auth,
 			api_key,
-			budgets,
 		} = val;
 		FilterOrPolicy {
 			oidc,
@@ -2503,7 +2498,6 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			transformations,
 			basic_auth,
 			api_key,
-			budgets,
 			..Default::default()
 		}
 	}
@@ -2520,7 +2514,6 @@ impl LocalGatewayPolicy {
 			&& self.transformations.is_none()
 			&& self.basic_auth.is_none()
 			&& self.api_key.is_none()
-			&& self.budgets.is_empty()
 	}
 }
 
@@ -2992,9 +2985,6 @@ pub struct FilterOrPolicy {
 	/// Inject artificial latency before forwarding requests.
 	#[serde(default)]
 	delay: Option<crate::http::delay::Policy>,
-	/// Budget for api keys based on selectors, groupby or key
-	#[serde(default)]
-	budgets: Vec<Budget>,
 }
 
 #[apply(schema_de!)]
@@ -5237,7 +5227,6 @@ pub(crate) async fn split_policies_for_target(
 		oidc: oidc_config,
 		basic_auth,
 		api_key,
-		budgets,
 		transformations,
 		csrf,
 		ext_authz,
@@ -5376,15 +5365,12 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = api_key {
 		let (budget_policy, database_configured) =
 			budget_policy.ok_or_else(|| Error::msg("API key policies must be attached"))?;
-		validate_budgets(&budgets, "this policy")?;
-		let api_key = p.compile(&budgets)?;
+		let api_key = p.compile()?;
 		budget_policy.register(&api_key, database_configured)?;
 		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(api_key)));
 		route_policies.push(TrafficPolicy::Budget(RequestPolicy::single_arc(
 			budget_policy,
 		)));
-	} else if !budgets.is_empty() {
-		bail!("API key policies must be attached in order to use budgets");
 	}
 	if let Some(p) = transformations {
 		if backend_target {

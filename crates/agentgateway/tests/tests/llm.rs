@@ -1383,6 +1383,13 @@ async fn llm_group_scoped_budget_pools_spend_across_keys() {
 			.unwrap();
 	let policy = json!({
 		"apiKey": {
+		"budgets": [{
+			"name": "team",
+			"scope": {"groupBy": ["group"]},
+			"limit": {"unit": "Tokens", "amount": 40},
+			"window": {"rolling": "1h"},
+			"onBudgetExceeded": "Block"
+		}],
 			"keys": [
 				{"key": "sk-alice", "metadata": {"name": "alice", "group": "research"}},
 				{"key": "sk-bob", "metadata": {"name": "bob", "group": "research"}},
@@ -1390,13 +1397,6 @@ async fn llm_group_scoped_budget_pools_spend_across_keys() {
 			],
 			"mode": "strict"
 		},
-		"budgets": [{
-			"name": "team",
-			"scope": {"groupBy": ["group"]},
-			"limit": {"unit": "Tokens", "amount": 40},
-			"window": {"rolling": "1h"},
-			"onBudgetExceeded": "Block"
-		}]
 	});
 
 	let mock = body_mock(include_bytes!(

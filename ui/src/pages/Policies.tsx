@@ -36,7 +36,7 @@ const llmPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
 	{ title: 'Safety', keys: ['guardrails'] as PolicyKey[] },
 	{
 		title: 'Traffic Shaping',
-		keys: ['localRateLimit', 'remoteRateLimit', 'budgets'] as PolicyKey[]
+		keys: ['localRateLimit', 'remoteRateLimit'] as PolicyKey[]
 	},
 	{ title: 'Mutation', keys: ['transformations', 'extProc'] as PolicyKey[] }
 ];
@@ -70,8 +70,7 @@ export function PoliciesPage() {
 			yamlDescription="Read-only view of effective LLM policies, including database-backed resources in hybrid mode."
 			policies={config => config.data?.llm?.policies as Record<string, unknown> | null | undefined}
 			managedLinks={{
-				apiKey: { to: '/llm/keys', summary: 'Managed on Virtual API Keys' },
-				budgets: { to: '/llm/budgets', summary: 'Managed on Budgets' },
+				apiKey: { to: '/llm/keys', summary: 'Managed on Virtual API Keys and Budgets' },
 				guardrails: { to: '/llm/guardrails', summary: 'Managed on Guardrails' }
 			}}
 			onSavePolicy={(next, key, value) => {

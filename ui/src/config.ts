@@ -300,13 +300,17 @@ export function upsertMcpTarget(config: GatewayConfig, target: McpTarget, previo
 }
 
 export function getLlmBudgets(config: GatewayConfig | undefined) {
-	return config?.llm?.policies?.budgets ?? [];
+	return config?.llm?.policies?.apiKey?.budgets ?? [];
 }
 
 export function setLlmBudgets(config: GatewayConfig, budgets: Budget[]) {
-	const policies = ensureLlmPolicies(config);
-	if (budgets.length) policies.budgets = budgets;
-	else delete policies.budgets;
+	// Budgets only apply to authenticated keys, so they live on the API key policy. Clearing them
+	// must not bring that policy into existence: an empty `strict` policy would reject every request.
+	if (!budgets.length) {
+		delete ensureLlmPolicies(config).apiKey?.budgets;
+		return;
+	}
+	getApiKeyPolicy(config).budgets = budgets;
 }
 
 export function getApiKeyPolicy(config: GatewayConfig): LlmApiKeyPolicy {

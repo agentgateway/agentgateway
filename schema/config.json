@@ -2051,13 +2051,6 @@
             }
           ],
           "default": null
-        },
-        "budgets": {
-          "description": "Budget for api keys based on selectors, groupby or key",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Budget"
-          }
         }
       },
       "additionalProperties": false
@@ -6421,6 +6414,13 @@
               "prefix": "Bearer "
             }
           }
+        },
+        "budgets": {
+          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Budget"
+          }
         }
       },
       "additionalProperties": false,
@@ -6591,7 +6591,7 @@
           "const": "perKey"
         },
         {
-          "description": "One counter per distinct value group of this metadata field.",
+          "description": "One counter per distinct combination metadata fields.",
           "type": "object",
           "properties": {
             "groupBy": {
@@ -9666,13 +9666,6 @@
               "type": "null"
             }
           ]
-        },
-        "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Budget"
-          }
         }
       },
       "additionalProperties": false
@@ -11048,13 +11041,6 @@
               "type": "null"
             }
           ]
-        },
-        "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Budget"
-          }
         }
       },
       "additionalProperties": false
@@ -11208,13 +11194,6 @@
               "type": "null"
             }
           ]
-        },
-        "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Budget"
-          }
         }
       },
       "additionalProperties": false
@@ -12312,13 +12291,6 @@
               "type": "null"
             }
           ]
-        },
-        "budgets": {
-          "description": "Limit LLM spend or token usage for the API keys authenticated here.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Budget"
-          }
         },
         "guardrails": {
           "description": "Guardrails to apply to every configured model.",

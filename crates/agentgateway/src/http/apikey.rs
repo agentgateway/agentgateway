@@ -7,7 +7,7 @@ use subtle::ConstantTimeEq;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
-use crate::http::budget::{Budget, MatchedBudgets, resolve_budgets};
+use crate::http::budget::{Budget, MatchedBudgets, resolve_budgets, validate_budgets};
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::{apply, *};
@@ -447,6 +447,10 @@ pub struct LocalAPIKeys {
 	/// Where to read the API key from in incoming requests.
 	#[serde(default)]
 	pub location: AuthorizationLocation,
+
+	/// Limit LLM spend or token usage for the API keys authenticated here.
+	#[serde(default)]
+	pub budgets: Vec<Budget>,
 }
 
 #[apply(schema_de!)]
@@ -518,13 +522,14 @@ impl LocalAPIKey {
 }
 
 impl LocalAPIKeys {
-	pub fn compile(self, policy_budgets: &[Budget]) -> anyhow::Result<APIKeyAuthentication> {
+	pub fn compile(self) -> anyhow::Result<APIKeyAuthentication> {
+		validate_budgets(&self.budgets, "this policy")?;
 		Ok(APIKeyAuthentication {
 			users: Arc::new(
 				self
 					.keys
 					.into_iter()
-					.map(|key| key.into_parts(policy_budgets))
+					.map(|key| key.into_parts(&self.budgets))
 					.collect::<anyhow::Result<_>>()?,
 			),
 			mode: self.mode,
@@ -533,8 +538,6 @@ impl LocalAPIKeys {
 	}
 
 	pub fn into(self) -> APIKeyAuthentication {
-		self
-			.compile(&[])
-			.expect("API key configuration must be valid")
+		self.compile().expect("API key configuration must be valid")
 	}
 }

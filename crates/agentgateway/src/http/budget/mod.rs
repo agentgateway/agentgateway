@@ -151,9 +151,11 @@ pub struct Budget {
 #[derive(Default)]
 pub enum BudgetScope {
 	/// One counter per API key, identified by the key itself.
+	// Per key in budgets under policies.budgets will apply to all the keys
+	// Inline budget policies of apikeys will be under apiKey.keys[x].budgets.
 	#[default]
 	PerKey,
-	/// One counter per distinct value group of this metadata field.
+	/// One counter per distinct combination metadata fields.
 	// Use btreeset because its ordered we construct the budget id from it
 	GroupBy(BTreeSet<String>),
 	/// One counter shared by every key whose metadata matches all of these fields.
@@ -847,7 +849,7 @@ mod tests {
 			}]
 		}))
 		.unwrap();
-		let authentication = keys.compile(&[]).unwrap();
+		let authentication = keys.compile().unwrap();
 		let err = BudgetPolicy::default()
 			.register(&authentication, false)
 			.unwrap_err();
@@ -887,13 +889,11 @@ mod tests {
 			}))
 			.unwrap();
 		let policy = BudgetPolicy::default();
-		policy
-			.register(&current.compile(&[]).unwrap(), true)
-			.unwrap();
+		policy.register(&current.compile().unwrap(), true).unwrap();
 
 		let candidate = policy.registration_policy();
 		candidate
-			.register(&replacement.compile(&[]).unwrap(), true)
+			.register(&replacement.compile().unwrap(), true)
 			.unwrap();
 		assert_eq!(policy.status(None).unwrap().budgets[0].name, "old");
 
@@ -1063,8 +1063,13 @@ CREATE TABLE budget_usage (
 		}
 	}
 
-	fn local_keys(keys: serde_json::Value) -> crate::http::apikey::LocalAPIKeys {
-		serde_json::from_value(keys).unwrap()
+	fn local_keys_and_budgets(
+		keys: serde_json::Value,
+		budgets: Vec<Budget>,
+	) -> crate::http::apikey::LocalAPIKeys {
+		let mut parsed: crate::http::apikey::LocalAPIKeys = serde_json::from_value(keys).unwrap();
+		parsed.budgets = budgets;
+		parsed
 	}
 
 	/// Every counter identifier produced for the compiled keys, so tests can assert which keys were
@@ -1088,14 +1093,17 @@ CREATE TABLE budget_usage (
 			100,
 			BudgetScope::GroupBy(BTreeSet::from(["group".to_string()])),
 		)];
-		let authentication = local_keys(serde_json::json!({
-			"keys": [
-				{"key": "sk-a", "metadata": {"name": "alice", "group": "research"}},
-				{"key": "sk-b", "metadata": {"name": "bob", "group": "research"}},
-				{"key": "sk-c", "metadata": {"name": "carol", "group": "platform"}},
-			]
-		}))
-		.compile(&policy_budgets)
+		let authentication = local_keys_and_budgets(
+			serde_json::json!({
+				"keys": [
+					{"key": "sk-a", "metadata": {"name": "alice", "group": "research"}},
+					{"key": "sk-b", "metadata": {"name": "bob", "group": "research"}},
+					{"key": "sk-c", "metadata": {"name": "carol", "group": "platform"}},
+				]
+			}),
+			policy_budgets,
+		)
+		.compile()
 		.unwrap();
 
 		let ids = counter_ids(&authentication);
@@ -1130,17 +1138,20 @@ CREATE TABLE budget_usage (
 			100,
 			BudgetScope::GroupBy(BTreeSet::from(["region".to_string(), "group".to_string()])),
 		)];
-		let authentication = local_keys(serde_json::json!({
-			"keys": [
-				{"key": "sk-a", "metadata": {"name": "alice", "group": "research", "region": "eu"}},
-				{"key": "sk-b", "metadata": {"name": "bob", "group": "research", "region": "eu"}},
-				// Same group, different region, so not the same counter.
-				{"key": "sk-c", "metadata": {"name": "carol", "group": "research", "region": "us"}},
-				// Same region, different group, likewise.
-				{"key": "sk-d", "metadata": {"name": "dave", "group": "platform", "region": "eu"}},
-			]
-		}))
-		.compile(&policy_budgets)
+		let authentication = local_keys_and_budgets(
+			serde_json::json!({
+				"keys": [
+					{"key": "sk-a", "metadata": {"name": "alice", "group": "research", "region": "eu"}},
+					{"key": "sk-b", "metadata": {"name": "bob", "group": "research", "region": "eu"}},
+					// Same group, different region, so not the same counter.
+					{"key": "sk-c", "metadata": {"name": "carol", "group": "research", "region": "us"}},
+					// Same region, different group, likewise.
+					{"key": "sk-d", "metadata": {"name": "dave", "group": "platform", "region": "eu"}},
+				]
+			}),
+			policy_budgets,
+		)
+		.compile()
 		.unwrap();
 
 		let ids = counter_ids(&authentication);
@@ -1185,14 +1196,17 @@ CREATE TABLE budget_usage (
 			100,
 			BudgetScope::GroupBy(BTreeSet::from(["region".to_string(), "group".to_string()])),
 		)];
-		let authentication = local_keys(serde_json::json!({
-			"keys": [
-				{"key": "sk-a", "metadata": {"name": "alice", "group": "research", "region": "eu"}},
-				{"key": "sk-b", "metadata": {"name": "bob", "group": "research"}},
-				{"key": "sk-c", "metadata": {"name": "carol"}},
-			]
-		}))
-		.compile(&policy_budgets)
+		let authentication = local_keys_and_budgets(
+			serde_json::json!({
+				"keys": [
+					{"key": "sk-a", "metadata": {"name": "alice", "group": "research", "region": "eu"}},
+					{"key": "sk-b", "metadata": {"name": "bob", "group": "research"}},
+					{"key": "sk-c", "metadata": {"name": "carol"}},
+				]
+			}),
+			policy_budgets,
+		)
+		.compile()
 		.unwrap();
 
 		assert_eq!(
@@ -1209,13 +1223,17 @@ CREATE TABLE budget_usage (
 		});
 		let ids = |fields: [&str; 2]| {
 			counter_ids(
-				&local_keys(keys.clone())
-					.compile(&[scoped_budget(
+				&local_keys_and_budgets(
+					keys.clone(),
+					([scoped_budget(
 						"team",
 						100,
 						BudgetScope::GroupBy(fields.iter().map(|f| (*f).to_string()).collect()),
 					)])
-					.unwrap(),
+					.to_vec(),
+				)
+				.compile()
+				.unwrap(),
 			)
 		};
 		assert_eq!(ids(["group", "region"]), ids(["region", "group"]));
@@ -1231,14 +1249,17 @@ CREATE TABLE budget_usage (
 				"research".to_string(),
 			)])),
 		)];
-		let authentication = local_keys(serde_json::json!({
-			"keys": [
-				{"key": "sk-a", "metadata": {"name": "alice", "group": "research"}},
-				{"key": "sk-b", "metadata": {"name": "bob", "group": "research"}},
-				{"key": "sk-c", "metadata": {"name": "carol", "group": "platform"}},
-			]
-		}))
-		.compile(&policy_budgets)
+		let authentication = local_keys_and_budgets(
+			serde_json::json!({
+				"keys": [
+					{"key": "sk-a", "metadata": {"name": "alice", "group": "research"}},
+					{"key": "sk-b", "metadata": {"name": "bob", "group": "research"}},
+					{"key": "sk-c", "metadata": {"name": "carol", "group": "platform"}},
+				]
+			}),
+			policy_budgets,
+		)
+		.compile()
 		.unwrap();
 
 		let ids = counter_ids(&authentication);
@@ -1255,10 +1276,13 @@ CREATE TABLE budget_usage (
 			100,
 			BudgetScope::Selector(HashMap::from([("tier".to_string(), "1".to_string())])),
 		)];
-		let authentication = local_keys(serde_json::json!({
-			"keys": [{"key": "sk-a", "metadata": {"name": "alice", "tier": 1}}]
-		}))
-		.compile(&policy_budgets)
+		let authentication = local_keys_and_budgets(
+			serde_json::json!({
+				"keys": [{"key": "sk-a", "metadata": {"name": "alice", "tier": 1}}]
+			}),
+			policy_budgets,
+		)
+		.compile()
 		.unwrap();
 
 		assert_eq!(counter_ids(&authentication).len(), 1);
@@ -1268,20 +1292,23 @@ CREATE TABLE budget_usage (
 	/// counter, which would otherwise let one silently replace the other's limit.
 	#[test]
 	fn a_policy_budget_cannot_collide_with_an_inline_budget() {
-		let specs = vec![scoped_budget("daily", 100, BudgetScope::PerKey)];
-		let err = local_keys(serde_json::json!({
-			"keys": [{
-				"key": "sk-a",
-				"metadata": {"name": "alice"},
-				"budgets": [{
-					"name": "daily",
-					"limit": {"unit": "Tokens", "amount": 40},
-					"window": {"rolling": "1h"},
-					"onBudgetExceeded": "Block"
+		let budgets = vec![scoped_budget("daily", 100, BudgetScope::PerKey)];
+		let err = local_keys_and_budgets(
+			serde_json::json!({
+				"keys": [{
+					"key": "sk-a",
+					"metadata": {"name": "alice"},
+					"budgets": [{
+						"name": "daily",
+						"limit": {"unit": "Tokens", "amount": 40},
+						"window": {"rolling": "1h"},
+						"onBudgetExceeded": "Block"
+					}]
 				}]
-			}]
-		}))
-		.compile(&specs)
+			}),
+			budgets,
+		)
+		.compile()
 		.unwrap_err();
 
 		assert!(
@@ -1305,25 +1332,38 @@ CREATE TABLE budget_usage (
 		let policy = BudgetPolicy::default();
 		policy
 			.register(
-				&local_keys(keys.clone())
-					.compile(&[scoped_budget(
+				&local_keys_and_budgets(
+					keys.clone(),
+					[scoped_budget(
 						"team",
 						100,
 						BudgetScope::GroupBy(BTreeSet::from(["group".to_string()])),
-					)])
-					.unwrap(),
+					)]
+					.to_vec(),
+				)
+				.compile()
+				.unwrap(),
 				true,
 			)
 			.unwrap();
 
-		let budget_id = counter_ids(&local_keys(keys.clone()).compile(&raised).unwrap())
-			.pop()
-			.unwrap();
+		let budget_id = counter_ids(
+			&local_keys_and_budgets(keys.clone(), raised.clone())
+				.compile()
+				.unwrap(),
+		)
+		.pop()
+		.unwrap();
 		policy.counters.get_mut(&budget_id).unwrap().amount = Decimal::from(30);
 
 		let candidate = policy.registration_policy();
 		candidate
-			.register(&local_keys(keys.clone()).compile(&raised).unwrap(), true)
+			.register(
+				&local_keys_and_budgets(keys.clone(), raised.clone())
+					.compile()
+					.unwrap(),
+				true,
+			)
 			.unwrap();
 		policy.apply_registration(candidate.registration()).unwrap();
 
@@ -1338,7 +1378,10 @@ CREATE TABLE budget_usage (
 		shortened[0].window.rolling = Duration::from_secs(60);
 		let candidate = policy.registration_policy();
 		candidate
-			.register(&local_keys(keys).compile(&shortened).unwrap(), true)
+			.register(
+				&local_keys_and_budgets(keys, shortened).compile().unwrap(),
+				true,
+			)
 			.unwrap();
 		policy.apply_registration(candidate.registration()).unwrap();
 
