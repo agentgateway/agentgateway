@@ -115,21 +115,9 @@ struct ResponseGuardEvaluator {
 	worst_action: GuardrailAction,
 }
 
-fn action_rank(a: GuardrailAction) -> u8 {
-	match a {
-		GuardrailAction::Allow => 0,
-		GuardrailAction::Mask => 1,
-		GuardrailAction::FailOpen => 2,
-		GuardrailAction::Audit => 3,
-		GuardrailAction::Reject => 4,
-	}
-}
-
 impl ResponseGuardEvaluator {
 	fn observe_action(&mut self, action: GuardrailAction) {
-		if action_rank(action) > action_rank(self.worst_action) {
-			self.worst_action = action;
-		}
+		self.worst_action = self.worst_action.max(action);
 	}
 }
 
