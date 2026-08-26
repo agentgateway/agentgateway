@@ -1,5 +1,11 @@
 import type { VirtualApiKey } from '@/types';
 
+export const managedMetadataPrefix = 'agentgateway.dev/';
+
+export function isServerMetadata(field: string) {
+	return field.startsWith(managedMetadataPrefix);
+}
+
 export function maskKey(key: string) {
 	if (key.length <= 10) return key;
 	return `${key.slice(0, 7)}...${key.slice(-4)}`;

@@ -35,7 +35,13 @@ import {
 	Tooltip
 } from '@/components/Primitives';
 import { getApiKeyPolicy, isDatabaseConfigResource, upsertVirtualKey } from '@/config';
-import { hasKeyValue, keyValue, maskKey } from '@/credentialDisplay';
+import {
+	hasKeyValue,
+	isServerMetadata,
+	keyValue,
+	managedMetadataPrefix,
+	maskKey
+} from '@/credentialDisplay';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import {
 	useBudgetStatus,
@@ -57,8 +63,7 @@ import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey, VirtualApiKeyBudget
 
 const fileOwnedPolicyMessage =
 	'This API key policy is file-owned and cannot be modified in hybrid mode.';
-const managedMetadataPrefix = 'agentgateway.dev/';
-const apiKeyIdMetadata = 'agentgateway.dev/id';
+const apiKeyIdMetadata = `${managedMetadataPrefix}id`;
 
 export function KeysPage() {
 	const {
@@ -1321,9 +1326,7 @@ function withoutManagedMetadata(value: Record<string, unknown>) {
 }
 
 function withoutServerMetadata(value: Record<string, unknown>) {
-	return Object.fromEntries(
-		Object.entries(value).filter(([key]) => !key.startsWith(managedMetadataPrefix))
-	);
+	return Object.fromEntries(Object.entries(value).filter(([key]) => !isServerMetadata(key)));
 }
 
 function stringMetadata(value: Record<string, unknown>) {

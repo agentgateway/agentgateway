@@ -20,7 +20,7 @@ import {
 	Tooltip
 } from '@/components/Primitives';
 import { getApiKeyPolicy, getLlmBudgets, setLlmBudgets, upsertVirtualKey } from '@/config';
-import { keyLabel, keyValue } from '@/credentialDisplay';
+import { isServerMetadata, keyLabel, keyValue } from '@/credentialDisplay';
 import type { Budget } from '@/gateway-config';
 import { useBudgetStatus, useLlmConfigData, useUpdateConfig } from '@/hooks';
 import type { GatewayConfig, VirtualApiKey } from '@/types';
@@ -575,7 +575,7 @@ function BudgetEditor(props: {
 
 			{kind === 'selector' ? (
 				<FieldGroup
-					label="Key selector"
+					label="Api Key metadata selector"
 					hint="A key joins when its metadata matches every entry. Leave empty to pool every key."
 				>
 					<div className="api-key-budget-list">
@@ -818,12 +818,12 @@ function counterCountLabel(counters: BudgetStatus[]) {
 	return counters.length ? `${counters.length} active` : 'None yet';
 }
 
-/** Metadata field names present on any configured key, used to suggest scopes. */
 function metadataFields(keys: VirtualApiKey[]) {
 	const fields = new Set<string>();
 	for (const key of keys) {
 		for (const [field, value] of metadataEntries(key)) {
-			if (value !== null && typeof value !== 'object') fields.add(field);
+			if (value !== null && typeof value !== 'object' && !isServerMetadata(field))
+				fields.add(field);
 		}
 	}
 	return [...fields].sort();
