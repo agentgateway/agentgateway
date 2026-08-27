@@ -698,11 +698,21 @@ async fn id_jag_chained_exchange_client_error_is_upstream_failure() {
 	let err = fetch_token(&policy_client(), a, exchange_req("subj", TOKEN_TYPE_ID))
 		.await
 		.unwrap_err();
-	assert!(matches!(err, FetchError::Upstream(_)), "got: {err:?}");
+	assert!(
+		matches!(&err, FetchError::CredentialProvider(_)),
+		"got: {err:?}"
+	);
 	let msg = err.to_string();
 	assert!(msg.contains("chained token exchange returned status 400"));
 	assert!(!msg.contains("invalid_grant"), "got: {msg}");
 	assert!(!msg.contains("issuer not trusted"), "got: {msg}");
+	assert_eq!(
+		err
+			.into_proxy_error()
+			.into_response_with_grpc(false)
+			.status(),
+		::http::StatusCode::BAD_GATEWAY
+	);
 }
 
 #[tokio::test]
@@ -1521,6 +1531,13 @@ async fn rejects_invalid_token_response(
 	.await
 	.unwrap_err();
 	assert!(err.to_string().contains(expected), "got: {err}");
+	assert_eq!(
+		err
+			.into_proxy_error()
+			.into_response_with_grpc(false)
+			.status(),
+		::http::StatusCode::BAD_GATEWAY
+	);
 }
 
 #[rstest]
@@ -1642,12 +1659,15 @@ async fn jwt_bearer_ignores_unexpected_issued_token_type() {
 }
 
 #[rstest]
-#[case(400, true)]
-#[case(401, false)]
-#[case(403, false)]
-#[case(503, false)]
+#[case(400, ::http::StatusCode::BAD_REQUEST)]
+#[case(401, ::http::StatusCode::INTERNAL_SERVER_ERROR)]
+#[case(403, ::http::StatusCode::INTERNAL_SERVER_ERROR)]
+#[case(503, ::http::StatusCode::BAD_GATEWAY)]
 #[tokio::test]
-async fn maps_error_status_by_class(#[case] status: u16, #[case] expect_client_error: bool) {
+async fn maps_token_endpoint_status_to_proxy_status(
+	#[case] status: u16,
+	#[case] expected_proxy_status: ::http::StatusCode,
+) {
 	let response = ResponseTemplate::new(status)
 		.set_body_string(r#"{"error":"invalid_grant","error_description":"provider diagnostic"}"#);
 	let mock = mock_token_endpoint(response).await;
@@ -1660,18 +1680,43 @@ async fn maps_error_status_by_class(#[case] status: u16, #[case] expect_client_e
 	)
 	.await
 	.unwrap_err();
-	if expect_client_error {
-		assert!(
-			matches!(err, FetchError::Client { status: actual, .. } if actual == ::http::StatusCode::from_u16(status).unwrap()),
-			"got: {err:?}"
-		);
-	} else {
-		assert!(matches!(err, FetchError::Upstream(_)), "got: {err:?}");
+	if status != 400 {
 		let msg = err.to_string();
 		assert!(msg.contains(&format!("token exchange returned status {status}")));
 		assert!(!msg.contains("invalid_grant"), "got: {msg}");
 		assert!(!msg.contains("provider diagnostic"), "got: {msg}");
 	}
+	assert_eq!(
+		err
+			.into_proxy_error()
+			.into_response_with_grpc(false)
+			.status(),
+		expected_proxy_status
+	);
+}
+
+#[tokio::test]
+async fn invalid_token_endpoint_backend_is_local_failure() {
+	let a = auth(Arc::new(SimpleBackendReference::Invalid));
+	let err = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("subj", TOKEN_TYPE_ACCESS),
+	)
+	.await
+	.unwrap_err();
+	let FetchError::Local(source) = &err else {
+		panic!("expected local failure, got: {err:?}");
+	};
+	assert!(source.downcast_ref::<ProxyError>().is_some());
+
+	assert_eq!(
+		err
+			.into_proxy_error()
+			.into_response_with_grpc(false)
+			.status(),
+		::http::StatusCode::INTERNAL_SERVER_ERROR
+	);
 }
 
 #[tokio::test]
