@@ -1276,6 +1276,29 @@ async fn bedrock_blocked_rejection_prefers_custom_body() {
 	assert!(!body.contains("HATE"));
 }
 
+/// A configured status (or headers) counts as a static rejection response, so the default body is left untouched.
+#[tokio::test]
+async fn bedrock_blocked_rejection_skips_when_status_configured() {
+	use http_body_util::BodyExt as _;
+	let resp = bedrock_intervened(
+		&["Sorry, I can't help with that."],
+		serde_json::json!([{
+			"contentPolicy": {"filters": [{"action": "BLOCKED", "type": "HATE", "confidence": "HIGH"}]}
+		}]),
+	);
+	let rejection = RequestRejection {
+		status: StatusCode::BAD_REQUEST,
+		..RequestRejection::default()
+	};
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(resp, 1, &rejection, &bedrock_test_config());
+	let GuardrailOutcome::Rejected(response) = outcome else {
+		panic!("expected GuardrailOutcome::Rejected");
+	};
+	assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(body, default_body());
+}
+
 /// A block with no derivable category falls back to the default body, not a bare "Blocked by guardrail:".
 #[tokio::test]
 async fn bedrock_blocked_rejection_falls_back_to_default_body() {

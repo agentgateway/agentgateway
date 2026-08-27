@@ -1169,9 +1169,13 @@ impl Policy {
 		}
 		// If no custom rejection content then we replace with content from bedrock
 		// Must be done early enough so as to have assessments accessible.
-		let categories = (!masked && resp.is_blocked() && rejection.body == default_body())
-			.then(|| resp.blocked_categories())
-			.filter(|cats| !cats.is_empty());
+		let categories = (!masked
+			&& resp.is_blocked()
+			&& rejection.body == default_body()
+			&& rejection.status == default_code()
+			&& rejection.headers.is_none())
+		.then(|| resp.blocked_categories())
+		.filter(|cats| !cats.is_empty());
 		let detail = resp.build_detail(guardrails);
 		let outcome = if masked {
 			GuardrailOutcome::Masked(TextReplacements::replace_all(resp.into_output_texts()))
