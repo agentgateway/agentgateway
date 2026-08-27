@@ -235,6 +235,7 @@ impl TCPProxy {
 					transport,
 					tcp: backend_call.backend_policies.tcp.clone(),
 					max_connection_duration: None,
+					max_connection_duration_jitter: None,
 				},
 			})
 			.await?;

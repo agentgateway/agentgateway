@@ -2293,6 +2293,7 @@ fn backend_policy_from_proto(
 				},
 				request_timeout: bhttp.request_timeout.map(convert_duration),
 				max_connection_duration: bhttp.max_connection_duration.map(convert_duration),
+				max_connection_duration_jitter: bhttp.max_connection_duration_jitter.map(convert_duration),
 			})
 		},
 		Some(bps::Kind::BackendTcp(btcp)) => BackendTrafficPolicy::TCP(backend::TCP {
@@ -3346,6 +3347,7 @@ fn frontend_policy_from_proto(
 			http2_keepalive_interval: h.http2_keepalive_interval.map(convert_duration),
 			http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
 			max_connection_duration: h.max_connection_duration.map(convert_duration),
+			max_connection_duration_jitter: h.max_connection_duration_jitter.map(convert_duration),
 			max_concurrent_requests: h
 				.max_concurrent_requests
 				.and_then(std::num::NonZeroU32::new),

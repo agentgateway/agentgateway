@@ -28,6 +28,15 @@ pub struct HTTP {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub max_connection_duration: Option<Duration>,
+	/// Maximum random reduction applied per-connection to `maxConnectionDuration`, so connections
+	/// established together do not all redial at the same instant. Unset means no jitter.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub max_connection_duration_jitter: Option<Duration>,
 }
 
 impl HTTP {

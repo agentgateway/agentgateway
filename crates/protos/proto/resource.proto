@@ -751,6 +751,7 @@ message FrontendPolicySpec {
     // Maximum number of in-flight HTTP requests across this bind. This includes
     // HTTP/1 requests and HTTP/2 streams. Unset means unlimited.
     optional uint32 max_concurrent_requests = 12;
+    google.protobuf.Duration max_connection_duration_jitter = 13;
   }
   message TLS {
     // TLS handshake timeout
@@ -1623,6 +1624,7 @@ message BackendPolicySpec {
     HttpVersion version = 1;
     google.protobuf.Duration request_timeout = 2;
     google.protobuf.Duration max_connection_duration = 3;
+    google.protobuf.Duration max_connection_duration_jitter = 4;
   }
   message BackendTunnel {
     enum Mode {
