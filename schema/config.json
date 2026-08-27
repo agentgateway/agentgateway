@@ -4521,7 +4521,7 @@
           ]
         },
         "maxConnectionDuration": {
-          "description": "Maximum time a connection to the backend may stay open. A connection past this duration is\nnot reused for new requests; a fresh connection is established instead, while in-flight\nrequests are not interrupted. Useful for even traffic distribution and DNS freshness when\nbackends change over time.",
+          "description": "Maximum time a connection to the backend may stay open. A connection past this duration is\nnot reused for new requests; a fresh connection is established instead, while in-flight\nrequests are not interrupted.",
           "type": [
             "string",
             "null"
