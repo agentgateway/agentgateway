@@ -866,8 +866,7 @@ impl HTTPProxy {
 		.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "gateway policies", &req);
 
-		Self::detect_misdirected(log, &bind, &req, &selected_listener)
-			.snapshot_on_err(log, &mut req)?;
+		Self::detect_misdirected(&bind, &req, &selected_listener).snapshot_on_err(log, &mut req)?;
 
 		let selected_route_chain =
 			select_route_chain(&inputs, self.target_address, &selected_listener, &req)
@@ -1353,7 +1352,6 @@ impl HTTPProxy {
 	}
 
 	fn detect_misdirected(
-		_log: &RequestLog,
 		bind: &BindSnapshot,
 		req: &Request,
 		selected_listener: &Listener,
