@@ -366,7 +366,7 @@ costs:
 ```bash
 export RUN_LIVE_PROVIDER_TESTS=true
 export OPENAI_MODEL=gpt-4o-mini
-export ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+export ANTHROPIC_MODEL=claude-haiku-4-5
 ./verify.sh
 ```
 
@@ -399,7 +399,7 @@ kubectl exec -n netbird-agent-network deployment/netbird-example-client \
   -H 'Content-Type: application/json' \
   --data-binary "${openai_body}" | jq
 
-export ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+export ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5}
 anthropic_body=$(jq -cn --arg model "${ANTHROPIC_MODEL}" '{
   model: $model,
   max_tokens: 16,
@@ -463,6 +463,11 @@ NetBird meters requests using the model name and pricing catalog it sends to
 the proxy. Recognized upstream model IDs use NetBird catalog defaults. Custom
 agentgateway aliases require explicit NetBird model rows and rates. An unknown
 alias remains routable but records `unknown_model` with zero cost.
+
+The example uses Anthropic's `claude-haiku-4-5` alias because it matches a
+NetBird catalog entry. A pinned snapshot such as
+`claude-haiku-4-5-20251001` remains routable, but requires an explicit NetBird
+model row and rates for cost accounting.
 
 A single static NetBird price cannot exactly represent a dynamic alias that
 load-balances among differently priced models. Use direct model names or an

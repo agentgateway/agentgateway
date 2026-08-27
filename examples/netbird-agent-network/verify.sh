@@ -5,7 +5,7 @@ NAMESPACE=netbird-agent-network
 AGENTGATEWAY_NAMESPACE=netbird-agent-network
 RUN_LIVE_PROVIDER_TESTS=${RUN_LIVE_PROVIDER_TESTS:-false}
 OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5}
 
 for command in curl jq kubectl; do
   if ! command -v "${command}" >/dev/null 2>&1; then
