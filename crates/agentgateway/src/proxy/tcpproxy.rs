@@ -234,6 +234,7 @@ impl TCPProxy {
 				connection: client::ConnectionConfig {
 					transport,
 					tcp: backend_call.backend_policies.tcp.clone(),
+					max_connection_duration: None,
 				},
 			})
 			.await?;

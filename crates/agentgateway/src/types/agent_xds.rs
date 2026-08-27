@@ -2292,6 +2292,7 @@ fn backend_policy_from_proto(
 					HttpVersion::Http2 => Some(::http::Version::HTTP_2),
 				},
 				request_timeout: bhttp.request_timeout.map(convert_duration),
+				max_connection_duration: bhttp.max_connection_duration.map(convert_duration),
 			})
 		},
 		Some(bps::Kind::BackendTcp(btcp)) => BackendTrafficPolicy::TCP(backend::TCP {

@@ -1622,6 +1622,7 @@ message BackendPolicySpec {
     }
     HttpVersion version = 1;
     google.protobuf.Duration request_timeout = 2;
+    google.protobuf.Duration max_connection_duration = 3;
   }
   message BackendTunnel {
     enum Mode {

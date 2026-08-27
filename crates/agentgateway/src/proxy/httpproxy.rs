@@ -1248,6 +1248,7 @@ impl HTTPProxy {
 				client::ConnectionConfig {
 					transport,
 					tcp: backend_call.backend_policies.tcp.clone(),
+					max_connection_duration: None,
 				},
 			)
 			.await?;
@@ -1788,6 +1789,7 @@ pub async fn build_transport(
 			connection: Box::new(client::ConnectionConfig {
 				transport,
 				tcp: call.backend_policies.tcp.clone(),
+				max_connection_duration: None,
 			}),
 			target: call.target.clone(),
 			token,
@@ -2845,6 +2847,11 @@ async fn make_backend_call(
 		connection: client::ConnectionConfig {
 			transport,
 			tcp: backend_call.backend_policies.tcp.clone(),
+			max_connection_duration: backend_call
+				.backend_policies
+				.http
+				.as_ref()
+				.and_then(|h| h.max_connection_duration),
 		},
 	};
 	let span_target = backend_call.span_target;

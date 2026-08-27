@@ -216,6 +216,7 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 pub struct ConnectionConfig {
 	pub transport: Transport,
 	pub tcp: Option<types::backend::TCP>,
+	pub max_connection_duration: Option<Duration>,
 }
 
 impl From<Transport> for ConnectionConfig {
@@ -223,6 +224,7 @@ impl From<Transport> for ConnectionConfig {
 		Self {
 			transport,
 			tcp: None,
+			max_connection_duration: None,
 		}
 	}
 }
@@ -319,7 +321,11 @@ impl Connector {
 		connection: ConnectionConfig,
 		http: bool,
 	) -> Result<Socket, http::Error> {
-		let ConnectionConfig { transport, tcp } = connection;
+		let ConnectionConfig {
+			transport,
+			tcp,
+			max_connection_duration,
+		} = connection;
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 		let tls = match transport.application() {
@@ -444,6 +450,12 @@ impl Connector {
 
 			"connected"
 		);
+
+		if let Some(max_age) = max_connection_duration {
+			socket
+				.ext_mut()
+				.insert(stream::ConnectionDeadline(connect_start + max_age));
+		}
 
 		socket.with_logging(LoggingMode::Upstream);
 		Ok(socket)
@@ -808,6 +820,42 @@ mod tests {
 				"tunnel protocol {tp:?} should map to no source role",
 			);
 		}
+	}
+
+	#[tokio::test]
+	async fn max_connection_duration_sets_pool_deadline_on_connect() {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		tokio::spawn(async move { while listener.accept().await.is_ok() {} });
+
+		let client = Client::new(
+			&Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			None,
+		);
+
+		let max_age = Duration::from_secs(60);
+		let before = std::time::Instant::now();
+		let socket = client
+			.connect_raw(
+				Target::Address(addr),
+				ConnectionConfig {
+					transport: Transport::Plain(ApplicationTransport::Plaintext),
+					tcp: None,
+					max_connection_duration: Some(max_age),
+				},
+			)
+			.await
+			.expect("connect to loopback listener");
+		let deadline = agent_pool::connect::Connection::connected(&socket)
+			.get_valid_until()
+			.expect("deadline should be set");
+		assert!(deadline >= before + max_age);
+		assert!(deadline <= std::time::Instant::now() + max_age);
 	}
 
 	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback

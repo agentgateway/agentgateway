@@ -129,6 +129,10 @@ impl Connection for Socket {
 #[derive(Debug, Clone, Default)]
 pub struct HttpProxy;
 
+/// Deadline after which the connection pool will not reuse this connection for new requests.
+#[derive(Debug, Clone, Copy)]
+pub struct ConnectionDeadline(pub Instant);
+
 impl agent_pool::connect::Connection for Socket {
 	fn connected(&self) -> agent_pool::connect::Connected {
 		let mut con = agent_pool::connect::Connected::new();
@@ -143,6 +147,9 @@ impl agent_pool::connect::Connection for Socket {
 			Some(Alpn::H2) => con = con.negotiated_h2(),
 			Some(Alpn::Http11) => con = con.negotiated_h1(),
 			_ => {},
+		}
+		if let Some(ConnectionDeadline(deadline)) = self.ext.get::<ConnectionDeadline>() {
+			con = con.valid_until(*deadline);
 		}
 		con
 	}
