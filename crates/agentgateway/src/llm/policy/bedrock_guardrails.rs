@@ -120,6 +120,77 @@ impl ApplyGuardrailResponse {
 			_ => false,
 		}
 	}
+
+	/// Deduplicated BLOCKED categories for the caller
+	pub fn blocked_categories(&self) -> Vec<String> {
+		/// `type` values of the BLOCKED entries under `assessment[policy][list]`.
+		fn blocked_types<'a>(
+			assessment: &'a serde_json::Value,
+			policy: &str,
+			list: &str,
+		) -> impl Iterator<Item = &'a str> {
+			assessment
+				.get(policy)
+				.and_then(|p| p.get(list))
+				.and_then(|l| l.as_array())
+				.into_iter()
+				.flatten()
+				.filter(|e| e.get("action").and_then(|a| a.as_str()) == Some("BLOCKED"))
+				.filter_map(|e| e.get("type").and_then(|t| t.as_str()))
+		}
+		/// Whether any entry under `assessment[policy][list]` is BLOCKED.
+		fn any_blocked(assessment: &serde_json::Value, policy: &str, list: &str) -> bool {
+			assessment
+				.get(policy)
+				.and_then(|p| p.get(list))
+				.and_then(|l| l.as_array())
+				.is_some_and(|entries| {
+					entries
+						.iter()
+						.any(|e| e.get("action").and_then(|a| a.as_str()) == Some("BLOCKED"))
+				})
+		}
+
+		let mut categories: Vec<String> = Vec::new();
+		let mut push = |cat: String| {
+			if !categories.contains(&cat) {
+				categories.push(cat);
+			}
+		};
+		for assessment in &self.assessments {
+			if !Self::value_contains_action(assessment, "BLOCKED") {
+				continue;
+			}
+			// Well known AWS fields for response
+			// https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html
+			for ty in blocked_types(assessment, "contentPolicy", "filters")
+				.chain(blocked_types(
+					assessment,
+					"sensitiveInformationPolicy",
+					"piiEntities",
+				))
+				.chain(blocked_types(
+					assessment,
+					"contextualGroundingPolicy",
+					"filters",
+				))
+				.chain(blocked_types(assessment, "wordPolicy", "managedWordLists"))
+			{
+				push(ty.to_owned());
+			}
+			// Operator-authored or content-bearing — collapse to a generic marker.
+			if any_blocked(assessment, "topicPolicy", "topics") {
+				push("topic".to_owned());
+			}
+			if any_blocked(assessment, "wordPolicy", "customWords") {
+				push("word".to_owned());
+			}
+			if any_blocked(assessment, "sensitiveInformationPolicy", "regexes") {
+				push("regex".to_owned());
+			}
+		}
+		categories
+	}
 }
 
 /// Assessment keys that are safe to log. Top-level keys are policy names (fixed

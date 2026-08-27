@@ -918,6 +918,129 @@ mod bedrock_guardrails_tests {
 		assert!(!response.is_anonymized());
 		assert!(response.is_intervened());
 	}
+
+	#[test]
+	fn bedrock_blocked_categories_content_policy() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "blocked"}],
+			"assessments": [{
+				"contentPolicy": {
+					"filters": [
+						{"action": "BLOCKED", "type": "HATE", "confidence": "HIGH"},
+						{"action": "BLOCKED", "type": "VIOLENCE", "confidence": "MEDIUM"}
+					]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(response.is_blocked());
+		assert_eq!(response.blocked_categories(), vec!["HATE", "VIOLENCE"]);
+	}
+
+	#[test]
+	fn bedrock_blocked_categories_topic_is_generic_marker() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "blocked"}],
+			"assessments": [{
+				"topicPolicy": {
+					"topics": [
+						{"action": "BLOCKED", "name": "Finance", "type": "DENY"},
+						{"action": "BLOCKED", "name": "Weapons", "type": "DENY"}
+					]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(response.is_blocked());
+		// Operator-authored topic names must never leak to the caller.
+		assert_eq!(response.blocked_categories(), vec!["topic"]);
+	}
+
+	/// Grounding filters and managed word lists surface verbatim; custom words and named regexes collapse to markers.
+	#[test]
+	fn bedrock_blocked_categories_word_grounding_and_regex() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "blocked"}],
+			"assessments": [{
+				"contextualGroundingPolicy": {
+					"filters": [{"action": "BLOCKED", "type": "GROUNDING", "score": 0.1}]
+				},
+				"wordPolicy": {
+					"managedWordLists": [{"action": "BLOCKED", "type": "PROFANITY", "match": "$#!%"}],
+					"customWords": [{"action": "BLOCKED", "match": "projectxyz"}]
+				},
+				"sensitiveInformationPolicy": {
+					"regexes": [{"action": "BLOCKED", "name": "internal-ticket", "match": "T-4242"}]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(response.is_blocked());
+		let cats = response.blocked_categories();
+		assert!(cats.contains(&"GROUNDING".to_string()));
+		assert!(cats.contains(&"PROFANITY".to_string()));
+		assert!(cats.contains(&"word".to_string()));
+		assert!(cats.contains(&"regex".to_string()));
+		// The operator-authored word, regex name, and matched text must not leak.
+		let joined = cats.join(",");
+		assert!(!joined.contains("projectxyz"));
+		assert!(!joined.contains("internal-ticket"));
+		assert!(!joined.contains("T-4242"));
+	}
+
+	#[test]
+	fn bedrock_blocked_categories_mixed_policies_dedup() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "blocked"}],
+			"assessments": [
+				{"contentPolicy": {"filters": [{"action": "BLOCKED", "type": "HATE", "confidence": "HIGH"}]}},
+				{"topicPolicy": {"topics": [{"action": "BLOCKED", "name": "Politics", "type": "DENY"}]}},
+				{"sensitiveInformationPolicy": {"piiEntities": [{"action": "BLOCKED", "type": "SSN"}]}}
+			]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(response.is_blocked());
+		let cats = response.blocked_categories();
+		assert!(cats.contains(&"HATE".to_string()));
+		assert!(cats.contains(&"topic".to_string()));
+		assert!(cats.contains(&"SSN".to_string()));
+		assert!(!cats.iter().any(|t| t.contains("Politics")));
+	}
+
+	#[test]
+	fn bedrock_blocked_categories_empty_when_not_blocked() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "masked"}],
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{"action": "ANONYMIZED", "match": "John", "type": "NAME"}]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(!response.is_blocked());
+		assert!(response.blocked_categories().is_empty());
+	}
+
+	/// A BLOCKED action under a policy we don't extract from counts as blocked but yields no categories.
+	#[test]
+	fn bedrock_blocked_categories_empty_for_unhandled_policy() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "blocked"}],
+			"assessments": [{
+				"futurePolicy": {"items": [{"action": "BLOCKED"}]}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert!(response.is_blocked());
+		assert!(response.blocked_categories().is_empty());
+	}
 }
 
 /// Build an intervened ApplyGuardrail response from output texts and assessments JSON.
@@ -1094,6 +1217,86 @@ fn bedrock_blocked_intervention_with_canned_output_rejects() {
 		&bedrock_test_config(),
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+}
+
+/// A default rejection body is replaced with the sanitized block categories.
+#[tokio::test]
+async fn bedrock_blocked_rejection_body_includes_categories() {
+	use http_body_util::BodyExt as _;
+	let resp = bedrock_intervened(
+		&["Sorry, I can't help with that."],
+		serde_json::json!([{
+			"contentPolicy": {
+				"filters": [
+					{"action": "BLOCKED", "type": "HATE", "confidence": "HIGH"},
+					{"action": "BLOCKED", "type": "VIOLENCE", "confidence": "MEDIUM"}
+				]
+			}
+		}]),
+	);
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		resp,
+		1,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	let GuardrailOutcome::Rejected(response) = outcome else {
+		panic!("expected GuardrailOutcome::Rejected");
+	};
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	let body = std::str::from_utf8(&body).unwrap();
+	assert!(body.contains("Blocked by guardrail"));
+	assert!(body.contains("HATE"));
+	assert!(body.contains("VIOLENCE"));
+}
+
+/// A configured (non-default) rejection body wins over the derived categories.
+#[tokio::test]
+async fn bedrock_blocked_rejection_prefers_custom_body() {
+	use http_body_util::BodyExt as _;
+	let resp = bedrock_intervened(
+		&["Sorry, I can't help with that."],
+		serde_json::json!([{
+			"contentPolicy": {
+				"filters": [{"action": "BLOCKED", "type": "HATE", "confidence": "HIGH"}]
+			}
+		}]),
+	);
+	let rejection = RequestRejection {
+		body: Bytes::from_static(b"Denied by policy."),
+		..RequestRejection::default()
+	};
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(resp, 1, &rejection, &bedrock_test_config());
+	let GuardrailOutcome::Rejected(response) = outcome else {
+		panic!("expected GuardrailOutcome::Rejected");
+	};
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	let body = std::str::from_utf8(&body).unwrap();
+	assert_eq!(body, "Denied by policy.");
+	assert!(!body.contains("HATE"));
+}
+
+/// A block with no derivable category falls back to the default body, not a bare "Blocked by guardrail:".
+#[tokio::test]
+async fn bedrock_blocked_rejection_falls_back_to_default_body() {
+	use http_body_util::BodyExt as _;
+	let resp = bedrock_intervened(
+		&["Sorry, I can't help with that."],
+		serde_json::json!([{"futurePolicy": {"items": [{"action": "BLOCKED"}]}}]),
+	);
+	assert!(resp.is_blocked());
+	assert!(resp.blocked_categories().is_empty());
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		resp,
+		1,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	let GuardrailOutcome::Rejected(response) = outcome else {
+		panic!("expected GuardrailOutcome::Rejected");
+	};
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(body, default_body());
 }
 
 /// Automated reasoning findings carry no `action` field; even when the output count

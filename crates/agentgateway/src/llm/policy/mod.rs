@@ -1167,11 +1167,21 @@ impl Policy {
 				"Bedrock guardrail masked output count mismatch; rejecting content"
 			);
 		}
+		// If no custom rejection content then we replace with content from bedrock
+		// Must be done early enough so as to have assessments accessible.
+		let categories = (!masked && resp.is_blocked() && rejection.body == default_body())
+			.then(|| resp.blocked_categories())
+			.filter(|cats| !cats.is_empty());
 		let detail = resp.build_detail(guardrails);
 		let outcome = if masked {
 			GuardrailOutcome::Masked(TextReplacements::replace_all(resp.into_output_texts()))
 		} else {
-			GuardrailOutcome::Rejected(rejection.as_response())
+			let mut response = rejection.as_response();
+			if let Some(cats) = categories {
+				*response.body_mut() =
+					http::Body::from(format!("Blocked by guardrail: {}", cats.join(", ")));
+			}
+			GuardrailOutcome::Rejected(response)
 		};
 		(outcome, Some(detail))
 	}
