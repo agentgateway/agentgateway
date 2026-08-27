@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use agent_core::strng;
 use bytes::Bytes;
@@ -279,6 +280,8 @@ fn error_status_map_redacts_provider_data(#[case] status: u16, #[case] expected_
 #[case::priority_tier(json!({"service_tier": "priority"}))]
 #[case::reasoning_context(json!({"reasoning": {"context": "all_turns"}}))]
 #[case::extended_prompt_cache(json!({"prompt_cache_retention": "24h"}))]
+#[case::top_logprobs(json!({"top_logprobs": 5}))]
+#[case::stream_obfuscation(json!({"stream_options": {"include_obfuscation": true}}))]
 #[case::verbosity_low(json!({"text": {"verbosity": "low"}}))]
 #[case::verbosity_medium(json!({"text": {"verbosity": "medium"}}))]
 #[case::verbosity_high(json!({"text": {"verbosity": "high"}}))]
@@ -397,6 +400,27 @@ async fn upstream_body_error_emits_one_safe_error() {
 		1024 * 1024,
 		State::default(),
 		StreamingUsageGuard::default(),
+	)
+	.await;
+
+	assert_one_safe_error(&events);
+}
+
+#[tokio::test]
+async fn upstream_error_event_emits_one_safe_error() {
+	let events = collect_stream(
+		vec![sse_event(
+			"error",
+			json!({
+				"type": "error",
+				"error": {
+					"type": "invalid_request_error",
+					"message": "SENSITIVE_UPSTREAM_ERROR"
+				}
+			}),
+		)],
+		1024 * 1024,
+		State::default(),
 	)
 	.await;
 
@@ -534,6 +558,138 @@ fn buffered_pause_turn_is_rejected() {
 	);
 
 	assert!(translate_response(&body, &State::default(), 1024 * 1024).is_err());
+}
+
+#[test]
+fn buffered_refusal_is_a_completed_refusal() {
+	let body = Bytes::from(
+		serde_json::to_vec(&json!({
+			"id": "msg_1",
+			"type": "message",
+			"role": "assistant",
+			"model": "upstream-model",
+			"content": [{"type": "text", "text": "I cannot help with that."}],
+			"stop_reason": "refusal",
+			"stop_sequence": null,
+			"usage": {"input_tokens": 1, "output_tokens": 6}
+		}))
+		.expect("valid response"),
+	);
+
+	let response =
+		translate_response(&body, &State::default(), 1024 * 1024).expect("refusal should translate");
+	let value = serde_json::to_value(response).expect("serializable response");
+
+	assert_eq!(value["status"], "completed");
+	assert_eq!(value["output"][0]["status"], "completed");
+	assert_eq!(value["output"][0]["content"][0]["type"], "refusal");
+	assert_eq!(
+		value["output"][0]["content"][0]["refusal"],
+		"I cannot help with that."
+	);
+}
+
+#[tokio::test]
+async fn streaming_text_is_emitted_before_the_terminal_event() {
+	let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+	let upstream =
+		axum_core::body::Body::from_stream(stream::poll_fn(move |cx| receiver.poll_recv(cx)));
+	let mut downstream = translate_stream(
+		upstream,
+		1024 * 1024,
+		StreamingUsageGuard::default(),
+		"request-model",
+		LogContentFields::default(),
+		State::default(),
+	);
+	sender
+		.send(Ok::<_, Infallible>(Bytes::from(format!(
+			"{}{}{}",
+			message_start(1),
+			sse_event(
+				"content_block_start",
+				json!({
+					"type": "content_block_start",
+					"index": 0,
+					"content_block": {"type": "text", "text": ""}
+				})
+			),
+			sse_event(
+				"content_block_delta",
+				json!({
+					"type": "content_block_delta",
+					"index": 0,
+					"delta": {"type": "text_delta", "text": "hello"}
+				})
+			)
+		))))
+		.expect("upstream receiver should remain open");
+
+	tokio::time::timeout(Duration::from_secs(1), async {
+		loop {
+			let frame = downstream
+				.frame()
+				.await
+				.expect("downstream should remain open")
+				.expect("downstream frame should be valid");
+			let data = frame.into_data().expect("SSE frame should contain data");
+			if String::from_utf8_lossy(&data).contains("response.output_text.delta") {
+				break;
+			}
+		}
+	})
+	.await
+	.expect("text delta should be emitted before the terminal event");
+}
+
+#[tokio::test]
+async fn streaming_refusal_completes_as_output_text() {
+	let mut frames = vec![
+		message_start(1),
+		sse_event(
+			"content_block_start",
+			json!({
+				"type": "content_block_start",
+				"index": 0,
+				"content_block": {"type": "text", "text": ""}
+			}),
+		),
+		sse_event(
+			"content_block_delta",
+			json!({
+				"type": "content_block_delta",
+				"index": 0,
+				"delta": {"type": "text_delta", "text": "I cannot help with that."}
+			}),
+		),
+		sse_event(
+			"content_block_stop",
+			json!({"type": "content_block_stop", "index": 0}),
+		),
+	];
+	frames.extend(terminal("refusal", 6));
+
+	let events = collect_stream(frames, 1024 * 1024, State::default()).await;
+
+	assert!(
+		events
+			.iter()
+			.any(|event| event["type"] == "response.output_text.delta")
+	);
+	assert!(!events.iter().any(|event| event["type"] == "error"));
+	let completed = events
+		.iter()
+		.find(|event| event["type"] == "response.completed")
+		.expect("completed response");
+	assert_eq!(
+		completed["response"]["output"][0]["content"][0],
+		json!({
+			"type": "output_text",
+			"annotations": [],
+			"logprobs": null,
+			"text": "I cannot help with that."
+		})
+	);
 }
 
 #[test]

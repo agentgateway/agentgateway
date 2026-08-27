@@ -1542,25 +1542,17 @@ pub mod from_messages {
 		let pending_tool_config = if let Some(tools) = req.tools {
 			let mut bedrock_tools = Vec::with_capacity(tools.len());
 			for tool in tools {
-				let (name, description, input_schema, cache_control) = match tool {
-					messages::Tool::Custom(tool) => (
-						tool.name,
-						tool.description,
-						tool.input_schema,
-						tool.cache_control,
-					),
-					messages::Tool::Server(tool) => {
-						tracing::debug!("Unsupported server tool in Bedrock conversion: {:?}", tool);
-						continue;
-					},
+				let messages::Tool::Custom(tool) = tool else {
+					tracing::debug!("Unsupported server tool in Bedrock conversion: {:?}", tool);
+					continue;
 				};
 				bedrock_tools.push((
 					bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
-						name: tool_name_map.register(&name),
-						description,
-						input_schema: Some(bedrock::ToolInputSchema::Json(input_schema)),
+						name: tool_name_map.register(&tool.name),
+						description: tool.description,
+						input_schema: Some(bedrock::ToolInputSchema::Json(tool.input_schema)),
 					}),
-					cache_control.is_some(),
+					tool.cache_control.is_some(),
 				));
 			}
 

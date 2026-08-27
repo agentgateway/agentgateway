@@ -116,6 +116,23 @@ fn validate_typed_request(req: &responses::CreateResponse) -> Result<(), AIError
 			"Responses background mode is unsupported"
 		)));
 	}
+	if req
+		.stream_options
+		.as_ref()
+		.is_some_and(|options| options.include_obfuscation == Some(true))
+	{
+		return Err(AIError::UnsupportedConversion(strng::literal!(
+			"Responses stream obfuscation is unsupported"
+		)));
+	}
+	if req
+		.top_logprobs
+		.is_some_and(|top_logprobs| top_logprobs > 0)
+	{
+		return Err(AIError::UnsupportedConversion(strng::literal!(
+			"Responses top_logprobs is unsupported"
+		)));
+	}
 	if matches!(
 		req.prompt_cache_retention,
 		Some(responses::PromptCacheRetention::Hours24)
@@ -1012,6 +1029,7 @@ pub fn translate_response(
 		response.content,
 		output_status,
 		message_phase(stop_reason),
+		matches!(stop_reason, messages::StopReason::Refusal),
 		state,
 		buffer_limit,
 	)?;
@@ -1063,11 +1081,12 @@ fn terminal_status(
 	match stop_reason {
 		messages::StopReason::EndTurn
 		| messages::StopReason::StopSequence
-		| messages::StopReason::ToolUse => Some(("completed", None)),
+		| messages::StopReason::ToolUse
+		| messages::StopReason::Refusal => Some(("completed", None)),
 		messages::StopReason::MaxTokens | messages::StopReason::ModelContextWindowExceeded => {
 			Some(("incomplete", Some("max_output_tokens")))
 		},
-		messages::StopReason::Refusal | messages::StopReason::PauseTurn => None,
+		messages::StopReason::PauseTurn => None,
 	}
 }
 
@@ -1145,6 +1164,7 @@ fn response_output(
 	content: Vec<messages::ContentBlock>,
 	status: responses::OutputStatus,
 	phase: responses::MessagePhase,
+	refusal: bool,
 	state: &State,
 	buffer_limit: usize,
 ) -> Result<Vec<responses::OutputItem>, AIError> {
@@ -1154,13 +1174,15 @@ fn response_output(
 	for (index, block) in content.into_iter().enumerate() {
 		if let messages::ContentBlock::Text(text) = block {
 			let (_, parts) = pending_text.get_or_insert_with(|| (index, Vec::new()));
-			parts.push(responses::OutputMessageContent::OutputText(
-				responses::OutputTextContent {
+			parts.push(if refusal {
+				responses::OutputMessageContent::Refusal(responses::RefusalContent { refusal: text.text })
+			} else {
+				responses::OutputMessageContent::OutputText(responses::OutputTextContent {
 					annotations: Vec::new(),
 					logprobs: None,
 					text: text.text,
-				},
-			));
+				})
+			});
 			continue;
 		}
 		// Drop reasoning before flushing so surrounding text stays in one message item.
@@ -1345,7 +1367,6 @@ struct ResponsesStreamState {
 	tool_ids: HashSet<String>,
 	tool_id_bytes: usize,
 	saw_tool: bool,
-	saw_message_delta: bool,
 	terminated: bool,
 	terminal_ready: bool,
 	first_visible_at: Option<Instant>,
@@ -1766,7 +1787,7 @@ pub fn translate_stream(
 					} => {
 						if stream.message_id.is_none()
 							|| stream.active_block.is_some()
-							|| stream.saw_message_delta
+							|| stream.terminal_usage.is_some()
 							|| index != stream.next_block_index
 						{
 							return Err(());
@@ -1883,7 +1904,7 @@ pub fn translate_stream(
 						}
 					},
 					messages::MessagesStreamEvent::ContentBlockDelta { index, delta } => {
-						if stream.saw_message_delta {
+						if stream.terminal_usage.is_some() {
 							return Err(());
 						}
 						let mut block = stream.active_block.take().ok_or(())?;
@@ -2089,19 +2110,18 @@ pub fn translate_stream(
 					messages::MessagesStreamEvent::MessageDelta { delta, usage } => {
 						if stream.message_id.is_none()
 							|| stream.active_block.is_some()
-							|| stream.saw_message_delta
+							|| stream.terminal_usage.is_some()
 							|| delta.stop_reason.is_none()
 						{
 							return Err(());
 						}
-						stream.saw_message_delta = true;
 						stream.stop_reason = delta.stop_reason;
 						stream.stop_sequence = delta.stop_sequence;
 						stream.terminal_usage = Some(usage);
 						Ok(Vec::new())
 					},
 					messages::MessagesStreamEvent::MessageStop => {
-						if !stream.saw_message_delta || stream.active_block.is_some() {
+						if stream.terminal_usage.is_none() || stream.active_block.is_some() {
 							return Err(());
 						}
 						let initial = stream.initial_usage.clone().ok_or(())?;
@@ -2218,6 +2238,7 @@ pub fn translate_stream(
 						// already being set, so there is nothing to validate here.
 						Ok(Vec::new())
 					},
+					messages::MessagesStreamEvent::Error { .. } => Ok(stream.error_event()),
 				}
 			})();
 			let result = result.and_then(|events| {
