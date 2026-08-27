@@ -946,7 +946,8 @@ impl Gateway {
 		let max_connection_duration = policies
 			.http
 			.as_ref()
-			.and_then(|h| h.max_connection_duration);
+			.and_then(|h| h.max_connection_duration)
+			.map(crate::client::jittered);
 		let max_requests = policies
 			.http
 			.as_ref()
