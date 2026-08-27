@@ -279,8 +279,14 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 	) {
 		return Err(ProxyResponse::Error(err));
 	}
+	// avoid converting errors for non-JSON RPC requests
+	// best effort; worst case scenario we find no request id
+	// at the MCP layer and fallback to the origial HTTP error
+	let path = req.uri().path();
 	if req.method() != ::http::Method::POST
-		|| req.uri().path() == "/sse"
+		|| path == "/sse"
+		|| auth::is_well_known_endpoint(path)
+		|| path.ends_with("client-registration")
 		|| crate::http::is_grpc_request(req)
 	{
 		return Err(ProxyResponse::Error(err));
