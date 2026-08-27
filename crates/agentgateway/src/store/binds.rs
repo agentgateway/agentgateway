@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
@@ -98,7 +98,7 @@ pub struct Store {
 	resources: HashMap<Strng, ResourceKind>,
 
 	policies_by_key: HashMap<PolicyKey, Arc<TargetedPolicy>>,
-	policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
+	policies_by_target: hashbrown::HashMap<PolicyTarget, BTreeSet<PolicyKey>>,
 
 	backends: HashMap<BackendKey, Arc<BackendWithPolicies>>,
 	model_routes: HashMap<RouteKey, (ListenerKey, agent::ModelRoute)>,
@@ -185,9 +185,9 @@ impl FrontendPolices {
 				self.connect.get_or_insert_with(|| p.clone());
 			},
 			FrontendPolicy::AccessLog(p) => {
-				self.access_log.get_or_insert_with(|| p.clone());
-				if let Some(alp) = &p.access_log_policy {
-					self.access_log_otlp.get_or_insert_with(|| alp.clone());
+				if self.access_log.is_none() {
+					self.access_log = Some(p.clone());
+					self.access_log_otlp = p.access_log_policy.clone();
 				}
 			},
 			FrontendPolicy::Tracing(p) => {
@@ -3548,6 +3548,133 @@ mod tests {
 			create_access_log_policy(remove_item),
 			Some(port),
 		);
+	}
+
+	fn logging_policy(json: serde_json::Value) -> FrontendPolicy {
+		let mut pol: LoggingPolicy =
+			serde_json::from_value(json).expect("logging policy should deserialize");
+		pol.init_access_log_policy();
+		FrontendPolicy::AccessLog(pol)
+	}
+
+	/// Stdout-only access log policy: a filter plus one added attribute.
+	fn stdout_access_log_policy() -> FrontendPolicy {
+		logging_policy(serde_json::json!({
+			"filter": "response.code == 503",
+			"add": {"request_body": "request.body"},
+		}))
+	}
+
+	/// OTLP-exporting access log policy with its own added attribute.
+	fn otlp_access_log_policy() -> FrontendPolicy {
+		logging_policy(serde_json::json!({
+			"add": {"probe.const": "\"canary-const\""},
+			"otlp": {
+				"host": "otlp.example.com:4317",
+				"fields": {"add": {"probe.const": "\"canary-const\""}},
+			},
+		}))
+	}
+
+	fn insert_gateway_frontend_policy(
+		store: &mut Store,
+		listener: &ListenerName,
+		name: &str,
+		policy: FrontendPolicy,
+	) {
+		insert_policy_at_level(store, listener, name, false, policy, None);
+	}
+
+	fn resolve_two_gateway_access_log_policies(order_swapped: bool) -> FrontendPolices {
+		let listener = listener();
+		let mut store = Store::default();
+		let (first, second) = if order_swapped {
+			("policy-b", "policy-a")
+		} else {
+			("policy-a", "policy-b")
+		};
+		let (first_pol, second_pol) = if order_swapped {
+			(otlp_access_log_policy(), stdout_access_log_policy())
+		} else {
+			(stdout_access_log_policy(), otlp_access_log_policy())
+		};
+		insert_gateway_frontend_policy(&mut store, &listener, first, first_pol);
+		insert_gateway_frontend_policy(&mut store, &listener, second, second_pol);
+		store.listener_frontend_policies(&listener, None, None)
+	}
+
+	fn assert_access_log_policy_is_self_consistent(pol: &FrontendPolices) {
+		let access_log = pol
+			.access_log
+			.as_ref()
+			.expect("an access log policy should be selected");
+		match (&access_log.access_log_policy, &pol.access_log_otlp) {
+			(None, None) => {},
+			(Some(selected), Some(exporter)) => assert!(
+				Arc::ptr_eq(selected, exporter),
+				"the OTLP exporter must come from the selected access log policy",
+			),
+			(None, Some(_)) => panic!("an OTLP exporter was taken from a different policy"),
+			(Some(_), None) => panic!("the selected policy's OTLP exporter was dropped"),
+		}
+	}
+
+	/// Selecting one access log policy must select its exporter as part of the same unit.
+	#[test]
+	fn frontend_access_log_selection_does_not_split_across_policies() {
+		let stdout = stdout_access_log_policy();
+		let otlp = otlp_access_log_policy();
+
+		let mut stdout_selected = FrontendPolices::default();
+		stdout_selected.set_if_empty(&stdout);
+		stdout_selected.set_if_empty(&otlp);
+		assert_access_log_policy_is_self_consistent(&stdout_selected);
+		assert!(
+			stdout_selected
+				.access_log
+				.as_ref()
+				.unwrap()
+				.filter
+				.is_some()
+		);
+
+		let mut otlp_selected = FrontendPolices::default();
+		otlp_selected.set_if_empty(&otlp);
+		otlp_selected.set_if_empty(&stdout);
+		assert_access_log_policy_is_self_consistent(&otlp_selected);
+		assert!(
+			otlp_selected
+				.access_log
+				.as_ref()
+				.unwrap()
+				.add
+				.contains_key("probe.const")
+		);
+	}
+
+	/// The stable policy key breaks ties between policies at the same attachment level, regardless
+	/// of insertion order. Conflicting policies select one winner rather than merge; the conflict
+	/// should surface through the controller's policy status. The core policy model does not carry
+	/// Kubernetes creation timestamps.
+	#[test]
+	fn frontend_access_log_selection_is_deterministic() {
+		for attempt in 0..64 {
+			for order_swapped in [false, true] {
+				let pol = resolve_two_gateway_access_log_policies(order_swapped);
+				let access_log = pol
+					.access_log
+					.as_ref()
+					.expect("an access log policy should be selected");
+				assert!(
+					access_log.filter.is_some() && access_log.add.contains_key("request_body"),
+					"attempt {attempt}: policy-a should win independent of insertion order",
+				);
+				assert!(
+					!access_log.add.contains_key("probe.const"),
+					"attempt {attempt}: conflicting access log policies must not merge",
+				);
+			}
+		}
 	}
 
 	#[test]
