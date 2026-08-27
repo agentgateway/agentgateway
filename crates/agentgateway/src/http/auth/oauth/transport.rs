@@ -253,7 +253,8 @@ fn classify_token_endpoint_call_error(error: ProxyError) -> FetchError {
 			| ProxyError::ProcessingString(_)
 			| ProxyError::BackendAuthenticationFailed(BackendAuthError::Local(_))
 	);
-	let source = anyhow::Error::new(error).context("token exchange request failed");
+	let detail = format!("token exchange request failed: {error}");
+	let source = anyhow::Error::new(error).context(detail);
 	if is_local_configuration_error {
 		FetchError::Local(source)
 	} else {
