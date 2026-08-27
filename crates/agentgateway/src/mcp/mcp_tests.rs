@@ -1465,6 +1465,54 @@ async fn task_methods_respect_mcp_authorization_deny_policy() {
 	assert_eq!(get["error"]["message"], "Unknown task: task-abc");
 }
 
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: tasks/get is allowed, tasks/cancel for the exact same task is
+/// denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_tasks_get_denies_tasks_cancel() {
+	let mock = mock_task_streamable_http_server().await;
+	let get_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "tasks/get""#).unwrap(),
+		)],
+	)));
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		false,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(get_only_policy)],
+	)
+	.await;
+
+	let get = modern_request(
+		io,
+		1,
+		"tasks/get",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(
+		get["result"]["status"], "completed",
+		"expected tasks/get to be allowed, got: {get}"
+	);
+
+	let cancel = modern_request(
+		io,
+		2,
+		"tasks/cancel",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(
+		cancel["error"]["code"], -32602,
+		"expected tasks/cancel to be denied for a tasks/get-only policy, got: {cancel}"
+	);
+}
+
 #[tokio::test]
 async fn legacy_multiplex_invalid_target_keeps_internal_error() {
 	let first = mock_streamable_http_server(true).await;
@@ -2649,6 +2697,59 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 }
 
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: tools/list is allowed, tools/call for the exact same tool is
+/// denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_list_denies_call() {
+	let mock = mock_streamable_http_server(true).await;
+
+	// Mirrors the shape of a real `action: Require` AgentgatewayPolicy: no allow/deny rules,
+	// so with no allow rules present a passing require defaults to allow (denylist semantics).
+	let list_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "tools/list""#).unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(list_only_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let tools = client
+		.list_tools(None)
+		.await
+		.expect("tools/list should be allowed");
+	assert!(
+		tools.tools.iter().any(|t| t.name == "echo"),
+		"expected the echo tool to be listed, got: {:?}",
+		tools.tools
+	);
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await;
+	assert!(
+		result.is_err(),
+		"expected tools/call to be denied for a tools/list-only policy"
+	);
+}
+
 #[tokio::test]
 async fn stateful_session_cannot_cross_mcp_backends() {
 	let sensitive = mock_streamable_http_server(true).await;
@@ -2784,6 +2885,49 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 	}
 }
 
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: prompts/list is allowed, prompts/get is denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_prompts_list_denies_prompts_get() {
+	let mock = mock_streamable_http_server(true).await;
+
+	let list_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "prompts/list""#).unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(list_only_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let prompts = client
+		.list_prompts(None)
+		.await
+		.expect("prompts/list should be allowed");
+	assert!(
+		prompts.prompts.iter().any(|p| p.name == "example_prompt"),
+		"expected example_prompt to be listed, got: {:?}",
+		prompts.prompts
+	);
+
+	let result = client
+		.get_prompt(rmcp::model::GetPromptRequestParams::new("example_prompt"))
+		.await;
+	assert!(
+		result.is_err(),
+		"expected prompts/get to be denied for a prompts/list-only policy"
+	);
+}
+
 /// Test that reading a resource denied by MCP authorization policy returns proper JSON-RPC error
 /// with INVALID_PARAMS error code (-32602) and message "Unknown resource: {resource_uri}"
 #[tokio::test]
@@ -2839,6 +2983,54 @@ async fn authorization_denied_returns_unknown_resource_error() {
 		},
 		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
 	}
+}
+
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: resources/list is allowed, resources/read is denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_resources_list_denies_resources_read() {
+	let mock = mock_streamable_http_server(true).await;
+
+	let list_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "resources/list""#).unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(list_only_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let resources = client
+		.list_resources(None)
+		.await
+		.expect("resources/list should be allowed");
+	assert!(
+		resources
+			.resources
+			.iter()
+			.any(|r| r.uri == "memo://insights"),
+		"expected memo://insights to be listed, got: {:?}",
+		resources.resources
+	);
+
+	let result = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"memo://insights",
+		))
+		.await;
+	assert!(
+		result.is_err(),
+		"expected resources/read to be denied for a resources/list-only policy"
+	);
 }
 
 #[tokio::test]

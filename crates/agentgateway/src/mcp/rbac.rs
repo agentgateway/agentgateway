@@ -48,12 +48,13 @@ impl McpAuthorizationSet {
 		Self(self.0.merge(other.0))
 	}
 
-	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
+	pub fn validate(&self, res: &ResourceType, method_name: &str, cel: &CelExecWrapper) -> bool {
 		if !self.0.has_rules() {
 			return true;
 		}
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
-		let mcp = crate::mcp::MCPInfo::from(res);
+		let mut mcp = crate::mcp::MCPInfo::from(res);
+		mcp.method_name = Some(method_name.to_string());
 		let exec = crate::cel::Executor::new_mcp_request(cel.0.as_ref(), &mcp);
 		self.0.validate(&exec)
 	}
@@ -177,12 +178,20 @@ mod tests {
 		let res = tool_resource("server", "increment");
 
 		let no_rule_sets = McpAuthorizationSet::new(RuleSets::from(vec![]));
-		assert!(no_rule_sets.validate(&res, &CelExecWrapper::new(req_without_claims())));
+		assert!(no_rule_sets.validate(
+			&res,
+			"tools/call",
+			&CelExecWrapper::new(req_without_claims())
+		));
 
 		let empty_rule_set = McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(
 			PolicySet::new(vec![], vec![], vec![]),
 		)]));
-		assert!(empty_rule_set.validate(&res, &CelExecWrapper::new(req_without_claims())));
+		assert!(empty_rule_set.validate(
+			&res,
+			"tools/call",
+			&CelExecWrapper::new(req_without_claims())
+		));
 	}
 
 	#[test]
@@ -206,14 +215,19 @@ mod tests {
 			.merge(with_authz(authorization_set("true")))
 			.mcp_authorization
 			.unwrap();
-		assert!(!merged.validate(&res, &cel));
+		assert!(!merged.validate(&res, "tools/call", &cel));
 
 		// A policy on only one side passes through
 		for merged in [
 			with_authz(deny_all()).merge(Default::default()),
 			crate::store::BackendPolicies::default().merge(with_authz(deny_all())),
 		] {
-			assert!(!merged.mcp_authorization.unwrap().validate(&res, &cel));
+			assert!(
+				!merged
+					.mcp_authorization
+					.unwrap()
+					.validate(&res, "tools/call", &cel)
+			);
 		}
 	}
 
@@ -223,7 +237,7 @@ mod tests {
 		let req = req_with_claims(json!({ "sub": "1234567890" }));
 		let res = tool_resource("server", "increment");
 
-		assert!(authz.validate(&res, &CelExecWrapper::new(req)));
+		assert!(authz.validate(&res, "tools/call", &CelExecWrapper::new(req)));
 	}
 
 	#[test]
@@ -232,7 +246,7 @@ mod tests {
 		let req = req_with_claims(json!({ "user": { "role": "viewer" } }));
 		let res = tool_resource("server", "increment");
 
-		assert!(!authz.validate(&res, &CelExecWrapper::new(req)));
+		assert!(!authz.validate(&res, "tools/call", &CelExecWrapper::new(req)));
 	}
 
 	#[test]
@@ -241,6 +255,17 @@ mod tests {
 		let req = req_without_claims();
 		let res = tool_resource("server", "increment");
 
-		assert!(!authz.validate(&res, &CelExecWrapper::new(req)));
+		assert!(!authz.validate(&res, "tools/call", &CelExecWrapper::new(req)));
+	}
+
+	#[test]
+	fn test_mcp_authorization_method_name_distinguishes_list_from_call() {
+		let authz = authorization_set(r#"mcp.methodName == "tools/list""#);
+		let req = req_without_claims();
+		let res = tool_resource("server", "increment");
+		let cel = CelExecWrapper::new(req);
+
+		assert!(authz.validate(&res, "tools/list", &cel));
+		assert!(!authz.validate(&res, "tools/call", &cel));
 	}
 }

@@ -184,6 +184,7 @@ impl Session {
 	async fn authorize_prompt_request<'a, 'b: 'a>(
 		&'a self,
 		name: &'b str,
+		method: &str,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 		ctx: &IncomingRequestContext,
@@ -200,6 +201,7 @@ impl Session {
 				service_name.to_string(),
 				prompt.to_string(),
 			)),
+			method,
 			cel,
 		) {
 			return Err(UpstreamError::Authorization {
@@ -214,6 +216,7 @@ impl Session {
 		&self,
 		service_name: &str,
 		uri: &str,
+		method: &str,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 	) -> Result<(), UpstreamError> {
@@ -225,6 +228,7 @@ impl Session {
 				service_name.to_string(),
 				uri.to_string(),
 			)),
+			method,
 			cel,
 		) {
 			return Err(UpstreamError::Authorization {
@@ -240,6 +244,7 @@ impl Session {
 		&self,
 		service_name: &str,
 		task_id: &str,
+		method: &str,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 	) -> Result<(), UpstreamError> {
@@ -251,6 +256,7 @@ impl Session {
 				service_name.to_string(),
 				task_id.to_string(),
 			)),
+			method,
 			cel,
 		) {
 			return Err(UpstreamError::Authorization {
@@ -281,7 +287,7 @@ impl Session {
 			.maybe_run_guardrails_call_request(backend, method, params, ctx)
 			.await?;
 		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
-		if self.relay.policies.validate(&res, &cel) {
+		if self.relay.policies.validate(&res, method, &cel) {
 			Ok(())
 		} else {
 			Err(UpstreamError::Authorization {
@@ -528,7 +534,7 @@ impl Session {
 							.unwrap_or_default()
 						{
 							let (service_name, upstream_uri) = self.relay.parse_resource_uri(uri)?;
-							self.authorize_resource_request(service_name, &upstream_uri, &log, &cel)?;
+							self.authorize_resource_request(service_name, &upstream_uri, &method, &log, &cel)?;
 							resource_subs.push(ResourceSubscription {
 								owner: service_name.to_string(),
 								client_uri: uri.clone(),
@@ -643,14 +649,14 @@ impl Session {
 					ClientRequest::SubscribeRequest(sr) => {
 						let uri = sr.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(service_name, &original_uri, &log, &cel)?;
+						self.authorize_resource_request(service_name, &original_uri, &method, &log, &cel)?;
 						sr.params.uri = original_uri;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UnsubscribeRequest(ur) => {
 						let uri = ur.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(service_name, &original_uri, &log, &cel)?;
+						self.authorize_resource_request(service_name, &original_uri, &method, &log, &cel)?;
 						ur.params.uri = original_uri;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
@@ -658,21 +664,21 @@ impl Session {
 					ClientRequest::GetTaskRequest(gtr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &gtr.params.task_id)?;
-						self.authorize_task_request(service_name, &original_id, &log, &cel)?;
+						self.authorize_task_request(service_name, &original_id, &method, &log, &cel)?;
 						gtr.params.task_id = original_id;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UpdateTaskRequest(utr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &utr.params.task_id)?;
-						self.authorize_task_request(service_name, &original_id, &log, &cel)?;
+						self.authorize_task_request(service_name, &original_id, &method, &log, &cel)?;
 						utr.params.task_id = original_id;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CancelTaskRequest(ctr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &ctr.params.task_id)?;
-						self.authorize_task_request(service_name, &original_id, &log, &cel)?;
+						self.authorize_task_request(service_name, &original_id, &method, &log, &cel)?;
 						ctr.params.task_id = original_id;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
@@ -690,14 +696,14 @@ impl Session {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
 							let (service_name, prompt_name) =
-								Box::pin(self.authorize_prompt_request(&name, &log, &cel, &ctx)).await?;
+								Box::pin(self.authorize_prompt_request(&name, &method, &log, &cel, &ctx)).await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
 							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},
 						Reference::Resource(resource) => {
 							let uri = resource.uri.clone();
 							let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-							self.authorize_resource_request(service_name, &original_uri, &log, &cel)?;
+							self.authorize_resource_request(service_name, &original_uri, &method, &log, &cel)?;
 							cr.params.r#ref = Reference::for_resource(original_uri);
 							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 						},

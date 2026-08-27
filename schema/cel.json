@@ -928,7 +928,7 @@
       "additionalProperties": false
     },
     "mcp": {
-      "description": "`mcp` contains attributes about the MCP request.\nRequest-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.\nPost-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.",
+      "description": "`mcp` contains attributes about the MCP request.\nRequest-time CEL includes identity fields (`tool`, `prompt`, `resource`,\n`task`) plus `methodName`. Post-request CEL may also include fields like\n`sessionId` and tool payloads.",
       "type": [
         "object",
         "null"

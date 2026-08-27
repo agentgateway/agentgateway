@@ -2164,8 +2164,9 @@ pub struct ExecutorSerde {
 	pub destination: Option<DestinationContext>,
 
 	/// `mcp` contains attributes about the MCP request.
-	/// Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.
-	/// Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.
+	/// Request-time CEL includes identity fields (`tool`, `prompt`, `resource`,
+	/// `task`) plus `methodName`. Post-request CEL may also include fields like
+	/// `sessionId` and tool payloads.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<MCPInfo>,
 
