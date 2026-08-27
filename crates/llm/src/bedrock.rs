@@ -94,8 +94,7 @@ impl Provider {
 		use BedrockEndpointPreference::*;
 
 		use crate::model_catalog::tags;
-		let effective = self.model.as_deref().or(model_id);
-		let has = |tag| effective.is_some_and(|m| catalog.is_some_and(|c| c.model_has_tag(m, tag)));
+		let has = |tag| model_id.is_some_and(|m| catalog.is_some_and(|c| c.model_has_tag(m, tag)));
 		match self.endpoint_preference {
 			RuntimeOnly => Runtime,
 			MantleOnly => Mantle,
@@ -136,8 +135,7 @@ impl Provider {
 					ChatFormat::AnthropicMessages,
 					ChatFormat::OpenAIResponses,
 				];
-				let effective = self.model.as_deref().or(request_model);
-				if let Some(tags) = effective.and_then(|m| catalog.and_then(|c| c.get_model_tags(m))) {
+				if let Some(tags) = request_model.and_then(|m| catalog.and_then(|c| c.get_model_tags(m))) {
 					let declared: Vec<ChatFormat> = NATIVE
 						.into_iter()
 						.filter(|f| tags.contains(f.tag()))

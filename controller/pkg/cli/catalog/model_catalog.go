@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -11,6 +12,78 @@ import (
 
 type ModelCatalog struct {
 	Providers map[string]Provider `json:"providers"`
+}
+
+// mergeFrom deep-merges overlay into c (mirrors the proxy's Catalog::override_with): insert absent
+// models, fill only empty rate fields, replace tiers when overlay has them, and union tags. This
+// lets one source contribute rates (models.dev) and another contribute tags (aws-bedrock-mantle).
+func (c *ModelCatalog) mergeFrom(overlay *ModelCatalog) {
+	if overlay == nil {
+		return
+	}
+	if c.Providers == nil {
+		c.Providers = map[string]Provider{}
+	}
+	for pid, op := range overlay.Providers {
+		bp, ok := c.Providers[pid]
+		if !ok {
+			bp = Provider{Models: map[string]Model{}}
+		}
+		if bp.Models == nil {
+			bp.Models = map[string]Model{}
+		}
+		for mid, om := range op.Models {
+			bp.Models[mid] = mergeModel(bp.Models[mid], om)
+		}
+		c.Providers[pid] = bp
+	}
+}
+
+// mergeModel overlays om onto base (see mergeFrom); a zero-value base yields om unchanged.
+func mergeModel(base, om Model) Model {
+	base.Rates = base.Rates.overlay(om.Rates)
+	if len(om.Tiers) > 0 {
+		base.Tiers = om.Tiers
+	}
+	base.Tags = unionTags(base.Tags, om.Tags)
+	return base
+}
+
+// overlay fills each empty field of r from o.
+func (r Rates) overlay(o Rates) Rates {
+	fill := func(dst *Money, src Money) {
+		if *dst == "" {
+			*dst = src
+		}
+	}
+	fill(&r.Input, o.Input)
+	fill(&r.Output, o.Output)
+	fill(&r.CacheRead, o.CacheRead)
+	fill(&r.CacheWrite, o.CacheWrite)
+	fill(&r.Reasoning, o.Reasoning)
+	fill(&r.InputAudio, o.InputAudio)
+	fill(&r.OutputAudio, o.OutputAudio)
+	return r
+}
+
+// unionTags returns the sorted, de-duplicated union of a and b (nil if both are empty).
+func unionTags(a, b []string) []string {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(a)+len(b))
+	for _, t := range a {
+		set[t] = true
+	}
+	for _, t := range b {
+		set[t] = true
+	}
+	out := make([]string, 0, len(set))
+	for t := range set {
+		out = append(out, t)
+	}
+	slices.Sort(out)
+	return out
 }
 
 func (c *ModelCatalog) Validate() error {

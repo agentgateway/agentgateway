@@ -16,13 +16,16 @@ func TestParseMDAvailabilityReturnsServedCardHrefs(t *testing.T) {
 | [Jamba 1.5 Large](model-card-ai21-labs-jamba-1-5-large.md) | ![](http://docs.aws.amazon.com/bedrock/latest/userguide/images/icons/icon-no.png) | ![](http://docs.aws.amazon.com/bedrock/latest/userguide/images/icons/icon-yes.png) |
 | [Jamba 1.5 Mini](model-card-ai21-labs-jamba-1-5-mini.md) | ![](http://docs.aws.amazon.com/bedrock/latest/userguide/images/icons/icon-yes.png) | ![](http://docs.aws.amazon.com/bedrock/latest/userguide/images/icons/icon-yes.png) | `
 
-	hrefs, warns := awsMDParseAvailability(strings.NewReader(page))
+	rows, warns := awsMDParseAvailability(strings.NewReader(page))
 	if len(warns) != 0 {
 		t.Fatalf("unexpected warnings: %v", warns)
 	}
-	want := []string{"model-card-ai21-labs-jamba-1-5-large.md", "model-card-ai21-labs-jamba-1-5-mini.md"}
-	if !slices.Equal(hrefs, want) {
-		t.Fatalf("hrefs = %v, want %v", hrefs, want)
+	want := []availRow{
+		{href: "model-card-ai21-labs-jamba-1-5-large.md", runtime: false, mantle: true},
+		{href: "model-card-ai21-labs-jamba-1-5-mini.md", runtime: true, mantle: true},
+	}
+	if !slices.Equal(rows, want) {
+		t.Fatalf("rows = %v, want %v", rows, want)
 	}
 }
 
@@ -32,9 +35,9 @@ func TestParseMDAvailabilitySkipsHeaderAndSeparator(t *testing.T) {
 | --- | --- | --- |
 | [Nova Pro](model-card-amazon-nova-pro.md) | ![](icon-no.png) | ![](icon-yes.png) | `
 
-	hrefs, _ := awsMDParseAvailability(strings.NewReader(page))
-	if len(hrefs) != 1 || hrefs[0] != "model-card-amazon-nova-pro.md" {
-		t.Fatalf("hrefs = %v, want [model-card-amazon-nova-pro.md]", hrefs)
+	rows, _ := awsMDParseAvailability(strings.NewReader(page))
+	if len(rows) != 1 || rows[0].href != "model-card-amazon-nova-pro.md" || rows[0].runtime || !rows[0].mantle {
+		t.Fatalf("rows = %v, want [{model-card-amazon-nova-pro.md runtime=false mantle=true}]", rows)
 	}
 }
 
@@ -46,7 +49,11 @@ func TestParseMDAvailabilitySkipsUnservedModels(t *testing.T) {
 | [Titan](model-card-amazon-titan-text.md) | ![](icon-yes.png) | ![](icon-no.png) |
 | [Retired](model-card-retired.md) | ![](icon-no.png) | ![](icon-no.png) | `
 
-	hrefs, _ := awsMDParseAvailability(strings.NewReader(page))
+	rows, _ := awsMDParseAvailability(strings.NewReader(page))
+	var hrefs []string
+	for _, r := range rows {
+		hrefs = append(hrefs, r.href)
+	}
 	want := []string{"model-card-anthropic-claude-3-5-sonnet.md", "model-card-amazon-titan-text.md"}
 	if !slices.Equal(hrefs, want) {
 		t.Fatalf("hrefs = %v, want %v", hrefs, want)
@@ -60,7 +67,10 @@ func TestParseMDModelCardTagsPerEndpoint(t *testing.T) {
 | bedrock-runtime | anthropic.claude-opus-4-8 | N/A |
 | bedrock-mantle | anthropic.claude-opus-4-8 | https://bedrock-mantle.{region}.api.aws | `
 
-	got := awsMDParseModelCard(strings.NewReader(page))
+	got, warns := awsMDParseModelCard(strings.NewReader(page))
+	if len(warns) != 0 {
+		t.Fatalf("unexpected warnings: %v", warns)
+	}
 	tags := got["anthropic.claude-opus-4-8"]
 	slices.Sort(tags)
 	want := []string{mantleTag, runtimeTag}
@@ -74,7 +84,7 @@ func TestParseMDModelCardDeduplicates(t *testing.T) {
 	page := `| bedrock-mantle | amazon.nova-pro-v1:0 | N/A |
 | bedrock-mantle | amazon.nova-pro-v1:0 | https://example.com | `
 
-	got := awsMDParseModelCard(strings.NewReader(page))
+	got, _ := awsMDParseModelCard(strings.NewReader(page))
 	if len(got) != 1 || !slices.Equal(got["amazon.nova-pro-v1:0"], []string{mantleTag}) {
 		t.Fatalf("got = %v, want {amazon.nova-pro-v1:0: [mantle]}", got)
 	}
@@ -85,9 +95,66 @@ func TestParseMDModelCardSkipsInvalidIDs(t *testing.T) {
 | bedrock-mantle | --- | N/A |
 | bedrock-mantle | valid.model-id | N/A | `
 
-	got := awsMDParseModelCard(strings.NewReader(page))
+	got, _ := awsMDParseModelCard(strings.NewReader(page))
 	if len(got) != 1 || !slices.Equal(got["valid.model-id"], []string{mantleTag}) {
 		t.Fatalf("got = %v, want {valid.model-id: [mantle]}", got)
+	}
+}
+
+func TestCardSlug(t *testing.T) {
+	if got := cardSlug("model-card-anthropic-claude-opus-4-8.md"); got != "anthropic-claude-opus-4-8" {
+		t.Fatalf("cardSlug = %q", got)
+	}
+}
+
+func TestBedrockModelKeyNormalizesRegionAndVersion(t *testing.T) {
+	// Region prefix, date, and version suffixes are stripped; regional variants share one key.
+	cases := map[string]string{
+		"amazon.nova-pro-v1:0":                        "amazonnovapro",
+		"anthropic.claude-opus-4-8":                   "anthropicclaudeopus48",
+		"us.anthropic.claude-opus-4-8":                "anthropicclaudeopus48",
+		"anthropic.claude-haiku-4-5-20251001-v1:0":    "anthropicclaudehaiku45",
+		"eu.anthropic.claude-haiku-4-5-20251001-v1:0": "anthropicclaudehaiku45",
+		"deepseek.r1-v1:0":                            "deepseekr1",
+		"deepseek.v3.2":                               "deepseekv32",
+		"meta.llama3-1-8b-instruct-v1:0":              "metallama318binstruct",
+	}
+	for id, want := range cases {
+		if got := bedrockModelKey(id); got != want {
+			t.Errorf("bedrockModelKey(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
+func TestBedrockSlugKeyMatchesModelKeyForCleanNames(t *testing.T) {
+	// A card slug and its models.dev ID must normalize to the same key so the card can be skipped.
+	cases := map[string]string{ // slug -> models.dev id
+		"amazon-nova-pro":            "amazon.nova-pro-v1:0",
+		"anthropic-claude-opus-4-8":  "us.anthropic.claude-opus-4-8",
+		"anthropic-claude-haiku-4-5": "anthropic.claude-haiku-4-5-20251001-v1:0",
+		"deepseek-deepseek-r1":       "deepseek.r1-v1:0",               // doubled provider collapses
+		"ai21-labs-jamba-1-5-large":  "ai21.jamba-1-5-large-v1:0",      // "labs" dropped
+		"meta-llama-3-1-8b-instruct": "meta.llama3-1-8b-instruct-v1:0", // dash placement differs
+	}
+	for slug, id := range cases {
+		if bedrockSlugKey(slug) != bedrockModelKey(id) {
+			t.Errorf("slug %q (%q) != id %q (%q)", slug, bedrockSlugKey(slug), id, bedrockModelKey(id))
+		}
+	}
+}
+
+func TestBedrockSlugKeyDoesNotMisMapDistinctModels(t *testing.T) {
+	// Distinct models with similar labels must NOT collide (else they'd get the wrong tags).
+	pairs := [][2]string{
+		{"anthropic-claude-3-haiku", "anthropic.claude-haiku-4-5-20251001-v1:0"},
+		{"amazon-nova-canvas", "amazon.nova-2-lite-v1:0"},
+		{"meta-llama-3-2-11b-instruct", "meta.llama3-3-70b-instruct-v1:0"},
+		{"mistral-ai-mistral-7b-instruct", "mistral.ministral-3-14b-instruct"},
+	}
+	for _, p := range pairs {
+		if bedrockSlugKey(p[0]) == bedrockModelKey(p[1]) {
+			t.Errorf("slug %q must not map to distinct model %q", p[0], p[1])
+		}
 	}
 }
 
