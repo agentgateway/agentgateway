@@ -21,7 +21,7 @@ config:
           model: gpt-4o
         health:
           eviction:
-            consecutiveFailures: 3
+            consecutiveFailures: 4
             duration: 60s
 findings:
   - sourcePath: "model_list[0]"
@@ -29,7 +29,7 @@ findings:
     message: Imported model deployment for gpt-4o
   - sourcePath: router_settings.allowed_fails
     status: approximate
-    message: Mapped LiteLLM allowed_fails to the model health eviction consecutiveFailures threshold; agentgateway counts consecutive failures rather than failures within a window
+    message: Mapped LiteLLM allowed_fails + 1 to the model health eviction consecutiveFailures threshold; agentgateway counts consecutive failures rather than failures within a window
   - sourcePath: router_settings.cooldown_time
     status: approximate
     message: Mapped LiteLLM cooldown_time to the model health eviction duration
