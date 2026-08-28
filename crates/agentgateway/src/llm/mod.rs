@@ -536,6 +536,12 @@ impl ChatTranslation {
 				return Ok(rendered);
 			},
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Copilot(_)) => {
+				let req = match req {
+					types::ChatRequest::Responses(req) => {
+						types::ChatRequest::Responses(copilot::prepare_responses_request(req))
+					},
+					other => other,
+				};
 				let mut rendered = render_anthropic_messages(req, ctx.catalog)?;
 				rendered.body = copilot::prepare_messages_body(rendered.body)?;
 				return Ok(rendered);

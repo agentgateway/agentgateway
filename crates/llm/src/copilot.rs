@@ -105,6 +105,36 @@ pub fn prepare_messages_body(body: Vec<u8>) -> Result<Vec<u8>, AIError> {
 	serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
 }
 
+/// Drops the cache-only hosted-search declaration that Copilot treats as a no-op.
+pub fn prepare_responses_request(
+	mut request: crate::types::responses::Request,
+) -> crate::types::responses::Request {
+	let automatic_tool_choice = request
+		.rest
+		.get("tool_choice")
+		.is_none_or(|choice| choice.as_str() == Some("auto"));
+	let removed_all_tools = if automatic_tool_choice
+		&& let Some(tools) = request
+			.rest
+			.get_mut("tools")
+			.and_then(serde_json::Value::as_array_mut)
+	{
+		let had_tools = !tools.is_empty();
+		let cache_only_search = serde_json::json!({
+			"type": "web_search",
+			"external_web_access": false,
+		});
+		tools.retain(|tool| tool != &cache_only_search);
+		had_tools && tools.is_empty()
+	} else {
+		false
+	};
+	if removed_all_tools && let Some(rest) = request.rest.as_object_mut() {
+		rest.remove("tool_choice");
+	}
+	request
+}
+
 pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
 		RouteType::Messages => "/v1/messages",
@@ -158,6 +188,23 @@ mod tests {
 	const CLAUDE_CODE_BETA_HEADER: &str =
 		"claude-code-20250219,advisor-tool-2026-03-01,effort-2025-11-24";
 
+	fn responses_request(
+		tools: Value,
+		tool_choice: Option<Value>,
+	) -> crate::types::responses::Request {
+		let mut request = json!({"input": "say hi", "tools": tools});
+		if let Some(tool_choice) = tool_choice {
+			request["tool_choice"] = tool_choice;
+		}
+		serde_json::from_value(request).expect("Responses request")
+	}
+
+	fn response_tools(request: &crate::types::responses::Request) -> &[Value] {
+		request.rest["tools"]
+			.as_array()
+			.expect("Responses tools array")
+	}
+
 	#[test]
 	fn messages_header_policy_sets_version_and_filters_only_unsupported_entries() {
 		let mut headers = HeaderMap::new();
@@ -208,5 +255,89 @@ mod tests {
 
 		assert!(prepared.get("context_management").is_none());
 		assert_eq!(prepared["some_future_anthropic_field"], "preserved");
+	}
+
+	#[test]
+	fn responses_policy_removes_orphaned_automatic_tool_choice() {
+		let request = responses_request(
+			json!([{"type": "web_search", "external_web_access": false}]),
+			Some(json!("auto")),
+		);
+
+		let prepared = prepare_responses_request(request);
+
+		assert!(response_tools(&prepared).is_empty());
+		assert!(prepared.rest.get("tool_choice").is_none());
+	}
+
+	#[test]
+	fn responses_policy_removes_only_cache_only_search_for_automatic_choice() {
+		for tool_choice in [None, Some(json!("auto"))] {
+			let request = responses_request(
+				json!([
+					{"type": "function", "name": "web_search", "parameters": {"type": "object"}},
+					{"type": "web_search", "external_web_access": false},
+					{"type": "function", "name": "weather", "parameters": {"type": "object"}}
+				]),
+				tool_choice.clone(),
+			);
+
+			let prepared = prepare_responses_request(request);
+
+			assert_eq!(
+				response_tools(&prepared),
+				json!([
+					{"type": "function", "name": "web_search", "parameters": {"type": "object"}},
+					{"type": "function", "name": "weather", "parameters": {"type": "object"}}
+				])
+				.as_array()
+				.expect("expected tools")
+			);
+			assert_eq!(prepared.rest.get("tool_choice"), tool_choice.as_ref());
+		}
+	}
+
+	#[test]
+	fn responses_policy_preserves_tools_outside_the_safe_case() {
+		let cases = [
+			(
+				json!({"type": "web_search", "external_web_access": true}),
+				None,
+			),
+			(json!({"type": "web_search"}), None),
+			(
+				json!({"type": "web_search", "external_web_access": false, "unexpected": true}),
+				None,
+			),
+			(
+				json!({"type": "web_search", "external_web_access": "false"}),
+				None,
+			),
+			(
+				json!({"type": "file_search", "vector_store_ids": ["vs_1"]}),
+				None,
+			),
+			(
+				json!({"type": "web_search", "external_web_access": false}),
+				Some(json!({"type": "web_search"})),
+			),
+			(
+				json!({"type": "web_search", "external_web_access": false}),
+				Some(json!("required")),
+			),
+			(
+				json!({"type": "web_search", "external_web_access": false}),
+				Some(json!("none")),
+			),
+		];
+
+		for (tool, tool_choice) in cases {
+			let request = responses_request(json!([tool]), tool_choice);
+			let expected = response_tools(&request).to_vec();
+
+			let prepared = prepare_responses_request(request);
+
+			assert_eq!(response_tools(&prepared), expected);
+		}
 	}
 }

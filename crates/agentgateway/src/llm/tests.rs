@@ -657,7 +657,11 @@ async fn copilot_claude_responses_request_uses_messages_route() {
 					"model":"Claude-Sonnet-4-5",
 					"input":"say hi",
 					"max_output_tokens":64,
-					"store":false
+					"store":false,
+					"tools":[
+						{"type":"web_search","external_web_access":false},
+						{"type":"function","name":"get_weather","description":"Get weather","parameters":{"type":"object"}}
+					]
 				}"#
 					.to_vec(),
 			))
@@ -693,7 +697,40 @@ async fn copilot_claude_responses_request_uses_messages_route() {
 			.expect("Copilot request setup");
 		assert_eq!(request.uri().path(), expected_path);
 		assert_eq!(request.headers()["anthropic-version"], "2023-06-01");
+		let body = request.collect().await.unwrap().to_bytes();
+		let body: Value = serde_json::from_slice(&body).expect("forwarded request should be JSON");
+		let tools = body["tools"].as_array().expect("translated tools");
+		assert_eq!(tools.len(), 1);
+		assert_eq!(tools[0]["name"], "get_weather");
 	}
+}
+
+#[test]
+fn cache_only_web_search_policy_is_copilot_only() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let translation = provider
+		.chat_translation(InputFormat::Responses, Some("claude-sonnet-4-5"), None)
+		.expect("Responses-to-Messages translation");
+	let request = serde_json::from_value(json!({
+		"input": "say hi",
+		"tools": [{"type": "web_search", "external_web_access": false}]
+	}))
+	.expect("Responses request");
+
+	let Err(error) = translation.render_request(
+		types::ChatRequest::Responses(request),
+		&ChatRequestContext {
+			provider: &provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+		},
+	) else {
+		panic!("non-Copilot provider must retain generic built-in handling");
+	};
+	assert_eq!(
+		error.to_string(),
+		"unsupported conversion: Responses built-in tools require a separate Anthropic Messages tool mapping"
+	);
 }
 
 #[tokio::test]
