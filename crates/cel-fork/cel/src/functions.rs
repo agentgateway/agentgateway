@@ -1105,6 +1105,7 @@ mod tests {
 			("map", "{1: true, 2: true, 3: true}.contains(3) == true"),
 			("string", "'foobar'.contains('bar') == true"),
 			("bytes", "b'foobar'.contains(b'o') == true"),
+			("function", "contains('foobar', 'bar') == true"),
 		];
 
 		for (name, script) in tests {
