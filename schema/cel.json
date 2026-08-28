@@ -1107,6 +1107,63 @@
       ],
       "additionalProperties": true
     },
+    "guardrails": {
+      "description": "`guardrails` contains one entry per prompt-guard guardrail intervention, in either the\nrequest or response phase. Only present in CEL that runs after the request completes,\nsuch as log and metric fields.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "description": "Records one prompt-guard guardrail intervention.",
+        "type": "object",
+        "properties": {
+          "phase": {
+            "description": "The phase the guardrail intervened in: `request` or `response`.",
+            "type": "string"
+          },
+          "guard": {
+            "description": "The guard kind that intervened, such as `bedrockGuardrails`.",
+            "type": "string"
+          },
+          "action": {
+            "description": "The action the guardrail took (mask/reject/audit/failOpen).",
+            "type": "string"
+          },
+          "guardrailId": {
+            "description": "The configured guardrail identifier.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "guardrailVersion": {
+            "description": "The configured guardrail version.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "actionReason": {
+            "description": "The reason the guardrail reported for its action.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assessments": {
+            "description": "Assessment detail reported by the guardrail provider, redacted to metadata\nonly. Content-bearing fields (such as the matched text) are never included.",
+            "type": "array",
+            "items": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "guard",
+          "action"
+        ]
+      }
+    },
     "metadata": {
       "description": "`metadata` contains values set by transformation metadata expressions.",
       "type": [

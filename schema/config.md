@@ -109,6 +109,7 @@
 |`config.hbone.poolUnusedReleaseTimeout`|string|Duration after which unused pooled connections are released.|
 |`binds`|[]object|binds defines the low-level API for configuring the proxy.<br>Each bind represents a single port the proxy listens on, as well as the full set of configuration<br>(listeners, routes, backends) for that port.<br>Deprecated; usage of `gateways` and `routes` is recommended instead.|
 |`binds[].port`|integer|Port to bind on. Omit it for an internal wildcard bind (which serves any destination port<br>via in-process routing). A numeric port is required unless `mode` is `internal`.|
+|`binds[].protocol`|enum|Protocol handling for the entire bind. When omitted, it is inferred from the listeners.<br>Possible values: `HTTP`, `TLS`, `TCP`, `AUTO`.|
 |`binds[].listeners`|[]object|Named listeners bound on this port, which may use different protocols and TLS.|
 |`binds[].listeners[].name`|string|Name identifying this listener, referenced by `gateways: gateway-name/listener-name`.|
 |`binds[].listeners[].namespace`|string|Namespace scoping this listener.|
@@ -466,6 +467,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -496,7 +498,7 @@
 |`binds[].listeners[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br>If unset, audience validation is disabled.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
@@ -804,6 +806,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -1079,6 +1082,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -1354,6 +1358,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -1627,6 +1632,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -1938,6 +1944,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -2213,6 +2220,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -2486,6 +2494,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -2808,6 +2817,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -2933,6 +2943,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -3049,6 +3060,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -3123,6 +3135,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -3460,6 +3473,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -3744,6 +3758,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -4110,6 +4125,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -4407,6 +4423,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -4707,6 +4724,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -4994,6 +5012,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -5282,6 +5301,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.substrateIngress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -5298,8 +5318,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`binds[].listeners[].routes[].policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`binds[].listeners[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`binds[].listeners[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`binds[].listeners[].routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`binds[].listeners[].routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`binds[].listeners[].routes[].policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -5566,6 +5585,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.substrateEgress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -5928,6 +5948,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -6140,6 +6161,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -6256,6 +6278,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -6330,6 +6353,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -6396,6 +6420,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -6665,6 +6690,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -6954,6 +6980,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -7263,6 +7290,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -7578,6 +7606,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -7853,6 +7882,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -8128,6 +8158,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -8401,6 +8432,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -8712,6 +8744,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -8987,6 +9020,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -9260,6 +9294,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -9502,6 +9537,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -9618,6 +9654,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -9692,6 +9729,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -9758,6 +9796,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -10027,6 +10066,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -10316,6 +10356,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -10625,6 +10666,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -10940,6 +10982,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -11215,6 +11258,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -11490,6 +11534,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -11763,6 +11808,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -12074,6 +12120,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -12349,6 +12396,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -12622,6 +12670,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -12826,6 +12875,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -12942,6 +12992,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -13016,6 +13067,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -13082,6 +13134,7 @@
 |`binds[].listeners[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -13351,6 +13404,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -13640,6 +13694,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -13949,6 +14004,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -14264,6 +14320,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -14539,6 +14596,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -14814,6 +14872,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -15087,6 +15146,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -15398,6 +15458,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -15673,6 +15734,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -15946,6 +16008,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -16295,6 +16358,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -16613,6 +16677,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -16910,6 +16975,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -17210,6 +17276,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -17497,6 +17564,7 @@
 |`binds[].listeners[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].policies.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`binds[].listeners[].policies.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`binds[].listeners[].policies.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -17616,6 +17684,7 @@
 |`frontendPolicies.http.http2KeepaliveInterval`|string|Interval between HTTP/2 keepalive pings.|
 |`frontendPolicies.http.http2KeepaliveTimeout`|string|Time to wait for an HTTP/2 keepalive ping response.|
 |`frontendPolicies.http.maxConnectionDuration`|string|Maximum time a connection may stay open. After this duration, the connection is gracefully<br>closed after the current in-flight request completes. Useful for even traffic distribution<br>behind load balancers during scaling events.|
+|`frontendPolicies.http.maxConcurrentRequests`|integer|Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests<br>and HTTP/2 streams. Requests over the limit are rejected immediately.|
 |`frontendPolicies.tls`|object|Settings for handling incoming TLS connections.|
 |`frontendPolicies.tls.handshakeTimeout`|string|Maximum time allowed to complete the downstream TLS handshake.|
 |`frontendPolicies.tls.alpn`|array|ALPN protocols advertised to downstream clients.|
@@ -17629,6 +17698,7 @@
 |`frontendPolicies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
 |`frontendPolicies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
 |`frontendPolicies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`frontendPolicies.tcp.maxConnections`|integer|Maximum number of active downstream connections on this bind. Connections over the limit<br>are closed immediately.|
 |`frontendPolicies.networkAuthorization`|object|CEL authorization for downstream network connections.|
 |`frontendPolicies.networkAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`frontendPolicies.networkAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -17894,6 +17964,7 @@
 |`frontendPolicies.networkExtAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.networkExtAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.networkExtAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`frontendPolicies.networkExtAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`frontendPolicies.networkExtAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`frontendPolicies.networkExtAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`frontendPolicies.networkExtAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -18204,6 +18275,7 @@
 |`frontendPolicies.accessLog.otlp.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.accessLog.otlp.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.accessLog.otlp.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`frontendPolicies.accessLog.otlp.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`frontendPolicies.accessLog.otlp.policies.tcp`|object|TCP protocol settings for this backend.|
 |`frontendPolicies.accessLog.otlp.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`frontendPolicies.accessLog.otlp.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -18493,6 +18565,7 @@
 |`frontendPolicies.logging.otlp.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.logging.otlp.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.logging.otlp.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`frontendPolicies.logging.otlp.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`frontendPolicies.logging.otlp.policies.tcp`|object|TCP protocol settings for this backend.|
 |`frontendPolicies.logging.otlp.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`frontendPolicies.logging.otlp.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -18778,6 +18851,7 @@
 |`frontendPolicies.tracing.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.tracing.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.tracing.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`frontendPolicies.tracing.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`frontendPolicies.tracing.policies.tcp`|object|TCP protocol settings for this backend.|
 |`frontendPolicies.tracing.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`frontendPolicies.tracing.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -19150,6 +19224,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -19180,7 +19255,7 @@
 |`policies[].policy.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`policies[].policy.mcpAuthentication`|object|Authenticate MCP clients.|
 |`policies[].policy.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`policies[].policy.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`policies[].policy.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br>If unset, audience validation is disabled.|
 |`policies[].policy.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`policies[].policy.mcpAuthentication.provider.auth0`|object||
 |`policies[].policy.mcpAuthentication.provider.keycloak`|object||
@@ -19488,6 +19563,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -19763,6 +19839,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -20038,6 +20115,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -20311,6 +20389,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -20622,6 +20701,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -20897,6 +20977,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -21170,6 +21251,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -21492,6 +21574,7 @@
 |`policies[].policy.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -21617,6 +21700,7 @@
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -21733,6 +21817,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -21807,6 +21892,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -22144,6 +22230,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -22428,6 +22515,7 @@
 |`policies[].policy.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.remoteRateLimit.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.remoteRateLimit.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -22794,6 +22882,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -23091,6 +23180,7 @@
 |`policies[].policy.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -23391,6 +23481,7 @@
 |`policies[].policy.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -23678,6 +23769,7 @@
 |`policies[].policy.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -23966,6 +24058,7 @@
 |`policies[].policy.substrateIngress.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.substrateIngress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.substrateIngress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.substrateIngress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.substrateIngress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.substrateIngress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.substrateIngress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -23982,8 +24075,7 @@
 |`policies[].policy.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`policies[].policy.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`policies[].policy.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`policies[].policy.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`policies[].policy.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`policies[].policy.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`policies[].policy.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`policies[].policy.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -24250,6 +24342,7 @@
 |`policies[].policy.substrateEgress.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.substrateEgress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.substrateEgress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.substrateEgress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`policies[].policy.substrateEgress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`policies[].policy.substrateEgress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`policies[].policy.substrateEgress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -24610,6 +24703,7 @@
 |`backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].mcp.targets[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].mcp.targets[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].mcp.targets[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].mcp.targets[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -24822,6 +24916,7 @@
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -24938,6 +25033,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -25012,6 +25108,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -25078,6 +25175,7 @@
 |`backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -25347,6 +25445,7 @@
 |`backends[].ai.policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -25636,6 +25735,7 @@
 |`backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -25945,6 +26045,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -26260,6 +26361,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -26535,6 +26637,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -26810,6 +26913,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -27083,6 +27187,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -27394,6 +27499,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -27669,6 +27775,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -27942,6 +28049,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -28184,6 +28292,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -28300,6 +28409,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -28374,6 +28484,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -28440,6 +28551,7 @@
 |`backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -28709,6 +28821,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -28998,6 +29111,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -29307,6 +29421,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -29622,6 +29737,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -29897,6 +30013,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -30172,6 +30289,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -30445,6 +30563,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -30756,6 +30875,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -31031,6 +31151,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -31304,6 +31425,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -31506,6 +31628,7 @@
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -31622,6 +31745,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -31696,6 +31820,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -31762,6 +31887,7 @@
 |`backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -32031,6 +32157,7 @@
 |`backends[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -32320,6 +32447,7 @@
 |`backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -32629,6 +32757,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -32944,6 +33073,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -33219,6 +33349,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -33494,6 +33625,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -33767,6 +33899,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -34078,6 +34211,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -34353,6 +34487,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -34626,6 +34761,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -35017,6 +35153,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -35047,7 +35184,7 @@
 |`routeGroups[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`routeGroups[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`routeGroups[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`routeGroups[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br>If unset, audience validation is disabled.|
 |`routeGroups[].routes[].policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
@@ -35355,6 +35492,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -35630,6 +35768,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -35905,6 +36044,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -36178,6 +36318,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -36489,6 +36630,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -36764,6 +36906,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -37037,6 +37180,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -37359,6 +37503,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -37484,6 +37629,7 @@
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -37600,6 +37746,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -37674,6 +37821,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -38011,6 +38159,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -38295,6 +38444,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -38661,6 +38811,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -38958,6 +39109,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -39258,6 +39410,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -39545,6 +39698,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -39833,6 +39987,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.substrateIngress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -39849,8 +40004,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`routeGroups[].routes[].policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`routeGroups[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`routeGroups[].routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`routeGroups[].routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`routeGroups[].routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`routeGroups[].routes[].policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -40117,6 +40271,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.substrateEgress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -40479,6 +40634,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -40691,6 +40847,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -40807,6 +40964,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -40881,6 +41039,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -40947,6 +41106,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -41216,6 +41376,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -41505,6 +41666,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -41814,6 +41976,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -42129,6 +42292,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -42404,6 +42568,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -42679,6 +42844,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -42952,6 +43118,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -43263,6 +43430,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -43538,6 +43706,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -43811,6 +43980,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -44053,6 +44223,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -44169,6 +44340,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -44243,6 +44415,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -44309,6 +44482,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -44578,6 +44752,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -44867,6 +45042,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -45176,6 +45352,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -45491,6 +45668,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -45766,6 +45944,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -46041,6 +46220,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -46314,6 +46494,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -46625,6 +46806,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -46900,6 +47082,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -47173,6 +47356,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -47377,6 +47561,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -47493,6 +47678,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -47567,6 +47753,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -47633,6 +47820,7 @@
 |`routeGroups[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -47902,6 +48090,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -48191,6 +48380,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -48500,6 +48690,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -48815,6 +49006,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -49090,6 +49282,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -49365,6 +49558,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -49638,6 +49832,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -49949,6 +50144,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -50224,6 +50420,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -50497,6 +50694,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -50874,6 +51072,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -51171,6 +51370,7 @@
 |`gateways.*.listeners[].extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.listeners[].extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.listeners[].extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.listeners[].extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.listeners[].extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.listeners[].extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.listeners[].extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -51471,6 +51671,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.listeners[].extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.listeners[].extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.listeners[].extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.listeners[].extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.listeners[].extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.listeners[].extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -51758,6 +51959,7 @@
 |`gateways.*.listeners[].extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.listeners[].extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.listeners[].extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.listeners[].extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.listeners[].extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.listeners[].extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.listeners[].extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -52183,6 +52385,7 @@
 |`gateways.*.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -52480,6 +52683,7 @@
 |`gateways.*.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -52780,6 +52984,7 @@
 |`gateways.*.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -53067,6 +53272,7 @@
 |`gateways.*.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`gateways.*.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`gateways.*.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`gateways.*.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`gateways.*.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`gateways.*.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -53512,6 +53718,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -53542,7 +53749,7 @@
 |`routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br>If unset, audience validation is disabled.|
 |`routes[].policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routes[].policies.mcpAuthentication.provider.keycloak`|object||
@@ -53850,6 +54057,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -54125,6 +54333,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -54400,6 +54609,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -54673,6 +54883,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -54984,6 +55195,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -55259,6 +55471,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -55532,6 +55745,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -55854,6 +56068,7 @@
 |`routes[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -55979,6 +56194,7 @@
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -56095,6 +56311,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -56169,6 +56386,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -56506,6 +56724,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.remoteRateLimit.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -56790,6 +57009,7 @@
 |`routes[].policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.remoteRateLimit.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.remoteRateLimit.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.remoteRateLimit.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -57156,6 +57376,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -57453,6 +57674,7 @@
 |`routes[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -57753,6 +57975,7 @@
 |`routes[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -58040,6 +58263,7 @@
 |`routes[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -58328,6 +58552,7 @@
 |`routes[].policies.substrateIngress.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.substrateIngress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.substrateIngress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.substrateIngress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.substrateIngress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.substrateIngress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.substrateIngress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -58344,8 +58569,7 @@
 |`routes[].policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routes[].policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`routes[].policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`routes[].policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`routes[].policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`routes[].policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`routes[].policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -58612,6 +58836,7 @@
 |`routes[].policies.substrateEgress.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].policies.substrateEgress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].policies.substrateEgress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.substrateEgress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].policies.substrateEgress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].policies.substrateEgress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].policies.substrateEgress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -58974,6 +59199,7 @@
 |`routes[].backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].mcp.targets[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].mcp.targets[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].mcp.targets[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].mcp.targets[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -59186,6 +59412,7 @@
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -59302,6 +59529,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -59376,6 +59604,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -59442,6 +59671,7 @@
 |`routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -59711,6 +59941,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -60000,6 +60231,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -60309,6 +60541,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -60624,6 +60857,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -60899,6 +61133,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -61174,6 +61409,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -61447,6 +61683,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -61758,6 +61995,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -62033,6 +62271,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -62306,6 +62545,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -62548,6 +62788,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -62664,6 +62905,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -62738,6 +62980,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -62804,6 +63047,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -63073,6 +63317,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -63362,6 +63607,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -63671,6 +63917,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -63986,6 +64233,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -64261,6 +64509,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -64536,6 +64785,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -64809,6 +65059,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -65120,6 +65371,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -65395,6 +65647,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -65668,6 +65921,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -65872,6 +66126,7 @@
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -65988,6 +66243,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -66062,6 +66318,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -66128,6 +66385,7 @@
 |`routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -66397,6 +66655,7 @@
 |`routes[].backends[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -66686,6 +66945,7 @@
 |`routes[].backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -66995,6 +67255,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -67310,6 +67571,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -67585,6 +67847,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -67860,6 +68123,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -68133,6 +68397,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -68444,6 +68709,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -68719,6 +68985,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -68992,6 +69259,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -69342,6 +69610,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`tcpRoutes[].backends[].policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -69543,6 +69812,7 @@
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.providers[].defaults.auth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -69659,6 +69929,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -69733,6 +70004,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -70065,6 +70337,7 @@
 |`llm.providers[].defaults.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.providers[].defaults.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.providers[].defaults.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.providers[].defaults.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.providers[].defaults.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.providers[].defaults.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.providers[].defaults.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -70265,6 +70538,7 @@
 |`llm.models[].auth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].auth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].auth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].auth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].auth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].auth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].auth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -70381,6 +70655,7 @@
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].auth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -70455,6 +70730,7 @@
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -70787,6 +71063,7 @@
 |`llm.models[].backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -71075,6 +71352,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -71350,6 +71628,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -71625,6 +71904,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -71898,6 +72178,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -72209,6 +72490,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -72484,6 +72766,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -72757,6 +73040,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -73124,6 +73408,7 @@
 |`llm.policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -73421,6 +73706,7 @@
 |`llm.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -73721,6 +74007,7 @@
 |`llm.policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -74008,6 +74295,7 @@
 |`llm.policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -74392,6 +74680,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -74667,6 +74956,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -74942,6 +75232,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -75215,6 +75506,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -75526,6 +75818,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -75801,6 +76094,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -76074,6 +76368,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -76370,6 +76665,7 @@
 |`llm.policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.remoteRateLimit.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`llm.policies.remoteRateLimit.policies.tcp`|object|TCP protocol settings for this backend.|
 |`llm.policies.remoteRateLimit.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`llm.policies.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -76682,6 +76978,7 @@
 |`mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.targets[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.targets[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.targets[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.targets[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -77021,6 +77318,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.mcpGuardrails.processors[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -77051,7 +77349,7 @@
 |`mcp.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`mcp.policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
-|`mcp.policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
+|`mcp.policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.<br>If unset, audience validation is disabled.|
 |`mcp.policies.mcpAuthentication.provider`|object|Identity provider type used to derive MCP authorization metadata and default JWKS URLs.|
 |`mcp.policies.mcpAuthentication.provider.auth0`|object||
 |`mcp.policies.mcpAuthentication.provider.keycloak`|object||
@@ -77359,6 +77657,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -77634,6 +77933,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -77909,6 +78209,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -78182,6 +78483,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -78493,6 +78795,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -78768,6 +79071,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -79041,6 +79345,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -79363,6 +79668,7 @@
 |`mcp.policies.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -79488,6 +79794,7 @@
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.backendAuth.oauthTokenExchange.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -79604,6 +79911,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -79678,6 +79986,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -80015,6 +80324,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -80299,6 +80609,7 @@
 |`mcp.policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.remoteRateLimit.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.remoteRateLimit.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -80665,6 +80976,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -80962,6 +81274,7 @@
 |`mcp.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -81262,6 +81575,7 @@
 |`mcp.policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.extProc.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.extProc.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.extProc.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -81549,6 +81863,7 @@
 |`mcp.policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.extProc.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.extProc.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.extProc.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.extProc.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -81837,6 +82152,7 @@
 |`mcp.policies.substrateIngress.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.substrateIngress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.substrateIngress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.substrateIngress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.substrateIngress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.substrateIngress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.substrateIngress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -81853,8 +82169,7 @@
 |`mcp.policies.substrateIngress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.substrateIngress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`mcp.policies.substrateIngress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`mcp.policies.substrateIngress.targetPort`|integer|Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.<br>This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.|
-|`mcp.policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.|
+|`mcp.policies.substrateIngress.connectTargetPort`|integer|Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.|
 |`mcp.policies.substrateIngress.cacheTtl`|string|How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.|
 |`mcp.policies.substrateIngress.requestParking`|object|Bounded request parking while a suspended actor is waiting for worker capacity.|
 |`mcp.policies.substrateIngress.requestParking.budget`|string|Maximum time to wait for the actor to become routable.|
@@ -82121,6 +82436,7 @@
 |`mcp.policies.substrateEgress.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.substrateEgress.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.substrateEgress.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.substrateEgress.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`mcp.policies.substrateEgress.policies.tcp`|object|TCP protocol settings for this backend.|
 |`mcp.policies.substrateEgress.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`mcp.policies.substrateEgress.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -82507,6 +82823,7 @@
 |`ui.policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`ui.policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`ui.policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`ui.policies.extAuthz.conditional[].policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`ui.policies.extAuthz.conditional[].policies.tcp`|object|TCP protocol settings for this backend.|
 |`ui.policies.extAuthz.conditional[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`ui.policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
@@ -82804,6 +83121,7 @@
 |`ui.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`ui.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`ui.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`ui.policies.extAuthz.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
 |`ui.policies.extAuthz.policies.tcp`|object|TCP protocol settings for this backend.|
 |`ui.policies.extAuthz.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
 |`ui.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|

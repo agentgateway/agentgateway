@@ -18,6 +18,16 @@ pub struct HTTP {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub request_timeout: Option<Duration>,
+	/// Maximum time a connection to the backend may stay open. A connection past this duration is
+	/// not reused for new requests; a fresh connection is established instead, while in-flight
+	/// requests are not interrupted.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub max_connection_duration: Option<Duration>,
 }
 
 impl HTTP {

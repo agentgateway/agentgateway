@@ -26,7 +26,7 @@ use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
-use crate::telemetry::log::{AsyncLog, RequestLog};
+use crate::telemetry::log::{AsyncLog, GuardrailLog, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
@@ -291,6 +291,14 @@ struct ChatRequestContext<'a> {
 struct ChatResponseContext<'a> {
 	model: &'a str,
 	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
+}
+
+/// Log handles and content-capture flags threaded through response processing.
+#[derive(Default, Clone)]
+pub struct LLMLogging {
+	pub response: AsyncLog<LLMInfo>,
+	pub guardrails: GuardrailLog,
+	pub content: LogContentFields,
 }
 
 // Context provider to each response translation (streaming)
@@ -1413,7 +1421,8 @@ impl AIProvider {
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
-				// Resolve host + signing name for the model; stash region/signing in extensions for late signing.
+				// Resolve the model-aware host + Mantle signing name. The region is set in
+				// set_required_fields instead, so it still applies under a host override.
 				let host = provider.get_host(route_type, model_id, catalog);
 				let signing_service = provider.signing_service_name(route_type, model_id, catalog);
 				// Bedrock's Mantle-vs-Runtime host is model-dependent, so align the connection target with it.
@@ -1425,9 +1434,6 @@ impl AIProvider {
 						uri.authority = Some(Authority::from_str(&host)?);
 						Ok(())
 					})?;
-					req.extensions.insert(bedrock::AwsRegion {
-						region: provider.region.as_str().to_string(),
-					});
 					if let Some(service) = signing_service {
 						req
 							.extensions
@@ -1506,24 +1512,6 @@ impl AIProvider {
 					Ok(())
 				}
 			},
-			AIProvider::Bedrock(p)
-				if matches!(route_type, RouteType::Messages)
-					&& matches!(
-						p.resolve_endpoint(
-							route_type,
-							llm_request.map(|r| r.request_model.as_str()),
-							catalog
-						),
-						bedrock::BedrockEndpoint::Mantle
-					) =>
-			{
-				http::modify_req(req, |req| {
-					req
-						.headers
-						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
-					Ok(())
-				})
-			},
 			AIProvider::Gemini(_)
 				if matches!(
 					route_type,
@@ -1553,6 +1541,27 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
+				// AWS signing needs the region on every Bedrock request, host override or not.
+				req.extensions.insert(bedrock::AwsRegion {
+					region: provider.region.as_str().to_string(),
+				});
+				// Mantle serves the Messages route via the Anthropic-native API, which needs this header.
+				if matches!(route_type, RouteType::Messages)
+					&& matches!(
+						provider.resolve_endpoint(
+							route_type,
+							llm_request.map(|r| r.request_model.as_str()),
+							catalog
+						),
+						bedrock::BedrockEndpoint::Mantle
+					) {
+					req
+						.headers
+						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+				}
+				Ok(())
+			}),
 			_ => Ok(()),
 		}
 	}
@@ -2034,8 +2043,16 @@ impl AIProvider {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
 				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
+				let guardrail_log = log.as_ref().map(|l| l.guardrails.clone());
 				if let Some((response, guardrail)) = p
-					.apply_prompt_guard(&client, req, http_headers, claims, original.as_deref())
+					.apply_prompt_guard(
+						&client,
+						req,
+						http_headers,
+						claims,
+						original.as_deref(),
+						guardrail_log.as_ref(),
+					)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -2230,8 +2247,7 @@ impl AIProvider {
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
-		log: AsyncLog<llm::LLMInfo>,
-		log_content: LogContentFields,
+		logging: LLMLogging,
 		model_catalog: Option<&Arc<catalog::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -2244,8 +2260,7 @@ impl AIProvider {
 				req,
 				rate_limit,
 				req_snapshot,
-				log,
-				log_content,
+				logging,
 				model_catalog.cloned(),
 				resp,
 			);
@@ -2256,16 +2271,16 @@ impl AIProvider {
 
 		match req.input_format {
 			InputFormat::CountTokens => {
-				self.process_count_tokens_response(req, buffered, model_catalog, &log)
+				self.process_count_tokens_response(req, buffered, model_catalog, &logging.response)
 			},
 			InputFormat::GeminiCountTokens => {
-				self.process_gemini_count_tokens_response(req, buffered, model_catalog, &log)
+				self.process_gemini_count_tokens_response(req, buffered, model_catalog, &logging.response)
 			},
 			InputFormat::Embeddings => {
-				self.process_embeddings_buffered_response(req, buffered, model_catalog, &log)
+				self.process_embeddings_buffered_response(req, buffered, model_catalog, &logging.response)
 			},
 			InputFormat::Rerank => {
-				self.process_rerank_buffered_response(req, buffered, model_catalog, &log)
+				self.process_rerank_buffered_response(req, buffered, model_catalog, &logging.response)
 			},
 			_ => {
 				self
@@ -2274,8 +2289,7 @@ impl AIProvider {
 						req,
 						rate_limit,
 						req_snapshot,
-						log,
-						log_content,
+						logging,
 						model_catalog,
 						buffered,
 					)
@@ -2291,11 +2305,15 @@ impl AIProvider {
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
-		log: AsyncLog<llm::LLMInfo>,
-		log_content: LogContentFields,
+		logging: LLMLogging,
 		model_catalog: Option<&catalog::ModelCatalog>,
 		buffered: BufferedResponse,
 	) -> Result<Response, AIError> {
+		let LLMLogging {
+			response: log,
+			guardrails: guardrail_log,
+			content: log_content,
+		} = logging;
 		let BufferedResponse { mut parts, bytes } = buffered;
 
 		let (llm_resp, body) = if !parts.status.is_success() {
@@ -2322,6 +2340,7 @@ impl AIProvider {
 				&prompt_guard_headers,
 				&rate_limit.prompt_guard,
 				req_snapshot.as_deref(),
+				Some(&guardrail_log),
 			)
 			.await
 			.map_err(|e| {
@@ -2668,11 +2687,15 @@ impl AIProvider {
 		req: LLMRequest,
 		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
-		log: AsyncLog<llm::LLMInfo>,
-		log_content: LogContentFields,
+		logging: LLMLogging,
 		model_catalog: Option<Arc<catalog::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		let LLMLogging {
+			response: log,
+			guardrails: guardrail_log,
+			content: log_content,
+		} = logging;
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
@@ -2738,6 +2761,7 @@ impl AIProvider {
 				&client,
 				&prompt_guard_headers,
 				req_snapshot.clone(),
+				guardrail_log,
 			)
 		} else {
 			vec![]

@@ -796,6 +796,12 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
 	// +optional
 	MaxConnectionDuration *Duration `json:"maxConnectionDuration,omitempty"`
+	// Maximum number of in-flight HTTP requests across this gateway/port.
+	// This includes HTTP/1 requests and HTTP/2 streams. Requests over the limit
+	// are rejected immediately with a 503 response. Unset means unlimited.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConcurrentRequests *int32 `json:"maxConcurrentRequests,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -882,6 +888,11 @@ type FrontendTCP struct {
 	// Settings for enabling TCP keepalives on the connection.
 	// +optional
 	KeepAlive *Keepalive `json:"keepalive,omitempty"`
+	// Maximum number of active downstream connections on this gateway/port.
+	// Connections over the limit are closed immediately. Unset means unlimited.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConnections *int32 `json:"maxConnections,omitempty"`
 }
 
 // TCP keepalive settings.

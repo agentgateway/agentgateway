@@ -748,6 +748,9 @@ message FrontendPolicySpec {
     optional uint32 http2_max_header_size = 10;
     // Controls HTTP/1 request header casing when encoding responses.
     HTTPHeaderCase http1_header_case = 11;
+    // Maximum number of in-flight HTTP requests across this bind. This includes
+    // HTTP/1 requests and HTTP/2 streams. Unset means unlimited.
+    optional uint32 max_concurrent_requests = 12;
   }
   message TLS {
     // TLS handshake timeout
@@ -776,6 +779,8 @@ message FrontendPolicySpec {
   message TCP {
     // TCP keepalive configuration
     KeepaliveConfig keepalives = 1;
+    // Maximum number of active downstream connections on this bind. Unset means unlimited.
+    optional uint32 max_connections = 2;
   }
 
   message NetworkAuthorization {
@@ -1617,6 +1622,7 @@ message BackendPolicySpec {
     }
     HttpVersion version = 1;
     google.protobuf.Duration request_timeout = 2;
+    google.protobuf.Duration max_connection_duration = 3;
   }
   message BackendTunnel {
     enum Mode {

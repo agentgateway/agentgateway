@@ -126,9 +126,7 @@ func (c *prometheusCounter) Add(value float64, labels ...Label) {
 // gathering.
 func (c *prometheusCounter) Reset() {
 	c.m.Reset()
-	// Initialize the counter to 0 so it's visible in metrics
-	// gathering. Otherwise we're undoing some initialization like
-	// StartResourceSyncMetricsProcessing() performs.
+	// Initialize the counter to 0 so it's visible in metrics gathering.
 	c.Add(0)
 }
 

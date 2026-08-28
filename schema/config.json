@@ -1175,6 +1175,17 @@
           "maximum": 65535,
           "default": null
         },
+        "protocol": {
+          "description": "Protocol handling for the entire bind. When omitted, it is inferred from the listeners.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBindProtocol"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "listeners": {
           "description": "Named listeners bound on this port, which may use different protocols and TLS.",
           "type": "array",
@@ -1196,6 +1207,23 @@
       "additionalProperties": false,
       "required": [
         "listeners"
+      ]
+    },
+    "LocalBindProtocol": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "HTTP",
+            "TLS",
+            "TCP"
+          ]
+        },
+        {
+          "description": "EXPERIMENTAL: Detects TLS, plaintext HTTP, or opaque TCP from the first bytes of each\nconnection and chooses the appropriate listener. Use an explicit protocol whenever\npossible. AUTO requires client-first opaque protocols that look like a TLS or HTTP request.",
+          "type": "string",
+          "const": "AUTO"
+        }
       ]
     },
     "LocalListener": {
@@ -4491,6 +4519,13 @@
             "string",
             "null"
           ]
+        },
+        "maxConnectionDuration": {
+          "description": "Maximum time a connection to the backend may stay open. A connection past this duration is\nnot reused for new requests; a fresh connection is established instead, while in-flight\nrequests are not interrupted.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -4604,8 +4639,11 @@
           "type": "string"
         },
         "audiences": {
-          "description": "Accepted token audiences, matched against the JWT `aud` claim.",
-          "type": "array",
+          "description": "Accepted token audiences, matched against the JWT `aud` claim.\nIf unset, audience validation is disabled.",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string"
           }
@@ -4673,7 +4711,6 @@
       "additionalProperties": false,
       "required": [
         "issuer",
-        "audiences",
         "resourceMetadata"
       ]
     },
@@ -7502,21 +7539,13 @@
             }
           ]
         },
-        "targetPort": {
-          "description": "Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.\nThis is independent from `connect_target_port`, which is used for raw CONNECT tunnels.",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 1,
-          "maximum": 65535,
-          "default": 443
-        },
         "connectTargetPort": {
-          "description": "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.",
+          "description": "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.",
           "type": "integer",
           "format": "uint16",
           "minimum": 1,
           "maximum": 65535,
-          "default": 444
+          "default": 8443
         },
         "cacheTtl": {
           "description": "How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.",
@@ -9944,6 +9973,15 @@
             "null"
           ],
           "default": null
+        },
+        "maxConcurrentRequests": {
+          "description": "Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests\nand HTTP/2 streams. Requests over the limit are rejected immediately.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1
         }
       },
       "additionalProperties": false
@@ -10037,13 +10075,26 @@
       "properties": {
         "keepalives": {
           "description": "TCP keepalive settings for downstream connections.",
-          "$ref": "#/$defs/KeepaliveConfig"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeepaliveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxConnections": {
+          "description": "Maximum number of active downstream connections on this bind. Connections over the limit\nare closed immediately.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "keepalives"
-      ]
+      "additionalProperties": false
     },
     "NetworkAuthorization": {
       "description": "CEL authorization rules for downstream network connections.",

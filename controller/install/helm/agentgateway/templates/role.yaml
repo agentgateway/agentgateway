@@ -108,12 +108,13 @@ rules:
   verbs: [create, get, list, patch, update, watch]
 
 # Discovers Istio services and workloads when Istio integration is enabled.
+{{- if .Values.istio.enabled }}
 - apiGroups: [networking.istio.io]
   resources:
-  - destinationrules
   - serviceentries
   - workloadentries
   verbs: [get, list, watch]
+{{- end }}
 
 # While the deployer uses scoped roles under '-deployer' for writes, we cannot do a scoped watch
 # Without opening N watches. instead, just always watch all which is generally acceptable.

@@ -262,7 +262,7 @@ func modelServingRuleRouterKey(namespace, route string, ruleIndex int, rule gwv1
 	if len(backend.Filters) > 0 {
 		return "", true, fmt.Errorf("model-serving HTTPRoute backendRef must not have filters")
 	}
-	ruleKey := fmt.Sprintf("%d", ruleIndex)
+	ruleKey := fmt.Sprintf("index:%d", ruleIndex)
 	if rule.Name != nil {
 		ruleKey = string(*rule.Name)
 	}

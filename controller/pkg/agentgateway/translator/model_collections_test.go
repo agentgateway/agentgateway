@@ -33,7 +33,7 @@ func TestModelServingRuleGuards(t *testing.T) {
 		wantKey string
 	}{
 		{name: "valid"},
-		{name: "unnamed rule", mutate: func(r *gwv1.HTTPRouteRule) { r.Name = nil }, wantKey: "/llm:router:httproute:default:tenant1:0"},
+		{name: "unnamed rule", mutate: func(r *gwv1.HTTPRouteRule) { r.Name = nil }, wantKey: "/llm:router:httproute:default:tenant1:index:0"},
 		{name: "ordinary route", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs = nil }, absent: true},
 		{name: "multiple matches", mutate: func(r *gwv1.HTTPRouteRule) { r.Matches = append(r.Matches, r.Matches[0]) }},
 		{name: "exact path", mutate: func(r *gwv1.HTTPRouteRule) { pathType := gwv1.PathMatchExact; r.Matches[0].Path.Type = &pathType }, wantErr: "must use PathPrefix"},

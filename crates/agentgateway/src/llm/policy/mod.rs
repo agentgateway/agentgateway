@@ -5,13 +5,14 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::cel::GuardDetail;
 use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
 use crate::http::{HeaderOrPseudo, Response, StatusCode};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::{AIError, ContentScope, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::RequestLog;
+use crate::telemetry::log::{GuardrailLog, RequestLog};
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
 use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
 use crate::*;
@@ -23,18 +24,44 @@ fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
 }
 
-fn log_guardrail_audit(kind: &'static str, phase: GuardrailPhase, verdict: &'static str) {
-	let phase = match phase {
-		GuardrailPhase::Request => "request",
-		GuardrailPhase::Response => "response",
+fn guardrail_phase(phase: GuardrailPhase) -> Strng {
+	match phase {
+		GuardrailPhase::Request => strng::literal!("request"),
+		GuardrailPhase::Response => strng::literal!("response"),
+	}
+}
+
+fn record_guardrail(
+	log: Option<&GuardrailLog>,
+	phase: GuardrailPhase,
+	guard: &'static str,
+	action: GuardrailAction,
+	detail: Option<GuardDetail>,
+) {
+	let action = match action {
+		GuardrailAction::Allow => return,
+		GuardrailAction::FailOpen => strng::literal!("failOpen"),
+		GuardrailAction::Audit => strng::literal!("audit"),
+		GuardrailAction::Mask => strng::literal!("mask"),
+		GuardrailAction::Reject => strng::literal!("reject"),
 	};
-	tracing::info!(
-		target: "agentgateway::guardrail::audit",
-		%kind,
-		%phase,
-		%verdict,
-		"guardrail audit evaluation"
-	);
+	let Some(log) = log else { return };
+	log.mutate_or_default(|entries| {
+		entries.push(cel::GuardrailInfo {
+			phase: guardrail_phase(phase),
+			guard: strng::new(guard),
+			action,
+			detail: detail.unwrap_or_default(),
+		});
+	});
+}
+
+fn reject_or_audit<M>(audit: bool, rejection: &RequestRejection) -> GuardrailOutcome<M> {
+	if audit {
+		GuardrailOutcome::Audit
+	} else {
+		GuardrailOutcome::Rejected(rejection.as_response())
+	}
 }
 
 pub mod webhook;
@@ -528,6 +555,7 @@ impl PromptGuard {
 		text: &str,
 		client: &crate::proxy::httpproxy::PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> Option<Bytes> {
 		let headers = ::http::HeaderMap::new();
 		let claims = original.and_then(|s| s.jwt.clone());
@@ -542,6 +570,7 @@ impl PromptGuard {
 				client,
 				claims.clone(),
 				original,
+				guardrail_log,
 			)
 			.await
 			{
@@ -592,6 +621,7 @@ impl PromptGuard {
 		client: &crate::proxy::httpproxy::PolicyClient,
 		http_headers: &HeaderMap,
 		original: Option<Arc<cel::RequestSnapshot>>,
+		guardrail_log: GuardrailLog,
 	) -> Vec<Box<dyn StreamingEvaluator>> {
 		self
 			.response
@@ -602,6 +632,7 @@ impl PromptGuard {
 					client.clone(),
 					http_headers.clone(),
 					original.clone(),
+					guardrail_log.clone(),
 				)
 			})
 			.collect()
@@ -613,6 +644,7 @@ impl PromptGuard {
 		client: &crate::proxy::httpproxy::PolicyClient,
 		http_headers: &HeaderMap,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<(Option<StreamingGuardrailOutcome>, GuardrailAction)> {
 		if window.is_empty() {
 			return Ok((None, GuardrailAction::Allow));
@@ -620,19 +652,20 @@ impl PromptGuard {
 		let mut resp = TextResponse {
 			content: window.to_string(),
 		};
-		let (action, rejection) =
-			Policy::apply_single_response_guard(guard, &mut resp, http_headers, client, original).await?;
+		let (action, rejection) = Policy::apply_single_response_guard(
+			guard,
+			&mut resp,
+			http_headers,
+			client,
+			original,
+			guardrail_log,
+			true,
+		)
+		.await?;
 		let streaming = match rejection {
 			Some(rejected) => {
 				let body = rejected.into_body().collect().await?.to_bytes();
 				Some(StreamingGuardrailOutcome::Blocked(body))
-			},
-			None if action == GuardrailAction::Mask => {
-				debug_assert!(
-					false,
-					"streaming response guard unexpectedly returned Masked; streaming masking is not supported"
-				);
-				None
 			},
 			None => None,
 		};
@@ -895,6 +928,7 @@ impl Policy {
 		})
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn apply_prompt_guard(
 		&self,
 		client: &PolicyClient,
@@ -902,16 +936,27 @@ impl Policy {
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<Option<(Response, &'static str)>> {
+		if let Some(log) = guardrail_log {
+			log.non_atomic_mutate(|entries| entries.retain(|e| e.phase != "request"));
+		}
 		for g in self
 			.prompt_guard
 			.as_ref()
 			.iter()
 			.flat_map(|g| g.request.iter())
 		{
-			let (action, rejection) =
-				Self::apply_single_request_guard(g, req, http_headers, client, claims.clone(), original)
-					.await?;
+			let (action, rejection) = Self::apply_single_request_guard(
+				g,
+				req,
+				http_headers,
+				client,
+				claims.clone(),
+				original,
+				guardrail_log,
+			)
+			.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Request, action);
 			if let Some(res) = rejection {
 				return Ok(Some((res, g.kind.name())));
@@ -929,11 +974,20 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
-		let outcome =
+		let (outcome, detail) =
 			Self::evaluate_single_request_guard(guard, req, http_headers, client, claims, original)
 				.await?;
-		Self::apply_request_guard_outcome(outcome, req)
+		let (action, rejection) = Self::apply_request_guard_outcome(outcome, req)?;
+		record_guardrail(
+			guardrail_log,
+			GuardrailPhase::Request,
+			guard.kind.name(),
+			action,
+			detail,
+		);
+		Ok((action, rejection))
 	}
 
 	async fn evaluate_single_request_guard(
@@ -943,13 +997,11 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
-	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		match &guard.kind {
-			RequestGuardKind::Regex(rg) => Ok(Self::evaluate_regex_request(
-				req,
-				rg,
-				&guard.rejection,
-				&guard.scope,
+			RequestGuardKind::Regex(rg) => Ok((
+				Self::evaluate_regex_request(req, rg, &guard.rejection, &guard.scope),
+				None,
 			)),
 			RequestGuardKind::Webhook(wh) => {
 				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
@@ -984,19 +1036,55 @@ impl Policy {
 		client: &PolicyClient,
 		moderation: &Moderation,
 		rejection: &RequestRejection,
-	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let resp = moderation::send_request(req, claims, client, moderation).await?;
-		if resp.results.iter().any(|r| r.flagged) {
-			if moderation.action == RejectAuditAction::Audit {
-				log_guardrail_audit("openai-moderation", GuardrailPhase::Request, "reject");
-				return Ok(GuardrailOutcome::Audit);
-			}
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else {
-			Ok(GuardrailOutcome::None)
-		}
+		Ok(Self::moderation_outcome(
+			resp,
+			rejection,
+			moderation.action == RejectAuditAction::Audit,
+		))
 	}
 
+	fn moderation_outcome(
+		resp: async_openai::types::moderations::CreateModerationResponse,
+		rejection: &RequestRejection,
+		audit: bool,
+	) -> (GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>) {
+		if !resp.results.iter().any(|r| r.flagged) {
+			return (GuardrailOutcome::None, None);
+		}
+		// One entry per flagged result listing the flagged category names; input text
+		// is never included.
+		let assessments = resp
+			.results
+			.iter()
+			.filter(|r| r.flagged)
+			.map(|r| {
+				let flagged: Vec<String> = serde_json::to_value(&r.categories)
+					.ok()
+					.and_then(|v| match v {
+						serde_json::Value::Object(m) => Some(
+							m.into_iter()
+								.filter(|(_, v)| v.as_bool() == Some(true))
+								.map(|(k, _)| k)
+								.collect(),
+						),
+						_ => None,
+					})
+					.unwrap_or_default();
+				serde_json::json!({"flaggedCategories": flagged})
+			})
+			.collect();
+		(
+			reject_or_audit(audit, rejection),
+			Some(GuardDetail {
+				assessments,
+				..Default::default()
+			}),
+		)
+	}
+
+	#[allow(clippy::too_many_arguments)]
 	async fn evaluate_bedrock_guardrails_request(
 		req: &mut dyn RequestType,
 		claims: Option<Claims>,
@@ -1004,10 +1092,10 @@ impl Policy {
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
 		guard_scope: &[ContentScope],
-	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let (content, in_scope) = Self::scoped_request_texts(req, guard_scope);
 		if content.is_empty() {
-			return Ok(GuardrailOutcome::None);
+			return Ok((GuardrailOutcome::None, None));
 		}
 		let sent_count = content.len();
 		let resp = bedrock_guardrails::send(
@@ -1019,12 +1107,14 @@ impl Policy {
 		)
 		.await?;
 		if guardrails.action == RejectAuditAction::Audit {
-			return Ok(Self::bedrock_audit_outcome(&resp, GuardrailPhase::Request));
+			return Ok(Self::bedrock_audit_outcome(resp, guardrails));
 		}
-		Ok(
-			Self::bedrock_guardrail_outcome(resp, sent_count, rejection)
-				.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope))),
-		)
+		let (outcome, detail) =
+			Self::bedrock_guardrail_outcome(resp, sent_count, rejection, guardrails);
+		Ok((
+			outcome.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope))),
+			detail,
+		))
 	}
 
 	async fn evaluate_bedrock_guardrails_response(
@@ -1033,11 +1123,11 @@ impl Policy {
 		client: &PolicyClient,
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
-	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let content = Self::response_texts(resp);
 
 		if content.is_empty() {
-			return Ok(GuardrailOutcome::None);
+			return Ok((GuardrailOutcome::None, None));
 		}
 		let sent_count = content.len();
 
@@ -1050,39 +1140,40 @@ impl Policy {
 		)
 		.await?;
 		if guardrails.action == RejectAuditAction::Audit {
-			return Ok(Self::bedrock_audit_outcome(
-				&guardrail_resp,
-				GuardrailPhase::Response,
-			));
+			return Ok(Self::bedrock_audit_outcome(guardrail_resp, guardrails));
 		}
-		Ok(
-			Self::bedrock_guardrail_outcome(guardrail_resp, sent_count, rejection)
-				.map_mask(ResponseGuardMutation::Texts),
-		)
+		let (outcome, detail) =
+			Self::bedrock_guardrail_outcome(guardrail_resp, sent_count, rejection, guardrails);
+		Ok((outcome.map_mask(ResponseGuardMutation::Texts), detail))
 	}
 
 	/// Mask only when anonymized with one output per block sent; any other
 	/// intervention rejects (its outputs are a canned message, not masks).
 	fn bedrock_guardrail_outcome(
-		resp: bedrock_guardrails::ApplyGuardrailResponse,
+		mut resp: bedrock_guardrails::ApplyGuardrailResponse,
 		sent_count: usize,
 		rejection: &RequestRejection,
-	) -> GuardrailOutcome<TextReplacements> {
+		guardrails: &BedrockGuardrails,
+	) -> (GuardrailOutcome<TextReplacements>, Option<GuardDetail>) {
 		if !resp.is_intervened() {
-			return GuardrailOutcome::None;
+			return (GuardrailOutcome::None, None);
 		}
-		if resp.is_anonymized() {
-			let outputs = resp.into_output_texts();
-			if outputs.len() == sent_count {
-				return GuardrailOutcome::Masked(TextReplacements::replace_all(outputs));
-			}
+		let anonymized = resp.is_anonymized();
+		let masked = anonymized && resp.outputs.len() == sent_count;
+		if anonymized && !masked {
 			tracing::warn!(
 				expected = sent_count,
-				got = outputs.len(),
+				got = resp.outputs.len(),
 				"Bedrock guardrail masked output count mismatch; rejecting content"
 			);
 		}
-		GuardrailOutcome::Rejected(rejection.as_response())
+		let detail = resp.build_detail(guardrails);
+		let outcome = if masked {
+			GuardrailOutcome::Masked(TextReplacements::replace_all(resp.into_output_texts()))
+		} else {
+			GuardrailOutcome::Rejected(rejection.as_response())
+		};
+		(outcome, Some(detail))
 	}
 
 	async fn evaluate_google_model_armor_request(
@@ -1091,17 +1182,28 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
-	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let resp = google_model_armor::send_request(req, claims, client, model_armor).await?;
-		if resp.is_blocked() {
-			if model_armor.action == RejectAuditAction::Audit {
-				log_guardrail_audit("google-model-armor", GuardrailPhase::Request, "reject");
-				return Ok(GuardrailOutcome::Audit);
-			}
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else {
-			Ok(GuardrailOutcome::None)
+		Ok(Self::model_armor_outcome(resp, model_armor, rejection))
+	}
+
+	fn model_armor_outcome<M>(
+		resp: google_model_armor::SanitizeResponse,
+		model_armor: &GoogleModelArmor,
+		rejection: &RequestRejection,
+	) -> (GuardrailOutcome<M>, Option<GuardDetail>) {
+		let matched = resp.matched_filters();
+		if matched.is_empty() {
+			return (GuardrailOutcome::None, None);
 		}
+		(
+			reject_or_audit(model_armor.action == RejectAuditAction::Audit, rejection),
+			Some(GuardDetail {
+				guardrail_id: Some(model_armor.template_id.clone()),
+				assessments: vec![serde_json::json!({"matchedFilters": matched})],
+				..Default::default()
+			}),
+		)
 	}
 
 	async fn evaluate_azure_content_safety_request(
@@ -1110,7 +1212,7 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
-	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let audit = config.action == RejectAuditAction::Audit;
 		if let Some(ref analyze_text) = config.analyze_text {
 			let resp = azure_content_safety::send_analyze_text_for_request(
@@ -1123,11 +1225,10 @@ impl Policy {
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if resp.is_blocked(threshold) {
-				if audit {
-					log_guardrail_audit("azure-content-safety", GuardrailPhase::Request, "reject");
-					return Ok(GuardrailOutcome::Audit);
-				}
-				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
+				return Ok((
+					reject_or_audit(audit, rejection),
+					Some(Self::azure_analyze_detail(&resp, threshold)),
+				));
 			}
 		}
 		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
@@ -1140,14 +1241,41 @@ impl Policy {
 			)
 			.await?;
 			if resp.jailbreak_detected() {
-				if audit {
-					log_guardrail_audit("azure-content-safety", GuardrailPhase::Request, "reject");
-					return Ok(GuardrailOutcome::Audit);
-				}
-				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
+				return Ok((
+					reject_or_audit(audit, rejection),
+					Some(GuardDetail {
+						assessments: vec![serde_json::json!({"jailbreakDetected": true})],
+						..Default::default()
+					}),
+				));
 			}
 		}
-		Ok(GuardrailOutcome::None)
+		Ok((GuardrailOutcome::None, None))
+	}
+
+	/// Severities and blocklist names only; matched text is never included.
+	fn azure_analyze_detail(
+		resp: &azure_content_safety::AnalyzeTextResponse,
+		threshold: i32,
+	) -> GuardDetail {
+		let categories: Vec<_> = resp
+			.categories_analysis
+			.iter()
+			.filter(|c| c.severity >= threshold)
+			.map(|c| serde_json::json!({"category": c.category, "severity": c.severity}))
+			.collect();
+		let blocklists: Vec<_> = resp
+			.blocklists_match
+			.iter()
+			.map(|b| b.blocklist_name.clone())
+			.collect();
+		GuardDetail {
+			assessments: vec![serde_json::json!({
+				"categoriesAnalysis": categories,
+				"blocklistMatches": blocklists,
+			})],
+			..Default::default()
+		}
 	}
 
 	async fn evaluate_google_model_armor_response(
@@ -1156,24 +1284,20 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
-	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let content = Self::webhook_choice_texts(resp);
 
 		if content.is_empty() {
-			return Ok(GuardrailOutcome::None);
+			return Ok((GuardrailOutcome::None, None));
 		}
 
 		let guardrail_resp =
 			google_model_armor::send_response(content, claims, client, model_armor).await?;
-		if guardrail_resp.is_blocked() {
-			if model_armor.action == RejectAuditAction::Audit {
-				log_guardrail_audit("google-model-armor", GuardrailPhase::Response, "reject");
-				return Ok(GuardrailOutcome::Audit);
-			}
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else {
-			Ok(GuardrailOutcome::None)
-		}
+		Ok(Self::model_armor_outcome(
+			guardrail_resp,
+			model_armor,
+			rejection,
+		))
 	}
 
 	async fn evaluate_azure_content_safety_response(
@@ -1182,11 +1306,11 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
-	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let content = Self::webhook_choice_texts(resp);
 
 		if content.is_empty() {
-			return Ok(GuardrailOutcome::None);
+			return Ok((GuardrailOutcome::None, None));
 		}
 
 		if let Some(ref analyze_text) = config.analyze_text {
@@ -1200,30 +1324,25 @@ impl Policy {
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if guardrail_resp.is_blocked(threshold) {
-				if config.action == RejectAuditAction::Audit {
-					log_guardrail_audit("azure-content-safety", GuardrailPhase::Response, "reject");
-					return Ok(GuardrailOutcome::Audit);
-				}
-				return Ok(GuardrailOutcome::Rejected(rejection.as_response()));
+				return Ok((
+					reject_or_audit(config.action == RejectAuditAction::Audit, rejection),
+					Some(Self::azure_analyze_detail(&guardrail_resp, threshold)),
+				));
 			}
 		}
 		// Note: detect_jailbreak is request-only, not applied to responses.
-		Ok(GuardrailOutcome::None)
+		Ok((GuardrailOutcome::None, None))
 	}
 
 	fn bedrock_audit_outcome<Mask>(
-		resp: &bedrock_guardrails::ApplyGuardrailResponse,
-		phase: GuardrailPhase,
-	) -> GuardrailOutcome<Mask> {
-		let verdict = if resp.is_blocked() {
-			"reject"
-		} else if resp.is_anonymized() {
-			"mask"
-		} else {
-			return GuardrailOutcome::None;
-		};
-		log_guardrail_audit("aws-bedrock", phase, verdict);
-		GuardrailOutcome::Audit
+		mut resp: bedrock_guardrails::ApplyGuardrailResponse,
+		guardrails: &BedrockGuardrails,
+	) -> (GuardrailOutcome<Mask>, Option<GuardDetail>) {
+		if !resp.is_blocked() && !resp.is_anonymized() {
+			return (GuardrailOutcome::None, None);
+		}
+		let detail = resp.build_detail(guardrails);
+		(GuardrailOutcome::Audit, Some(detail))
 	}
 
 	/// One flattened text per choice; masking guards must use `response_texts`
@@ -1311,7 +1430,6 @@ impl Policy {
 			}
 		});
 		if audited {
-			log_guardrail_audit("regex", GuardrailPhase::Request, "match");
 			return GuardrailOutcome::Audit;
 		}
 		if rejected {
@@ -1361,7 +1479,6 @@ impl Policy {
 			}
 		});
 		if audited {
-			log_guardrail_audit("regex", GuardrailPhase::Response, "match");
 			return GuardrailOutcome::Audit;
 		}
 		if rejected {
@@ -1380,7 +1497,7 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
-	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		let llm_request = webhook
 			.headers
 			.iter()
@@ -1396,47 +1513,65 @@ impl Policy {
 				return match webhook.failure_mode {
 					FailureMode::FailOpen => {
 						warn!("webhook guardrail unavailable, failing open: {}", e);
-						Ok(GuardrailOutcome::FailOpen)
+						Ok((GuardrailOutcome::FailOpen, None))
 					},
 					FailureMode::FailClosed => Err(e),
 				};
 			},
 		};
 		if webhook.action == RejectAuditAction::Audit {
-			let verdict = match &whr.action {
-				RequestAction::Mask(_) => "mask",
-				RequestAction::Reject(_) => "reject",
-				RequestAction::Pass(_) => return Ok(GuardrailOutcome::None),
+			let (would_action, reason) = match whr.action {
+				RequestAction::Mask(m) => ("mask", m.reason),
+				RequestAction::Reject(r) => ("reject", r.reason),
+				RequestAction::Pass(_) => return Ok((GuardrailOutcome::None, None)),
 			};
-			log_guardrail_audit("webhook", GuardrailPhase::Request, verdict);
-			return Ok(GuardrailOutcome::Audit);
+			return Ok((
+				GuardrailOutcome::Audit,
+				Some(GuardDetail {
+					action_reason: reason,
+					assessments: vec![serde_json::json!({"wouldAction": would_action})],
+					..Default::default()
+				}),
+			));
 		}
-		match whr.action {
+		Self::webhook_request_outcome(whr.action)
+	}
+
+	fn webhook_request_outcome(
+		action: RequestAction,
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
+		match action {
 			RequestAction::Mask(mask) => {
 				debug!(
 					"webhook masked request: {}",
-					mask
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					mask.reason.as_deref().unwrap_or("no reason specified")
 				);
 				let MaskActionBody::PromptMessages(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
-				Ok(GuardrailOutcome::Masked(RequestGuardMutation::Messages(
-					body.messages,
-				)))
+				Ok((
+					GuardrailOutcome::Masked(RequestGuardMutation::Messages(body.messages)),
+					Some(GuardDetail {
+						action_reason: mask.reason,
+						..Default::default()
+					}),
+				))
 			},
 			RequestAction::Reject(rej) => {
 				debug!(
 					"webhook rejected request: {}",
-					rej
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					rej.reason.as_deref().unwrap_or("no reason specified")
 				);
-				Ok(GuardrailOutcome::Rejected(
-					::http::response::Builder::new()
-						.status(rej.status_code)
-						.body(http::Body::from(rej.body))?,
+				Ok((
+					GuardrailOutcome::Rejected(
+						::http::response::Builder::new()
+							.status(rej.status_code)
+							.body(http::Body::from(rej.body))?,
+					),
+					Some(GuardDetail {
+						action_reason: rej.reason,
+						..Default::default()
+					}),
 				))
 			},
 			RequestAction::Pass(pass) => {
@@ -1446,7 +1581,7 @@ impl Policy {
 						.reason
 						.unwrap_or_else(|| "no reason specified".to_string())
 				);
-				Ok(GuardrailOutcome::None)
+				Ok((GuardrailOutcome::None, None))
 			},
 		}
 	}
@@ -1457,7 +1592,7 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
-	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let messages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let whr = match webhook::send_response(
@@ -1474,47 +1609,65 @@ impl Policy {
 				return match webhook.failure_mode {
 					FailureMode::FailOpen => {
 						warn!("webhook guardrail unavailable, failing open: {}", e);
-						Ok(GuardrailOutcome::FailOpen)
+						Ok((GuardrailOutcome::FailOpen, None))
 					},
 					FailureMode::FailClosed => Err(e),
 				};
 			},
 		};
 		if webhook.action == RejectAuditAction::Audit {
-			let verdict = match &whr.action {
-				ResponseAction::Mask(_) => "mask",
-				ResponseAction::Reject(_) => "reject",
-				ResponseAction::Pass(_) => return Ok(GuardrailOutcome::None),
+			let (would_action, reason) = match whr.action {
+				ResponseAction::Mask(m) => ("mask", m.reason),
+				ResponseAction::Reject(r) => ("reject", r.reason),
+				ResponseAction::Pass(_) => return Ok((GuardrailOutcome::None, None)),
 			};
-			log_guardrail_audit("webhook", GuardrailPhase::Response, verdict);
-			return Ok(GuardrailOutcome::Audit);
+			return Ok((
+				GuardrailOutcome::Audit,
+				Some(GuardDetail {
+					action_reason: reason,
+					assessments: vec![serde_json::json!({"wouldAction": would_action})],
+					..Default::default()
+				}),
+			));
 		}
-		match whr.action {
+		Self::webhook_response_outcome(whr.action)
+	}
+
+	fn webhook_response_outcome(
+		action: ResponseAction,
+	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
+		match action {
 			ResponseAction::Mask(mask) => {
 				debug!(
 					"webhook masked response: {}",
-					mask
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					mask.reason.as_deref().unwrap_or("no reason specified")
 				);
 				let MaskActionBody::ResponseChoices(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
-				Ok(GuardrailOutcome::Masked(ResponseGuardMutation::Choices(
-					body.choices,
-				)))
+				Ok((
+					GuardrailOutcome::Masked(ResponseGuardMutation::Choices(body.choices)),
+					Some(GuardDetail {
+						action_reason: mask.reason,
+						..Default::default()
+					}),
+				))
 			},
 			ResponseAction::Reject(rej) => {
 				debug!(
 					"webhook rejected response: {}",
-					rej
-						.reason
-						.unwrap_or_else(|| "no reason specified".to_string())
+					rej.reason.as_deref().unwrap_or("no reason specified")
 				);
-				Ok(GuardrailOutcome::Rejected(
-					::http::response::Builder::new()
-						.status(rej.status_code)
-						.body(http::Body::from(rej.body))?,
+				Ok((
+					GuardrailOutcome::Rejected(
+						::http::response::Builder::new()
+							.status(rej.status_code)
+							.body(http::Body::from(rej.body))?,
+					),
+					Some(GuardDetail {
+						action_reason: rej.reason,
+						..Default::default()
+					}),
 				))
 			},
 			ResponseAction::Pass(pass) => {
@@ -1524,7 +1677,7 @@ impl Policy {
 						.reason
 						.unwrap_or_else(|| "no reason specified".to_string())
 				);
-				Ok(GuardrailOutcome::None)
+				Ok((GuardrailOutcome::None, None))
 			},
 		}
 	}
@@ -1687,10 +1840,19 @@ impl Policy {
 		http_headers: &HeaderMap,
 		guards: &Vec<ResponseGuard>,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<Option<Response>> {
 		for g in guards {
-			let (action, rejection) =
-				Self::apply_single_response_guard(g, resp, http_headers, client, original).await?;
+			let (action, rejection) = Self::apply_single_response_guard(
+				g,
+				resp,
+				http_headers,
+				client,
+				original,
+				guardrail_log,
+				false,
+			)
+			.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Response, action);
 			if let Some(res) = rejection {
 				return Ok(Some(res));
@@ -1699,16 +1861,35 @@ impl Policy {
 		Ok(None)
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn apply_single_response_guard(
 		guard: &ResponseGuard,
 		resp: &mut dyn ResponseType,
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
+		guardrail_log: Option<&GuardrailLog>,
+		streaming: bool,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
-		let outcome =
+		let (outcome, detail) =
 			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original).await?;
-		Self::apply_response_guard_outcome(outcome, resp)
+
+		let outcome = if streaming && matches!(outcome, GuardrailOutcome::Masked(_)) {
+			// mask is not supported for streaming; we should not record for logging
+			GuardrailOutcome::None
+		} else {
+			outcome
+		};
+
+		let (action, rejection) = Self::apply_response_guard_outcome(outcome, resp)?;
+		record_guardrail(
+			guardrail_log,
+			GuardrailPhase::Response,
+			guard.kind.name(),
+			action,
+			detail,
+		);
+		Ok((action, rejection))
 	}
 
 	async fn evaluate_single_response_guard(
@@ -1717,9 +1898,12 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
-	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
+	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		match &guard.kind {
-			ResponseGuardKind::Regex(rg) => Ok(Self::evaluate_regex_response(resp, rg, &guard.rejection)),
+			ResponseGuardKind::Regex(rg) => Ok((
+				Self::evaluate_regex_response(resp, rg, &guard.rejection),
+				None,
+			)),
 			ResponseGuardKind::Webhook(wh) => {
 				Self::evaluate_webhook_response(resp, http_headers, client, wh, original).await
 			},
@@ -2176,6 +2360,18 @@ pub enum ResponseGuardKind {
 	GoogleModelArmor(GoogleModelArmor),
 	/// Use Azure Content Safety to evaluate the response.
 	AzureContentSafety(AzureContentSafety),
+}
+
+impl ResponseGuardKind {
+	fn name(&self) -> &'static str {
+		match self {
+			ResponseGuardKind::Regex(_) => "regex",
+			ResponseGuardKind::Webhook(_) => "webhook",
+			ResponseGuardKind::BedrockGuardrails(_) => "bedrockGuardrails",
+			ResponseGuardKind::GoogleModelArmor(_) => "googleModelArmor",
+			ResponseGuardKind::AzureContentSafety(_) => "azureContentSafety",
+		}
+	}
 }
 
 #[apply(schema!)]

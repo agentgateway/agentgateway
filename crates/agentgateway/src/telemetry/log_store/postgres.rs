@@ -1,8 +1,11 @@
 use std::fmt::Display;
+use std::time::Instant;
 
+use anyhow::Context;
 use serde_json::Value;
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use tracing::{error, info, warn};
 
 use super::{
 	AnalyticsGroup, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
@@ -17,10 +20,12 @@ pub struct PostgresLogStore {
 }
 
 const ANALYTICS_FILTER_OPTION_LIMIT: i64 = 500;
+const SCHEMA_LOCK_TIMEOUT: &str = "10s";
+const MIGRATIONS_TABLE: &str = "_agentgateway_request_log_migrations";
 
 impl PostgresLogStore {
 	pub async fn from_pool(pool: PgPool) -> anyhow::Result<Self> {
-		sqlx::raw_sql(SCHEMA).execute(&pool).await?;
+		migrate(&pool).await?;
 		Ok(Self { pool })
 	}
 
@@ -239,6 +244,50 @@ impl PostgresLogStore {
 			.last()
 			.map(|log| encode_cursor(log.completed_at, &log.id));
 		Ok(TailResponse { logs, next_cursor })
+	}
+}
+
+async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
+	let started = Instant::now();
+	info!(
+		lock_timeout = SCHEMA_LOCK_TIMEOUT,
+		"initializing request log database schema"
+	);
+
+	// Use one connection for all migration work, then close it so the session-scoped
+	// lock_timeout and any advisory lock left behind after an error cannot leak into the pool.
+	let mut connection = pool
+		.acquire()
+		.await
+		.context("failed to acquire connection for request log database migration")?;
+	connection.close_on_drop();
+	sqlx::query("SELECT set_config('lock_timeout', $1, false)")
+		.bind(SCHEMA_LOCK_TIMEOUT)
+		.execute(&mut *connection)
+		.await
+		.context("failed to configure request log database migration lock timeout")?;
+
+	let mut migrator = sqlx::migrate!("./src/telemetry/log_store/postgres_migrations");
+	// Keep request-log migrations independent from any other SQLx-managed schema that
+	// may share this database.
+	migrator.dangerous_set_table_name(MIGRATIONS_TABLE);
+	let result = migrator.run(&mut *connection).await;
+	if let Err(err) = connection.close().await {
+		warn!(
+			?err,
+			"failed to close request log database migration connection"
+		);
+	}
+
+	match result {
+		Ok(()) => {
+			info!(elapsed = ?started.elapsed(), "request log database schema is ready");
+			Ok(())
+		},
+		Err(err) => {
+			error!(?err, elapsed = ?started.elapsed(), "failed to migrate request log database schema");
+			Err(err).context("failed to migrate request log database schema")
+		},
 	}
 }
 
@@ -573,46 +622,6 @@ COPY request_logs (
 
 const COPY_REQUEST_LOG_PAYLOADS: &str = r#"
 COPY request_log_payloads (log_id, request_prompt_json, response_completion_json) FROM STDIN
-"#;
-
-const SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS request_logs (
-	id TEXT PRIMARY KEY,
-	started_at TIMESTAMPTZ NOT NULL,
-	completed_at TIMESTAMPTZ NOT NULL,
-	duration_ms BIGINT NOT NULL,
-	trace_id TEXT,
-	span_id TEXT,
-	http_status INTEGER,
-	error TEXT,
-	gen_ai_operation_name TEXT,
-	gen_ai_provider_name TEXT,
-	gen_ai_request_model TEXT,
-	gen_ai_response_model TEXT,
-	input_tokens BIGINT,
-	output_tokens BIGINT,
-	total_tokens BIGINT,
-	cost DOUBLE PRECISION,
-	agentgateway_user TEXT,
-	agentgateway_group TEXT,
-	user_agent_name TEXT,
-	has_payload BOOLEAN NOT NULL,
-	attributes_json JSONB NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS request_log_payloads (
-	log_id TEXT PRIMARY KEY REFERENCES request_logs(id) ON DELETE CASCADE,
-	request_prompt_json JSONB,
-	response_completion_json JSONB
-);
-
-CREATE INDEX IF NOT EXISTS idx_request_logs_completed_at ON request_logs(completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_http_status_completed_at ON request_logs(http_status, completed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_gen_ai_completed_at ON request_logs(gen_ai_provider_name, gen_ai_request_model, completed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_request_model_completed_at ON request_logs(gen_ai_request_model, completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_user_completed_at ON request_logs(agentgateway_user, completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_group_completed_at ON request_logs(agentgateway_group, completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_user_agent_completed_at ON request_logs(user_agent_name, completed_at DESC, id DESC);
 "#;
 
 const SELECT_LOGS: &str = r#"

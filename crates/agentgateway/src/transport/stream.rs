@@ -129,6 +129,10 @@ impl Connection for Socket {
 #[derive(Debug, Clone, Default)]
 pub struct HttpProxy;
 
+/// Deadline after which the connection pool will not reuse this connection for new requests.
+#[derive(Debug, Clone, Copy)]
+pub struct ConnectionDeadline(pub Instant);
+
 impl agent_pool::connect::Connection for Socket {
 	fn connected(&self) -> agent_pool::connect::Connected {
 		let mut con = agent_pool::connect::Connected::new();
@@ -143,6 +147,9 @@ impl agent_pool::connect::Connection for Socket {
 			Some(Alpn::H2) => con = con.negotiated_h2(),
 			Some(Alpn::Http11) => con = con.negotiated_h1(),
 			_ => {},
+		}
+		if let Some(ConnectionDeadline(deadline)) = self.ext.get::<ConnectionDeadline>() {
+			con = con.valid_until(*deadline);
 		}
 		con
 	}
@@ -377,12 +384,13 @@ impl Socket {
 
 	pub fn apply_tcp_settings(&mut self, settings: &TCP) {
 		if let SocketType::Tcp(tcp) = &self.inner
-			&& settings.keepalives.enabled
+			&& let Some(keepalives) = &settings.keepalives
+			&& keepalives.enabled
 		{
 			let ka = socket2::TcpKeepalive::new()
-				.with_time(settings.keepalives.time)
-				.with_retries(settings.keepalives.retries)
-				.with_interval(settings.keepalives.interval);
+				.with_time(keepalives.time)
+				.with_retries(keepalives.retries)
+				.with_interval(keepalives.interval);
 			let res = socket2::SockRef::from(tcp).set_tcp_keepalive(&ka);
 			tracing::trace!("set keepalive: {:?}", res);
 		}

@@ -26,6 +26,7 @@ spec:
         retries: 3
         time: 120s
         interval: 30s
+      maxConnections: 10
 ---
 # Output
 output:
@@ -40,6 +41,7 @@ output:
             interval: 30s
             retries: 3
             time: 120s
+          maxConnections: 10
       key: frontend/default/tcp-keepalive-policy:frontend-tcp:default/test
       name:
         kind: AgentgatewayPolicy

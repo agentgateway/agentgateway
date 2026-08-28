@@ -1,0 +1,315 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: model-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tenants
+  namespace: default
+spec:
+  parentRefs:
+  - name: model-gateway
+    sectionName: http
+  # The named rule "0" currently collides with the unnamed rule at index 0.
+  # The expected output below shows the correct behavior: the public rule uses
+  # router key :index:0, while the private rule and its model use its name, :0.
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /public
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+  - name: "0"
+    matches:
+    - path:
+        type: PathPrefix
+        value: /private
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: private-model
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenants
+    sectionName: "0"
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: private-auth
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenants
+    sectionName: "0"
+  traffic:
+    basicAuthentication:
+      secretRef:
+        name: private-users
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: private-users
+  namespace: default
+stringData:
+  .htpasswd: alice:hash
+
+---
+# Output
+output:
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/private-model/backend.default.tenants.0
+      name:
+        name: private-model
+        namespace: default
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    backend:
+      key: default/tenants.00.http
+      modelRouter:
+        routerKey: /llm:router:httproute:default:tenants:index:0
+      name:
+        name: tenants
+        namespace: default
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    backend:
+      key: default/tenants.01.http
+      modelRouter:
+        routerKey: /llm:router:httproute:default:tenants:0
+      name:
+        name: tenants
+        namespace: default
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/model-gateway
+      port: 80
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/model-gateway
+      key: default/model-gateway.http
+      name:
+        gatewayName: model-gateway
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/private-model/backend.default.tenants.0
+      key: default/private-model.default.tenants.0
+      listenerKey: default/model-gateway.http
+      match:
+        model: private-model
+      routerKey: /llm:router:httproute:default:tenants:0
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/private-auth:basicauth:default/tenants/0
+      name:
+        kind: AgentgatewayPolicy
+        name: private-auth
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: tenants
+          namespace: default
+          routeRule: "0"
+      traffic:
+        basicAuth: {}
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: /llm:router:httproute:default:tenants:index:0
+        weight: 1
+      key: default/tenants.00.http
+      listenerKey: default/model-gateway.http
+      matches:
+      - path:
+          pathPrefix: /public
+      name:
+        kind: HTTPRoute
+        name: tenants
+        namespace: default
+      trafficPolicies:
+      - urlRewrite:
+          prefix: ""
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: /llm:router:httproute:default:tenants:0
+        weight: 1
+      key: default/tenants.01.http
+      listenerKey: default/model-gateway.http
+      matches:
+      - path:
+          pathPrefix: /private
+      name:
+        kind: HTTPRoute
+        name: tenants
+        namespace: default
+        ruleName: "0"
+      trafficPolicies:
+      - urlRewrite:
+          prefix: ""
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: private-model
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: tenants
+        namespace: default
+        sectionName: "0"
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: model-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: tenants
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: model-gateway
+        namespace: default
+        sectionName: http

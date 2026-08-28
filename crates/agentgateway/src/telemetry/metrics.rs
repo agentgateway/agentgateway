@@ -161,6 +161,11 @@ pub struct ConnectLabels {
 	pub transport: DefaultedUnknown<RichStrng>,
 }
 
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct AdmissionLabels {
+	pub bind: DefaultedUnknown<RichStrng>,
+}
+
 #[derive(
 	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
 )]
@@ -275,6 +280,8 @@ pub struct Metrics {
 	pub downstream_connection: TCPCounter,
 	pub tcp_downstream_rx_bytes: Family<TCPLabels, counter::Counter>,
 	pub tcp_downstream_tx_bytes: Family<TCPLabels, counter::Counter>,
+	pub downstream_connections_shed: Family<AdmissionLabels, counter::Counter>,
+	pub requests_shed: Family<AdmissionLabels, counter::Counter>,
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
 	pub upstream_call_duration: Histogram<OutboundCallLabels>,
@@ -435,6 +442,16 @@ impl Metrics {
 				&mut registry,
 				"downstream_connections",
 				"The total number of downstream connections established",
+			),
+			downstream_connections_shed: build(
+				&mut registry,
+				"downstream_connections_shed",
+				"Total downstream connections closed by the active connection limit",
+			),
+			requests_shed: build(
+				&mut registry,
+				"requests_shed",
+				"Total downstream requests rejected by the in-flight request limit",
 			),
 
 			mcp_requests: build(

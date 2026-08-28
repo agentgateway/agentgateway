@@ -832,6 +832,7 @@ pub struct ProxyInputs {
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
+	pub admission: Arc<proxy::admission::AdmissionRegistry>,
 }
 
 impl ProxyInputs {
@@ -861,6 +862,7 @@ impl ProxyInputs {
 			mcp_state,
 			ca,
 			spiffe,
+			admission: Default::default(),
 		}
 	}
 }

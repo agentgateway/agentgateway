@@ -137,6 +137,7 @@ fn test_snapshot_matches_ref() {
 		None,
 		None,
 		None,
+		None,
 	);
 	let ref_executor = Executor::new_request(&req);
 
@@ -335,7 +336,7 @@ fn test_proxy_timing_is_native_duration() {
 		upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
 		response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
 	};
-	let executor = Executor::new_logger(None, None, None, None, None, Some(&proxy));
+	let executor = Executor::new_logger(None, None, None, None, None, None, Some(&proxy));
 	let expr = Expression::new_strict(
 		"proxy.requestProcessingDuration == duration('12ms') && \
 		 proxy.upstreamDuration == duration('675ms') && \
@@ -352,7 +353,7 @@ fn test_executor_snapshot_round_trip() {
 	let req_snapshot = snapshot_request(&mut req, true);
 
 	// Create executor from snapshot
-	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None, None);
+	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None, None, None);
 
 	// Serialize to JSON
 	let json = exec_to_json(&executor1);

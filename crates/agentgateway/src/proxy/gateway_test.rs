@@ -34,6 +34,26 @@ fn hbone_address_parsing() {
 	assert!(HboneAddress::try_from(&uri_no_port).is_err());
 }
 
+#[tokio::test]
+async fn auto_protocol_peek_dispatches_non_http_tcp_without_waiting_for_more_bytes() {
+	use std::time::Duration;
+
+	use tokio::io::AsyncWriteExt;
+
+	let (mut client, mut server) = tokio::io::duplex(8);
+	client.write_all(b"\x01").await.unwrap();
+
+	let n = tokio::time::timeout(
+		Duration::from_millis(100),
+		super::peek_auto_protocol(&mut server, &mut [0; 8]),
+	)
+	.await
+	.expect("non-HTTP TCP should be classified without waiting for more bytes")
+	.unwrap();
+
+	assert_eq!(n, 1);
+}
+
 #[test]
 fn hostname_resolution_logic() {
 	// Create a mock service store with a service that has a hostname

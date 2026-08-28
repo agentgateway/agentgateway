@@ -52,6 +52,9 @@ pub enum FailureMode {
 
 pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
 
+/// Application-defined "over quota" code (MCP defines none); shared with the guardrail mapping.
+pub(crate) const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
+
 /// Method names of rmcp's typed `ClientRequest` variants. Keep this list in sync with rmcp rev
 /// bumps; only `CustomRequest` and failed typed parses consult it, so drift cannot 404 typed
 /// requests.
@@ -159,6 +162,14 @@ pub enum Error {
 	Authorization(RequestId, String, String),
 	#[error("mcpGuardrails rejected: {}", .1.message)]
 	McpGuardrails(RequestId, rmcp::ErrorData),
+	// rate limit denial with a request id; renders as HTTP 200 + JSON-RPC error
+	#[error("{}", .message.as_deref().unwrap_or("rate limit exceeded"))]
+	RateLimited {
+		request_id: RequestId,
+		status: Option<crate::http::localratelimit::RateLimitStatus>,
+		message: Option<String>,
+		headers: Box<crate::http::HeaderMap>,
+	},
 	#[error("failed to process session_id query parameter")]
 	InvalidSessionIdQuery,
 	#[error("failed to establish get stream: {0}")]
@@ -177,6 +188,24 @@ impl Error {
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		let (id, error) = match self {
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
+			Error::RateLimited {
+				request_id: id,
+				status,
+				..
+			} => (
+				id.clone(),
+				ErrorData {
+					code: RESOURCE_EXHAUSTED,
+					message: self.to_string().into(),
+					data: status.map(|s| {
+						serde_json::json!({
+							"limit": s.limit,
+							"remaining": s.remaining,
+							"retryAfterSeconds": s.reset_seconds,
+						})
+					}),
+				},
+			),
 			Error::UnsupportedVersion {
 				request_id: Some(id),
 				version,
@@ -228,6 +257,92 @@ impl Error {
 		})
 		.ok()
 	}
+}
+
+// convert policy errors on MCP POSTs into JSON-RPC errors, rendered as HTTP 200 like
+// guardrail rejections. anything we can't extract a request id for keeps the plain error.
+pub(crate) async fn maybe_convert_mcp_error<T>(
+	res: Result<T, crate::proxy::ProxyResponse>,
+	inputs: &crate::ProxyInputs,
+	backend: Option<&crate::types::agent::RouteBackendReference>,
+	req: &mut crate::http::Request,
+) -> Result<T, crate::proxy::ProxyResponse> {
+	use crate::proxy::ProxyResponse;
+	let err = match res {
+		Err(ProxyResponse::Error(err)) => err,
+		other => return other,
+	};
+	// currently only rate limit denials have a JSON-RPC shape.
+	if !matches!(
+		err,
+		ProxyError::RateLimitExceeded { .. } | ProxyError::RemoteRateLimitExceeded { .. }
+	) {
+		return Err(ProxyResponse::Error(err));
+	}
+	// avoid converting errors for non-JSON RPC requests
+	// best effort; worst case scenario we find no request id
+	// at the MCP layer and fallback to the origial HTTP error
+	let path = req.uri().path();
+	if req.method() != ::http::Method::POST
+		|| path == "/sse"
+		|| auth::is_well_known_endpoint(path)
+		|| path.ends_with("client-registration")
+		|| crate::http::is_grpc_request(req)
+	{
+		return Err(ProxyResponse::Error(err));
+	}
+	let is_mcp = backend
+		.cloned()
+		.and_then(|b| crate::proxy::httpproxy::resolve_backend(b, inputs).ok())
+		.is_some_and(|b| matches!(b.backend.backend, crate::types::agent::Backend::MCP(_, _)));
+	if !is_mcp {
+		return Err(ProxyResponse::Error(err));
+	}
+	let limit = crate::http::buffer_limit(req);
+	let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
+	let id = match crate::http::read_body_with_limit(body, limit).await {
+		Ok(bytes) => serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&bytes)
+			.ok()
+			.as_ref()
+			.and_then(streamablehttp::request_id),
+		Err(_) => None,
+	};
+	let Some(request_id) = id else {
+		return Err(ProxyResponse::Error(err));
+	};
+	let converted = match err {
+		ProxyError::RateLimitExceeded {
+			limit,
+			remaining,
+			reset_seconds,
+		} => {
+			let status = crate::http::localratelimit::RateLimitStatus {
+				limit,
+				remaining,
+				reset_seconds,
+			};
+			Error::RateLimited {
+				request_id,
+				status: Some(status),
+				message: None,
+				headers: Box::new(status.to_headers()),
+			}
+			.into()
+		},
+		ProxyError::RemoteRateLimitExceeded {
+			status,
+			raw_body,
+			response_headers,
+		} => Error::RateLimited {
+			request_id,
+			status,
+			message: (!raw_body.is_empty()).then(|| String::from_utf8_lossy(&raw_body).into_owned()),
+			headers: response_headers,
+		}
+		.into(),
+		e => e,
+	};
+	Err(ProxyResponse::Error(converted))
 }
 
 impl From<Error> for ProxyError {

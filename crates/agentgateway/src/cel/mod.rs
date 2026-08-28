@@ -131,6 +131,8 @@ flagset::flags! {
 
 		Mcp,
 
+		Guardrails,
+
 		Extauthz,
 		Extproc,
 		Metadata,
@@ -419,6 +421,9 @@ fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
 			},
 			["mcp", ..] => {
 				attributes |= Attributes::Mcp;
+			},
+			["guardrails", ..] => {
+				attributes |= Attributes::Guardrails;
 			},
 			["extauthz", ..] => {
 				attributes |= Attributes::Extauthz;

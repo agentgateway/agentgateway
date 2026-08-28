@@ -258,6 +258,10 @@ controllerName: ""
 
 # -- Control-plane-wide Istio mesh defaults.
 istio:
+  # -- Grant the controller permission to discover Istio ServiceEntry and WorkloadEntry resources.
+  #    Set to false only when the Istio CRDs are not installed. This controls RBAC generation; it
+  #    does not disable Istio integration in the controller.
+  enabled: true
   # -- Enable Istio integration by default on all built-in-class gateways.
   #    When false (default), gateways opt in via AgentgatewayParameters spec.istio;
   #    when true, individual gateways can opt out via spec.istio.enabled=false.

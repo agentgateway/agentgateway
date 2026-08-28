@@ -2987,7 +2987,8 @@ pub struct LocalMcpAuthentication {
 	/// Expected token issuer, matched against the JWT `iss` claim.
 	pub issuer: String,
 	/// Accepted token audiences, matched against the JWT `aud` claim.
-	pub audiences: Vec<String>,
+	/// If unset, audience validation is disabled.
+	pub audiences: Option<Vec<String>>,
 	/// Identity provider type used to derive MCP authorization metadata and default JWKS URLs.
 	pub provider: Option<McpIDP>,
 	/// Protected resource metadata returned to MCP clients.
@@ -3080,7 +3081,7 @@ impl LocalMcpAuthentication {
 			location: self.authorization_location.clone(),
 			preserve_token: false,
 			issuer: self.issuer.clone(),
-			audiences: Some(self.audiences.clone()),
+			audiences: self.audiences.clone(),
 			jwks,
 			jwt_validation_options: self.jwt_validation_options.clone(),
 		})
@@ -3095,7 +3096,7 @@ impl LocalMcpAuthentication {
 		let jwt = jwt_cfg.try_into(resources).await?;
 		Ok(McpAuthentication {
 			issuer: self.issuer.clone(),
-			audiences: self.audiences.clone(),
+			audiences: self.audiences.clone().unwrap_or_default(),
 			provider: self.provider.clone(),
 			resource_metadata: self.resource_metadata.clone(),
 			jwt_validator: Arc::new(jwt),
@@ -3650,6 +3651,24 @@ resourceMetadata:
 		assert_eq!(auth.client_id.as_deref(), Some("client-id-guid"));
 		assert!(auth.client_secret.is_some());
 		assert!(auth.as_jwt().is_ok());
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_without_audiences() {
+		let yaml = r#"
+issuer: "https://example.com"
+jwks: '{"keys":[]}'
+resourceMetadata: {}
+"#;
+		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		assert_eq!(auth.audiences, None);
+
+		match auth.as_jwt().unwrap() {
+			http::jwt::LocalJwtConfig::Single { audiences, .. } => {
+				assert_eq!(audiences, None);
+			},
+			_ => panic!("Expected LocalJwtConfig::Single"),
+		}
 	}
 
 	#[test]

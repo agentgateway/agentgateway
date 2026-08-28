@@ -2338,8 +2338,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)
@@ -2396,8 +2395,7 @@ async fn upstream_encoding_is_applied_after_messages_response_translation() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			upstream,
 		)
@@ -2555,8 +2553,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			},
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)
@@ -3010,6 +3007,38 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
 		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_bedrock_sets_signing_region_with_host_override() {
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("ca-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	});
+	let mut req = crate::http::tests_common::request(
+		"https://bedrock-vpce.example.com/model/example/converse",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(&mut req, RouteType::Messages, None, None, None, true, None, None)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().authority().map(|authority| authority.as_str()),
+		Some("bedrock-vpce.example.com")
+	);
+	assert_eq!(
+		req
+			.extensions()
+			.get::<bedrock::AwsRegion>()
+			.map(|region| region.region.as_str()),
+		Some("ca-central-1")
 	);
 }
 

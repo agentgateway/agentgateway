@@ -662,9 +662,9 @@ fn apply_over_limit_response_returns_429() {
 		dynamic_metadata: None,
 		quota: None,
 	};
-	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
-	// Should have a direct response with 429
-	let direct = result.direct_response.unwrap();
+	let err = RemoteRateLimit::apply(&mut req, response).unwrap_err();
+	// Denial is data; rendering builds the 429
+	let direct = err.into_response_with_grpc(false);
 	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
 	assert_eq!(direct.headers().get("retry-after").unwrap(), "60");
 }
@@ -719,8 +719,8 @@ fn apply_over_limit_response_sets_x_ratelimit_headers_from_most_constrained_stat
 		quota: None,
 	};
 
-	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
-	let direct = result.direct_response.unwrap();
+	let err = RemoteRateLimit::apply(&mut req, response).unwrap_err();
+	let direct = err.into_response_with_grpc(false);
 
 	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
 	assert_eq!(direct.headers().get("retry-after").unwrap(), "38");

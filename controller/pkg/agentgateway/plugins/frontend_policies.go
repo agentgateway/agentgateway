@@ -315,6 +315,9 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 			spec.Keepalives.Retries = castUint32(ka.Retries) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 		}
 	}
+	if tcp.MaxConnections != nil {
+		spec.MaxConnections = castUint32(tcp.MaxConnections) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
 
 	tcpPolicy := &api.Policy{
 		Key:  name + frontendTcpPolicySuffix,
@@ -591,6 +594,9 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	spec.Http2KeepaliveInterval = durationToProto(http.HTTP2KeepaliveInterval)
 	spec.Http2KeepaliveTimeout = durationToProto(http.HTTP2KeepaliveTimeout)
 	spec.MaxConnectionDuration = durationToProto(http.MaxConnectionDuration)
+	if v := http.MaxConcurrentRequests; v != nil {
+		spec.MaxConcurrentRequests = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
 
 	httpPolicy := &api.Policy{
 		Key:  name + frontendHttpPolicySuffix,

@@ -211,6 +211,8 @@ sse-stream = "0.2"
 sqlx = { version = "0.9", default-features = false, features = [
     "chrono",
     "json",
+    "macros",
+    "migrate",
     "postgres",
     "runtime-tokio",
     "sqlite",

@@ -234,6 +234,7 @@ impl TCPProxy {
 				connection: client::ConnectionConfig {
 					transport,
 					tcp: backend_call.backend_policies.tcp.clone(),
+					max_connection_duration: None,
 				},
 			})
 			.await?;
@@ -1039,6 +1040,7 @@ mod tests {
 			ca: None,
 			spiffe: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
+			admission: Default::default(),
 		})
 	}
 

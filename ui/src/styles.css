@@ -5446,6 +5446,11 @@ textarea {
 	gap: 16px;
 }
 
+.traffic-bind-header .button-row {
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
 .traffic-bind-header h3 {
 	margin: 0;
 	font-size: 16px;
@@ -6579,8 +6584,18 @@ details summary {
 
 @media (max-width: 620px) {
 	.page-header,
-	.editor-title {
+	.editor-title,
+	.traffic-bind-header {
 		flex-direction: column;
+	}
+
+	.traffic-bind-header .button-row {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.traffic-bind-header .badge {
+		white-space: normal;
 	}
 
 	.eyebrow {

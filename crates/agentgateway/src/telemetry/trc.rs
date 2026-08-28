@@ -956,7 +956,15 @@ mod tests {
 		{
 			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
 			let resp_snap = snapshot_response(&mut resp(405));
-			let exec = Executor::new_logger(Some(&req_snap), Some(&resp_snap), None, None, None, None);
+			let exec = Executor::new_logger(
+				Some(&req_snap),
+				Some(&resp_snap),
+				None,
+				None,
+				None,
+				None,
+				None,
+			);
 			assert!(!should_export_span(Some(&keep_expr), &exec));
 		}
 
@@ -969,6 +977,7 @@ mod tests {
 				Some(&resp_snap),
 				None,
 				Some(&mcp),
+				None,
 				None,
 				None,
 			);
@@ -986,6 +995,7 @@ mod tests {
 				Some(&mcp),
 				None,
 				None,
+				None,
 			);
 			assert!(should_export_span(Some(&keep_expr), &exec));
 		}
@@ -994,7 +1004,15 @@ mod tests {
 		{
 			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
 			let resp_snap = snapshot_response(&mut resp(200));
-			let exec = Executor::new_logger(Some(&req_snap), Some(&resp_snap), None, None, None, None);
+			let exec = Executor::new_logger(
+				Some(&req_snap),
+				Some(&resp_snap),
+				None,
+				None,
+				None,
+				None,
+				None,
+			);
 			assert!(should_export_span(Some(&keep_expr), &exec));
 		}
 
@@ -1002,7 +1020,7 @@ mod tests {
 		// Under keep-semantics, eval errors fail closed (the span is dropped).
 		{
 			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
-			let exec = Executor::new_logger(Some(&req_snap), None, None, None, None, None);
+			let exec = Executor::new_logger(Some(&req_snap), None, None, None, None, None, None);
 			assert!(!should_export_span(Some(&keep_expr), &exec));
 		}
 

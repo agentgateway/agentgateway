@@ -116,6 +116,11 @@ impl<K: Key> Pool<K> {
 					return false;
 				}
 
+				if entry.value.past_deadline(now) {
+					trace!("evicting past-deadline for {:?}", key);
+					return false;
+				}
+
 				// Otherwise, keep this value...
 				true
 			});
@@ -283,12 +288,18 @@ impl H2Pool {
 			conn
 		}
 	}
-	fn reserve(&mut self) -> Option<ReservedHttp2Connection> {
+	fn reserve(&mut self, now: Instant) -> Option<ReservedHttp2Connection> {
 		while let Some(h) = self.0.front() {
 			if !h.tx.is_ready() {
 				// Connection is dead... remove it.
 				let _ = self.0.pop_front();
 				debug!("removing dead http2 connection");
+				continue;
+			}
+			if h.info.past_deadline(now) {
+				// expired, do not attach new streams.
+				let _ = self.0.pop_front();
+				debug!("removing past-deadline http2 connection");
 				continue;
 			}
 			match h.load.try_reserve_stream_slot() {
@@ -385,6 +396,9 @@ impl HttpConnection {
 			HttpConnection::Http1(h1) => h1.tx.is_ready(),
 			HttpConnection::Http2(h2) => h2.tx.is_ready(),
 		}
+	}
+	pub fn past_deadline(&self, now: Instant) -> bool {
+		self.conn_info().past_deadline(now)
 	}
 }
 
@@ -633,6 +647,12 @@ impl<K: Key> HostPool<K> {
 		key: K,
 		conn: HttpConnection,
 	) {
+		// do not put expired conns back into the idle pool handing them
+		// to a request waiting for a connection
+		if conn.past_deadline(settings.timer.now()) {
+			debug!("dropping past-deadline connection for {:?}", key);
+			return;
+		}
 		trace!(waiters=%self.waiters.len(), "return idle");
 		// we are returning, so there should only ever been 1 additional spot free
 		let capacity = 1;
@@ -925,8 +945,9 @@ impl<K: Key> Pool<K> {
 
 	pub(crate) fn checkout_or_register_waker(&self, key: K) -> CheckoutResult<K> {
 		let mut host = self.host(&key);
+		let now = self.settings.timer.now();
 		// First attempt: find any active H2 streams with available capacity and attach to that.
-		if let Some(reserved) = host.active_h2.reserve() {
+		if let Some(reserved) = host.active_h2.reserve(now) {
 			trace!("found active h2 connection with capacity");
 			let p = Pooled {
 				value: Some((key, HttpConnection::Http2(reserved))),
@@ -939,7 +960,6 @@ impl<K: Key> Pool<K> {
 
 		{
 			let expiration = Expiration::new(self.settings.timeout);
-			let now = self.settings.timer.now();
 			let popper = IdlePopper {
 				key: &key,
 				list: &mut host.idle,
@@ -1018,6 +1038,10 @@ impl<'a, K: Debug> IdlePopper<'a, K> {
 			// whole list...
 			if expiration.expires(entry.idle_at, now) {
 				trace!("removing expired connection for {:?}", self.key);
+				continue;
+			}
+			if entry.value.past_deadline(now) {
+				trace!("removing past-deadline connection for {:?}", self.key);
 				continue;
 			}
 
@@ -1550,8 +1574,32 @@ mod tests {
 		)
 	}
 
+	async fn mock_http1_connection_valid_until(deadline: Instant) -> HttpConnection {
+		let HttpConnection::Http1(c) = mock_http1_connection().await else {
+			unreachable!("mock is http1")
+		};
+		HttpConnection::Http1(ReservedHttp1Connection {
+			info: c.info.valid_until(deadline),
+			tx: c.tx,
+		})
+	}
+
 	async fn mock_http2_connection(max_streams: usize) -> HttpConnection {
 		mock_http2_connection_with_control(max_streams).await.0
+	}
+
+	async fn mock_http2_connection_valid_until(
+		max_streams: usize,
+		deadline: Instant,
+	) -> HttpConnection {
+		let HttpConnection::Http2(c) = mock_http2_connection(max_streams).await else {
+			unreachable!("mock is http2")
+		};
+		HttpConnection::Http2(ReservedHttp2Connection {
+			info: c.info.valid_until(deadline),
+			tx: c.tx,
+			load: c.load,
+		})
 	}
 
 	struct MockHttp2Control {
@@ -1861,6 +1909,66 @@ mod tests {
 		tokio::time::sleep(Duration::from_millis(8)).await;
 
 		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_pool_checkout_reuses_connection_before_deadline() {
+		let pool = pool_with_idle_timeout(Duration::from_secs(10));
+		let key = host_key("foo");
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+
+		pool.insert_new_connection(
+			sc,
+			mock_http1_connection_valid_until(Instant::now() + Duration::from_secs(60)).await,
+		);
+		let pooled = w.await.expect("waiter should receive inserted connection");
+		drop(pooled);
+
+		let _ = must_checkout(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_pool_checkout_skips_idle_connection_past_deadline() {
+		let pool = pool_with_idle_timeout(Duration::from_secs(10));
+		let key = host_key("foo");
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+
+		// The connection parks idle before its deadline, then the deadline passes while it sits
+		// in the pool (the idle-eviction interval has not fired yet).
+		pool.insert_new_connection(
+			sc,
+			mock_http1_connection_valid_until(Instant::now() + Duration::from_millis(30)).await,
+		);
+		let pooled = w.await.expect("waiter should receive inserted connection");
+		drop(pooled);
+		tokio::time::sleep(Duration::from_millis(80)).await;
+
+		// Checkout must dial a new connection instead of reusing the parked one.
+		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_pool_return_retires_past_deadline_connection() {
+		let pool = pool_with_idle_timeout(Duration::from_secs(10));
+		let key = host_key("foo");
+		let (sc, w) = must_want_new_connection(&pool, key.clone());
+
+		// A fresh connection still serves its first request even if the deadline already passed.
+		pool.insert_new_connection(sc, mock_http1_connection_valid_until(Instant::now()).await);
+		let pooled = w.await.expect("waiter should receive inserted connection");
+
+		// A second request queues while the first is in flight. When the first completes, the
+		// past-deadline connection must be retired, not renewed onto the waiter (which would
+		// keep it alive indefinitely under sustained load) or parked idle.
+		let (_sc2, mut w2) = must_want_new_connection(&pool, key.clone());
+		drop(pooled);
+		assert!(
+			w2.try_recv()
+				.expect("waiter should still be registered")
+				.is_none(),
+			"waiter must not receive the past-deadline connection"
+		);
+		assert!(pool.host(&key).idle.is_empty());
 	}
 
 	#[tokio::test]
@@ -2376,6 +2484,29 @@ mod tests {
 		tokio::time::sleep(Duration::from_millis(80)).await;
 
 		let _ = must_want_new_connection(&pool, key.clone());
+	}
+
+	#[tokio::test]
+	async fn test_h2_checkout_skips_active_connection_past_deadline() {
+		let pool = pool_with_expected_h2_capacity(2);
+		let key = host_key_h2("foo");
+		let (sc1, w1) = must_want_new_connection(&pool, key.clone());
+
+		pool.insert_new_connection(
+			sc1,
+			mock_http2_connection_valid_until(2, Instant::now()).await,
+		);
+		// The in-flight stream keeps working...
+		let pooled1 = w1.await.expect("get h2").unwrap();
+
+		// ...but even though the connection has spare capacity, it is past its deadline, so a
+		// checkout must dial a new connection instead of attaching another stream.
+		let (_sc2, _w2) = must_want_new_connection(&pool, key.clone());
+		assert!(
+			pool.host(&key).active_h2.0.is_empty(),
+			"past-deadline h2 connection should no longer be tracked for new streams"
+		);
+		drop(pooled1);
 	}
 
 	#[tokio::test]

@@ -6934,6 +6934,14 @@ spec:
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
+                      maxConcurrentRequests:
+                        description: |-
+                          Maximum number of in-flight HTTP requests across this gateway/port.
+                          This includes HTTP/1 requests and HTTP/2 streams. Requests over the limit
+                          are rejected immediately with a 503 response. Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
                       maxConnectionDuration:
                         description: |-
                           Maximum time a connection is allowed to remain open.
@@ -6950,8 +6958,8 @@ spec:
                     - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
                         http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
-                        maxConnectionDuration] must be set
-                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        maxConcurrentRequests maxConnectionDuration] must be set
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -7117,10 +7125,19 @@ spec:
                             - message: time must be at least 1 second
                               rule: duration(self) >= duration('1s')
                         type: object
+                      maxConnections:
+                        description: |-
+                          Maximum number of active downstream connections on this gateway/port.
+                          Connections over the limit are closed immediately. Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [keepalive] must be set
-                      rule: '[has(self.keepalive)].filter(x,x==true).size() >= 1'
+                    - message: at least one of the fields in [keepalive maxConnections]
+                        must be set
+                      rule: '[has(self.keepalive),has(self.maxConnections)].filter(x,x==true).size()
+                        >= 1'
                   tls:
                     description: Settings for managing incoming TLS connections.
                     properties:

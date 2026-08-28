@@ -1,5 +1,7 @@
 use agentgateway::test_helpers::ateapimock;
-use agentgateway::types::agent::{Backend, BindMode, TunnelProtocol};
+use agentgateway::transport::stream::TLSConnectionInfo;
+use agentgateway::transport::tls::TlsInfo;
+use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
 use protos::ateapi::{Actor, ActorStatus, ResumeActorResponse};
 use tokio::sync::Notify;
 
@@ -134,7 +136,7 @@ async fn actor_ingress_resolves_the_dynamic_backend() {
 		.attach_route_policy(json!({
 			"substrateIngress": {
 				"host": api.address.to_string(),
-				"targetPort": actor.address().port(),
+				"connectTargetPort": actor.address().port(),
 			}
 		}))
 		.await;
@@ -182,7 +184,7 @@ async fn actor_ingress_parks_while_worker_capacity_recovers() {
 		.attach_route_policy(json!({
 			"substrateIngress": {
 				"host": api.address.to_string(),
-				"targetPort": actor.address().port(),
+				"connectTargetPort": actor.address().port(),
 				"requestParking": {
 					"budget": "1s",
 					"max": 1,
@@ -233,7 +235,7 @@ async fn actor_ingress_sheds_when_request_parking_is_full() {
 		.attach_route_policy(json!({
 			"substrateIngress": {
 				"host": api.address.to_string(),
-				"targetPort": actor.address().port(),
+				"connectTargetPort": actor.address().port(),
 				"requestParking": {
 					"budget": "1s",
 					"max": 1,
@@ -292,7 +294,7 @@ async fn actor_ingress_keeps_cached_actor_available_when_parking_is_full() {
 		.attach_route_policy(json!({
 			"substrateIngress": {
 				"host": api.address.to_string(),
-				"targetPort": actor.address().port(),
+				"connectTargetPort": actor.address().port(),
 				"requestParking": {
 					"budget": "1s",
 					"max": 1,
@@ -361,7 +363,7 @@ async fn actor_ingress_uses_the_original_connect_authority() {
 		.attach_route_policy(json!({
 			"substrateIngress": {
 				"host": api.address.to_string(),
-				"targetPort": actor.address().port(),
+				"connectTargetPort": actor.address().port(),
 			}
 		}))
 		.await;
@@ -413,13 +415,35 @@ async fn actor_ingress_uses_the_original_connect_authority() {
 }
 
 #[tokio::test]
-async fn actor_ingress_rejects_atunnel_without_alpn() {
+async fn actor_ingress_uses_backend_tunnel_for_connect() {
+	let actor = simple_mock().await;
+	let actor_address = *actor.address();
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let atunnel_address = listener.local_addr().unwrap();
 	let atunnel = tokio::spawn(async move {
-		let (mut stream, _) = listener.accept().await.unwrap();
-		let mut buf = [0; 1];
-		assert_eq!(stream.read(&mut buf).await.unwrap(), 0);
+		let (mut downstream, _) = listener.accept().await.unwrap();
+		let mut request = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = downstream.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT request unexpectedly closed");
+			request.extend_from_slice(&chunk[..n]);
+			if request.windows(4).any(|window| window == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let request = String::from_utf8(request).unwrap();
+		assert!(
+			request
+				.starts_with("CONNECT my-actor.demo.actors.resources.substrate.ate.dev:9090 HTTP/1.1\r\n"),
+			"unexpected tunnel request: {request:?}"
+		);
+		downstream
+			.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+			.await
+			.unwrap();
+		let mut upstream = TcpStream::connect(actor_address).await.unwrap();
+		let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
 	});
 
 	let calls = Arc::new(AtomicUsize::new(0));
@@ -434,46 +458,58 @@ async fn actor_ingress_rejects_atunnel_without_alpn() {
 	.spawn()
 	.await;
 
-	let dynamic = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
-	let bind = simple_bind();
+	let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
+	let dynamic_name = dynamic_backend.name();
+	let dynamic = BackendWithPolicies {
+		backend: dynamic_backend,
+		inline_policies: vec![BackendTrafficPolicy::Tunnel(backend::Tunnel {
+			proxy: Arc::new(SimpleBackendReference::Backend(dynamic_name.clone())),
+			mode: backend::TunnelMode::Connect,
+			policies: vec![],
+		})],
+	};
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.tunnel_protocol = TunnelProtocol::Connect;
+	let mut inner = simple_bind();
+	inner.key = strng::literal!("bind/wildcard");
+	inner.mode = BindMode::Internal;
 	let mut gateway = setup_proxy_test("{}")
 		.unwrap()
-		.with_raw_backend(dynamic.into())
-		.with_bind(bind)
-		.with_route(basic_named_route(strng::literal!("/dynamic")))
-		.with_connect_enabled();
+		.with_raw_backend(dynamic)
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_route(basic_named_route(strng::literal!("/dynamic")));
 	gateway
 		.attach_route_policy(json!({
 			"substrateIngress": {
 				"host": api.address.to_string(),
-				"targetPort": atunnel_address.port(),
 				"connectTargetPort": atunnel_address.port(),
 			}
 		}))
 		.await;
-
-	let mut io = gateway.serve_tunnel(BIND_KEY);
+	let mut io = gateway.serve_tunnel(strng::literal!("outer"));
 	let authority = "my-actor.demo.actors.resources.substrate.ate.dev:9090";
 	io.write_all(format!("CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n").as_bytes())
 		.await
 		.unwrap();
+	let mut response = [0; 128];
+	let response_len = io.read(&mut response).await.unwrap();
+	assert!(String::from_utf8_lossy(&response[..response_len]).starts_with("HTTP/1.1 200 OK\r\n"));
+
+	io.write_all(b"GET / HTTP/1.1\r\nHost: irrelevant.example\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
 	let mut response = Vec::new();
-	loop {
-		let mut chunk = [0; 1024];
-		let n = io.read(&mut chunk).await.unwrap();
-		assert!(n > 0, "CONNECT response unexpectedly closed");
-		response.extend_from_slice(&chunk[..n]);
-		if response.windows(4).any(|window| window == b"\r\n\r\n") {
-			break;
-		}
-	}
-	assert!(
-		String::from_utf8_lossy(&response).contains("HTTP/1.1 503 Service Unavailable"),
-		"unexpected CONNECT response: {}",
-		String::from_utf8_lossy(&response),
-	);
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut response))
+		.await
+		.expect("timed out waiting for tunneled response")
+		.unwrap();
+	assert!(String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"));
 	assert_eq!(calls.load(Ordering::Relaxed), 1);
-	atunnel.await.unwrap();
+	assert_eq!(actor.received_requests().await.unwrap().len(), 1);
+	drop(io);
+	atunnel.abort();
 }
 
 #[tokio::test]
@@ -502,12 +538,21 @@ async fn substrate_egress_authorizes_a_reentered_connect_request() {
 		}))
 		.await;
 
-	let mut io = gateway.serve_tunnel(strng::literal!("outer"));
-	io.write_all(
-		b"CONNECT allowed.example:18080 HTTP/1.1\r\nHost: allowed.example:18080\r\nX-Ate-Atespace: demo\r\nX-Ate-Actor: my-actor\r\nX-Ate-Actor-Version: 1\r\n\r\n",
-	)
-	.await
-	.unwrap();
+	let mut io = gateway.serve_tunnel_with_tls_info(
+		strng::literal!("outer"),
+		Some(TLSConnectionInfo {
+			src_identity: Some(TlsInfo {
+				spiffe_id: Some(strng::literal!(
+					"spiffe://substrate-actor.local/atespace/demo/actor/my-actor"
+				)),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+	);
+	io.write_all(b"CONNECT allowed.example:18080 HTTP/1.1\r\nHost: allowed.example:18080\r\n\r\n")
+		.await
+		.unwrap();
 	let mut response = Vec::new();
 	loop {
 		let mut chunk = [0; 1024];
