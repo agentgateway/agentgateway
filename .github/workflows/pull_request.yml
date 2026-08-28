@@ -94,8 +94,40 @@ jobs:
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Generation
       run: make generate-schema check-clean-repo check-default-members
+    - name: Verify FIPS TLS call sites
+      run: ./tools/fips-tls-call-sites.sh
     - name: Lint
       run: make lint
+
+  # The FIPS backend is non-default, so the regular proxy jobs do not compile it.
+  # Keep the source-level implementation healthy with a dedicated job.
+  fips-proxy:
+    name: "FIPS: Proxy source"
+    timeout-minutes: 30
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
+      with:
+        rust-version: "${{ env.RUST_VERSION }}"
+        cache-key: fips-proxy
+        save: ${{ github.ref == 'refs/heads/main' }}
+    # aws-lc-fips-sys compiles its bundled C module and needs Go and native build tools.
+    - name: Install Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: "${{ env.GO_VERSION }}"
+        cache: false
+    - name: Install AWS-LC-FIPS build dependencies
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake nasm perl
+    - name: Build FIPS proxy
+      run: UI=0 PROFILE=dev CARGO_BUILD_ARGS="-p agentgateway-app" make build-fips
+    - name: Test FIPS proxy
+      run: ./tools/fips-tests.sh
 
   #### UI jobs ####
   ui-lint:

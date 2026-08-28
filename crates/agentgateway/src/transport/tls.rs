@@ -15,9 +15,9 @@ use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
 use crate::apply;
-// Provider construction lives in the central `crypto` module; re-export here so
-// existing `transport::tls::provider*` call sites keep working unchanged.
-pub use crate::crypto::tls::{provider, provider_with_cipher_suites, provider_with_options};
+// Provider construction lives in the central `crypto` module; re-export its
+// public factories through the existing `transport::tls` path.
+pub use crate::crypto::tls::{provider, provider_with_options_validated};
 use crate::serdes::schema;
 use crate::transport::stream::Socket;
 use crate::types::discovery::Identity;
@@ -78,9 +78,18 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls_symcrypt::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 ];
 
-#[cfg(feature = "crypto-aws-lc")]
+#[cfg(all(feature = "crypto-aws-lc", not(feature = "crypto-aws-lc-fips")))]
 pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	KeyExchangeGroup::X25519.to_supported_kx_group(),
+	KeyExchangeGroup::P256.to_supported_kx_group(),
+	KeyExchangeGroup::P384.to_supported_kx_group(),
+	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),
+];
+
+// Bare X25519 is not an approved group; the AWS-LC FIPS module does report
+// X25519MLKEM768 as approved, so the hybrid PQC group stays.
+#[cfg(feature = "crypto-aws-lc-fips")]
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	KeyExchangeGroup::P256.to_supported_kx_group(),
 	KeyExchangeGroup::P384.to_supported_kx_group(),
 	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),

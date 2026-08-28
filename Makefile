@@ -40,6 +40,7 @@ docker-s390x:
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -f $(DOCKERFILE_S390X) -t $(IMAGE_FULL_NAME)-s390x . --progress=plain
 
 CARGO_BUILD_ARGS ?=
+PROFILE ?= release
 
 # The web UI is embedded into the binary via the `ui` cargo feature, which
 # compiles the built assets from ui/dist into the binary at build time. Those
@@ -76,6 +77,11 @@ build-target: $(UI_PREREQ)
 .PHONY: build-symcrypt
 build-symcrypt: $(UI_PREREQ)
 	cargo build --release --no-default-features --features jemalloc,mimalloc,crypto-symcrypt $(UI_FEATURE) $(CARGO_BUILD_ARGS)
+
+# Build with the AWS-LC-FIPS provider instead of the default AWS-LC provider.
+.PHONY: build-fips
+build-fips: $(UI_PREREQ)
+	cargo build --profile $(PROFILE) --no-default-features --features jemalloc,mimalloc,crypto-aws-lc-fips $(UI_FEATURE) $(CARGO_BUILD_ARGS)
 
 # lint
 .PHONY: lint

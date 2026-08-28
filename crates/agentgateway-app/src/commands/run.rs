@@ -47,6 +47,13 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				config.logging.format == LoggingFormat::Json,
 			);
 			info!("version: {}", version::BuildInfo::new());
+			// Which crypto backend is compiled in, and whether it operates in FIPS mode.
+			// Without this the two builds are indistinguishable at runtime.
+			info!(
+				backend = agentgateway::crypto::CRYPTO_BACKEND,
+				fips = agentgateway::crypto::provider().fips(),
+				"crypto backend"
+			);
 			info!(
 				"running with config: {}",
 				serdes::yamlviajson::to_string(&config)?
