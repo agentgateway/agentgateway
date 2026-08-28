@@ -34,4 +34,4 @@ pub rest: serde_json::Value
 Only fields we specifically operate on (like `model`) need to be included in the type definitions.
 
 However, in some cases having the full typed definitions is useful, such as for conversion from one type to another.
-In these, we have additional `typed` variation that we upgrade the passhthrough type to internally.
+In these, we have additional `typed` variation that we upgrade the passthrough type to internally.
