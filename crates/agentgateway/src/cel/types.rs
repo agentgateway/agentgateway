@@ -2447,7 +2447,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			cost_status: None,
 		}),
 		mcp: Some(MCPInfo {
-			method_name: Some("tools/call".to_string()),
+			method_name: Some("tools/call".into()),
 			session_id: Some("session-123".to_string()),
 			tool: Some(MCPTool {
 				target: "my-mcp-server".to_string(),

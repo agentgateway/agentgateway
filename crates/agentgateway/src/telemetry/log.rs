@@ -1383,7 +1383,7 @@ impl Drop for DropOnLog {
 					.metrics
 					.mcp_requests
 					.get_or_create(&MCPCall {
-						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
+						method: mcp.method_name.clone().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
 						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
@@ -1785,7 +1785,7 @@ impl Drop for DropOnLog {
 				.or_else(|| {
 					let request = log.request_snapshot.as_ref()?;
 					crate::http::is_grpc_content_type(&request.headers)
-						.then(|| request.path.path().trim_start_matches('/').to_owned())
+						.then(|| strng::new(request.path.path().trim_start_matches('/')))
 				});
 
 			if enable_trace && let Some(t) = &log.tracer {
