@@ -460,7 +460,7 @@ async fn cookie_browser_session_store_returns_expired_values_for_refresh() {
 async fn apply_derives_claims_from_stored_id_token() {
 	let policy = test_policy();
 	let id_token = signed_id_token(TEST_NONCE);
-	let encoded = policy
+	let session_cookie = policy
 		.browser_session_store
 		.save(&BrowserSession {
 			policy_id: policy.policy_id.clone(),
@@ -469,7 +469,7 @@ async fn apply_derives_claims_from_stored_id_token() {
 			expires_at_unix: Some(now_unix() + 300),
 		})
 		.await
-		.expect("encode session");
+		.expect("save browser session");
 	let mut req = request(
 		Method::GET,
 		"https://app.example.com/protected",
@@ -477,7 +477,7 @@ async fn apply_derives_claims_from_stored_id_token() {
 	);
 	add_cookie(
 		&mut req,
-		format!("{}={encoded}", policy.session.cookie_name),
+		format!("{}={session_cookie}", policy.session.cookie_name),
 	);
 
 	let response = test_helpers::test_policy(&policy, &mut req)
