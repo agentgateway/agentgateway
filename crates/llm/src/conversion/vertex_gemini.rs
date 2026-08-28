@@ -458,8 +458,8 @@ pub mod from_completions {
 	/// Convert an OpenAI `file` content part into a Gemini part.
 	///
 	/// Mirrors [`image_part`]: inline `data:` payloads become `inlineData`, `gs://`
-	/// objects become `fileData`, and anything Vertex cannot fetch is rejected rather
-	/// than dropped.
+	/// objects and public `https://` URLs become `fileData`, and anything Vertex cannot
+	/// fetch is rejected rather than dropped.
 	fn file_part(file: Option<&Value>) -> Result<vg::Part, AIError> {
 		let field = |k: &str| {
 			file
@@ -469,6 +469,7 @@ pub mod from_completions {
 		};
 		let file_data = field("file_data");
 		let file_id = field("file_id");
+		let file_url = field("url");
 
 		if let Some((mime, data)) = parse_data_url(file_data) {
 			if !mime.is_empty() {
@@ -499,6 +500,20 @@ pub mod from_completions {
 				))));
 			};
 			return Ok(file_data_part(&mime, uri));
+		}
+
+		// Vertex can fetch public HTTPS URLs directly. The nested `url` field is the
+		// Responses-style file source; use the filename when the URL has no extension.
+		if file_url.starts_with("https://") {
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+				.or_else(|| mime_from_extension(file_url).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
+					"https:// file ({file_url}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use a URL with a known extension"
+				))));
+			};
+			return Ok(file_data_part(&mime, file_url));
 		}
 
 		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.

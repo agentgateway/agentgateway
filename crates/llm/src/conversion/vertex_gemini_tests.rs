@@ -202,6 +202,30 @@ fn file_id_holding_a_gs_uri_becomes_file_data() {
 }
 
 #[test]
+fn file_url_https_becomes_file_data() {
+	let g = to_gemini(file_content(json!({
+		"url": "https://example.com/report.pdf"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(
+		part["fileData"]["fileUri"],
+		"https://example.com/report.pdf"
+	);
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn file_url_https_uses_filename_for_mime() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"url": "https://example.com/download"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], "https://example.com/download");
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
 fn file_id_is_rejected_rather_than_dropped() {
 	// Vertex has no OpenAI Files store, so an opaque file_id cannot be resolved. It must
 	// error rather than silently vanish from the request (#3117).
