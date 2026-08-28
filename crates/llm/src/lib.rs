@@ -647,7 +647,10 @@ mod token_gap_summary_tests {
 
 		// All other buckets remain untouched.
 		for (i, &(count, mean)) in buckets.iter().enumerate() {
-			if i == 0 || i == INTER_CHUNK_LATENCY_BUCKETS.len() - 1 || i == INTER_CHUNK_LATENCY_BUCKETS.len() {
+			if i == 0
+				|| i == INTER_CHUNK_LATENCY_BUCKETS.len() - 1
+				|| i == INTER_CHUNK_LATENCY_BUCKETS.len()
+			{
 				continue;
 			}
 			assert_eq!(count, 0);

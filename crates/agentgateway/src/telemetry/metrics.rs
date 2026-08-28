@@ -415,9 +415,7 @@ impl Metrics {
 			gen_ai_time_to_first_token.clone(),
 		);
 
-		let gen_ai_inter_chunk_latency = Family::<GenAILabels, _>::new_with_constructor(move || {
-			PromHistogram::new(OUTPUT_TOKEN_BUCKET)
-		});
+		let gen_ai_inter_chunk_latency = histogram_family(histogram_mode, &OUTPUT_TOKEN_BUCKET);
 		registry.register(
 			"gen_ai_server_inter_chunk_latency",
 			"Time between consecutive output chunks for a given request",
