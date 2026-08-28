@@ -14,6 +14,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"net"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 )
 
 const (
@@ -41,6 +43,33 @@ const (
 	xdsCACertLifetime      = 10 * 365 * 24 * time.Hour
 	xdsLeafCertLifetime    = 24 * time.Hour
 	xdsLeafCertRenewBefore = 12 * time.Hour
+
+	// xdsLeafCertWarnBefore is the remaining-lifetime threshold at which a
+	// warning log is emitted. It is intentionally shorter than the renewal
+	// window so the warning only fires when rotation has fallen behind
+	// schedule — most useful for externally-provided certificates where the
+	// operator is responsible for rotation.
+	xdsLeafCertWarnBefore = 6 * time.Hour
+)
+
+var (
+	xdsCertExpiry = metrics.NewGauge(metrics.GaugeOpts{
+		Subsystem: xdsSubsystem,
+		Name:      "cert_expiry_seconds",
+		Help:      "Expiry timestamp (Unix seconds) of the current xDS serving certificate",
+	}, nil)
+
+	xdsCertRotationTotal = metrics.NewCounter(metrics.CounterOpts{
+		Subsystem: xdsSubsystem,
+		Name:      "cert_rotation_total",
+		Help:      "Total number of successful xDS certificate rotations",
+	}, nil)
+
+	xdsCertRotationErrors = metrics.NewCounter(metrics.CounterOpts{
+		Subsystem: xdsSubsystem,
+		Name:      "cert_rotation_errors_total",
+		Help:      "Total number of failed xDS certificate rotations",
+	}, nil)
 )
 
 type xdsTLSMaterial struct {
@@ -125,19 +154,44 @@ func (s *xdsTLSMaterialSyncer) refreshSecret(secret *corev1.Secret, force bool) 
 	}
 	certPEM, keyPEM, err := extractServingMaterial(secret, s.hosts)
 	if err != nil {
+		xdsCertRotationErrors.Inc()
 		return err
 	}
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
+		xdsCertRotationErrors.Inc()
 		return err
 	}
 	cert.Leaf, err = parseCertificate(certPEM)
 	if err != nil {
+		xdsCertRotationErrors.Inc()
 		return err
 	}
 	s.material.setCertificate(cert)
 	s.lastRV = secret.ResourceVersion
 	s.scheduleRenewal(secret, cert)
+
+	// Surface the current certificate's expiry via a Prometheus gauge and bump
+	// the rotation counter. The counter fires on every successful refresh; for
+	// auto-generated leaves this matches the rotation cadence.
+	xdsCertExpiry.Set(float64(cert.Leaf.NotAfter.Unix()))
+	xdsCertRotationTotal.Inc()
+
+	// If the serving certificate is nearing expiry faster than the renewal
+	// window expected, log a warning so operators can notice. This is most
+	// useful for externally-provided certificates where the operator is
+	// responsible for rotation; for auto-generated leaves the renewal
+	// mechanism is expected to keep the remaining lifetime well above this
+	// threshold.
+	if time.Until(cert.Leaf.NotAfter) <= xdsLeafCertWarnBefore {
+		slog.Warn("xDS serving certificate is expiring soon",
+			"not_after", cert.Leaf.NotAfter.Format(time.RFC3339),
+			"remaining", time.Until(cert.Leaf.NotAfter).Round(time.Second))
+	} else {
+		slog.Info("xDS serving certificate refreshed",
+			"not_after", cert.Leaf.NotAfter.Format(time.RFC3339))
+	}
+
 	return nil
 }
 

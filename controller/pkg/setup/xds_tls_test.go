@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -10,6 +11,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -232,6 +234,124 @@ func TestXdsTLSMaterialSyncerRefreshesChangedSecret(t *testing.T) {
 	cert, err = material.GetCertificate(nil)
 	require.NoError(t, err)
 	require.Equal(t, "watch-ca", cert.Leaf.Issuer.CommonName)
+}
+
+func TestRefreshSecretUpdatesCertMetrics(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	material := &xdsTLSMaterial{}
+	s := &xdsTLSMaterialSyncer{
+		ctx:      ctx,
+		hosts:    []string{"xds.default.svc"},
+		material: material,
+	}
+
+	caCert, caKey, err := generateCA("metrics-ca")
+	require.NoError(t, err)
+	secret := xdsSecret(map[string][]byte{
+		xdsCACertKey: caCert,
+		xdsCAKeyKey:  caKey,
+	})
+	secret.ResourceVersion = "1"
+
+	require.NoError(t, s.refreshSecret(secret, true))
+
+	// Verify a valid cert was loaded with expected lifetime.
+	cert, err := material.GetCertificate(nil)
+	require.NoError(t, err)
+	require.WithinDuration(t, time.Now().Add(xdsLeafCertLifetime), cert.Leaf.NotAfter, time.Minute)
+}
+
+func TestRefreshSecretHandlesShortLivedCert(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	material := &xdsTLSMaterial{}
+	s := &xdsTLSMaterialSyncer{
+		ctx:      ctx,
+		hosts:    []string{"xds.default.svc"},
+		material: material,
+	}
+
+	// Provide a direct serving certificate with a 1h remaining lifetime
+	// (within the 6h warning window) to exercise the warning log path.
+	caCert, caKey, err := generateCA("short-lived-ca")
+	require.NoError(t, err)
+	leafCert, leafKey, err := generateLeafWithLifetime(caCert, caKey, []string{"xds.default.svc"}, time.Hour)
+	require.NoError(t, err)
+	secret := xdsSecret(map[string][]byte{
+		xdsCertKey:   leafCert,
+		xdsKeyKey:    leafKey,
+		xdsCACertKey: caCert,
+	})
+	secret.ResourceVersion = "1"
+
+	// refreshSecret should succeed and load the short-lived cert without panic.
+	require.NoError(t, s.refreshSecret(secret, true))
+
+	cert, err := material.GetCertificate(nil)
+	require.NoError(t, err)
+	require.WithinDuration(t, time.Now().Add(time.Hour), cert.Leaf.NotAfter, time.Minute)
+}
+
+func TestRefreshSecretErrorOnBadSecret(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	material := &xdsTLSMaterial{}
+	s := &xdsTLSMaterialSyncer{
+		ctx:      ctx,
+		hosts:    []string{"xds.default.svc"},
+		material: material,
+	}
+
+	// A secret with no usable keys hits the error path in extractServingMaterial.
+	secret := xdsSecret(map[string][]byte{})
+	secret.ResourceVersion = "1"
+
+	require.Error(t, s.refreshSecret(secret, true))
+}
+
+// generateLeafWithLifetime creates a leaf certificate signed by the given CA
+// with a custom remaining lifetime (NotAfter = now + lifetime).
+func generateLeafWithLifetime(caCertPEM, caKeyPEM []byte, hosts []string, lifetime time.Duration) ([]byte, []byte, error) {
+	caBlock, _ := pem.Decode(caCertPEM)
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	caKeyBlock, _ := pem.Decode(caKeyPEM)
+	caKeyI, err := x509.ParsePKCS8PrivateKey(caKeyBlock.Bytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	caKeySigner, ok := caKeyI.(crypto.Signer)
+	if !ok {
+		return nil, nil, fmt.Errorf("CA key is not a crypto.Signer")
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	serial, _ := rand.Int(rand.Reader, big.NewInt(1<<62))
+	tpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "agw-xds-server"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(lifetime),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     hosts,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, caCert, &leafKey.PublicKey, caKeySigner)
+	if err != nil {
+		return nil, nil, err
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyDER, err := x509.MarshalPKCS8PrivateKey(leafKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	return certPEM, keyPEM, nil
 }
 
 func testCertificate(t *testing.T, notAfter time.Time) tls.Certificate {
