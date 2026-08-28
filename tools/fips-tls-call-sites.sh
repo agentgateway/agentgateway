@@ -42,7 +42,10 @@ done < <(grep -nE '(^[[:space:]]*|[=(:,][[:space:]]*|return[[:space:]]+)CryptoPr
 
 if [[ ${status} -eq 0 ]]; then
   # Config builders only: verifier builders also match the bare call.
-  sites=$(grep -cE '(Client|Server)Config::builder_with_provider\(' "${sources[@]}" 2>/dev/null | awk -F: '{n+=$2} END {print n+0}')
+  sites=$(
+    { grep -cE '(Client|Server)Config::builder_with_provider\(' "${sources[@]}" 2>/dev/null || true; } |
+      awk -F: '{n+=$2} END {print n+0}'
+  )
   echo "Verified ${sites} rustls config sites: no provider bypasses or FIPS escape hatches outside crypto::tls."
 fi
 exit ${status}

@@ -305,7 +305,7 @@ impl ResolvedBackendTLS {
 			)?;
 			let ccb = ClientConfig::builder_with_provider(provider.clone())
 				.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-				.expect("server config must be valid")
+				.expect("client config must be valid")
 				.with_root_certificates(roots.clone());
 
 			let mut cc = match (self.cert, self.key) {
