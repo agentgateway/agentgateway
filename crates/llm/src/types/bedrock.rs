@@ -58,6 +58,13 @@ pub enum ReasoningContentBlock {
 		#[serde(rename = "reasoningText")]
 		reasoning_text: ReasoningText,
 	},
+	// Encrypted reasoning: { "redactedContent": "<base64>" }. Emitted by models
+	// that never expose plaintext reasoning in non-streaming responses (e.g.
+	// xAI Grok 4.6 on Bedrock Converse).
+	Redacted {
+		#[serde(rename = "redactedContent")]
+		redacted_content: String,
+	},
 	// Legacy/simple format: { "text": "..." }
 	Simple {
 		text: String,

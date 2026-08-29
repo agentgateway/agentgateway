@@ -2017,3 +2017,34 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		"unexpected error: {err}"
 	);
 }
+
+#[test]
+fn test_reasoning_content_block_deserializes_redacted_content() {
+	// xAI Grok 4.6 on Bedrock Converse returns encrypted reasoning as
+	// { "reasoningContent": { "redactedContent": "<base64>" } } in
+	// non-streaming responses; this must parse, not 502.
+	let block: types::bedrock::ContentBlock = serde_json::from_value(json!({
+		"reasoningContent": { "redactedContent": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo" }
+	}))
+	.expect("redactedContent variant must deserialize");
+	match block {
+		types::bedrock::ContentBlock::ReasoningContent(
+			types::bedrock::ReasoningContentBlock::Redacted { redacted_content },
+		) => {
+			assert!(redacted_content.starts_with("cnNu"));
+		},
+		other => panic!("expected Redacted variant, got {other:?}"),
+	}
+
+	// The pre-existing variants must still take priority.
+	let structured: types::bedrock::ContentBlock = serde_json::from_value(json!({
+		"reasoningContent": { "reasoningText": { "text": "thinking...", "signature": "sig" } }
+	}))
+	.expect("structured variant");
+	assert!(matches!(
+		structured,
+		types::bedrock::ContentBlock::ReasoningContent(
+			types::bedrock::ReasoningContentBlock::Structured { .. }
+		)
+	));
+}
