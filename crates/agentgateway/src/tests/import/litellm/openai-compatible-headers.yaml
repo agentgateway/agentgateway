@@ -1,0 +1,28 @@
+credential_list:
+- credential_name: openai-org
+  credential_info:
+    provider: openai
+  credential_values:
+    api_key: os.environ/OPENAI_API_KEY
+    organization: os.environ/OPENAI_ORGANIZATION
+    extra_headers:
+      X-Credential-Header: credential
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+    litellm_credential_name: openai-org
+- model_name: chat-with-overrides
+  litellm_params:
+    model: openai/gpt-4o-mini
+    litellm_credential_name: openai-org
+    extra_headers:
+      X-Credential-Header: model
+      X-Request-ID: os.environ/REQUEST_ID
+- model_name: local
+  litellm_params:
+    model: ollama/llama3
+    api_base: http://localhost:11434/v1
+    organization: ignored-by-ollama
+    extra_headers:
+      X-Static: "yes"

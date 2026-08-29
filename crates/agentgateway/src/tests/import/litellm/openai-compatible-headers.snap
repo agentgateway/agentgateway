@@ -1,0 +1,87 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/openai-compatible-headers.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider:
+          reference: imported/litellm/openai-org
+        params:
+          model: gpt-4o
+      - name: chat-with-overrides
+        provider:
+          reference: imported/litellm/openai-org
+        params:
+          model: gpt-4o-mini
+        requestHeaders:
+          set:
+            openai-organization: $OPENAI_ORGANIZATION
+            x-credential-header: model
+            x-request-id: $REQUEST_ID
+      - name: local
+        provider: ollama
+        params:
+          model: llama3
+          baseUrl: "http://localhost:11434/v1"
+        requestHeaders:
+          set:
+            x-static: "yes"
+    providers:
+      - name: imported/litellm/openai-org
+        provider: openAI
+        params:
+          apiKey: $OPENAI_API_KEY
+        defaults:
+          requestHeaders:
+            set:
+              openai-organization: $OPENAI_ORGANIZATION
+              x-credential-header: credential
+findings:
+  - sourcePath: "credential_list[0].credential_values.extra_headers.X-Credential-Header"
+    status: exact
+    message: "Mapped fixed upstream header \"x-credential-header\""
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: "credential_list[0].credential_values.organization"
+    status: exact
+    message: Mapped OpenAI organization to the upstream OpenAI-Organization header
+  - sourcePath: "credential_list[0]"
+    status: exact
+    message: "Imported supported values from LiteLLM credential \"openai-org\""
+  - sourcePath: "model_list[0].litellm_params.litellm_credential_name"
+    status: exact
+    message: "Mapped LiteLLM credential \"openai-org\" to reusable agentgateway provider \"imported/litellm/openai-org\""
+  - sourcePath: "model_list[1].litellm_params.extra_headers.X-Credential-Header"
+    status: exact
+    message: "Mapped fixed upstream header \"x-credential-header\""
+  - sourcePath: "model_list[1].litellm_params.extra_headers.X-Request-ID"
+    status: exact
+    message: "Mapped fixed upstream header \"x-request-id\""
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for chat-with-overrides
+  - sourcePath: "model_list[1].litellm_params.litellm_credential_name"
+    status: exact
+    message: "Mapped LiteLLM credential \"openai-org\" to reusable agentgateway provider \"imported/litellm/openai-org\""
+  - sourcePath: "model_list[2].litellm_params.extra_headers.X-Static"
+    status: exact
+    message: "Mapped fixed upstream header \"x-static\""
+  - sourcePath: "model_list[2].litellm_params.organization"
+    status: manual
+    message: "LiteLLM organization was not emitted because provider \"ollama\" is not OpenAI"
+  - sourcePath: "model_list[2]"
+    status: exact
+    message: Imported model deployment for local
