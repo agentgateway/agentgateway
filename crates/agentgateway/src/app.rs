@@ -9,7 +9,7 @@ use tokio::task::JoinSet;
 
 use crate::control::{caclient, spiffe};
 use crate::telemetry::trc;
-use crate::{Config, ProxyInputs, client, config_store, mcp, proxy, state_manager};
+use crate::{Address, Config, ProxyInputs, client, config_store, mcp, proxy, state_manager};
 
 pub async fn run(
 	config: Arc<Config>,
@@ -144,7 +144,11 @@ pub async fn run(
 	.await
 	.context("admin server starts")?;
 	if cfg!(feature = "ui") {
-		info!("serving UI at {}", ui_url(config.as_ref()).await);
+		if matches!(config.admin_addr, Address::Off) {
+			info!("UI disabled (adminAddr: off)");
+		} else {
+			info!("serving UI at {}", ui_url(config.as_ref()).await);
+		}
 	}
 
 	let pi = ProxyInputs {
