@@ -49,15 +49,15 @@ config:
               openai-organization: $OPENAI_ORGANIZATION
               x-credential-header: credential
 findings:
-  - sourcePath: "credential_list[0].credential_values.extra_headers.X-Credential-Header"
-    status: exact
-    message: "Mapped fixed upstream header \"x-credential-header\""
   - sourcePath: "model_list[0]"
     status: exact
     message: Imported model deployment for chat
   - sourcePath: "credential_list[0].credential_values.organization"
     status: exact
     message: Mapped OpenAI organization to the upstream OpenAI-Organization header
+  - sourcePath: "credential_list[0].credential_values.extra_headers.X-Credential-Header"
+    status: exact
+    message: "Mapped fixed upstream header \"x-credential-header\""
   - sourcePath: "credential_list[0]"
     status: exact
     message: "Imported supported values from LiteLLM credential \"openai-org\""

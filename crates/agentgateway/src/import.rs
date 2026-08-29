@@ -325,8 +325,14 @@ struct LiteLlmCredential {
 	source_path: String,
 	provider_hint: Option<String>,
 	params: Map<String, Value>,
-	request_headers: IndexMap<String, String>,
+	request_headers: LiteLlmExtraHeaders,
 	organization: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct LiteLlmExtraHeaders {
+	values: IndexMap<String, String>,
+	exact_findings: Vec<ImportFinding>,
 }
 
 #[derive(Debug)]
@@ -698,15 +704,15 @@ impl LiteLlmCredentials {
 		}
 
 		if credential.params.is_empty()
-			&& credential.request_headers.is_empty()
+			&& credential.request_headers.values.is_empty()
 			&& credential.organization.is_none()
 		{
 			plan.findings.push(ImportFinding {
-			source_path: reference_path,
-			status: ImportStatus::Manual,
-			message: format!(
-				"LiteLLM credential {credential_name:?} contains no supported provider values and was not applied"
-			),
+				source_path: reference_path,
+				status: ImportStatus::Manual,
+				message: format!(
+					"LiteLLM credential {credential_name:?} contains no supported provider values and was not applied"
+				),
 			});
 			return;
 		}
@@ -714,7 +720,7 @@ impl LiteLlmCredentials {
 		let credential_request_headers = request_headers_for_provider(
 			&provider,
 			credential.organization.as_deref(),
-			&credential.request_headers,
+			&credential.request_headers.values,
 			&format!("{}.credential_values.organization", credential.source_path),
 			&mut organization_findings,
 		);
@@ -726,6 +732,9 @@ impl LiteLlmCredentials {
 			plan.findings.extend(organization_findings);
 		}
 		if first_use {
+			plan
+				.findings
+				.extend(credential.request_headers.exact_findings.iter().cloned());
 			plan.findings.push(ImportFinding {
 				source_path: credential.source_path.clone(),
 				status: ImportStatus::Exact,
@@ -894,11 +903,15 @@ fn import_litellm_model(
 		&format!("{source_path}.litellm_params.organization"),
 		findings,
 	);
-	let extra_headers = take_litellm_extra_headers(
+	let LiteLlmExtraHeaders {
+		values: extra_headers,
+		exact_findings,
+	} = take_litellm_extra_headers(
 		&mut params,
 		&format!("{source_path}.litellm_params"),
 		findings,
 	);
+	findings.extend(exact_findings);
 	let request_headers = request_headers_for_provider(
 		provider,
 		organization.as_deref(),
@@ -1056,9 +1069,9 @@ fn take_litellm_extra_headers(
 	source: &mut Map<String, Value>,
 	source_prefix: &str,
 	findings: &mut Vec<ImportFinding>,
-) -> IndexMap<String, String> {
+) -> LiteLlmExtraHeaders {
 	let Some(value) = source.remove("extra_headers") else {
-		return IndexMap::new();
+		return LiteLlmExtraHeaders::default();
 	};
 	let Value::Object(headers) = value else {
 		findings.push(ImportFinding {
@@ -1067,15 +1080,17 @@ fn take_litellm_extra_headers(
 			message: "LiteLLM extra_headers must be an object of fixed string values and was not emitted"
 				.to_string(),
 		});
-		return IndexMap::new();
+		return LiteLlmExtraHeaders::default();
 	};
 	if headers.is_empty() {
-		findings.push(ImportFinding {
-			source_path: format!("{source_prefix}.extra_headers"),
-			status: ImportStatus::Exact,
-			message: "Consumed empty LiteLLM extra_headers".to_string(),
-		});
-		return IndexMap::new();
+		return LiteLlmExtraHeaders {
+			values: IndexMap::new(),
+			exact_findings: vec![ImportFinding {
+				source_path: format!("{source_prefix}.extra_headers"),
+				status: ImportStatus::Exact,
+				message: "Consumed empty LiteLLM extra_headers".to_string(),
+			}],
+		};
 	}
 
 	let mut parsed = Vec::new();
@@ -1118,6 +1133,7 @@ fn take_litellm_extra_headers(
 	}
 
 	let mut result = IndexMap::new();
+	let mut exact_findings = Vec::new();
 	for indexes in names.values() {
 		let first_value = &parsed[indexes[0]].2;
 		let conflicting = indexes
@@ -1136,7 +1152,7 @@ fn take_litellm_extra_headers(
 				});
 			} else {
 				result.insert(name.clone(), value.clone());
-				findings.push(ImportFinding {
+				exact_findings.push(ImportFinding {
 					source_path: source_path.clone(),
 					status: ImportStatus::Exact,
 					message: format!("Mapped fixed upstream header {name:?}"),
@@ -1144,7 +1160,10 @@ fn take_litellm_extra_headers(
 			}
 		}
 	}
-	result
+	LiteLlmExtraHeaders {
+		values: result,
+		exact_findings,
+	}
 }
 
 fn take_litellm_organization(
