@@ -1698,7 +1698,14 @@ pub mod from_messages {
 						false,
 					),
 					messages::ContentBlock::WebSearchToolResult { .. } => continue,
-					messages::ContentBlock::RedactedThinking { .. } => continue,
+					// Round-trip encrypted reasoning so multi-turn clients can replay the
+					// opaque payload Bedrock returned (see to_anthropic's redacted_thinking).
+					messages::ContentBlock::RedactedThinking { data } => (
+						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Redacted {
+							redacted_content: data,
+						}),
+						false,
+					),
 					messages::ContentBlock::Document(_) => continue,
 					messages::ContentBlock::SearchResult(_) => continue,
 					messages::ContentBlock::ServerToolUse { .. } => continue,
