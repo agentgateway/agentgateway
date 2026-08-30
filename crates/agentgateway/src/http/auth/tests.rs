@@ -1011,7 +1011,7 @@ async fn test_backend_auth_combined_key_and_credentials() {
 }
 
 #[tokio::test]
-async fn test_backend_auth_credentials_invalid_value_errors() {
+async fn test_backend_auth_credentials_invalid_value_is_local() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
 	let inputs = t.inputs();
@@ -1030,8 +1030,17 @@ async fn test_backend_auth_credentials_invalid_value_errors() {
 		kind: None,
 		credentials: vec![credential("x-bad", "value\nwith\nnewlines", None)],
 	};
-	let err = apply_backend_auth(&backend_info, &auth, &mut req).await;
-	assert!(err.is_err(), "invalid header value must error");
+	let err = apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect_err("invalid header value must error");
+	assert!(matches!(
+		&err,
+		ProxyError::BackendAuthenticationFailed(BackendAuthError::Local(_))
+	));
+	assert_eq!(
+		err.into_response_with_grpc(false).status(),
+		http::StatusCode::INTERNAL_SERVER_ERROR
+	);
 }
 
 #[test]

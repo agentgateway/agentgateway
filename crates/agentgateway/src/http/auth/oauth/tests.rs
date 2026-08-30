@@ -2538,6 +2538,49 @@ async fn dispatch_uses_configured_output_location_and_marks_explicit() {
 	);
 }
 
+#[test]
+fn classifies_exchanged_token_insertion_failures() {
+	let cases = [
+		(
+			AuthorizationLocation::default(),
+			"invalid\ntoken",
+			true,
+			::http::StatusCode::BAD_GATEWAY,
+		),
+		(
+			AuthorizationLocation::Header {
+				name: ::http::HeaderName::from_static("x-upstream-auth"),
+				prefix: Some("invalid\n".into()),
+			},
+			"upstream-token",
+			false,
+			::http::StatusCode::INTERNAL_SERVER_ERROR,
+		),
+	];
+
+	for (authorization_location, access_token, expect_provider, expected_status) in cases {
+		let a = OAuthTokenExchangeAuth {
+			authorization_location,
+			..base_auth(Arc::new(SimpleBackendReference::Invalid))
+		};
+		let mut req = incoming_request();
+		let err = a
+			.insert_exchanged_token(&mut req, access_token)
+			.expect_err("invalid exchanged-token insertion must fail");
+		let is_provider = match &err {
+			crate::proxy::ProxyError::BackendAuthenticationFailed(
+				crate::http::auth::BackendAuthError::CredentialProvider(_),
+			) => true,
+			crate::proxy::ProxyError::BackendAuthenticationFailed(
+				crate::http::auth::BackendAuthError::Local(_),
+			) => false,
+			other => panic!("unexpected error: {other:?}"),
+		};
+		assert_eq!(is_provider, expect_provider);
+		assert_eq!(err.into_response_with_grpc(false).status(), expected_status);
+	}
+}
+
 #[tokio::test]
 async fn dispatch_supports_query_parameter_output_location() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;

@@ -210,9 +210,7 @@ pub async fn apply_backend_auth(
 		apply_backend_auth_kind(backend_info, kind, req).await?;
 	}
 	for credential in &auth.credentials {
-		credential
-			.location
-			.insert(req, credential.key.expose_secret())?;
+		insert_local_auth(&credential.location, req, credential.key.expose_secret())?;
 		// Credential locations are always explicitly configured. Mark Authorization writes
 		// so providers (e.g. Anthropic) do not rewrite or relocate the header. Other
 		// locations must not touch the marker set by the primary auth kind.
@@ -224,6 +222,16 @@ pub async fn apply_backend_auth(
 		}
 	}
 	Ok(())
+}
+
+fn insert_local_auth(
+	location: &AuthorizationLocation,
+	req: &mut Request,
+	value: &str,
+) -> Result<(), BackendAuthError> {
+	location
+		.insert(req, value)
+		.map_err(|error| BackendAuthError::Local(error.into()))
 }
 
 async fn apply_backend_auth_kind(
@@ -242,7 +250,7 @@ async fn apply_backend_auth_kind(
 				.get::<Claims>()
 				.map(|claim| claim.jwt.expose_secret().to_string())
 			{
-				resolved.insert(req, &token)?;
+				insert_local_auth(resolved, req, &token)?;
 			}
 			req
 				.extensions_mut()
@@ -254,7 +262,7 @@ async fn apply_backend_auth_kind(
 		} => {
 			let explicit = location.is_some();
 			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
-			resolved.insert(req, key.expose_secret())?;
+			insert_local_auth(resolved, req, key.expose_secret())?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
@@ -283,7 +291,7 @@ async fn apply_backend_auth_kind(
 			let token = cfg.sign().map_err(BackendAuthError::Local)?;
 			let explicit = cfg.location().is_some();
 			let resolved = cfg.location().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
-			resolved.insert(req, &token)?;
+			insert_local_auth(resolved, req, &token)?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
