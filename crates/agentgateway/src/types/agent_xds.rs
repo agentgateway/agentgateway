@@ -279,8 +279,7 @@ fn mcp_authorization_cel_expression(
 		.collect::<Vec<_>>();
 	if !fields.is_empty() {
 		diagnostics.add_warning(format!(
-			"{context} expression {:?} references post-request-only MCP fields [{}]; these fields are unavailable during request-time authorization, so references to their values cannot enforce the intended condition",
-			expression.original_expression,
+			"{context} expression references post-request-only MCP fields [{}]; these fields are unavailable during request-time authorization, so references to their values cannot enforce the intended condition",
 			fields.join(", ")
 		));
 	}
@@ -4305,6 +4304,12 @@ mod tests {
 			let warnings = diagnostics.into_warnings();
 			assert_eq!(warnings.len(), 1, "expression: {expression}");
 			assert!(warnings[0].contains(fields), "warning: {}", warnings[0]);
+			assert!(
+				!warnings[0].contains(expression),
+				"warning: {}",
+				warnings[0]
+			);
+			assert!(!warnings[0].contains("secret"), "warning: {}", warnings[0]);
 		}
 	}
 
