@@ -134,21 +134,34 @@ pub(crate) async fn authorize_substrate_connect(
 	let host = http::get_host(req)?;
 	let listener = bind
 		.listeners
-		.best_match_http(host)
+		.best_match(host)
 		.ok_or(ProxyError::ListenerNotFound)?;
-	let selected = select_route_chain(inputs, target_address, &listener, req)?;
+	let selected = matches!(
+		listener.protocol,
+		ListenerProtocol::HTTP | ListenerProtocol::HTTPS(_)
+	)
+	.then(|| select_route_chain(inputs, target_address, &listener, req))
+	.transpose()?;
 	let route_inlines = selected
-		.routes
-		.iter()
-		.map(|route| route.inline_policies.as_slice())
-		.collect();
+		.as_ref()
+		.map(|selected| {
+			selected
+				.routes
+				.iter()
+				.map(|route| route.inline_policies.as_slice())
+				.collect()
+		})
+		.unwrap_or_default();
 	let path = RoutePath {
 		listener: &listener.name,
 		service: selected
-			.routes
-			.last()
+			.as_ref()
+			.and_then(|selected| selected.routes.last())
 			.and_then(|route| route.service_key.as_ref()),
-		routes: selected.routes.iter().map(|route| &route.name).collect(),
+		routes: selected
+			.as_ref()
+			.map(|selected| selected.routes.iter().map(|route| &route.name).collect())
+			.unwrap_or_default(),
 		route_inlines,
 	};
 	let policies = inputs.stores.read_binds().route_policies(&path);

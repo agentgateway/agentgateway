@@ -1,3 +1,6 @@
+use serde::Deserialize;
+use tonic::Code;
+
 use super::{ActorRef, TRACE_POLICY_KIND, valid_resource_name};
 use crate::http::{PolicyResponse, Request};
 use crate::proxy::ProxyError;
@@ -8,8 +11,6 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::TLSConnectionInfo;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::*;
-use serde::Deserialize;
-use tonic::Code;
 
 const ACTOR_IDENTITY_OID: &str = "1.3.6.1.4.1.11129.2.12.2";
 
@@ -149,10 +150,11 @@ impl RequestPolicyTrait for SubstrateEgress {
 
 #[cfg(test)]
 mod tests {
+	use rcgen::{CertificateParams, CustomExtension, KeyPair};
+
 	use super::*;
 	use crate::http::Body;
 	use crate::transport::tls::TlsInfo;
-	use rcgen::{CertificateParams, CustomExtension, KeyPair};
 
 	fn request_with_identity(identity: &str) -> Request {
 		let mut params = CertificateParams::default();
