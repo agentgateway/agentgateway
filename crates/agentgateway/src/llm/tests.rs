@@ -3026,7 +3026,16 @@ fn setup_request_bedrock_sets_signing_region_with_host_override() {
 	);
 
 	provider
-		.setup_request(&mut req, RouteType::Messages, None, None, None, true, None, None)
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			None,
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
 		.expect("setup_request should succeed");
 
 	assert_eq!(

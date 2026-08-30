@@ -571,7 +571,7 @@ type BedrockSettings struct {
 
 	// EndpointPreference selects which Bedrock API surface to prefer.
 	// Defaults to preferring runtime over mantle.
-	// Decidees which endpoints to pick mainly based off the catalog tags
+	// Decides which endpoint to pick mainly based on the catalog tags
 	// `mantle` and `runtime`.
 	// +kubebuilder:default=RuntimePreferred
 	// +optional

@@ -2388,7 +2388,7 @@ async fn make_backend_call(
 					Some(target) => target.clone(),
 					None => provider
 						.provider
-						.default_connector_target(route_type, Some(inputs.model_catalog.as_handle()))
+						.default_connector_target(route_type)
 						.ok_or_else(|| {
 							ProxyError::ProcessingString(
 								"custom providers require an explicit host override or provider backend"

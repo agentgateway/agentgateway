@@ -374,7 +374,7 @@ func bedrockModelKey(id string) string {
 // provider-suffix noise ("labs", "ai") and doubled provider tokens (amazon-amazon, deepseek-deepseek).
 func bedrockSlugKey(slug string) string {
 	var toks []string
-	for _, t := range strings.Split(strings.ToLower(slug), "-") {
+	for t := range strings.SplitSeq(strings.ToLower(slug), "-") {
 		if t == "" || t == "labs" || t == "ai" {
 			continue
 		}

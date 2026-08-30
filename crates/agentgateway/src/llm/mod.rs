@@ -1118,18 +1118,16 @@ impl AIProvider {
 	/// providers serve routes from different hosts (Bedrock rerank uses `bedrock-agent-runtime` and
 	/// Vertex rerank uses `discoveryengine`, distinct from the chat/embeddings host). Returns `None`
 	/// for custom providers, which require an explicit host override or provider backend.
-	pub fn default_connector_target(
-		&self,
-		route_type: RouteType,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
-	) -> Option<Target> {
+	pub fn default_connector_target(&self, route_type: RouteType) -> Option<Target> {
 		Some(match self {
 			AIProvider::OpenAI(_) => Target::Hostname(openai::DEFAULT_HOST, 443),
 			AIProvider::Copilot(_) => Target::Hostname(copilot::DEFAULT_HOST, 443),
 			AIProvider::Gemini(_) => Target::Hostname(gemini::DEFAULT_HOST, 443),
 			AIProvider::Anthropic(_) => Target::Hostname(anthropic::DEFAULT_HOST, 443),
 			AIProvider::Vertex(p) => Target::Hostname(p.get_host(route_type), 443),
-			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type, None, catalog), 443),
+			// Model is not known before the body is parsed, so the target here is model-unaware
+			// (Runtime for chat routes); `setup_request` re-resolves it to the Mantle host if needed.
+			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type, None, None), 443),
 			AIProvider::Azure(p) => Target::Hostname(p.get_host(), 443),
 			AIProvider::Custom(_) => return None,
 		})
