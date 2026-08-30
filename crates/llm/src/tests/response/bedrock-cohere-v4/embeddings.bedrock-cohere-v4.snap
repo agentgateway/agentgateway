@@ -1,0 +1,59 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock-cohere-v4/embeddings.json
+info:
+  embeddings:
+    float:
+      - - 0.1
+        - 0.2
+        - 0.3
+      - - 0.4
+        - 0.5
+        - 0.6
+    int8:
+      - - 1
+        - 2
+        - 3
+      - - 4
+        - 5
+        - 6
+  id: "123"
+  texts:
+    - hello
+    - world
+---
+{
+  "response": {
+    "object": "list",
+    "model": "cohere.embed-v4:0",
+    "usage": {
+      "prompt_tokens": 0,
+      "total_tokens": 0
+    },
+    "data": [
+      {
+        "index": 0,
+        "object": "embedding",
+        "embedding": [
+          0.10000000149011612,
+          0.20000000298023224,
+          0.30000001192092896
+        ]
+      },
+      {
+        "index": 1,
+        "object": "embedding",
+        "embedding": [
+          0.4000000059604645,
+          0.5,
+          0.6000000238418579
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_tokens": 0,
+    "total_tokens": 0,
+    "provider_model": "cohere.embed-v4:0"
+  }
+}
