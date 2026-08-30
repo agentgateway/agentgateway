@@ -260,9 +260,7 @@ async fn apply_backend_auth_kind(
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
 		BackendAuthKind::Gcp(g) => {
-			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
-				.await
-				.map_err(BackendAuthError::Local)?;
+			gcp::insert_token(g, &backend_info.call_target, req.headers_mut()).await?;
 		},
 		BackendAuthKind::Aws(_) => {
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
@@ -273,8 +271,7 @@ async fn apply_backend_auth_kind(
 				azure_auth,
 				&backend_info.call_target,
 			)
-			.await
-			.map_err(BackendAuthError::Local)?;
+			.await?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 		BackendAuthKind::Copilot => {
@@ -321,7 +318,6 @@ pub async fn apply_late_backend_auth(
 
 	aws::sign_request(req, aws_auth)
 		.await
-		.map_err(BackendAuthError::Local)
 		.map_err(ProxyError::BackendAuthenticationFailed)
 }
 
