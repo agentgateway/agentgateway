@@ -767,12 +767,13 @@ impl Gateway {
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(raw_stream),
-			hyper::service::service_fn(move |mut req: ::http::Request<hyper::body::Incoming>| {
+			hyper::service::service_fn(move |req: ::http::Request<hyper::body::Incoming>| {
 				let inputs = inputs.clone();
 				let connection = connection.clone();
 				let drain = drain.clone();
-				req.extensions_mut().insert(BufferLimit::new(buffer));
 				async move {
+					let mut req = req.map(crate::http::Body::new);
+					req.extensions_mut().insert(BufferLimit::new(buffer));
 					if req.method() != ::http::Method::CONNECT {
 						return Ok::<_, Infallible>(
 							ProxyError::MethodNotAllowed.into_response_with_grpc(false),
@@ -799,44 +800,58 @@ impl Gateway {
 						Some(authority) => authority.as_str(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
 					};
-					let binds = inputs.stores.read_binds();
-					let (target_address, bind) = if let Ok(addr) = authority.parse::<SocketAddr>() {
-						// CONNECT re-entry must not expose a bind scoped to a concrete address
-						// (for example, a loopback-only listener). Match only an unspecified-address
-						// bind for this port; otherwise fall back to the explicit internal wildcard
-						// bind, preserving the requested address as the tunnel target.
-						let Some(bind) = binds
-							.find_bind(addr)
-							.filter(|b| b.address.ip().is_unspecified())
-							.or_else(|| binds.find_wildcard_bind())
-						else {
-							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
-						};
-						(addr, bind)
-					} else {
-						let Some(port) = req.uri().port_u16() else {
-							return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
-						};
-						// Match a bind by the requested port; otherwise fall back to the internal
-						// wildcard bind, which serves any destination port via a dynamic backend.
-						let Some(bind) = binds
-							.find_bind_by_port(port)
-							.or_else(|| binds.find_wildcard_bind())
-						else {
-							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
-						};
-						let target_ip = if bind.address.ip().is_unspecified() {
-							connection
-								.get::<TCPConnectionInfo>()
-								.map(|tcp| tcp.local_addr.ip())
-								.unwrap_or_else(|| bind.address.ip())
+					let (target_address, bind) = {
+						let binds = inputs.stores.read_binds();
+						if let Ok(addr) = authority.parse::<SocketAddr>() {
+							// CONNECT re-entry must not expose a bind scoped to a concrete address
+							// (for example, a loopback-only listener). Match only an unspecified-address
+							// bind for this port; otherwise fall back to the explicit internal wildcard
+							// bind, preserving the requested address as the tunnel target.
+							let Some(bind) = binds
+								.find_bind(addr)
+								.filter(|b| b.address.ip().is_unspecified())
+								.or_else(|| binds.find_wildcard_bind())
+							else {
+								return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
+							};
+							(addr, bind)
 						} else {
-							bind.address.ip()
-						};
-						(SocketAddr::new(target_ip, port), bind)
+							let Some(port) = req.uri().port_u16() else {
+								return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
+							};
+							// Match a bind by the requested port; otherwise fall back to the internal
+							// wildcard bind, which serves any destination port via a dynamic backend.
+							let Some(bind) = binds
+								.find_bind_by_port(port)
+								.or_else(|| binds.find_wildcard_bind())
+							else {
+								return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
+							};
+							let target_ip = if bind.address.ip().is_unspecified() {
+								connection
+									.get::<TCPConnectionInfo>()
+									.map(|tcp| tcp.local_addr.ip())
+									.unwrap_or_else(|| bind.address.ip())
+							} else {
+								bind.address.ip()
+							};
+							(SocketAddr::new(target_ip, port), bind)
+						}
 					};
-					// Release the binds read lock before spawning the tunnel task.
-					drop(binds);
+					if let Err(error) = super::httpproxy::authorize_substrate_connect(
+						&inputs,
+						&bind.key,
+						target_address,
+						connection.as_ref(),
+						&mut req,
+					)
+					.await
+					{
+						return Ok(match error {
+							crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
+							crate::proxy::ProxyResponse::DirectResponse(response) => *response,
+						});
+					}
 
 					tokio::task::spawn(async move {
 						let downstream = match upgrade.await {
@@ -847,6 +862,9 @@ impl Gateway {
 							},
 						};
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
+						downstream
+							.ext_mut()
+							.insert(crate::http::substrate::SubstrateEgressAuthorized);
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						downstream.ext_mut().insert(BufferLimit::new(buffer));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;

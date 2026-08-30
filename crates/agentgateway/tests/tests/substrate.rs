@@ -2,7 +2,7 @@ use agentgateway::test_helpers::ateapimock;
 use agentgateway::transport::stream::TLSConnectionInfo;
 use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
-use protos::ateapi::{Actor, ActorStatus, ResumeActorResponse};
+use protos::ateapi::{Actor, ActorState, ActorStatus, ResourceMetadata, ResumeActorResponse};
 use tokio::sync::Notify;
 
 use crate::common::prelude::*;
@@ -11,6 +11,40 @@ use crate::common::prelude::*;
 struct IngressHandler {
 	pod_ip: String,
 	calls: Arc<AtomicUsize>,
+}
+
+#[derive(Clone)]
+struct EgressHandler {
+	uid: &'static str,
+	state: ActorState,
+	error: Option<tonic::Code>,
+}
+
+#[async_trait::async_trait]
+impl ateapimock::Handler for EgressHandler {
+	async fn get_actor(
+		&mut self,
+		request: &protos::ateapi::GetActorRequest,
+	) -> Result<Actor, tonic::Status> {
+		let actor = request.actor.as_ref().unwrap();
+		assert_eq!(
+			(actor.atespace.as_str(), actor.name.as_str()),
+			("demo", "my-actor")
+		);
+		if let Some(code) = self.error {
+			return Err(tonic::Status::new(code, "GetActor failed"));
+		}
+		Ok(Actor {
+			metadata: Some(ResourceMetadata {
+				uid: self.uid.to_owned(),
+				..Default::default()
+			}),
+			status: Some(ActorStatus {
+				state: self.state as i32,
+				worker_assignment: None,
+			}),
+		})
+	}
 }
 
 #[async_trait::async_trait]
@@ -26,6 +60,7 @@ impl ateapimock::Handler for IngressHandler {
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
 				status: Some(ActorStatus {
+					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
 						worker_pod_ip: self.pod_ip.clone(),
 					}),
@@ -69,6 +104,7 @@ impl ateapimock::Handler for SelectiveParkingHandler {
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
 				status: Some(ActorStatus {
+					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
 						worker_pod_ip: self.pod_ip.clone(),
 					}),
@@ -101,6 +137,7 @@ impl ateapimock::Handler for ParkingHandler {
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
 				status: Some(ActorStatus {
+					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
 						worker_pod_ip: self.pod_ip.clone(),
 					}),
@@ -512,10 +549,35 @@ async fn actor_ingress_uses_backend_tunnel_for_connect() {
 	atunnel.abort();
 }
 
-#[tokio::test]
-async fn substrate_egress_authorizes_a_reentered_connect_request() {
+fn actor_certificate(uid: &str) -> String {
+	let mut params = rcgen::CertificateParams::default();
+	params
+		.custom_extensions
+		.push(rcgen::CustomExtension::from_oid_content(
+			&[1, 3, 6, 1, 4, 1, 11129, 2, 12, 2],
+			serde_json::to_vec(&json!({
+				"Atespace": "demo",
+				"ActorName": "my-actor",
+				"ActorUid": uid,
+				"Purpose": "atunnel",
+			}))
+			.unwrap(),
+		));
+	params
+		.self_signed(&rcgen::KeyPair::generate().unwrap())
+		.unwrap()
+		.pem()
+}
+
+async fn substrate_egress_connect_status(
+	handler: EgressHandler,
+	certificate_uid: &str,
+	payload: &[u8],
+) -> StatusCode {
 	let upstream = simple_mock().await;
-	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new(move || handler.clone())
+		.spawn()
+		.await;
 
 	let mut outer = simple_bind();
 	outer.key = strng::literal!("outer");
@@ -533,7 +595,7 @@ async fn substrate_egress_authorizes_a_reentered_connect_request() {
 	gateway
 		.attach_route_policy(json!({
 			"substrateEgress": {
-				"host": "http://dummy", // Egress is not yet implemented
+				"host": api.address.to_string(),
 			}
 		}))
 		.await;
@@ -542,9 +604,7 @@ async fn substrate_egress_authorizes_a_reentered_connect_request() {
 		strng::literal!("outer"),
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
-				spiffe_id: Some(strng::literal!(
-					"spiffe://substrate-actor.local/atespace/demo/actor/my-actor"
-				)),
+				certificate: Some(actor_certificate(certificate_uid).into()),
 				..Default::default()
 			}),
 			..Default::default()
@@ -563,24 +623,95 @@ async fn substrate_egress_authorizes_a_reentered_connect_request() {
 			break;
 		}
 	}
-	assert!(
-		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
-		"unexpected CONNECT response: {}",
-		String::from_utf8_lossy(&response),
-	);
+	let response = String::from_utf8(response).unwrap();
+	if response.starts_with("HTTP/1.1 200 OK\r\n") {
+		io.write_all(payload).await.unwrap();
+		StatusCode::OK
+	} else if response.starts_with("HTTP/1.1 403 Forbidden\r\n") {
+		StatusCode::FORBIDDEN
+	} else if response.starts_with("HTTP/1.1 503 Service Unavailable\r\n") {
+		StatusCode::SERVICE_UNAVAILABLE
+	} else {
+		panic!("unexpected CONNECT response: {response}")
+	}
+}
 
-	io.write_all(b"GET / HTTP/1.1\r\nHost: allowed.example\r\nConnection: close\r\n\r\n")
-		.await
-		.unwrap();
-	let mut tunneled = Vec::new();
-	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
-		.await
-		.expect("timed out waiting for tunneled response")
-		.unwrap();
-	assert!(
-		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
-		"unexpected tunneled response: {}",
-		String::from_utf8_lossy(&tunneled),
+#[tokio::test]
+async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time() {
+	let running = ActorState::Running;
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-1",
+				state: running,
+				error: Some(tonic::Code::NotFound)
+			},
+			"uid-1",
+			b"",
+		)
+		.await,
+		StatusCode::FORBIDDEN,
 	);
-	assert_eq!(calls.load(Ordering::Relaxed), 0);
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-2",
+				state: running,
+				error: None
+			},
+			"uid-1",
+			b"",
+		)
+		.await,
+		StatusCode::FORBIDDEN,
+	);
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-1",
+				state: ActorState::Suspended,
+				error: None
+			},
+			"uid-1",
+			b"",
+		)
+		.await,
+		StatusCode::FORBIDDEN,
+	);
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-1",
+				state: running,
+				error: Some(tonic::Code::Unavailable)
+			},
+			"uid-1",
+			b"",
+		)
+		.await,
+		StatusCode::SERVICE_UNAVAILABLE,
+	);
+}
+
+#[tokio::test]
+async fn substrate_egress_authorizes_http_tls_and_opaque_tcp_connect_tunnels() {
+	for payload in [
+		b"GET / HTTP/1.1\r\nHost: allowed.example\r\n\r\n".as_slice(),
+		b"\x16\x03\x03\x00\x01\x00".as_slice(),
+		b"opaque tcp".as_slice(),
+	] {
+		assert_eq!(
+			substrate_egress_connect_status(
+				EgressHandler {
+					uid: "uid-1",
+					state: ActorState::Running,
+					error: None
+				},
+				"uid-1",
+				payload,
+			)
+			.await,
+			StatusCode::OK,
+		);
+	}
 }

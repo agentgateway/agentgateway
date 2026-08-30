@@ -15,7 +15,20 @@ message Actor {
 }
 
 message ActorStatus {
+  ActorState state = 1;
   WorkerAssignment worker_assignment = 2;
+}
+
+enum ActorState {
+  ACTOR_STATE_UNSPECIFIED = 0;
+  ACTOR_STATE_RESUMING = 1;
+  ACTOR_STATE_RUNNING = 2;
+  ACTOR_STATE_SUSPENDING = 3;
+  ACTOR_STATE_SUSPENDED = 4;
+  ACTOR_STATE_PAUSING = 5;
+  ACTOR_STATE_PAUSED = 6;
+  ACTOR_STATE_CRASHED = 7;
+  ACTOR_STATE_DELETING = 8;
 }
 
 // The minimal running-actor assignment required by AgentGateway ingress.
@@ -24,6 +37,7 @@ message WorkerAssignment {
 }
 
 message ResourceMetadata {
+  string uid = 3;
   int64 version = 4;
 }
 

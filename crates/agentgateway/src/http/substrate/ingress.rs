@@ -618,6 +618,7 @@ impl RequestPolicyTrait for SubstrateIngress {
 mod tests {
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::time::{Duration, Instant};
 
 	use ::http::Method;
 	use protos::ateapi::control_server::{Control, ControlServer};
@@ -667,6 +668,7 @@ mod tests {
 			Ok(GrpcResponse::new(ResumeActorResponse {
 				actor: Some(Actor {
 					status: Some(ActorStatus {
+						state: 0,
 						worker_assignment: Some(protos::ateapi::WorkerAssignment {
 							worker_pod_ip: self.pod_ip.clone(),
 						}),
@@ -678,7 +680,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn stale_assignment_is_refreshed_then_cached() {
+	async fn stale_assignment_retries_wait_for_assignment_convergence() {
 		let actor = MockServer::start().await;
 		let actor_calls = Arc::new(AtomicUsize::new(0));
 		let responder_calls = actor_calls.clone();
@@ -688,7 +690,7 @@ mod tests {
 				"my-actor.my-space.actors.resources.substrate.ate.dev",
 			))
 			.respond_with(move |_: &wiremock::Request| {
-				if responder_calls.fetch_add(1, Ordering::Relaxed) == 0 {
+				if responder_calls.fetch_add(1, Ordering::Relaxed) < 2 {
 					ResponseTemplate::new(421).insert_header(STALE_ASSIGNMENT_HEADER, "true")
 				} else {
 					ResponseTemplate::new(200)
@@ -720,6 +722,7 @@ mod tests {
 			.await;
 		let client = proxy.serve_http("bind".into());
 
+		let started = Instant::now();
 		for _ in 0..2 {
 			let response = send_request(
 				client.clone(),
@@ -729,8 +732,9 @@ mod tests {
 			.await;
 			assert_eq!(response.status(), ::http::StatusCode::OK);
 		}
-		assert_eq!(actor_calls.load(Ordering::Relaxed), 3);
-		assert_eq!(control_calls.load(Ordering::Relaxed), 2);
+		assert!(started.elapsed() >= Duration::from_millis(200));
+		assert_eq!(actor_calls.load(Ordering::Relaxed), 4);
+		assert_eq!(control_calls.load(Ordering::Relaxed), 3);
 	}
 
 	#[tokio::test]

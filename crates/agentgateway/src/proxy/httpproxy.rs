@@ -114,6 +114,65 @@ fn select_route_chain(
 	}
 }
 
+pub(crate) async fn authorize_substrate_connect(
+	inputs: &Arc<ProxyInputs>,
+	bind_name: &BindKey,
+	target_address: SocketAddr,
+	connection: &Extension,
+	req: &mut Request,
+) -> Result<(), ProxyResponse> {
+	let tcp = connection
+		.copy::<TCPConnectionInfo>(req.extensions_mut())
+		.expect("tcp connection must be set")
+		.clone();
+	connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+	let bind = inputs
+		.stores
+		.read_binds()
+		.bind(bind_name)
+		.ok_or(ProxyError::BindNotFound)?;
+	let host = http::get_host(req)?;
+	let listener = bind
+		.listeners
+		.best_match_http(host)
+		.ok_or(ProxyError::ListenerNotFound)?;
+	let selected = select_route_chain(inputs, target_address, &listener, req)?;
+	let route_inlines = selected
+		.routes
+		.iter()
+		.map(|route| route.inline_policies.as_slice())
+		.collect();
+	let path = RoutePath {
+		listener: &listener.name,
+		service: selected
+			.routes
+			.last()
+			.and_then(|route| route.service_key.as_ref()),
+		routes: selected.routes.iter().map(|route| &route.name).collect(),
+		route_inlines,
+	};
+	let policies = inputs.stores.read_binds().route_policies(&path);
+	let mut log = RequestLog::new(
+		log::CelLogging::new(inputs.cfg.logging.clone(), inputs.cfg.metrics.clone()),
+		inputs.metrics.clone(),
+		inputs.model_catalog.clone(),
+		agent_core::Timestamp::now(),
+		tcp,
+	);
+	policies.register_cel_expressions(log.cel.ctx());
+	policies
+		.substrate_egress
+		.apply_without_response(
+			"substrate egress",
+			&PolicyClient::new(inputs.clone()).with_parent(req),
+			&mut log,
+			req,
+			&mut HeaderMap::new(),
+		)
+		.await?;
+	Ok(())
+}
+
 pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
 	// Merge filter/fields into config for this request
 	if lp.preset.is_some() {
@@ -645,6 +704,7 @@ impl HTTPProxy {
 			.expect("tcp connection must be set")
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		connection.copy::<http::substrate::SubstrateEgressAuthorized>(req.extensions_mut());
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		connection.copy::<cel::DestinationContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
@@ -1050,7 +1110,10 @@ impl HTTPProxy {
 		} else {
 			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
 		};
-		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
+		let retry_backoff = retries
+			.as_ref()
+			.and_then(|r| r.backoff)
+			.or_else(|| substrate_default_retry.then_some(std::time::Duration::from_millis(100)));
 		let request_timeout = response_policies
 			.timeout
 			.as_ref()
