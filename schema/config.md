@@ -101,6 +101,8 @@
 |`config.backend.connectTimeout`|string|Maximum time to wait when establishing a connection to an upstream. Defaults to 11 seconds.|
 |`config.backend.poolIdleTimeout`|string|The maximum duration to keep an idle connection alive.|
 |`config.backend.poolMaxSize`|integer|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
+|`config.backend.h2KeepaliveInterval`|string|Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.<br>PINGs are sent even on idle connections to proactively evict dead connections from the pool.<br>Disabled by default ("0s"). Note: many gRPC servers enforce a minimum ping interval<br>and will reject connections that ping more frequently.|
+|`config.backend.h2KeepaliveTimeout`|string|Timeout waiting for a PING ACK before considering the connection dead and closing it.<br>Only applies when h2_keepalive_interval is set. Defaults to 5s.|
 |`config.hbone`|object|HBONE (HTTP/2 CONNECT tunnel) protocol configuration.|
 |`config.hbone.windowSize`|integer|HTTP/2 per-stream flow-control window size in bytes. Defaults to 4 MiB.|
 |`config.hbone.connectionWindowSize`|integer|HTTP/2 connection-level flow-control window size in bytes. Defaults to 16 MiB.|
