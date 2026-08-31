@@ -547,7 +547,7 @@ function AddGuardModal(props: {
 
 	return (
 		<Drawer
-			title={tr('copy.addValueGuard')}
+			title={kind ? tr('copy.addValueGuard', [guardKindText(kind)]) : tr('copy.addGuard')}
 			onClose={props.onClose}
 			dirty={guard != null}
 			footer={requestClose => (
@@ -638,7 +638,7 @@ function EditGuardDrawer(props: {
 	const [draft, setDraft] = useState<GuardDraft>(props.guard);
 	return (
 		<Drawer
-			title={tr('copy.editValueGuard')}
+			title={tr('copy.editValueGuard', [guardKindText(draft.kind)])}
 			onClose={props.onClose}
 			dirty={JSON.stringify(draft) !== JSON.stringify(props.guard)}
 			footer={requestClose => (
@@ -1627,8 +1627,22 @@ function commaList(value: string) {
 }
 
 function guardKindLabel(kind: GuardDraft['kind']) {
-	if (kind === 'unsupported') return 'Unsupported guard';
+	if (kind === 'unsupported') return tr('copy.unsupportedGuard');
 	return requestGuardKinds.find(item => item.value === kind)?.label ?? kind;
+}
+
+function guardKindText(kind: GuardDraft['kind']) {
+	if (kind === 'unsupported') return tr('copy.unsupportedGuard');
+	const key: Record<GuardKind, string> = {
+		builtin: 'builtInDetectors',
+		regex: 'customRegex',
+		webhook: 'webhook',
+		openAIModeration: 'openAiModeration',
+		bedrockGuardrails: 'bedrockGuardrails',
+		googleModelArmor: 'googleModelArmor',
+		azureContentSafety: 'azureContentSafety'
+	};
+	return tr(`copy.${key[kind]}`);
 }
 
 function guardKindIcon(kind: GuardDraft['kind']) {
@@ -1652,42 +1666,73 @@ function guardDrawerIndex(value: string | null, phase: GuardPhase, guardCount: n
 }
 
 function guardSummary(guard: GuardDraft) {
-	if (guard.kind === 'unsupported')
-		return 'Raw guard YAML is preserved. Use Raw Configuration for unsupported edits.';
-	const rejection = guard.rejectionStatus.trim()
-		? ` Rejects with ${guard.rejectionStatus.trim()}.`
-		: '';
+	if (guard.kind === 'unsupported') return tr('copy.rawGuardYamlPreserved');
+	const withRejection = (summary: string) =>
+		guard.rejectionStatus.trim()
+			? tr('copy.summaryWithRejection', [
+					summary.replace(/[.!。]+$/, ''),
+					guard.rejectionStatus.trim()
+				])
+			: summary;
 	switch (guard.kind) {
 		case 'builtin':
-			return `${capitalize(guard.action)} ${guard.builtins.length} built-in detector${guard.builtins.length === 1 ? '' : 's'}.${rejection}`;
-		case 'regex':
-			return `${capitalize(guard.action)} ${guard.patterns.filter(pattern => pattern.trim()).length} regex pattern${guard.patterns.filter(pattern => pattern.trim()).length === 1 ? '' : 's'}.${rejection}`;
+			return withRejection(
+				tr(
+					guard.builtins.length === 1
+						? 'copy.guardBuiltInSummary_one'
+						: 'copy.guardBuiltInSummary_other',
+					[guardActionLabel(guard.action), guard.builtins.length]
+				)
+			);
+		case 'regex': {
+			const patternCount = guard.patterns.filter(pattern => pattern.trim()).length;
+			return withRejection(
+				tr(patternCount === 1 ? 'copy.guardRegexSummary_one' : 'copy.guardRegexSummary_other', [
+					guardActionLabel(guard.action),
+					patternCount
+				])
+			);
+		}
 		case 'webhook':
-			return guard.target.trim()
-				? `${guard.target.trim()} · ${guard.failureMode === 'failOpen' ? 'fail open' : 'fail closed'}.${rejection}`
-				: `Webhook target not set.${rejection}`;
+			return withRejection(
+				guard.target.trim()
+					? tr('copy.guardTargetSummary', [
+							guard.target.trim(),
+							tr(guard.failureMode === 'failOpen' ? 'copy.failOpen' : 'copy.failClosed')
+						])
+					: tr('copy.webhookTargetNotSet')
+			);
 		case 'openAIModeration':
-			return guard.model.trim()
-				? `Model ${guard.model.trim()}.${rejection}`
-				: `Default moderation model.${rejection}`;
+			return withRejection(
+				guard.model.trim()
+					? tr('copy.guardModelSummary', [guard.model.trim()])
+					: tr('copy.defaultModerationModel')
+			);
 		case 'bedrockGuardrails':
-			return (
+			return withRejection(
 				[guard.guardrailIdentifier, guard.guardrailVersion, guard.region]
 					.filter(Boolean)
-					.join(' · ') || 'Bedrock guardrail details not set.'
+					.join(' · ') || tr('copy.bedrockGuardrailDetailsNotSet')
 			);
 		case 'googleModelArmor':
-			return (
+			return withRejection(
 				[guard.templateId, guard.projectId, guard.location].filter(Boolean).join(' · ') ||
-				'Model Armor details not set.'
+					tr('copy.modelArmorDetailsNotSet')
 			);
 		case 'azureContentSafety':
-			return guard.endpoint.trim()
-				? `${guard.endpoint.trim()}${guard.detectJailbreak ? ' · jailbreak detection' : ''}.${rejection}`
-				: `Azure endpoint not set.${rejection}`;
+			return withRejection(
+				guard.endpoint.trim()
+					? guard.detectJailbreak
+						? tr('copy.guardEndpointSummary', [
+								guard.endpoint.trim(),
+								tr('copy.jailbreakDetection')
+							])
+						: tr('copy.guardEndpointOnlySummary', [guard.endpoint.trim()])
+					: tr('copy.azureEndpointNotSet')
+			);
 	}
 }
 
-function capitalize(value: string) {
-	return value ? value[0].toUpperCase() + value.slice(1) : value;
+function guardActionLabel(action: 'mask' | 'reject') {
+	return tr(action === 'mask' ? 'copy.mask' : 'copy.reject');
 }

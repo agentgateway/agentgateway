@@ -693,7 +693,9 @@ export function PlaygroundPage() {
 					>
 						<summary>
 							<span>{tr('copy.systemPrompt')}</span>
-							<small>{system.trim() ? truncateOneLine(system, 96) : 'No system prompt'}</small>
+							<small>
+								{system.trim() ? truncateOneLine(system, 96) : tr('copy.noSystemPrompt')}
+							</small>
 							<ChevronDown size={16} />
 						</summary>
 						<Field label={tr('copy.systemPrompt')}>

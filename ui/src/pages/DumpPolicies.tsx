@@ -85,7 +85,7 @@ export function DumpPoliciesPage() {
 												<button
 													className="icon-button"
 													type="button"
-													aria-label={tr('copy.viewValue')}
+													aria-label={tr('copy.viewValue', [policyName(policy)])}
 													onClick={() => setSelectedKey(policy.key)}
 												>
 													<Eye size={16} />

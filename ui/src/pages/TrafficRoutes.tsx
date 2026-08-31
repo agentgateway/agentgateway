@@ -1856,7 +1856,7 @@ function cleanHttpMatch(match: HttpMatch): HttpMatch {
 function backendListSummary(
 	backends: Array<TrafficRouteBackend | TrafficTcpRouteBackend> | null | undefined
 ) {
-	if (!backends?.length) return 'No backends';
+	if (!backends?.length) return tr('copy.noBackendsConfigured');
 	return backends.map(backendSummary).join(', ');
 }
 

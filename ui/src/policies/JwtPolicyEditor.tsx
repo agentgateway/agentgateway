@@ -346,7 +346,7 @@ export function JwtPolicyEditor(props: {
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'audiences')}
 					values={audiences}
 					placeholder="api://gateway"
-					emptyText="No audience restriction configured."
+					emptyText={tr('copy.noAudienceRestrictionConfigured')}
 					onChange={setAudiences}
 				/>
 

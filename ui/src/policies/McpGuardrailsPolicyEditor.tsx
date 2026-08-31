@@ -184,10 +184,10 @@ export function McpGuardrailsPolicyEditor(props: {
 								</span>
 								<div className="mcp-processor-title">
 									<strong>{tr('copy.processorNumber', [index + 1])}</strong>
-									<code>{processor.host || 'No host configured'}</code>
+									<code>{processor.host || tr('copy.noHostConfigured')}</code>
 								</div>
 								<span className={processor.failureMode === 'failOpen' ? 'badge warn' : 'badge'}>
-									{processor.failureMode === 'failOpen' ? 'Fail open' : 'Fail closed'}
+									{tr(processor.failureMode === 'failOpen' ? 'copy.failOpen' : 'copy.failClosed')}
 								</span>
 								<button
 									className="table-action danger"

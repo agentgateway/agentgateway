@@ -250,13 +250,15 @@ export function PromptCachingEditor(props: {
 }
 
 export function healthSummary(health: LlmModel['health'] | null | undefined) {
-	if (!health) return 'No health policy configured';
+	if (!health) return tr('copy.noHealthPolicyConfigured');
 	const parts = [
-		health.unhealthyExpression ? 'custom expression' : null,
-		health.eviction?.duration ? `evict ${health.eviction.duration}` : null,
-		health.eviction?.consecutiveFailures ? `${health.eviction.consecutiveFailures} failures` : null
+		health.unhealthyExpression ? tr('copy.customExpression') : null,
+		health.eviction?.duration ? tr('copy.evictValue', [health.eviction.duration]) : null,
+		health.eviction?.consecutiveFailures
+			? tr('copy.failuresValue', [health.eviction.consecutiveFailures])
+			: null
 	].filter(Boolean);
-	return parts.join(', ') || 'Default unhealthy detection configured';
+	return parts.join(', ') || tr('copy.defaultUnhealthyDetectionConfigured');
 }
 
 export function headerModifierSummary(
@@ -283,13 +285,15 @@ export function headerModifierSummary(
 }
 
 export function promptCachingSummary(value: LlmModel['promptCaching'] | null | undefined) {
-	if (!value) return 'No prompt caching configured';
+	if (!value) return tr('copy.noPromptCachingConfigured');
 	const scopes = [
-		value.cacheSystem ? 'system' : null,
-		value.cacheMessages ? 'messages' : null,
-		value.cacheTools ? 'tools' : null
+		value.cacheSystem ? tr('copy.system') : null,
+		value.cacheMessages ? tr('copy.messages') : null,
+		value.cacheTools ? tr('copy.tools') : null
 	].filter(Boolean);
-	return scopes.length ? `Cache ${scopes.join(', ')}` : 'Prompt caching configured';
+	return scopes.length
+		? tr('copy.cacheValue', [scopes.join(', ')])
+		: tr('copy.promptCachingConfigured');
 }
 
 function optionalNumber(value: string) {

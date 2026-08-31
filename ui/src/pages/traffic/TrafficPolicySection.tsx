@@ -227,7 +227,7 @@ export function TrafficPolicySection(props: {
 							? enabled
 									.map(policy => `${policy.title}${policy.summary ? `: ${policy.summary}` : ''}`)
 									.join(' · ')
-							: 'No policies configured'}
+							: tr('copy.noPoliciesConfigured')}
 					</small>
 				</span>
 				<ChevronRight size={17} />

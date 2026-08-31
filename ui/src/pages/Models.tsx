@@ -524,9 +524,9 @@ export function ModelsPage() {
 			) : null}
 			{deleting ? (
 				<ConfirmDialog
-					title={tr('copy.deleteValue_pkbukw')}
+					title={tr('copy.deleteValue_pkbukw', [deleting.name])}
 					destructive
-					confirmLabel={tr('copy.deleteValue', deleting.kind)}
+					confirmLabel={tr('copy.deleteValue', [deleting.kind])}
 					confirmDisabled={saving}
 					onCancel={() => setDeleting(null)}
 					onConfirm={() =>
@@ -1488,7 +1488,7 @@ function VirtualModelEditor(props: {
 										<button
 											className="icon-button danger"
 											type="button"
-											aria-label={tr('copy.removeFailoverGroupValue')}
+											aria-label={tr('copy.removeFailoverGroupValue', [groupIndex + 1])}
 											onClick={() =>
 												updateFailoverGroups(
 													failoverGroups.filter((_, itemIndex) => itemIndex !== groupIndex)

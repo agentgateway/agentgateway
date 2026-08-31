@@ -152,7 +152,7 @@ function TrafficListenersEditorPage() {
 			) : null}
 			{update.isSuccess ? <StatusBanner state="ok" title={tr('copy.configurationSaved')} /> : null}
 			{stats.invalidListeners ? (
-				<StatusBanner state="warn" title={tr('copy.valueListenerValueMixHttpAndTcpRoutes')}>
+				<StatusBanner state="warn" title={tr('copy.someListenersMixHttpAndTcpRoutes')}>
 					{tr('copy.editThoseListenersThroughRawYamlOrSplitTheRoutesAcrossSeparateListeners')}
 				</StatusBanner>
 			) : null}
@@ -375,9 +375,9 @@ function TrafficListenersEditorPage() {
 			) : null}
 			{deleting ? (
 				<ConfirmDialog
-					title={tr('copy.deleteValue_pkbukw')}
+					title={tr('copy.deleteValue_pkbukw', [deleting.label])}
 					destructive
-					confirmLabel={tr('copy.deleteValue')}
+					confirmLabel={tr('copy.delete')}
 					confirmDisabled={update.isPending}
 					onCancel={() => setDeleting(null)}
 					onConfirm={() =>
@@ -400,11 +400,9 @@ function TrafficListenersEditorPage() {
 					}
 				>
 					<p>
-						{tr('copy.delete')}
-						<strong>{deleting.label}</strong>?
 						{deleting.kind === 'bind' && deleting.listenerCount
-							? ` This also removes ${deleting.listenerCount} listener${deleting.listenerCount === 1 ? '' : 's'} and their routes.`
-							: ' Traffic using it will no longer be served.'}
+							? tr('copy.trafficBindDeleteWithListeners', { count: deleting.listenerCount })
+							: tr('copy.trafficDeleteWarning', [deleting.label])}
 					</p>
 				</ConfirmDialog>
 			) : null}

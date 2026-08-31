@@ -218,7 +218,7 @@ export function McpAuthenticationPolicyEditor(props: {
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'audiences')}
 					values={audiences}
 					placeholder={tr('copy.mcpGateway')}
-					emptyText="No audience restriction configured."
+					emptyText={tr('copy.noAudienceRestrictionConfigured')}
 					onChange={setAudiences}
 				/>
 				<Field
