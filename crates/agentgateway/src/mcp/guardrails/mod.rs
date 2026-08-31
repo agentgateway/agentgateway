@@ -238,12 +238,13 @@ pub async fn run_call_request<P: serde::de::DeserializeOwned>(
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome<P> {
+	let client = client.with_parent_extensions(req_ctx.extensions());
 	let mut composed = Outcome::Pass;
 	for processor in &ext.processors {
 		if !processor.runs_request(ctx.method) {
 			continue;
 		}
-		match processor.call_request::<P>(ctx, req_ctx, client).await {
+		match processor.call_request::<P>(ctx, req_ctx, &client).await {
 			Outcome::Pass => {},
 			Outcome::Mutated(p) => composed = Outcome::Mutated(p),
 			Outcome::Reject(e) => return Outcome::Reject(e),
@@ -261,13 +262,14 @@ pub async fn run_response(
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome<rmcp::model::ServerResult> {
+	let client = client.with_parent_extensions(req_ctx.extensions());
 	let mut composed = Outcome::Pass;
 	for processor in &ext.processors {
 		if !processor.runs_response(method) {
 			continue;
 		}
 		match processor
-			.response(method, backends, &mut body, req_ctx, client)
+			.response(method, backends, &mut body, req_ctx, &client)
 			.await
 		{
 			Outcome::Pass => {},

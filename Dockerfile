@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=agentgateway-ui-pnpm,target=/pnpm/store \
 
 RUN pnpm build
 
-FROM docker.io/library/rust:1.97.0-trixie AS musl-builder
+FROM docker.io/library/rust:1.98.0-trixie AS musl-builder
 
 ARG TARGETARCH
 
@@ -37,7 +37,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.97.0-trixie AS base-builder
+FROM docker.io/library/rust:1.98.0-trixie AS base-builder
 
 ARG TARGETARCH
 
@@ -91,7 +91,7 @@ mkdir /out
 mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
 /out/agentgateway --version || exit 1
 # Fail if version is not set
-if /out/agentgateway --version | grep -q '"unknown"'; then
+if /out/agentgateway --version | grep -q '"version": "unknown"'; then
   exit 1
 fi
 EOF

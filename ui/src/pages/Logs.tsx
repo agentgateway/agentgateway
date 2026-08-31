@@ -1,6 +1,7 @@
 import { tr } from "../i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import DOMPurify from "dompurify";
 import {
   ArrowRight,
   Braces,
@@ -9,11 +10,14 @@ import {
   ChevronRight,
   Copy,
   Download,
+  Ellipsis,
+  MessageSquare,
   RefreshCw,
   Settings,
   User,
   Wrench,
 } from "lucide-react";
+import { marked } from "marked";
 import {
   analyticsSummary,
   getLog,
@@ -52,6 +56,7 @@ import {
   PageHeader,
   Panel,
   StatusBanner,
+  Tooltip,
   formatDate,
   formatNumber,
   formatRelativeTime,
@@ -453,6 +458,7 @@ export function LogsPage() {
                 <col className="col-status" />
                 <col className="col-model" />
                 <col className="col-prompt" />
+                <col className="col-turn" />
                 <col className="col-duration" />
                 <col className="col-in" />
                 <col className="col-out" />
@@ -466,6 +472,7 @@ export function LogsPage() {
                   <th className="center">{tr("copy.status")}</th>
                   <th>{tr("copy.model")}</th>
                   <th>{tr("copy.prompt")}</th>
+                  <th>{tr("copy.turn")}</th>
                   <th className="num">{tr("copy.duration")}</th>
                   <th className="num">{tr("copy.in")}</th>
                   <th className="num">{tr("copy.out")}</th>
@@ -1154,11 +1161,31 @@ function analyticsRecordCost(value: unknown) {
   return 0;
 }
 
+type RenderedLogMessagePart =
+  | { type: "text"; text: string }
+  | { type: "toolCall"; id?: string; name: string; arguments?: unknown }
+  | {
+      type: "toolResult";
+      id?: string;
+      name?: string;
+      content?: unknown;
+      isError?: boolean;
+    }
+  | { type: "reasoning"; content?: unknown };
+
 type RenderedLogMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
   name?: string;
-  toolCalls?: Array<{ name: string; arguments?: unknown }>;
+  parts?: RenderedLogMessagePart[];
+  toolCalls?: Array<{ id?: string; name: string; arguments?: unknown }>;
+  toolResults?: Array<{
+    id?: string;
+    name?: string;
+    content?: unknown;
+    isError?: boolean;
+  }>;
+  reasoning?: unknown[];
 };
 
 function originalModelForLog(entry: LogEntry) {
@@ -1198,8 +1225,54 @@ function logMessagePreview(entry: LogEntry) {
       messages,
       (item) => item.role === "user" && Boolean(item.content.trim()),
     ) ?? findLastMessage(messages, (item) => Boolean(item.content.trim()));
-  const text = message?.content.trim() || entry.error || "";
+  const text =
+    message?.content.trim() || entry.promptPreview?.trim() || entry.error || "";
   return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+}
+
+function logTurn(entry: LogEntry) {
+  const labels = {
+    user: tr("copy.user"),
+    assistant: tr("copy.assistant"),
+    toolCall: tr("copy.toolCall"),
+    toolResult: tr("copy.toolResult"),
+  };
+  const input = entry.turn?.input ? labels[entry.turn.input] : null;
+  const output = entry.turn?.output ? labels[entry.turn.output] : null;
+  return [input, output].filter(Boolean).join(" → ");
+}
+
+function LogTurnBadge(props: { entry: LogEntry }) {
+  const input = props.entry.turn?.input;
+  const output = props.entry.turn?.output;
+  const label = logTurn(props.entry) || tr("copy.unknownTurn");
+  const variant = (input ?? "unknown") + "-" + (output ?? "unknown");
+  const common =
+    (input === "user" || input === "toolResult") &&
+    (output === "assistant" || output === "toolCall");
+  return (
+    <Tooltip content={label}>
+      <span
+        className={"log-turn-badge " + (common ? variant : "other")}
+        aria-label={label}
+        tabIndex={0}
+      >
+        {common ? (
+          <>
+            {input === "user" ? <User size={13} /> : <Braces size={13} />}
+            <ArrowRight size={10} />
+            {output === "assistant" ? (
+              <MessageSquare size={13} />
+            ) : (
+              <Wrench size={13} />
+            )}
+          </>
+        ) : (
+          <Ellipsis size={15} />
+        )}
+      </span>
+    </Tooltip>
+  );
 }
 
 function findLastMessage(
@@ -1351,6 +1424,9 @@ function LogCallRow(props: {
             {preview || "—"}
           </span>
         </td>
+        <td className="log-td-turn">
+          <LogTurnBadge entry={props.entry} />
+        </td>
         <td className="log-td-num">{formatDuration(props.entry.durationMs)}</td>
         <TokenCells entry={props.entry} />
         <td className="log-td-num">
@@ -1362,7 +1438,7 @@ function LogCallRow(props: {
       </tr>
       {props.expanded ? (
         <tr className="log-row-detail">
-          <td colSpan={10}>
+          <td colSpan={11}>
             <div className="expanded-log">
               {props.loading ? (
                 <StatusBanner
@@ -1467,6 +1543,8 @@ function LogDetailView(props: {
   onOpenSettings?: () => void;
 }) {
   const messages = logConversation(props.entry);
+  const trajectory = trajectoryEvents(messages);
+  const conversationRef = useRef<HTMLDetailsElement>(null);
   const usage = logUsageDetail(props.entry);
   const identity = logIdentity(props.entry);
   const provider = props.entry.genAi.providerName ?? null;
@@ -1480,6 +1558,31 @@ function LogDetailView(props: {
   const userAgent = stringValue(
     attributeValue(props.entry.attributes, "user_agent.name"),
   );
+  const trajectoryAnchors = trajectory.map((event) => event.anchorId).join("|");
+
+  function jumpToConversation(anchorId: string) {
+    if (conversationRef.current) conversationRef.current.open = true;
+    window.requestAnimationFrame(() => {
+      document.getElementById(anchorId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      const hash = "#" + anchorId;
+      if (window.location.hash !== hash) {
+        window.history.pushState(null, "", hash);
+      }
+    });
+  }
+
+  useEffect(() => {
+    const anchorId = decodeURIComponent(window.location.hash.slice(1));
+    if (!trajectory.some((event) => event.anchorId === anchorId)) return;
+    if (conversationRef.current) conversationRef.current.open = true;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(anchorId)?.scrollIntoView({ block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [props.entry.id, trajectoryAnchors]);
   return (
     <div className="log-detail-view">
       <div className="log-detail-top">
@@ -1557,6 +1660,10 @@ function LogDetailView(props: {
         />
       </div>
 
+      {trajectory.length ? (
+        <LogTrajectory events={trajectory} onJump={jumpToConversation} />
+      ) : null}
+
       <div className="log-detail-grid">
         <section className="log-detail-section">
           <h4>{tr("copy.request_1058hua")}</h4>
@@ -1615,7 +1722,7 @@ function LogDetailView(props: {
       </div>
 
       {messages.length ? (
-        <details className="log-conversation">
+        <details className="log-conversation" ref={conversationRef}>
           <summary>
             <ChevronRight className="log-conversation-chevron" size={15} />
             <span className="log-conversation-title">
@@ -1628,6 +1735,9 @@ function LogDetailView(props: {
           <div className="log-thread">
             {messages.map((message, index) => (
               <LogMessageView
+                events={trajectory.filter(
+                  (event) => event.messageIndex === index,
+                )}
                 message={message}
                 key={`${message.role}-${index}`}
               />
@@ -1658,6 +1768,254 @@ function LogDetailView(props: {
       </details>
     </div>
   );
+}
+
+type TrajectoryLane = "input" | "model" | "tool-call" | "tool-result";
+
+type TrajectoryEvent = {
+  lane: TrajectoryLane;
+  label: string;
+  approxTokens: number;
+  anchorId: string;
+  messageIndex: number;
+  partIndex?: number;
+  system?: boolean;
+};
+
+const TRAJECTORY_LANES: Array<{ lane: TrajectoryLane; label: string }> = [
+  { lane: "input", label: "Input" },
+  { lane: "model", label: "Model" },
+  { lane: "tool-call", label: "Tool call" },
+  { lane: "tool-result", label: "Tool result" },
+];
+
+function LogTrajectory(props: {
+  events: TrajectoryEvent[];
+  onJump: (anchorId: string) => void;
+}) {
+  const [selected, setSelected] = useState<number | null>(null);
+  if (!props.events.length) return null;
+  const selectedEvent = selected == null ? null : props.events[selected];
+  const chartStyle = {
+    minWidth: Math.max(420, props.events.length * 24 + 92) + "px",
+  };
+  const trackStyle = {
+    gridTemplateColumns: props.events
+      .map((event) => "minmax(14px, " + event.approxTokens + "fr)")
+      .join(" "),
+  };
+  return (
+    <section className="log-trajectory" aria-labelledby="log-trajectory-title">
+      <div className="log-trajectory-header">
+        <h3 id="log-trajectory-title">{tr("copy.trajectory")}</h3>
+        <span>{tr("copy.trajectorySteps", { count: props.events.length })}</span>
+      </div>
+      <div className="log-trajectory-scroll">
+        <div className="log-trajectory-chart" style={chartStyle}>
+          {TRAJECTORY_LANES.map(({ lane }) => (
+            <div className="log-trajectory-row" key={lane}>
+              <span className="log-trajectory-label">
+                {tr(trajectoryLaneKey(lane))}
+              </span>
+              <div className="log-trajectory-track" style={trackStyle}>
+                {props.events.map((event, index) =>
+                  event.lane === lane ? (
+                    <button
+                      aria-label={tr("copy.trajectoryStep", [
+                        index + 1,
+                        event.label,
+                      ])}
+                      aria-pressed={selected === index}
+                      className={
+                        "log-trajectory-bar " +
+                        lane +
+                        (event.system ? " system" : "") +
+                        (selected === index ? " selected" : "")
+                      }
+                      key={lane + "-" + index}
+                      title={tr("copy.trajectoryStep", [
+                        index + 1,
+                        event.label,
+                      ])}
+                      type="button"
+                      onClick={() =>
+                        setSelected((current) =>
+                          current === index ? null : index,
+                        )
+                      }
+                      onDoubleClick={() => {
+                        setSelected(index);
+                        props.onJump(event.anchorId);
+                      }}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="log-trajectory-gap"
+                      key={lane + "-" + index}
+                    />
+                  ),
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="log-trajectory-caption" aria-live="polite">
+        <span>
+          {selectedEvent
+            ? tr("copy.trajectoryStepLabel", [
+                (selected ?? 0) + 1,
+                selectedEvent.label,
+              ])
+            : tr("copy.widthShowsApproximateTokens")}
+        </span>
+        {selectedEvent ? (
+          <a
+            href={"#" + selectedEvent.anchorId}
+            onClick={(event) => {
+              event.preventDefault();
+              props.onJump(selectedEvent.anchorId);
+            }}
+          >
+            {tr("copy.jumpToConversation")}
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function trajectoryLaneKey(lane: TrajectoryLane) {
+  if (lane === "input") return "copy.input";
+  if (lane === "model") return "copy.model";
+  if (lane === "tool-call") return "copy.toolCall";
+  return "copy.toolResult";
+}
+
+function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
+  const events: Array<Omit<TrajectoryEvent, "anchorId">> = [];
+  for (const [messageIndex, message] of messages.entries()) {
+    if (message.parts) {
+      for (const [partIndex, part] of message.parts.entries()) {
+        const base = { messageIndex, partIndex };
+        switch (part.type) {
+          case "text": {
+            if (!part.text.trim()) break;
+            const model = message.role === "assistant";
+            events.push({
+              ...base,
+              lane: model ? "model" : "input",
+              label: trajectoryMessageLabel(
+                model
+                  ? tr("copy.model")
+                  : message.role === "system"
+                    ? tr("copy.system")
+                    : tr("copy.user"),
+                part.text,
+              ),
+              approxTokens: approximateTokenCount(part.text),
+              system: message.role === "system",
+            });
+            break;
+          }
+          case "toolCall":
+            events.push({
+              ...base,
+              lane: "tool-call",
+              label: tr("copy.trajectoryToolCall", part.name),
+              approxTokens: approximateTokenCount(
+                part.name + "\n" + trajectoryValueText(part.arguments),
+              ),
+            });
+            break;
+          case "toolResult":
+            events.push({
+              ...base,
+              lane: "tool-result",
+              label: tr(
+                "copy.trajectoryToolResult",
+                part.name ?? tr("copy.unknown"),
+              ),
+              approxTokens: approximateTokenCount(
+                trajectoryValueText(part.content),
+              ),
+            });
+            break;
+          case "reasoning":
+            break;
+        }
+      }
+      continue;
+    }
+
+    if (message.role === "assistant") {
+      if (message.content.trim()) {
+        events.push({
+          lane: "model",
+          label: trajectoryMessageLabel(tr("copy.model"), message.content),
+          approxTokens: approximateTokenCount(message.content),
+          messageIndex,
+        });
+      }
+      for (const call of message.toolCalls ?? []) {
+        events.push({
+          lane: "tool-call",
+          label: tr("copy.trajectoryToolCall", call.name),
+          approxTokens: approximateTokenCount(
+            call.name + "\n" + trajectoryValueText(call.arguments),
+          ),
+          messageIndex,
+        });
+      }
+    } else if (message.role === "tool") {
+      events.push({
+        lane: "tool-result",
+        label: tr(
+          "copy.trajectoryToolResult",
+          message.name ?? tr("copy.unknown"),
+        ),
+        approxTokens: approximateTokenCount(message.content),
+        messageIndex,
+      });
+    } else if (message.content.trim()) {
+      events.push({
+        lane: "input",
+        label: trajectoryMessageLabel(
+          message.role === "system" ? tr("copy.system") : tr("copy.user"),
+          message.content,
+        ),
+        approxTokens: approximateTokenCount(message.content),
+        messageIndex,
+        system: message.role === "system",
+      });
+    }
+  }
+  return events.map((event, index) => ({
+    ...event,
+    anchorId: "conversation-step-" + (index + 1),
+  }));
+}
+
+function approximateTokenCount(text: string) {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function trajectoryValueText(value: unknown) {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function trajectoryMessageLabel(prefix: string, content: string) {
+  const compact = content.replace(/\s+/g, " ").trim();
+  if (!compact) return prefix;
+  const preview = compact.length > 64 ? compact.slice(0, 61) + "..." : compact;
+  return tr("copy.trajectoryMessageValue", [prefix, preview]);
 }
 
 function LogStat(props: { label: string; value: string; sub?: string }) {
@@ -1898,13 +2256,28 @@ function logRoleLabel(role: RenderedLogMessage["role"]) {
   return tr(keys[role]);
 }
 
-function LogMessageView(props: { message: RenderedLogMessage }) {
+function LogMessageView(props: {
+  message: RenderedLogMessage;
+  events: TrajectoryEvent[];
+}) {
   const message = props.message;
   const content = message.content;
   const isSystem = message.role === "system";
   const collapsible = content.length > (isSystem ? 280 : 2000);
   const [collapsed, setCollapsed] = useState(collapsible);
   const hasToolCalls = Boolean(message.toolCalls?.length);
+  const hasToolResults = Boolean(message.toolResults?.length);
+  const hasReasoning = Boolean(message.reasoning?.length);
+  const copyValue =
+    message.parts || hasToolCalls || hasToolResults || hasReasoning
+      ? serializeLogMessage(message)
+      : content;
+  const messageAnchor = props.events.find(
+    (event) => event.partIndex == null && event.lane !== "tool-call",
+  )?.anchorId;
+  const toolCallEvents = props.events.filter(
+    (event) => event.partIndex == null && event.lane === "tool-call",
+  );
 
   return (
     <article className={`log-msg ${message.role}`}>
@@ -1913,29 +2286,59 @@ function LogMessageView(props: { message: RenderedLogMessage }) {
         {message.role === "tool" && message.name ? (
           <code className="log-msg-name">{message.name}</code>
         ) : null}
-        {content ? (
+        {copyValue ? (
           <span className="log-msg-meta">
-            {tr("copy.valueCharacters", formatNumber(content.length))}
+            {tr("copy.valueCharacters", formatNumber(copyValue.length))}
           </span>
         ) : null}
-        {content ? <CopyButton value={content} /> : null}
+        {copyValue ? <CopyButton value={copyValue} /> : null}
       </header>
       <div className="log-msg-body">
-        {message.role === "tool" ? (
+        {message.parts ? (
+          <>
+            {message.parts.map((part, index) => (
+              <LogMessagePartView
+                anchorId={props.events.find(
+                  (event) => event.partIndex === index,
+                )?.anchorId}
+                part={part}
+                collapsed={part.type === "text" && collapsed}
+                key={part.type + "-" + index}
+              />
+            ))}
+            {collapsible ? (
+              <button
+                className="log-msg-toggle"
+                type="button"
+                onClick={() => setCollapsed((current) => !current)}
+              >
+                {collapsed ? (
+                  <ChevronRight size={12} />
+                ) : (
+                  <ChevronDown size={12} />
+                )}
+                {collapsed
+                  ? tr(
+                      "copy.showAllValueCharacters",
+                      formatNumber(content.length),
+                    )
+                  : tr("copy.collapse")}
+              </button>
+            ) : null}
+          </>
+        ) : message.role === "tool" && !hasToolResults ? (
           <LogToolBlock
             kind="result"
-            name={message.name ?? "unknown"}
-            content={content}
+            name={message.name ?? tr("copy.unknown")}
+            value={content}
           />
         ) : content ? (
           <>
-            <div
-              className={
-                collapsed ? "log-msg-content collapsed" : "log-msg-content"
-              }
-            >
-              {content}
-            </div>
+            <LogMarkdown
+              content={content}
+              collapsed={collapsed}
+              anchorId={messageAnchor}
+            />
             {collapsible ? (
               <button
                 className="log-msg-toggle"
@@ -1957,17 +2360,37 @@ function LogMessageView(props: { message: RenderedLogMessage }) {
             ) : null}
           </>
         ) : null}
-        {hasToolCalls
+        {!message.parts && hasToolCalls
           ? message.toolCalls!.map((call, index) => (
               <LogToolBlock
+                anchorId={toolCallEvents[index]?.anchorId}
                 kind="call"
                 name={call.name}
-                args={call.arguments}
+                value={call.arguments}
                 key={`${call.name}-${index}`}
               />
             ))
           : null}
-        {!content && !hasToolCalls ? (
+        {!message.parts && hasToolResults
+          ? message.toolResults!.map((result, index) => (
+              <LogToolBlock
+                anchorId={props.events.find(
+                  (event) => event.lane === "tool-result" && event.partIndex == null,
+                )?.anchorId}
+                kind="result"
+                name={result.name ?? tr("copy.unknown")}
+                value={result.content}
+                isError={result.isError}
+                key={(result.id ?? result.name ?? "result") + "-" + index}
+              />
+            ))
+          : null}
+        {!message.parts && hasReasoning
+          ? message.reasoning!.map((reasoning, index) => (
+              <LogReasoningBlock content={reasoning} key={"reasoning-" + index} />
+            ))
+          : null}
+        {!content && !hasToolCalls && !hasToolResults && !hasReasoning ? (
           <span className="log-msg-empty">{tr("copy.emptyMessage")}</span>
         ) : null}
       </div>
@@ -1975,61 +2398,272 @@ function LogMessageView(props: { message: RenderedLogMessage }) {
   );
 }
 
+function LogMessagePartView(props: {
+  part: RenderedLogMessagePart;
+  collapsed: boolean;
+  anchorId?: string;
+}) {
+  switch (props.part.type) {
+    case "text":
+      return props.part.text ? (
+        <LogMarkdown
+          content={props.part.text}
+          collapsed={props.collapsed}
+          anchorId={props.anchorId}
+        />
+      ) : null;
+    case "toolCall":
+      return (
+        <LogToolBlock
+          anchorId={props.anchorId}
+          kind="call"
+          name={props.part.name}
+          value={props.part.arguments}
+        />
+      );
+    case "toolResult":
+      return (
+        <LogToolBlock
+          anchorId={props.anchorId}
+          kind="result"
+          name={props.part.name ?? tr("copy.unknown")}
+          value={props.part.content}
+          isError={props.part.isError}
+        />
+      );
+    case "reasoning":
+      return <LogReasoningBlock content={props.part.content} />;
+  }
+}
+
+function LogReasoningBlock(props: { content: unknown }) {
+  return (
+    <LogToolBlock
+      kind="reasoning"
+      name="reasoning"
+      value={reasoningDisplayText(props.content)}
+    />
+  );
+}
+
+function reasoningDisplayText(content: unknown) {
+  if (!content || typeof content !== "object") {
+    return typeof content === "string" && content.trim()
+      ? content
+      : tr("copy.reasoningDetailsUnavailable");
+  }
+  const record = content as Record<string, unknown>;
+  const summary = reasoningSummaryText(record.summary);
+  if (summary) return summary;
+  const encrypted = record.encrypted_content ?? record.encryptedContent;
+  if (typeof encrypted !== "string" || !encrypted) {
+    return tr("copy.reasoningDetailsUnavailable");
+  }
+  const bytes = decodedBase64UrlLength(encrypted);
+  return bytes == null
+    ? tr("copy.encrypted")
+    : tr("copy.encryptedBytes", formatNumber(bytes));
+}
+
+function reasoningSummaryText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    return value.map(reasoningSummaryText).filter(Boolean).join("\n");
+  }
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return reasoningSummaryText(record.text ?? record.content);
+}
+
+function decodedBase64UrlLength(value: string) {
+  if (!/^[A-Za-z0-9_-]+={0,2}$/.test(value)) return null;
+  const unpadded = value.replace(/=+$/, "");
+  if (unpadded.length % 4 === 1) return null;
+  const padded = unpadded
+    .replaceAll("-", "+")
+    .replaceAll("_", "/")
+    .padEnd(unpadded.length + ((4 - (unpadded.length % 4)) % 4), "=");
+  try {
+    return atob(padded).length;
+  } catch {
+    return null;
+  }
+}
+
+function serializeLogMessage(message: RenderedLogMessage) {
+  return (
+    JSON.stringify(
+      {
+        role: message.role,
+        ...(message.parts
+          ? { parts: message.parts }
+          : {
+              ...(message.content ? { content: message.content } : {}),
+              ...(message.toolCalls?.length
+                ? { toolCalls: message.toolCalls }
+                : {}),
+              ...(message.toolResults?.length
+                ? { toolResults: message.toolResults }
+                : {}),
+              ...(message.reasoning?.length
+                ? { reasoning: message.reasoning }
+                : {}),
+            }),
+      },
+      null,
+      2,
+    ) ?? ""
+  );
+}
+
+const logMarkdownRenderer = new marked.Renderer();
+logMarkdownRenderer.html = ({ text }) =>
+  escapeLogMarkdownHtml(text).replaceAll("\n", "<br>");
+logMarkdownRenderer.link = ({ text }) => escapeLogMarkdownHtml(text);
+logMarkdownRenderer.image = ({ text }) =>
+  text ? "[image: " + escapeLogMarkdownHtml(text) + "]" : "[image]";
+
+const LOG_MARKDOWN_TAGS = [
+  "blockquote",
+  "br",
+  "code",
+  "del",
+  "em",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "hr",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "strong",
+  "table",
+  "tbody",
+  "td",
+  "th",
+  "thead",
+  "tr",
+  "ul",
+];
+
+function escapeLogMarkdownHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function LogMarkdown(props: {
+  content: string;
+  collapsed: boolean;
+  anchorId?: string;
+}) {
+  const html = useMemo(
+    () =>
+      DOMPurify.sanitize(
+        marked.parse(props.content, {
+          async: false,
+          breaks: true,
+          gfm: true,
+          renderer: logMarkdownRenderer,
+        }) as string,
+        {
+          ALLOWED_ATTR: [],
+          ALLOWED_TAGS: LOG_MARKDOWN_TAGS,
+        },
+      ),
+    [props.content],
+  );
+  return (
+    <div
+      className={
+        "log-msg-content log-markdown" +
+        (props.collapsed ? " collapsed" : "")
+      }
+      dangerouslySetInnerHTML={{ __html: html }}
+      id={props.anchorId}
+    />
+  );
+}
+
 function LogToolBlock(props: {
-  kind: "call" | "result";
+  kind: "call" | "result" | "reasoning";
   name: string;
-  args?: unknown;
-  content?: string;
+  anchorId?: string;
+  value?: unknown;
+  isError?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const isCall = props.kind === "call";
-  const summary = isCall
-    ? summarizeLogValue(props.args)
-    : (props.content ?? "");
+  const summary = summarizeLogValue(props.value);
   const parsedResult =
-    !isCall && props.content
+    props.kind === "result" && typeof props.value === "string"
       ? (() => {
           try {
-            return JSON.parse(props.content) as unknown;
+            return JSON.parse(props.value as string) as unknown;
           } catch {
             return null;
           }
         })()
       : null;
-  const expandable = isCall
-    ? props.args != null && props.args !== "" && summary !== "{}"
-    : summary.length > 120 || parsedResult != null;
+  const copyValue = summary;
   return (
-    <div className={open ? "log-tool-block open" : "log-tool-block"}>
-      <button
-        className="log-tool-head"
-        type="button"
-        disabled={!expandable}
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {isCall ? <Wrench size={13} /> : <Braces size={13} />}
-        <span className="log-tool-kind">
-          {isCall ? tr("copy.toolCall") : tr("copy.toolResult")}
-        </span>
-        <code className="log-tool-name">{props.name}</code>
-        {!open ? (
-          <span className="log-tool-summary">
-            {summary || (isCall ? tr("copy.noArgs") : tr("copy.emptyResult"))}
+    <div
+      className={
+        "log-tool-block " +
+        props.kind +
+        (props.isError ? " error" : "") +
+        (open ? " open" : "")
+      }
+      id={props.anchorId}
+    >
+      <div className="log-tool-head">
+        <button
+          className="log-tool-toggle"
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          {isCall ? <Wrench size={13} /> : <Braces size={13} />}
+          <span className="log-tool-kind">
+            {isCall
+              ? tr("copy.toolCall")
+              : props.kind === "reasoning"
+                ? tr("copy.reasoning")
+                : tr("copy.toolResult")}
           </span>
-        ) : null}
-        {expandable ? (
+          {props.kind !== "reasoning" ? (
+            <code className="log-tool-name">{props.name}</code>
+          ) : null}
+          {!open ? (
+            <span className="log-tool-summary">
+              {summary || (isCall ? tr("copy.noArgs") : tr("copy.emptyResult"))}
+            </span>
+          ) : null}
           <ChevronDown className="log-tool-chevron" size={14} />
-        ) : null}
-      </button>
+        </button>
+        {copyValue ? <CopyButton value={copyValue} /> : null}
+      </div>
       {open ? (
         <div className="log-tool-body">
-          {isCall ? (
-            <JsonBlock value={props.args} />
+          {typeof props.value === "string" && parsedResult == null ? (
+            <pre className="log-tool-text">
+              {props.value || tr("copy.emptyResult")}
+            </pre>
           ) : parsedResult != null ? (
             <JsonBlock value={parsedResult} />
+          ) : props.value != null ? (
+            <JsonBlock value={props.value} />
           ) : (
-            <pre className="log-tool-text">{props.content}</pre>
+            <pre className="log-tool-text">
+              {isCall ? tr("copy.noArgs") : tr("copy.emptyResult")}
+            </pre>
           )}
         </div>
       ) : null}
@@ -2144,6 +2778,9 @@ function messageFromUnknown(value: unknown): RenderedLogMessage[] {
   if (typeof value !== "object" || Array.isArray(value))
     return [{ role: "user", content: contentText(value) }];
   const record = value as Record<string, unknown>;
+  if (Array.isArray(record.parts)) {
+    return [messageFromNormalizedParts(record)];
+  }
   const role = normalizeRole(record.role);
   const content = contentText(
     record.content ?? record.text ?? record.message ?? "",
@@ -2151,6 +2788,62 @@ function messageFromUnknown(value: unknown): RenderedLogMessage[] {
   const toolCalls = toolCallsFromUnknown(record.tool_calls ?? record.toolCalls);
   const name = typeof record.name === "string" ? record.name : undefined;
   return [{ role, content, name, toolCalls }];
+}
+
+function messageFromNormalizedParts(
+  record: Record<string, unknown>,
+): RenderedLogMessage {
+  const text: string[] = [];
+  const parts: RenderedLogMessagePart[] = [];
+  const toolCalls: NonNullable<RenderedLogMessage["toolCalls"]> = [];
+  const toolResults: NonNullable<RenderedLogMessage["toolResults"]> = [];
+  const reasoning: unknown[] = [];
+  for (const part of record.parts as unknown[]) {
+    if (!part || typeof part !== "object") continue;
+    const value = part as Record<string, unknown>;
+    switch (value.type) {
+      case "text":
+        if (typeof value.text === "string") {
+          text.push(value.text);
+          parts.push({ type: "text", text: value.text });
+        }
+        break;
+      case "toolCall": {
+        const call = {
+          id: typeof value.id === "string" ? value.id : undefined,
+          name: typeof value.name === "string" ? value.name : "unknown",
+          arguments: value.arguments,
+        };
+        toolCalls.push(call);
+        parts.push({ type: "toolCall", ...call });
+        break;
+      }
+      case "toolResult": {
+        const result = {
+          id: typeof value.id === "string" ? value.id : undefined,
+          name: typeof value.name === "string" ? value.name : undefined,
+          content: value.content,
+          isError:
+            typeof value.isError === "boolean" ? value.isError : undefined,
+        };
+        toolResults.push(result);
+        parts.push({ type: "toolResult", ...result });
+        break;
+      }
+      case "reasoning":
+        reasoning.push(value.content);
+        parts.push({ type: "reasoning", content: value.content });
+        break;
+    }
+  }
+  return {
+    role: normalizeRole(record.role),
+    content: text.join("\n"),
+    parts,
+    toolCalls: toolCalls.length ? toolCalls : undefined,
+    toolResults: toolResults.length ? toolResults : undefined,
+    reasoning: reasoning.length ? reasoning : undefined,
+  };
 }
 
 function normalizeRole(value: unknown): RenderedLogMessage["role"] {
@@ -2170,7 +2863,8 @@ function toolCallsFromUnknown(value: unknown): RenderedLogMessage["toolCalls"] {
         ? (record.function as Record<string, unknown>)
         : record;
     const name = typeof fn.name === "string" ? fn.name : "unknown";
-    return [{ name, arguments: parseMaybeJson(fn.arguments) }];
+    const id = typeof record.id === "string" ? record.id : undefined;
+    return [{ id, name, arguments: parseMaybeJson(fn.arguments) }];
   });
   return calls.length ? calls : undefined;
 }

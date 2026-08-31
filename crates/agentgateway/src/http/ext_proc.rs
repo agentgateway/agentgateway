@@ -39,6 +39,8 @@ pub(crate) const EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE: &str =
 mod tests;
 
 const TRACE_POLICY_KIND: &str = "ext_proc";
+const INFERENCE_DESTINATION_HEADER: HeaderName =
+	HeaderName::from_static("x-gateway-destination-endpoint");
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -212,15 +214,16 @@ impl InferencePoolRouter {
 		let Some(ext_proc) = &mut self.ext_proc else {
 			return Ok(Default::default());
 		};
+		// The destination header is an EPP output, not a client-controlled input.
+		req.headers_mut().remove(&INFERENCE_DESTINATION_HEADER);
 		let r = std::mem::take(req);
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		let failed_open = ext_proc.skipped;
 		*req = new_req;
 		let dest = req
-			.headers()
-			.get(HeaderName::from_static("x-gateway-destination-endpoint"))
-			.and_then(|v| v.to_str().ok())
-			.map(|v| v.parse::<SocketAddr>())
+			.headers_mut()
+			.remove(&INFERENCE_DESTINATION_HEADER)
+			.and_then(|v| v.to_str().ok().map(|v| v.parse::<SocketAddr>()))
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
 		Ok(InferenceRequestResult {
@@ -378,6 +381,8 @@ struct ExtProcInstance {
 	request_body_immediate_response: Arc<Mutex<Option<http::Response>>>,
 	protocol_config_sent: bool,
 	mode_state: ModeStateMachine,
+	span_client: PolicyClient,
+	span_target: Arc<SimpleBackendReference>,
 	client: Option<proto::external_processor_client::ExternalProcessorClient<GrpcReferenceChannel>>,
 	tx_req: Option<Sender<ProcessingRequest>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
@@ -399,14 +404,17 @@ impl ExtProcInstance {
 		processing_options: ProcessingOptions,
 	) -> ExtProcInstance {
 		trace!("connecting to {:?}", target.target);
-		let chan = target
-			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc));
+		let client = client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc);
+		let span_target = target.target.clone();
+		let chan = target.grpc_channel(client.clone());
 		Self {
 			skipped: Default::default(),
 			request_body_immediate_response: Arc::new(Mutex::new(None)),
 			failure_mode,
 			protocol_config_sent: false,
 			mode_state: processing_options.into(),
+			span_client: client,
+			span_target,
 			client: Some(
 				proto::external_processor_client::ExternalProcessorClient::new(chan)
 					.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE),
@@ -432,15 +440,25 @@ impl ExtProcInstance {
 			return Err(Error::RequestSend);
 		};
 		let failure_mode = self.failure_mode;
+		let span_client = self.span_client.clone();
+		let span_target = self.span_target.clone();
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
 		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
-		tokio::task::spawn(async move {
+		dtrace::spawn(async move {
 			let mut request = tonic::Request::new(req_stream);
 			*request.metadata_mut() = grpc_initial_metadata;
+			let mut span = span_client.start_grpc_span(
+				&mut request,
+				span_target.as_ref(),
+				"/envoy.service.ext_proc.v3.ExternalProcessor/Process",
+			);
 			let responses = match client.process(request).await {
 				Ok(r) => r,
 				Err(e) => {
+					if let Some(span) = span.as_deref_mut() {
+						span.record_grpc_error(&e);
+					}
 					warn!(?failure_mode, "failed to initialize extproc client: {e:?}");
 					return;
 				},
@@ -455,8 +473,16 @@ impl ExtProcInstance {
 							return;
 						}
 					},
-					Ok(None) => return,
+					Ok(None) => {
+						if let Some(span) = span.as_deref_mut() {
+							span.record_grpc_status(tonic::Code::Ok);
+						}
+						return;
+					},
 					Err(error) => {
+						if let Some(span) = span.as_deref_mut() {
+							span.record_grpc_error(&error);
+						}
 						warn!(%error, "ext_proc response stream failed");
 						return;
 					},

@@ -1694,3 +1694,20 @@ spec:
         - name: ca-bundle
           kind: Invalid
 ---
+_err: 'at most one of the fields in [clientId objectId resourceId] may be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-managed-identity-multiple-identifiers
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  backend:
+    auth:
+      azure:
+        managedIdentity:
+          clientId: client-id
+          objectId: object-id
+---

@@ -115,12 +115,18 @@ impl Provider {
 				)
 			},
 			(RouteType::Embeddings, _, _) => {
-				let model = self.configured_model(request_model).unwrap_or_default();
+				let model = self.embeddings_model(request_model);
+				let method = if self.uses_embed_content(request_model) {
+					"embedContent"
+				} else {
+					"predict"
+				};
 				strng::format!(
-					"/v1/projects/{}/locations/{}/publishers/google/models/{}:predict",
+					"/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
 					self.project_id,
 					location,
-					model
+					model,
+					method
 				)
 			},
 			(_, Some(model), _) => {
@@ -137,9 +143,22 @@ impl Provider {
 				)
 			},
 
+			// Native countTokens has no upstream provider format to translate through, so it keeps
+			// its client-facing route type all the way here.
+			(RouteType::GeminiCountTokens, _, Some(model)) => {
+				strng::format!(
+					"/v1/projects/{}/locations/{}/publishers/google/models/{}:countTokens",
+					self.project_id,
+					location,
+					model
+				)
+			},
+
 			// `?alt=sse` is required on the streaming endpoint; without it Vertex returns a
-			// JSON array rather than an SSE stream.
-			(RouteType::Completions, None, Some(model)) if native_gemini => {
+			// JSON array rather than an SSE stream. Native Gemini inbound arrives here as
+			// RouteType::Completions (its upstream provider format); GenerateContent is
+			// matched for completeness.
+			(RouteType::Completions | RouteType::GenerateContent, None, Some(model)) if native_gemini => {
 				let method = if streaming {
 					"streamGenerateContent?alt=sse"
 				} else {
@@ -179,15 +198,30 @@ impl Provider {
 		}
 	}
 
+	fn embeddings_model<'a>(&'a self, request_model: Option<&'a str>) -> &'a str {
+		self
+			.configured_model(request_model)
+			.map(strip_google_model_prefix)
+			.unwrap_or_default()
+	}
+
+	/// `gemini-embedding-2` and later are served only by `:embedContent`; `:predict`
+	/// returns FAILED_PRECONDITION for them. `-001` stays on `:predict`, that supports
+	/// batch prediction and avoids regression
+	pub fn uses_embed_content(&self, request_model: Option<&str>) -> bool {
+		let model = self.embeddings_model(request_model);
+		model.starts_with("gemini-embedding-") && !model.starts_with("gemini-embedding-001")
+	}
+
 	fn gemini_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<Strng> {
 		let model = self.configured_model(request_model)?;
+		let stripped = strip_google_model_prefix(model);
 
-		let stripped: &str = model
-			.split_once("publishers/google/models/")
-			.map(|(_, m)| m)
-			.or_else(|| model.strip_prefix("models/"))
-			.or_else(|| model.strip_prefix("google/"))
-			.unwrap_or(model);
+		// The publisher path supplies its own `.../models/` prefix, so what is left has to be a
+		// single segment; a `/` still in it would be choosing the upstream path, not a model.
+		if !crate::model_path::is_safe_segment(stripped) {
+			return None;
+		}
 
 		// Embedding models can share the gemini- prefix (e.g. gemini-embedding-001) but
 		// route via the Embeddings arm, not :generateContent.
@@ -236,6 +270,17 @@ impl Provider {
 			Some(strng::new(model))
 		}
 	}
+}
+
+/// Reduce a Google publisher model to its bare id, so callers can match on the model
+/// family regardless of how fully qualified the configured value is.
+fn strip_google_model_prefix(model: &str) -> &str {
+	model
+		.split_once("publishers/google/models/")
+		.map(|(_, m)| m)
+		.or_else(|| model.strip_prefix("models/"))
+		.or_else(|| model.strip_prefix("google/"))
+		.unwrap_or(model)
 }
 
 fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
@@ -359,6 +404,32 @@ mod tests {
 		assert_eq!(actual.as_deref(), expected);
 	}
 
+	#[rstest::rstest]
+	#[case::traversal(
+		"gemini-2.5-flash/../../../../locations/global/endpoints/openapi/chat/completions"
+	)]
+	#[case::extra_segment("gemini-2.5-flash/foo")]
+	#[case::traversal_under_resource_name("publishers/google/models/gemini-2.5-flash/../../other")]
+	#[case::encoded_traversal("gemini-2.5-flash%2F..%2F..")]
+	#[case::backslash("gemini-2.5-flash\\..\\..")]
+	#[case::dot_dot("..")]
+	fn test_gemini_model_rejects_unsafe_segments(#[case] model: &str) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: None,
+		};
+		assert_eq!(p.gemini_model(Some(model)), None, "{model}");
+		// And so the publisher path can never be chosen by the model: it falls to the fixed
+		// OpenAI-compat endpoint instead.
+		let path = p.get_path_for_model(RouteType::Completions, Some(model), false, true);
+		assert_eq!(
+			path.as_str(),
+			"/v1/projects/p/locations/global/endpoints/openapi/chat/completions",
+			"{model}"
+		);
+	}
+
 	#[test]
 	fn test_is_gemini_model_consistency_with_optional() {
 		let p = Provider {
@@ -439,6 +510,40 @@ mod tests {
 		};
 		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, true);
 		assert_eq!(got.as_str(), expected);
+		// The native arm also matches the client-facing route type.
+		let got = p.get_path_for_model(RouteType::GenerateContent, req_model, streaming, true);
+		assert_eq!(got.as_str(), expected);
+	}
+
+	#[rstest::rstest]
+	#[case::global(
+		None,
+		Some("gemini-2.5-flash"),
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
+	)]
+	#[case::regional(
+		Some("us-central1"),
+		Some("gemini-3-pro"),
+		"/v1/projects/p/locations/us-central1/publishers/google/models/gemini-3-pro:countTokens"
+	)]
+	#[case::models_prefix_normalized(
+		None,
+		Some("models/gemini-2.5-flash"),
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
+	)]
+	fn test_get_path_for_gemini_count_tokens(
+		#[case] region: Option<&str>,
+		#[case] req_model: Option<&str>,
+		#[case] expected: &str,
+	) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: region.map(strng::new),
+		};
+		// countTokens never streams and carries no native_gemini provider state.
+		let got = p.get_path_for_model(RouteType::GeminiCountTokens, req_model, false, false);
+		assert_eq!(got.as_str(), expected);
 	}
 
 	#[rstest::rstest]
@@ -514,6 +619,37 @@ mod tests {
 			!path.as_str().contains(":generateContent"),
 			"embedding route must not produce :generateContent, got {path}"
 		);
+	}
+
+	#[rstest::rstest]
+	#[case::gemini_embedding_2(
+		"gemini-embedding-2",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+	)]
+	#[case::gemini_embedding_1_keeps_predict(
+		"gemini-embedding-001",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-001:predict"
+	)]
+	#[case::text_embedding_keeps_predict(
+		"text-embedding-005",
+		"/v1/projects/p/locations/global/publishers/google/models/text-embedding-005:predict"
+	)]
+	#[case::publishers_prefix_normalized(
+		"publishers/google/models/gemini-embedding-2",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+	)]
+	#[case::models_prefix_normalized(
+		"models/text-embedding-005",
+		"/v1/projects/p/locations/global/publishers/google/models/text-embedding-005:predict"
+	)]
+	fn test_get_path_for_embeddings(#[case] req_model: &str, #[case] expected: &str) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: None,
+		};
+		let got = p.get_path_for_model(RouteType::Embeddings, Some(req_model), false, false);
+		assert_eq!(got.as_str(), expected);
 	}
 
 	#[rstest::rstest]

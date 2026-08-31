@@ -1,0 +1,31 @@
+{
+  "model": "claude-sonnet-4-20250514",
+  "max_tokens": 1024,
+  "system": [
+    {
+      "type": "text",
+      "text": "Stable instructions"
+    },
+    {
+      "type": "text",
+      "text": "Cached instructions",
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Return CACHE_CONTROL_OK",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    }
+  ]
+}

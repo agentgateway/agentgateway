@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { tr } from "../i18n";
 import {
+  Bot,
   Check,
+  CircleDollarSign,
   Copy,
   Eye,
   EyeOff,
@@ -9,15 +11,18 @@ import {
   Pencil,
   Plus,
   SlidersHorizontal,
+  Tags,
   Trash2,
   X,
 } from "lucide-react";
+import type { BudgetStatus, BudgetStatusResponse } from "../api/budgetsApi";
 import { getApiKeyPolicy, upsertVirtualKey } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { EnumSelector } from "../components/EnumSelector";
 import { hasKeyValue, keyValue, maskKey } from "../credentialDisplay";
 import { useStickyQueryParam } from "../drawerRouteState";
 import {
+  useBudgetStatus,
   useDeleteConfigResource,
   useLlmConfigData,
   useUpsertConfigResource,
@@ -31,9 +36,12 @@ import {
   EmptyState,
   Field,
   FieldGroup,
+  formatNumber,
+  formatRelativeTime,
   PageHeader,
   Panel,
   StatusBanner,
+  SegmentedControl,
   Tooltip,
 } from "../components/Primitives";
 import {
@@ -41,14 +49,24 @@ import {
   authorizationLocationToValue,
   CredentialLocationSetting,
 } from "../policies/AuthorizationLocation";
-import { AdvancedSettingRow } from "../policies/PolicyLayout";
+import { ListEditor } from "../policies/ListEditor";
+import {
+  AdvancedSettingRow,
+  CollapsiblePolicySection,
+} from "../policies/PolicyLayout";
 import { KeyValueEditor } from "../policies/PolicyFormControls";
-import { randomUuid } from "../randomUuid";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
+import type {
+  GatewayConfig,
+  LlmApiKeyPolicy,
+  VirtualApiKey,
+  VirtualApiKeyBudget,
+} from "../types";
 
 const fileOwnedPolicyMessage = () =>
   tr("copy.thisApiKeyPolicyIsFileOwnedAndCannotBeModifiedInHybridMode");
+const managedMetadataPrefix = "agentgateway.dev/";
+const apiKeyIdMetadata = "agentgateway.dev/id";
 
 export function KeysPage() {
   const {
@@ -64,6 +82,9 @@ export function KeysPage() {
   const upsertResource = useUpsertConfigResource();
   const upsertPolicy = useUpsertPolicyResource();
   const deleteResource = useDeleteConfigResource();
+  const budgetStatus = useBudgetStatus({
+    enabled: keys.some((key) => key.budgets?.length),
+  });
   const help = useSchemaHelp();
   const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
   const filePolicyOwned = Boolean(
@@ -118,7 +139,7 @@ export function KeysPage() {
       : undefined;
     const value = structuredClone(key);
     if (value.metadata && typeof value.metadata === "object") {
-      delete value.metadata.id;
+      value.metadata = withoutServerMetadata(metadataObject(value.metadata));
     }
     upsertResource.mutate(
       { kind: "llm.apiKey", value, previousId },
@@ -293,7 +314,9 @@ export function KeysPage() {
                 <tr>
                   <th>{tr("copy.name")}</th>
                   <th>{tr("copy.key")}</th>
+                  <th>{tr("copy.models")}</th>
                   <th>{tr("copy.metadata")}</th>
+                  <th>{tr("copy.budgets")}</th>
                   <th />
                 </tr>
               </thead>
@@ -301,13 +324,25 @@ export function KeysPage() {
                 {keys.map((item, index) => (
                   <tr key={keyValue(item)}>
                     <td className="strong key-name-cell">
-                      {keyName(item) || tr("copy.unnamedKey")}
+                      {keyName(item) || (
+                        <span className="muted">{tr("copy.unnamedKey")}</span>
+                      )}
                     </td>
                     <td className="key-cell">
                       <VirtualKeyValue value={keyValue(item)} />
                     </td>
                     <td>
+                      <AllowedModelsSummary value={item.allowedModels} />
+                    </td>
+                    <td>
                       <MetadataSummary value={item.metadata} />
+                    </td>
+                    <td>
+                      <BudgetSummary
+                        apiKeyName={keyName(item)}
+                        value={item.budgets}
+                        status={budgetStatus.data}
+                      />
                     </td>
                     <td className="key-action-cell">
                       <div className="key-actions">
@@ -623,6 +658,22 @@ function KeyEditor(props: {
   const [metadataValues, setMetadataValues] = useState(() =>
     stringMetadata(withoutManagedMetadata(initialMetadata)),
   );
+  const initialAllowedModels = props.initial.allowedModels ?? undefined;
+  const [modelAccess, setModelAccess] = useState<
+    "unrestricted" | "deny" | "restricted"
+  >(() =>
+    initialAllowedModels === undefined
+      ? "unrestricted"
+      : initialAllowedModels.length === 0
+        ? "deny"
+        : "restricted",
+  );
+  const [allowedModels, setAllowedModels] = useState(
+    initialAllowedModels ?? [],
+  );
+  const [budgets, setBudgets] = useState<VirtualApiKeyBudget[]>(() =>
+    structuredClone(props.initial.budgets ?? []),
+  );
   const [submitted, setSubmitted] = useState(false);
   const generatedKey = useRef<string | null>(null);
   const draft = JSON.stringify({
@@ -631,21 +682,57 @@ function KeyEditor(props: {
     key,
     replaceKey,
     metadataValues,
+    modelAccess,
+    allowedModels,
+    budgets,
   });
   const [initialDraft] = useState(() => draft);
-  const nameRequired = isNew && !name.trim();
+  const nameRequired = (isNew || budgets.length > 0) && !name.trim();
   const duplicateName = isNew
     ? duplicateKeyName(name, props.existingKeys)
     : false;
+  const modelError =
+    modelAccess !== "restricted"
+      ? null
+      : allowedModels.length === 0
+        ? tr("copy.addAtLeastOneModelPatternOrSelectDenyAll")
+        : allowedModels.includes("*") && allowedModels.length > 1
+          ? tr("copy.cannotBeCombinedWithOtherModelPatterns")
+          : allowedModels.find((pattern) => {
+                const firstWildcard = pattern.indexOf("*");
+                return (
+                  pattern !== "*" &&
+                  firstWildcard >= 0 &&
+                  firstWildcard !== 0 &&
+                  firstWildcard !== pattern.length - 1
+                );
+              })
+            ? tr("copy.wildcardsAreOnlySupportedAtTheBeginningOrEndOfAPattern")
+            : allowedModels.some(
+                  (pattern) =>
+                    pattern !== "*" && pattern.split("*").length > 2,
+                )
+              ? tr("copy.aModelPatternCanContainAtMostOneWildcard")
+              : null;
+  const budgetNames = budgets.map((budget) => budget.name.trim()).filter(Boolean);
+  const invalidBudgets =
+    budgets.some(
+      (budget) =>
+        !budget.name.trim() ||
+        !budget.window.rolling?.trim() ||
+        !Number.isFinite(budget.limit.amount) ||
+        budget.limit.amount < 0 ||
+        (budget.limit.unit === "Tokens" &&
+          !Number.isInteger(budget.limit.amount)),
+    ) || new Set(budgetNames).size !== budgetNames.length;
+  const modelSuggestions = [
+    ...(props.config?.llm?.models ?? []).map((model) => model.name),
+    ...(props.config?.llm?.virtualModels ?? []).map((model) => model.name),
+  ].filter((value): value is string => typeof value === "string");
 
   function virtualKey() {
-    const metadataId =
-      typeof initialMetadata.id === "string" && initialMetadata.id.trim()
-        ? initialMetadata.id.trim()
-        : randomUuid();
     const metadata = {
       ...metadataValues,
-      id: metadataId,
       ...(name.trim() ? { name: name.trim() } : {}),
     };
     const nextKey = isNew
@@ -655,14 +742,18 @@ function KeyEditor(props: {
       : replaceKey
         ? key
         : "";
-    return isNew || replaceKey
-      ? { key: nextKey, metadata }
-      : { ...props.initial, metadata };
+    const value: VirtualApiKey =
+      isNew || replaceKey ? { key: nextKey, metadata } : { ...props.initial, metadata };
+    if (modelAccess === "unrestricted") delete value.allowedModels;
+    else value.allowedModels = modelAccess === "deny" ? [] : allowedModels;
+    if (budgets.length) value.budgets = budgets;
+    else delete value.budgets;
+    return value;
   }
 
   function nextVirtualKey() {
     setSubmitted(true);
-    return nameRequired ? null : virtualKey();
+    return nameRequired || modelError || invalidBudgets ? null : virtualKey();
   }
 
   function save() {
@@ -723,7 +814,7 @@ function KeyEditor(props: {
       </Field>
       {submitted && nameRequired ? (
         <StatusBanner state="bad" title={tr("copy.nameIsRequired")}>
-          {tr("copy.addANameBeforeCreatingThisVirtualApiKey")}
+          {tr("copy.addAMetadataNameBeforeSavingThisVirtualApiKey")}
         </StatusBanner>
       ) : null}
       {duplicateName ? (
@@ -787,15 +878,125 @@ function KeyEditor(props: {
           />
         </Field>
       ) : null}
-      <KeyValueEditor
-        label={tr("copy.metadata")}
-        tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "metadata")}
-        values={metadataValues}
-        quickKeys={["user", "group"]}
-        keyPlaceholder="owner"
-        valuePlaceholder="platform"
-        onChange={setMetadataValues}
-      />
+      <CollapsiblePolicySection
+        icon={<CircleDollarSign size={17} />}
+        title={tr("copy.budgets")}
+        description={tr("copy.capHowMuchThisKeyCanSpendOrConsumeDuringEachRollingWindow")}
+        summary={
+          submitted && invalidBudgets ? (
+            <span className="badge bad">{tr("copy.invalid")}</span>
+          ) : budgets.length ? (
+            tr(
+              budgets.length === 1
+                ? "copy.valueBudgets_one"
+                : "copy.valueBudgets_other",
+              {
+              count: budgets.length,
+              },
+            )
+          ) : (
+            tr("copy.none")
+          )
+        }
+      >
+        <BudgetEditor
+          budgets={budgets}
+          apiKeyName={keyName(props.initial)}
+          onChange={setBudgets}
+        />
+        {submitted && invalidBudgets ? (
+          <StatusBanner state="bad" title={tr("copy.invalidBudgets")}>
+            {tr("copy.budgetNamesMustBePresentAndUniqueRollingWindowsAreRequiredAndAmountsMustBeNonNegative")}
+          </StatusBanner>
+        ) : null}
+      </CollapsiblePolicySection>
+      <CollapsiblePolicySection
+        icon={<Bot size={17} />}
+        title={tr("copy.modelAccess")}
+        description={tr("copy.limitWhichRequestedModelNamesThisKeyCanUse")}
+        summary={
+          submitted && modelError ? (
+            <span className="badge bad">{tr("copy.invalid")}</span>
+          ) : modelAccess === "unrestricted" ? (
+            tr("copy.unrestricted")
+          ) : modelAccess === "deny" ? (
+            <span className="badge bad">{tr("copy.denyAll")}</span>
+          ) : (
+            tr(
+              allowedModels.length === 1
+                ? "copy.valuePatterns_one"
+                : "copy.valuePatterns_other",
+              { count: allowedModels.length },
+            )
+          )
+        }
+      >
+        <FieldGroup
+          label={tr("copy.accessMode")}
+          tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "allowedModels")}
+          hint={
+            modelAccess === "unrestricted"
+              ? tr("copy.thisKeyCanRequestAnyModel")
+              : modelAccess === "restricted"
+                ? tr("copy.requestsMayOnlyUseModelsMatchingPatternsBelow")
+                : tr("copy.thisKeyCannotRequestAnyModel")
+          }
+        >
+          <SegmentedControl
+            ariaLabel={tr("copy.modelAccess")}
+            value={modelAccess}
+            options={[
+              { value: "unrestricted", label: tr("copy.unrestricted") },
+              { value: "restricted", label: tr("copy.selectedModels") },
+              { value: "deny", label: tr("copy.denyAll") },
+            ]}
+            onChange={(value) =>
+              setModelAccess(value as "unrestricted" | "restricted" | "deny")
+            }
+          />
+        </FieldGroup>
+        {modelAccess === "restricted" ? (
+          <ListEditor
+            label={tr("copy.allowedModelPatterns")}
+            tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "allowedModels")}
+            values={allowedModels}
+            onChange={setAllowedModels}
+            placeholder={tr("copy.modelPatternPlaceholder")}
+            emptyText={tr("copy.noModelPatternsConfigured")}
+            suggestions={modelSuggestions}
+          />
+        ) : null}
+        {submitted && modelError ? (
+          <StatusBanner state="bad" title={tr("copy.invalidModelAccess")}>
+            {modelError}
+          </StatusBanner>
+        ) : null}
+      </CollapsiblePolicySection>
+      <CollapsiblePolicySection
+        icon={<Tags size={17} />}
+        title={tr("copy.metadata")}
+        description={tr("copy.attachCustomMetadataToRequestsAuthenticatedWithThisKey")}
+        summary={
+          Object.keys(metadataValues).length
+            ? tr(
+                Object.keys(metadataValues).length === 1
+                  ? "copy.valueEntries_one"
+                  : "copy.valueEntries_other",
+                { count: Object.keys(metadataValues).length },
+              )
+            : tr("copy.none")
+        }
+      >
+        <KeyValueEditor
+          label={tr("copy.metadata")}
+          tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "metadata")}
+          values={metadataValues}
+          quickKeys={["user", "group"]}
+          keyPlaceholder="owner"
+          valuePlaceholder="platform"
+          onChange={setMetadataValues}
+        />
+      </CollapsiblePolicySection>
       {props.saveError ? (
         <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
@@ -805,10 +1006,302 @@ function KeyEditor(props: {
   );
 }
 
+function BudgetEditor(props: {
+  budgets: VirtualApiKeyBudget[];
+  apiKeyName: string;
+  onChange: (budgets: VirtualApiKeyBudget[]) => void;
+}) {
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const status = useBudgetStatus({ enabled: props.budgets.length > 0 });
+
+  function addBudget() {
+    props.onChange([
+      ...props.budgets,
+      {
+        name: "",
+        limit: { unit: "USD", amount: 0 },
+        window: { rolling: "30d" },
+        onBudgetExceeded: "Audit",
+      },
+    ]);
+    setEditingIndex(props.budgets.length);
+  }
+
+  function updateBudget(index: number, value: VirtualApiKeyBudget) {
+    props.onChange(
+      props.budgets.map((budget, budgetIndex) =>
+        budgetIndex === index ? value : budget,
+      ),
+    );
+  }
+
+  function removeBudget(index: number) {
+    props.onChange(
+      props.budgets.filter((_, budgetIndex) => budgetIndex !== index),
+    );
+    setEditingIndex((current) =>
+      current === null || current === index
+        ? null
+        : current > index
+          ? current - 1
+          : current,
+    );
+  }
+
+  return (
+    <div className="api-key-budget-editor">
+      {props.budgets.length === 0 ? (
+        <div className="empty-inline">
+          {tr("copy.noBudgetsConfiguredUsageIsUnlimited")}
+        </div>
+      ) : (
+        <div className="api-key-budget-list">
+          {props.budgets.map((budget, index) => {
+            const editing = editingIndex === index;
+            const live = status.data?.budgets.find(
+              (item) =>
+                item.apiKeyName === props.apiKeyName &&
+                item.name === budget.name.trim(),
+            );
+            return (
+              <article className="api-key-budget-card" key={index}>
+                <header className="api-key-budget-card-header">
+                  <div className="api-key-budget-card-title">
+                    <strong>
+                      {budget.name.trim() || tr("copy.untitledBudget")}
+                    </strong>
+                    {live?.usage.exceeded ? (
+                      <span className="badge bad">{tr("copy.exceeded")}</span>
+                    ) : null}
+                  </div>
+                  <div className="button-row compact">
+                    <button
+                      className="table-action"
+                      type="button"
+                      onClick={() =>
+                        setEditingIndex(editing ? null : index)
+                      }
+                    >
+                      {editing ? <Check size={14} /> : <Pencil size={14} />}
+                      {tr(editing ? "copy.done" : "copy.edit")}
+                    </button>
+                    <button
+                      className="table-action danger"
+                      type="button"
+                      aria-label={tr("copy.removeBudgetValue", [index + 1])}
+                      onClick={() => removeBudget(index)}
+                    >
+                      <Trash2 size={14} />
+                      {tr("copy.remove")}
+                    </button>
+                  </div>
+                </header>
+                {editing ? (
+                  <div className="api-key-budget-form">
+                    <Field
+                      label={tr("copy.name")}
+                      hint={tr("copy.stableIdentifierUsedForAccounting")}
+                    >
+                      <input
+                        value={budget.name}
+                        onChange={(event) =>
+                          updateBudget(index, {
+                            ...budget,
+                            name: event.target.value,
+                          })
+                        }
+                        placeholder={tr("copy.monthlySpend")}
+                      />
+                    </Field>
+                    <Field
+                      label={tr("copy.rollingWindow")}
+                      hint={tr("copy.examples24h7dOr30d")}
+                    >
+                      <input
+                        value={budget.window.rolling ?? ""}
+                        onChange={(event) =>
+                          updateBudget(index, {
+                            ...budget,
+                            window: { rolling: event.target.value },
+                          })
+                        }
+                        placeholder="30d"
+                      />
+                    </Field>
+                    <Field label={tr("copy.limitAmount")}>
+                      <input
+                        type="number"
+                        min="0"
+                        step={budget.limit.unit === "USD" ? "any" : "1"}
+                        aria-label={tr("copy.budgetValueAmount", [index + 1])}
+                        value={
+                          Number.isFinite(budget.limit.amount)
+                            ? budget.limit.amount
+                            : ""
+                        }
+                        onChange={(event) =>
+                          updateBudget(index, {
+                            ...budget,
+                            limit: {
+                              ...budget.limit,
+                              amount: event.target.valueAsNumber,
+                            },
+                          })
+                        }
+                      />
+                    </Field>
+                    <FieldGroup label={tr("copy.limitUnit")}>
+                      <SegmentedControl
+                        ariaLabel={tr("copy.budgetValueUnit", [index + 1])}
+                        value={budget.limit.unit}
+                        options={[
+                          { value: "USD", label: "USD" },
+                          { value: "Tokens", label: tr("copy.tokens") },
+                        ]}
+                        onChange={(unit) =>
+                          updateBudget(index, {
+                            ...budget,
+                            limit: {
+                              ...budget.limit,
+                              unit: unit as "USD" | "Tokens",
+                            },
+                          })
+                        }
+                      />
+                    </FieldGroup>
+                    <FieldGroup
+                      label={tr("copy.whenLimitIsReached")}
+                      className="api-key-budget-form-wide"
+                    >
+                      <SegmentedControl
+                        ariaLabel={tr("copy.budgetValueEnforcement", [index + 1])}
+                        value={budget.onBudgetExceeded}
+                        options={[
+                          {
+                            value: "Block",
+                            label: tr("copy.blockRequests"),
+                            description: tr("copy.return429"),
+                          },
+                          {
+                            value: "Audit",
+                            label: tr("copy.auditOnly"),
+                            description: tr("copy.continueServing"),
+                          },
+                        ]}
+                        onChange={(onBudgetExceeded) =>
+                          updateBudget(index, {
+                            ...budget,
+                            onBudgetExceeded: onBudgetExceeded as "Audit" | "Block",
+                          })
+                        }
+                      />
+                    </FieldGroup>
+                  </div>
+                ) : (
+                  <BudgetUsage
+                    budget={budget}
+                    live={live}
+                    loading={status.isLoading}
+                    unavailable={Boolean(status.error)}
+                  />
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      <div className="button-row">
+        <button className="button small" type="button" onClick={addBudget}>
+          <Plus size={15} />
+          {tr("copy.addBudget")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BudgetUsage(props: {
+  budget: VirtualApiKeyBudget;
+  live?: BudgetStatus;
+  loading: boolean;
+  unavailable: boolean;
+}) {
+  const { budget, live } = props;
+  if (props.loading) {
+    return (
+      <div className="api-key-budget-usage muted">
+        {tr("copy.loadingUsage")}
+      </div>
+    );
+  }
+  if (props.unavailable) {
+    return (
+      <div className="api-key-budget-usage muted">
+        {tr("copy.liveUsageUnavailable")}
+      </div>
+    );
+  }
+  const { used, fraction, level } = budgetProgress(budget, live);
+  return (
+    <div className="api-key-budget-usage">
+      <div className="api-key-budget-usage-row">
+        <span>
+          {tr("copy.valueOfValueUsed", [
+            budgetAmountLabel(used, budget.limit.unit),
+            budgetAmountLabel(budget.limit.amount, budget.limit.unit),
+          ])}
+        </span>
+        <span>
+          {live
+            ? tr("copy.valueResetsValue", [
+                Math.round(fraction * 100),
+                formatRelativeTime(new Date(live.window.end).toISOString()),
+              ])
+            : tr("copy.noUsageRecordedYetValueRollingWindow", [
+                budget.window.rolling || tr("copy.unset"),
+              ])}
+        </span>
+      </div>
+      <div className="api-key-budget-meter">
+        <div className={level} style={{ width: `${fraction * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function budgetProgress(budget: VirtualApiKeyBudget, live?: BudgetStatus) {
+  const used = live ? Number(live.usage.used) : 0;
+  const limit =
+    Number.isFinite(budget.limit.amount) && budget.limit.amount > 0
+      ? budget.limit.amount
+      : 0;
+  const fraction = limit > 0 ? Math.min(used / limit, 1) : 0;
+  const exceeded =
+    Boolean(live?.usage.exceeded) || (limit > 0 && used >= limit);
+  return {
+    used,
+    fraction,
+    level: exceeded ? "bad" : fraction >= 0.8 ? "warn" : "",
+  };
+}
+
+function budgetAmountLabel(
+  amount: number,
+  unit: VirtualApiKeyBudget["limit"]["unit"],
+) {
+  const value = Number.isFinite(amount) ? amount : 0;
+  if (unit === "USD") {
+    return tr("copy.usdAmount", [
+      value.toLocaleString(undefined, { maximumFractionDigits: 9 }),
+    ]);
+  }
+  return tr("copy.tokenAmount", [formatNumber(value)]);
+}
+
 function newVirtualKey(): VirtualApiKey {
   return {
     key: "",
-    metadata: { id: randomUuid(), name: "" },
+    metadata: { name: "" },
   };
 }
 
@@ -842,15 +1335,16 @@ function normalizeKeyName(name: string) {
 
 function keyId(key: VirtualApiKey) {
   const metadata = metadataObject(key.metadata);
-  return typeof metadata.id === "string" && metadata.id.trim()
-    ? metadata.id.trim()
+  const id = metadata[apiKeyIdMetadata] ?? metadata.id;
+  return typeof id === "string" && id.trim()
+    ? id.trim()
     : "";
 }
 
 function keyResourceForDisplay(key: VirtualApiKey) {
   const value = structuredClone(key);
   if (value.metadata && typeof value.metadata === "object") {
-    delete value.metadata.id;
+    value.metadata = withoutServerMetadata(metadataObject(value.metadata));
   }
   return value;
 }
@@ -944,6 +1438,78 @@ function VirtualKeyValue(props: { value: string }) {
   );
 }
 
+function AllowedModelsSummary(props: { value?: string[] | null }) {
+  if (props.value == null) {
+    return <span className="muted">{tr("copy.unrestrictedLowercase")}</span>;
+  }
+  if (props.value.length === 0) {
+    return <span className="badge bad">{tr("copy.denyAllLowercase")}</span>;
+  }
+  if (props.value.length === 1) {
+    return (
+      <span className="badge">
+        {props.value[0] === "*"
+          ? tr("copy.allModels")
+          : props.value[0]}
+      </span>
+    );
+  }
+  return (
+    <span className="badge">
+      {tr(
+        props.value.length === 1
+          ? "copy.valuePatterns_one"
+          : "copy.valuePatterns_other",
+        { count: props.value.length },
+      )}
+    </span>
+  );
+}
+
+function BudgetSummary(props: {
+  apiKeyName: string;
+  value?: VirtualApiKeyBudget[];
+  status?: BudgetStatusResponse;
+}) {
+  const budgets = props.value ?? [];
+  if (!budgets.length) return <span className="muted">{tr("copy.none")}</span>;
+  return (
+    <div className="key-budget-summary">
+      {budgets.map((budget, index) => {
+        const live = props.status?.budgets.find(
+          (item) =>
+            item.apiKeyName === props.apiKeyName &&
+            item.name === budget.name,
+        );
+        const { used, fraction, level } = budgetProgress(budget, live);
+        return (
+          <Tooltip
+            key={`${budget.name}:${index}`}
+            content={tr("copy.valueOfValuePerValue", [
+              budgetAmountLabel(used, budget.limit.unit),
+              budgetAmountLabel(budget.limit.amount, budget.limit.unit),
+              budget.window.rolling || tr("copy.unset"),
+            ])}
+          >
+            <div className="key-budget-summary-row">
+              <span className="key-budget-summary-name">{budget.name}</span>
+              <div className="api-key-budget-meter">
+                <div
+                  className={level}
+                  style={{ width: `${fraction * 100}%` }}
+                />
+              </div>
+              <span className="key-budget-summary-pct">
+                {Math.round(fraction * 100)}%
+              </span>
+            </div>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
 function MetadataSummary(props: { value: unknown }) {
   const metadata = withoutManagedMetadata(metadataObject(props.value));
   const entries = Object.entries(metadata);
@@ -969,10 +1535,17 @@ function metadataObject(value: unknown): Record<string, unknown> {
 }
 
 function withoutManagedMetadata(value: Record<string, unknown>) {
-  const next = { ...value };
+  const next = withoutServerMetadata(value);
   delete next.name;
-  delete next.id;
   return next;
+}
+
+function withoutServerMetadata(value: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([key]) => !key.startsWith(managedMetadataPrefix) && key !== "id",
+    ),
+  );
 }
 
 function stringMetadata(value: Record<string, unknown>) {

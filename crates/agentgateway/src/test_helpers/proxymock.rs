@@ -27,7 +27,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider, cost};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, catalog};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
@@ -37,11 +37,11 @@ use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendReference, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind,
-	BindKey, BindProtocol, FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget,
-	McpBackend, McpTarget, McpTargetSpec, PathMatch, PolicyInheritance, PolicyPhase, PolicyTarget,
-	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, SimpleBackendReference,
-	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target,
-	TargetedPolicy,
+	BindKey, BindProtocol, BindSnapshot, FrontendPolicy, Listener, ListenerProtocol, ListenerSet,
+	ListenerTarget, McpBackend, McpTarget, McpTargetSpec, PathMatch, PolicyInheritance, PolicyPhase,
+	PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
+	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, Target, TargetedPolicy,
 };
 use crate::types::loadbalancer::EndpointSet;
 use crate::types::local::LocalNamedAIProvider;
@@ -161,7 +161,16 @@ pub fn setup_llm_named_provider_mock(
 	provider: LocalNamedAIProvider,
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
-	let t = setup_proxy_test(config).unwrap();
+	let config = crate::config::parse_config(config.to_string(), None).unwrap();
+	setup_llm_named_provider_mock_with_config(mock, provider, config)
+}
+
+pub fn setup_llm_named_provider_mock_with_config(
+	mock: MockServer,
+	provider: LocalNamedAIProvider,
+	config: crate::Config,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let t = setup_proxy_test_with_config(config);
 	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
 	let be = futures::executor::block_on(
 		crate::types::local::LocalAIBackend::Provider(provider).translate(&resources),
@@ -283,7 +292,7 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 		hostnames: Default::default(),
 		backends: vec![TCPRouteBackendReference {
 			weight: 1,
-			backend: SimpleBackendReference::Backend(target),
+			backend: BackendReference::Backend(target),
 			inline_policies: Default::default(),
 		}],
 	}
@@ -292,28 +301,35 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 pub const BIND_KEY: Strng = strng::literal!("bind");
 pub const LISTENER_KEY: Strng = strng::literal!("listener");
 
-pub fn simple_bind() -> Bind {
-	Bind {
-		key: BIND_KEY,
-		// not really used
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+pub fn simple_bind() -> BindSnapshot {
+	BindSnapshot {
+		bind: Arc::new(Bind {
+			key: BIND_KEY,
+			// not really used
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::http,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		}),
+		listeners: Arc::new(ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-		}]),
-		protocol: BindProtocol::http,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
+		}])),
 	}
 }
 
-pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
-	Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:15008".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+pub fn waypoint_bind(protocol: ListenerProtocol) -> BindSnapshot {
+	BindSnapshot {
+		bind: Arc::new(Bind {
+			key: BIND_KEY,
+			address: "127.0.0.1:15008".parse().unwrap(),
+			protocol: BindProtocol::http,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		}),
+		listeners: Arc::new(ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: crate::types::agent::ListenerName {
 				gateway_name: strng::literal!("default"),
@@ -323,27 +339,26 @@ pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
 			},
 			hostname: Default::default(),
 			protocol,
-		}]),
-		protocol: BindProtocol::http,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
+		}])),
 	}
 }
 
-pub fn simple_tcp_bind() -> Bind {
-	Bind {
-		key: BIND_KEY,
-		// not really used
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+pub fn simple_tcp_bind() -> BindSnapshot {
+	BindSnapshot {
+		bind: Arc::new(Bind {
+			key: BIND_KEY,
+			// not really used
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::tcp,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		}),
+		listeners: Arc::new(ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
-		}]),
-		protocol: BindProtocol::tcp,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
+		}])),
 	}
 }
 
@@ -465,9 +480,13 @@ impl tower::Service<Uri> for MemoryConnector {
 }
 
 impl TestBind {
-	pub fn with_bind(self, bind: Bind) -> Self {
+	pub fn with_bind(self, snapshot: BindSnapshot) -> Self {
 		let mut binds = self.pi.stores.binds.write();
-		binds.insert_bind(bind);
+		let bind_key = snapshot.key.clone();
+		for listener in snapshot.listeners.iter() {
+			binds.insert_listener(listener.clone(), bind_key.clone());
+		}
+		binds.insert_bind(Arc::unwrap_or_clone(snapshot.bind));
 		drop(binds);
 		self
 	}
@@ -699,7 +718,16 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
-		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![])
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![], false)
+	}
+
+	pub fn with_mcp_backend_dns_rebinding_protection(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+	) -> Self {
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, vec![], vec![], true)
 	}
 
 	// Like `with_mcp_backend_policies`, but also attaches `target_policies` to the
@@ -713,6 +741,7 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 		target_policies: Vec<BackendTrafficPolicy>,
+		dns_rebinding_protection: bool,
 	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),
@@ -740,6 +769,7 @@ impl TestBind {
 				prefix_mode: Default::default(),
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection,
 			},
 		);
 		{
@@ -768,7 +798,24 @@ impl TestBind {
 		servers: Vec<(&str, SocketAddr, bool)>,
 		stateful: bool,
 	) -> Self {
-		self.with_multiplex_mcp_backend_policies(name, servers, stateful, vec![])
+		self.with_multiplex_mcp_backend_failure_mode(name, servers, stateful, FailureMode::FailClosed)
+	}
+
+	pub fn with_multiplex_mcp_backend_failure_mode(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		failure_mode: FailureMode,
+	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			vec![],
+			Default::default(),
+			failure_mode,
+		)
 	}
 
 	pub fn with_multiplex_mcp_backend_policies(
@@ -795,6 +842,25 @@ impl TestBind {
 		policies: Vec<BackendTrafficPolicy>,
 		prefix_mode: crate::types::agent::McpPrefixMode,
 	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			policies,
+			prefix_mode,
+			FailureMode::FailClosed,
+		)
+	}
+
+	fn with_multiplex_mcp_backend_options(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		policies: Vec<BackendTrafficPolicy>,
+		prefix_mode: crate::types::agent::McpPrefixMode,
+		failure_mode: FailureMode,
+	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
 			McpBackend {
@@ -820,8 +886,9 @@ impl TestBind {
 					.collect_vec(),
 				stateful,
 				prefix_mode,
-				failure_mode: FailureMode::FailClosed,
+				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection: false,
 			},
 		);
 		{
@@ -918,6 +985,7 @@ impl TestBind {
 			});
 		}
 	}
+
 	pub async fn attach_gateway_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("pol/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
@@ -980,6 +1048,12 @@ impl TestBind {
 		)
 		.await
 		.unwrap();
+		self
+			.pi
+			.cfg
+			.budget_policy
+			.apply_registration(normalized.budget_registration.clone())
+			.unwrap();
 		for v in normalized.policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
@@ -1070,6 +1144,7 @@ impl TestBind {
 			alpn: None,
 			subject_alt_names: None,
 			key_exchange_groups: None,
+			spiffe: false,
 		}
 		.try_into()
 		.unwrap();
@@ -1080,6 +1155,46 @@ impl TestBind {
 				io: Arc::new(Mutex::new(Some(io))),
 			})
 	}
+
+	/// Like [`serve_https`], but lets the caller supply the trust root and an optional client
+	/// certificate, so tests can drive mutual TLS — e.g. a SPIFFE listener that requires a client
+	/// SVID. Hostname verification is skipped (`insecure_host`) because SPIFFE SVIDs carry a
+	/// `spiffe://` URI SAN and no DNS SAN.
+	pub fn serve_https_client_auth(
+		&self,
+		bind_name: BindKey,
+		sni: Option<&str>,
+		root_pem: Vec<u8>,
+		client_cert_key_pem: Option<(Vec<u8>, Vec<u8>)>,
+	) -> Client<MemoryConnector, Body> {
+		let io = self.serve(bind_name);
+		let (cert, key) = match client_cert_key_pem {
+			Some((c, k)) => (Some(c), Some(k)),
+			None => (None, None),
+		};
+		let tls: BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
+			cert,
+			key,
+			root: Some(root_pem),
+			hostname: sni.map(|s| s.to_string()),
+			insecure: false,
+			insecure_host: true,
+			alpn: None,
+			subject_alt_names: None,
+			key_exchange_groups: None,
+			spiffe: false,
+		}
+		.try_into()
+		.unwrap();
+
+		Client::builder(TokioExecutor::new())
+			.timer(TokioTimer::new())
+			.build(MemoryConnector {
+				tls_config: Some(tls),
+				io: Arc::new(Mutex::new(Some(io))),
+			})
+	}
+
 	// The need to split http/http2 is a hyper limit, not our proxy
 	pub fn serve_http2(&self, bind_name: BindKey) -> Client<MemoryConnector, Body> {
 		let io = self.serve(bind_name);
@@ -1172,9 +1287,16 @@ impl TestBind {
 		client
 	}
 
-	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+	/// Like [`Self::serve`], but the server-side socket already carries a downstream mTLS
+	/// identity, simulating a connection tunneled over HBONE where the outer Istio mTLS
+	/// layer authenticated the peer (see `Gateway::terminate_gateway_hbone`).
+	pub fn serve_with_src_identity(
+		&self,
+		bind_name: BindKey,
+		src_identity: crate::transport::tls::TlsInfo,
+	) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
-		let server = Socket::from_memory(
+		let mut server = Socket::from_memory(
 			server,
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
@@ -1183,6 +1305,46 @@ impl TestBind {
 				raw_peer_addr: None,
 			},
 		);
+		server
+			.ext_mut()
+			.insert(crate::transport::stream::TLSConnectionInfo {
+				src_identity: Some(src_identity),
+				..Default::default()
+			});
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
+		let bind = Gateway::proxy_bind(
+			bind_name,
+			bind.protocol,
+			server,
+			self.pi.clone(),
+			self.drain_rx.clone(),
+		);
+		tokio::spawn(bind);
+		client
+	}
+
+	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+		self.serve_tunnel_with_tls_info(bind_name, None)
+	}
+
+	pub fn serve_tunnel_with_tls_info(
+		&self,
+		bind_name: BindKey,
+		tls_info: Option<crate::transport::stream::TLSConnectionInfo>,
+	) -> DuplexStream {
+		let (client, server) = tokio::io::duplex(8192);
+		let mut server = Socket::from_memory(
+			server,
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse().unwrap(),
+				local_addr: "127.0.0.1:80".parse().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		);
+		if let Some(tls_info) = tls_info {
+			server.ext_mut().insert(tls_info);
+		}
 		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
 		let bind_protocol = bind.protocol;
 		let tunnel_protocol = bind.tunnel_protocol;
@@ -1231,6 +1393,22 @@ impl TestBind {
 
 		addr
 	}
+
+	pub async fn serve_gateway_listener(&self, bind_name: BindKey) -> SocketAddr {
+		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+		listener.set_nonblocking(true).unwrap();
+		let addr = listener.local_addr().unwrap();
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap().bind;
+		let (_tx, config) = tokio::sync::watch::channel(bind);
+		let pi = self.pi.clone();
+		let drain = self.drain_rx.clone();
+		tokio::spawn(async move {
+			Gateway::run_bind(pi, drain, config, listener)
+				.await
+				.unwrap();
+		});
+		addr
+	}
 }
 
 pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
@@ -1240,8 +1418,27 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 }
 
 pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
+	setup_proxy_test_with_config_and_spiffe(config, None)
+}
+
+/// Like [`setup_proxy_test`], but injects a `SpiffeClient` into [`ProxyInputs`] so SPIFFE-sourced
+/// listeners/backends can be exercised (e.g. a `tls: spiffe` listener that requires a client SVID).
+pub fn setup_proxy_test_with_spiffe(
+	cfg: &str,
+	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
+) -> anyhow::Result<TestBind> {
+	agent_core::telemetry::testing::setup_test_logging();
+	let config = crate::config::parse_config(cfg.to_string(), None)?;
+	Ok(setup_proxy_test_with_config_and_spiffe(config, spiffe))
+}
+
+pub fn setup_proxy_test_with_config_and_spiffe(
+	config: crate::Config,
+	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
+) -> TestBind {
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
+	let histogram_mode = config.histograms;
 	let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
 	let client = client::Client::new(&config.dns, None, Default::default(), None);
 	let (drain_tx, drain_rx) = drain::new();
@@ -1251,13 +1448,16 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 		metrics: Arc::new(crate::metrics::Metrics::new(
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
+			histogram_mode,
 		)),
-		model_catalog: cost::ModelCatalog::empty(),
+		model_catalog: catalog::ModelCatalog::empty(),
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
+		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
+		admission: Default::default(),
 	});
 	TestBind {
 		pi,

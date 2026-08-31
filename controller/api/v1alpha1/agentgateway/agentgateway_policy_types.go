@@ -534,10 +534,31 @@ type LocalCACertificateRef struct {
 	Kind string `json:"kind,omitempty"`
 }
 
+// BackendTLSCertificateSource selects where the gateway's client identity and trust roots come
+// from when originating TLS to a backend.
+// +k8s:enum
+type BackendTLSCertificateSource string
+
+const (
+	// BackendTLSCertificateSourceInline uses the inline `mtlsCertificateRef`/`caCertificateRefs`
+	// (or the system trust roots when unset). This is the default.
+	BackendTLSCertificateSourceInline BackendTLSCertificateSource = "Inline"
+	// BackendTLSCertificateSourceSPIFFE sources the gateway's X.509-SVID and trust bundle from
+	// the SPIFFE Workload API (mutual TLS).
+	BackendTLSCertificateSourceSPIFFE BackendTLSCertificateSource = "SPIFFE"
+)
+
 // +kubebuilder:validation:AtMostOneOf=verifySubjectAltNames;insecureSkipVerify
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
+// +kubebuilder:validation:XValidation:rule="!has(self.certificateSource) || self.certificateSource != 'SPIFFE' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))",message="certificateSource SPIFFE may not be combined with mtlsCertificateRef, caCertificateRefs, or insecureSkipVerify"
 type BackendTLS struct {
+	// Source for the gateway's client identity and trust roots (`Inline` default, or `SPIFFE`).
+	//
+	// +optional
+	// +kubebuilder:default=Inline
+	CertificateSource *BackendTLSCertificateSource `json:"certificateSource,omitempty"`
+
 	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
 	// referenced credential source (defaulting to a Kubernetes `Secret`). An
 	// optional `ca.cert`, if present, verifies the server certificate, but
@@ -775,6 +796,12 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
 	// +optional
 	MaxConnectionDuration *Duration `json:"maxConnectionDuration,omitempty"`
+	// Maximum number of in-flight HTTP requests across this gateway/port.
+	// This includes HTTP/1 requests and HTTP/2 streams. Requests over the limit
+	// are rejected immediately with a 503 response. Unset means unlimited.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConcurrentRequests *int32 `json:"maxConcurrentRequests,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -861,6 +888,11 @@ type FrontendTCP struct {
 	// Settings for enabling TCP keepalives on the connection.
 	// +optional
 	KeepAlive *Keepalive `json:"keepalive,omitempty"`
+	// Maximum number of active downstream connections on this gateway/port.
+	// Connections over the limit are closed immediately. Unset means unlimited.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConnections *int32 `json:"maxConnections,omitempty"`
 }
 
 // TCP keepalive settings.
@@ -1163,6 +1195,12 @@ type JWTAuthentication struct {
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
+
+	// Keeps a successfully validated JWT in its original location. By default, the gateway removes
+	// the JWT after validation. When the token only needs to be forwarded to the selected backend,
+	// prefer `backendAuth.passthrough` so it is not exposed to other policies in the request path.
+	// +optional
+	PreserveToken bool `json:"preserveToken,omitempty"`
 
 	// Enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
@@ -1687,11 +1725,17 @@ type CrossAppAccessAuth struct {
 	// +optional
 	Resources []string `json:"resources,omitempty"`
 
-	// Scopes sent to the token endpoint.
+	// Scopes requested when obtaining the ID-JAG from the identity provider.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Scopes []string `json:"scopes,omitempty"`
+
+	// Scopes requested when exchanging the ID-JAG for an access token.
+	// When omitted, defaults to Scopes. Set to an empty list to omit scope.
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	AccessTokenScopes *[]string `json:"accessTokenScopes,omitempty"`
 
 	// Subject token sent to the identity provider. Defaults to an OpenID Connect
 	// ID token read from the Authorization Bearer header.
@@ -2136,7 +2180,9 @@ type AzureAuth struct {
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// Managed identity authentication settings.
+	// Managed identity authentication settings. Leave this object empty to use
+	// the system-assigned identity. To use a user-assigned identity, set one of
+	// `clientId`, `objectId`, or `resourceId`.
 	//
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
@@ -2149,13 +2195,26 @@ type AzureAuth struct {
 	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
 }
 
+// AzureManagedIdentity configures authentication with an Azure managed
+// identity. Leave all identifiers unset to use the system-assigned identity.
+// To use a user-assigned identity, set one identifier.
+//
+// +kubebuilder:validation:AtMostOneOf=clientId;objectId;resourceId
 type AzureManagedIdentity struct {
-	// +required
-	ClientID string `json:"clientId"`
-	// +required
-	ObjectID string `json:"objectId"`
-	// +required
-	ResourceID string `json:"resourceId"`
+	// Client ID of the user-assigned managed identity.
+	//
+	// +optional
+	ClientID string `json:"clientId,omitempty"`
+
+	// Object ID of the user-assigned managed identity.
+	//
+	// +optional
+	ObjectID string `json:"objectId,omitempty"`
+
+	// Resource ID of the user-assigned managed identity.
+	//
+	// +optional
+	ResourceID string `json:"resourceId,omitempty"`
 }
 
 // AzureWorkloadIdentity configures Azure Workload Identity authentication.
@@ -2265,6 +2324,14 @@ const (
 
 	// RouteTypeRerank processes Cohere `/v2/rerank` format requests.
 	RouteTypeRerank RouteType = "Rerank"
+
+	// RouteTypeGenerateContent processes Gemini `models/{model}:generateContent`
+	// and `models/{model}:streamGenerateContent` format requests.
+	RouteTypeGenerateContent RouteType = "GenerateContent"
+
+	// RouteTypeGeminiCountTokens processes Gemini `models/{model}:countTokens`
+	// format requests.
+	RouteTypeGeminiCountTokens RouteType = "GeminiCountTokens"
 )
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -2433,6 +2500,16 @@ const (
 	Entra     McpIDP = "Entra"
 )
 
+// +k8s:enum
+type BackendTunnelMode string
+
+const (
+	// Auto uses CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
+	BackendTunnelModeAuto BackendTunnelMode = "Auto"
+	// Connect uses CONNECT for all transports, including plaintext HTTP.
+	BackendTunnelModeConnect BackendTunnelMode = "Connect"
+)
+
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
 type BackendTunnel struct {
 	// Proxy server to reach.
@@ -2440,6 +2517,12 @@ type BackendTunnel struct {
 	// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path for backend tunnel"
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
+
+	// How requests are sent through the proxy.
+	// Defaults to `Auto`.
+	// +kubebuilder:default=Auto
+	// +optional
+	Mode BackendTunnelMode `json:"mode,omitempty"`
 }
 
 type BackendHTTP struct {

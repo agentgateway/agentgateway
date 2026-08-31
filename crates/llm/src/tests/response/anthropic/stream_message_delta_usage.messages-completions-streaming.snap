@@ -2,7 +2,7 @@
 source: crates/llm/src/golden_tests.rs
 description: src/tests/response/anthropic/stream_message_delta_usage.json
 ---
-data: {"id":"msg","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"created":123,"model":"glm-5.2","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":3883,"completion_tokens":49,"total_tokens":3932,"prompt_tokens_details":{"cached_tokens":30464,"cache_write_tokens":0},"cache_read_input_tokens":30464,"cache_creation_input_tokens":0}}
+data: {"id":"msg","choices":[{"index":0,"delta":{"content":null,"role":"assistant"},"finish_reason":"stop"}],"created":123,"model":"glm-5.2","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":3883,"completion_tokens":49,"total_tokens":3932,"prompt_tokens_details":{"cached_tokens":30464,"cache_write_tokens":0},"cache_read_input_tokens":30464,"cache_creation_input_tokens":0}}
 
 data: [DONE]
 

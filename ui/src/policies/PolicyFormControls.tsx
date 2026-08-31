@@ -57,7 +57,7 @@ export function TargetEditor(props: {
 }
 
 export function KeyValueEditor(props: {
-  label: string;
+  label?: string;
   tooltip?: string;
   values: Record<string, string>;
   keyPlaceholder?: string;
@@ -79,9 +79,8 @@ export function KeyValueEditor(props: {
     setValueDraft("");
   }
 
-  return (
-    <FieldGroup label={props.label} tooltip={props.tooltip}>
-      <div className="kv-editor">
+  const editor = (
+    <div className="kv-editor">
         {entries.length ? (
           <div className="kv-list">
             {entries.map(([key, value]) => (
@@ -149,8 +148,14 @@ export function KeyValueEditor(props: {
             {tr("copy.add")}
           </button>
         </div>
-      </div>
+    </div>
+  );
+  return props.label ? (
+    <FieldGroup label={props.label} tooltip={props.tooltip}>
+      {editor}
     </FieldGroup>
+  ) : (
+    editor
   );
 }
 

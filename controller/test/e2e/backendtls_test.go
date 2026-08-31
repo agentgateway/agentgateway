@@ -27,10 +27,8 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 	)
 
 	backendTLSPolicy := &gwv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "tls-policy",
-			Namespace: base.Namespace,
-		},
+		Name:      "tls-policy",
+		Namespace: base.Namespace,
 	}
 	err := t.TestInstallation.ClusterContext.ControllerClient.Get(t.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
 	assert.NoError(t, err)
@@ -40,7 +38,7 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 	t.Send("foo.com", base.Expect(http.StatusMovedPermanently))
 
 	assertBackendTLSPolicyStatus(t, backendTLSPolicy, metav1.Condition{
-		Type:               string(agentgateway.PolicyConditionAccepted),
+		Type:               agentgateway.PolicyConditionAccepted,
 		Status:             metav1.ConditionTrue,
 		Reason:             string(gwv1.PolicyReasonAccepted),
 		ObservedGeneration: backendTLSPolicy.Generation,

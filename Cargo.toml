@@ -92,6 +92,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive"] }
 clocksource = "1.0"
 crossbeam = "0.8"
+dashmap = "6.2"
 divan = "0.1"
 durationfmt = "0.1"
 go-parse-duration = "0.1"
@@ -159,7 +160,10 @@ pprof = { version = "0.15", features = [
     "criterion",
 ] }
 pretty_env_logger = "0.5"
-prometheus-client = "0.25"
+prometheus-client =  { version = "0.25", features = [
+    "prometheus_protobuf",
+    "protobuf-protox"
+] }
 prost = "0.14"
 prost-build = "0.14"
 prost-types = "0.14"
@@ -201,11 +205,14 @@ sha1 = "0.11"
 sha2 = "0.11"
 shellexpand = "3.1"
 socket2 = "0.6"
+spiffe = { version = "0.16", default-features = false, features = ["workload-api", "x509-source", "x509", "transport-grpc", "tracing"] }
 split-iter = "0.1"
 sse-stream = "0.2"
 sqlx = { version = "0.9", default-features = false, features = [
     "chrono",
     "json",
+    "macros",
+    "migrate",
     "postgres",
     "runtime-tokio",
     "sqlite",

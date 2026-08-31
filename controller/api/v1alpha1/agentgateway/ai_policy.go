@@ -95,6 +95,42 @@ const (
 
 	// Reject the request or response that contains the matched content.
 	REJECT Action = "Reject"
+
+	// Audit runs the guard but never blocks or masks: the would-be action is
+	// recorded (metrics + structured log) and the content passes through.
+	AUDIT Action = "Audit"
+)
+
+// Action for guards that cannot mask (only reject or observe). `Reject` (the
+// default) enforces the guard's native verdict; `Audit` invokes the guard and
+// records what it would have done without enforcing.
+// +k8s:enum
+type RejectAuditAction string
+
+const (
+	// RejectAuditReject enforces the guard's verdict (the default).
+	RejectAuditReject RejectAuditAction = "Reject"
+
+	// RejectAuditAudit records the would-be action without blocking or masking.
+	RejectAuditAudit RejectAuditAction = "Audit"
+)
+
+// Which category of request content a prompt guard inspects.
+// +k8s:enum
+type ContentScope string
+
+const (
+	// The system/developer prompt.
+	ContentScopeSystemPrompt ContentScope = "SystemPrompt"
+
+	// Regular user/assistant message text.
+	ContentScopeMessages ContentScope = "Messages"
+
+	// Tool call results fed back to the model.
+	ContentScopeToolOutput ContentScope = "ToolOutput"
+
+	// Tool call arguments, usually produced by the model.
+	ContentScopeToolInput ContentScope = "ToolInput"
 )
 
 // Streaming prompt guard mode.
@@ -155,6 +191,13 @@ type Webhook struct {
 	// `FailClosed` (default) rejects the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// Action controls whether the webhook's verdict is enforced or only observed.
+	// `Reject` (the default) enforces it; `Audit` records the would-be action
+	// without blocking or masking.
+	// +kubebuilder:default=Reject
+	// +optional
+	Action *RejectAuditAction `json:"action,omitempty"`
 }
 
 // Response to return to the client if request content
@@ -180,6 +223,12 @@ type OpenAIModeration struct {
 	// `omni-moderation`.
 	// +optional
 	Model *string `json:"model,omitempty"`
+	// Action controls whether flagged content is rejected or only observed.
+	// `Reject` (the default) rejects flagged content; `Audit` records the
+	// would-be rejection without blocking.
+	// +kubebuilder:default=Reject
+	// +optional
+	Action *RejectAuditAction `json:"action,omitempty"`
 	// Policies for communicating with OpenAI.
 	// +optional
 	Policies *OpenAIModerationPolicy `json:"policies,omitempty"`
@@ -198,6 +247,16 @@ type BedrockGuardrails struct {
 	// `us-west-2`).
 	// +required
 	Region ShortString `json:"region"`
+
+	// Action controls whether the guardrail's verdict is enforced or only
+	// observed. `Reject` (the default) enforces the guardrail: a blocked
+	// assessment rejects the request/response and an anonymized assessment masks
+	// the matched content. `Audit` runs the guardrail in observe mode: it is
+	// invoked and its assessment recorded (metrics + structured log), but the
+	// request/response is never blocked or masked.
+	// +kubebuilder:default=Reject
+	// +optional
+	Action *RejectAuditAction `json:"action,omitempty"`
 
 	// Policies for communicating with AWS Bedrock Guardrails.
 	// +optional
@@ -219,6 +278,13 @@ type GoogleModelArmor struct {
 	// +optional
 	Location *ShortString `json:"location,omitempty"`
 
+	// Action controls whether flagged content is rejected or only observed.
+	// `Reject` (the default) rejects flagged content; `Audit` records the
+	// would-be rejection without blocking.
+	// +kubebuilder:default=Reject
+	// +optional
+	Action *RejectAuditAction `json:"action,omitempty"`
+
 	// Policies for communicating with Google Model Armor.
 	// +optional
 	Policies *GoogleModelArmorPolicy `json:"policies,omitempty"`
@@ -226,11 +292,24 @@ type GoogleModelArmor struct {
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: only regex and bedrockGuardrails guards support a non-default scope; other guard kinds always inspect the default (SystemPrompt + Messages)"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
 	// +optional
 	CustomResponse *CustomResponse `json:"response,omitempty"`
+
+	// Which parts of the request this guard inspects. When unset, defaults to
+	// `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+	// inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+	// In APIs that send tool arguments as opaque JSON, such as Completions, the
+	// arguments are masked as a single string, meaning a prompt guard has the
+	// potential to rewrite the arguments into invalid JSON.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	// +listType=set
+	// +optional
+	Scope []ContentScope `json:"scope,omitempty"`
 
 	// Regular expression (regex) matching for prompt guards and data masking.
 	// +optional

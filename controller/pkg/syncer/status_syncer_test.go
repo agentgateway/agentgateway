@@ -7,6 +7,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 )
 
 func TestMergePolicyAncestorStatuses_SortsOurEntriesOnly(t *testing.T) {
@@ -252,6 +254,28 @@ func TestMergeGatewayStatus_ArbitratesAcceptedInvalidParameters(t *testing.T) {
 			require.Equal(t, testCase.wantProgrammedGeneration, programmed.ObservedGeneration)
 		})
 	}
+}
+
+func TestMergeGatewayStatus_PreservesDeploymentFailure(t *testing.T) {
+	existing := gwv1.GatewayStatus{Conditions: []metav1.Condition{
+		gatewayProgrammedCondition(metav1.ConditionFalse, reports.GatewayReasonDeploymentFailed, 1),
+	}}
+
+	merged := mergeGatewayStatus(existing, gwv1.GatewayStatus{Conditions: []metav1.Condition{
+		gatewayProgrammedCondition(metav1.ConditionTrue, gwv1.GatewayReasonProgrammed, 1),
+	}})
+	programmed := meta.FindStatusCondition(merged.Conditions, string(gwv1.GatewayConditionProgrammed))
+	require.NotNil(t, programmed)
+	require.Equal(t, metav1.ConditionFalse, programmed.Status)
+	require.Equal(t, string(reports.GatewayReasonDeploymentFailed), programmed.Reason)
+
+	merged = mergeGatewayStatus(existing, gwv1.GatewayStatus{Conditions: []metav1.Condition{
+		gatewayProgrammedCondition(metav1.ConditionTrue, gwv1.GatewayReasonProgrammed, 2),
+	}})
+	programmed = meta.FindStatusCondition(merged.Conditions, string(gwv1.GatewayConditionProgrammed))
+	require.NotNil(t, programmed)
+	require.Equal(t, metav1.ConditionTrue, programmed.Status)
+	require.Equal(t, int64(2), programmed.ObservedGeneration)
 }
 
 func gatewayAcceptedCondition(status metav1.ConditionStatus, reason gwv1.GatewayConditionReason, generation int64) metav1.Condition {

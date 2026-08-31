@@ -2046,7 +2046,7 @@ const en = {
         "Read-only top-level policies from the active gateway dump.",
       readinessProbeServerAddressInTheFormatIpPortLocalhostPortUnixPathToSocketOrOff:
         'Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"',
-      readonlyMode: "Readonly mode",
+      readonlyMode: "Read-only mode",
       readonlyPoliciesUnavailable: "Readonly policies unavailable",
       ready: "ready",
       realmShownInTheWwwAuthenticateResponseHeaderWhenCredentialsAreMissingOrInvalid:
@@ -3265,6 +3265,285 @@ const en = {
         "Delete {{value}}? Traffic can no longer be sent to this target.",
       deleteRouteQuestion:
         "Delete {{value}}? Traffic matching this route will no longer reach its backends.",
+      invalid: "Invalid",
+      unrestricted: "Unrestricted",
+      unrestrictedLowercase: "unrestricted",
+      denyAll: "Deny all",
+      denyAllLowercase: "deny all",
+      allModels: "all models",
+      modelAccess: "Model access",
+      selectedModels: "Selected models",
+      accessMode: "Access mode",
+      allowedModelPatterns: "Allowed model patterns",
+      modelPatternPlaceholder: "gpt-5.5 or openai/*",
+      noModelPatternsConfigured: "No model patterns configured.",
+      invalidModelAccess: "Invalid model access",
+      addAtLeastOneModelPatternOrSelectDenyAll:
+        "Add at least one model pattern or select Deny all.",
+      wildcardCannotBeCombinedWithOtherModelPatterns:
+        "'*' cannot be combined with other model patterns.",
+      wildcardsOnlySupportedAtPatternBeginningOrEnd:
+        "Wildcards are only supported at the beginning or end of a pattern.",
+      modelPatternCanContainAtMostOneWildcard:
+        "A model pattern can contain at most one wildcard.",
+      thisKeyCanRequestAnyModel: "This key can request any model.",
+      requestsMayOnlyUseModelsMatchingPatternsBelow:
+        "Requests may only use models matching the patterns below.",
+      thisKeyCannotRequestAnyModel: "This key cannot request any model.",
+      capHowMuchThisKeyCanSpendOrConsumeDuringEachRollingWindow:
+        "Cap how much this key can spend or consume during each rolling window.",
+      budgetNamesMustBePresentAndUniqueRollingWindowsAreRequiredAndAmountsMustBeNonNegative:
+        "Budget names must be present and unique, rolling windows are required, and amounts must be non-negative; token limits must be whole numbers.",
+      noBudgetsConfiguredUsageIsUnlimited:
+        "No budgets configured. Usage is unlimited.",
+      untitledBudget: "Untitled budget",
+      exceeded: "Exceeded",
+      done: "Done",
+      removeBudget: "Remove budget {{value}}",
+      stableIdentifierUsedForAccounting: "Stable identifier used for accounting.",
+      monthlySpend: "monthly-spend",
+      rollingWindow: "Rolling window",
+      rollingWindowExamples: "Examples: 24h, 7d, or 30d.",
+      limitAmount: "Limit amount",
+      limitUnit: "Limit unit",
+      whenLimitIsReached: "When limit is reached",
+      budgetAmount: "Budget {{value}} amount",
+      budgetUnit: "Budget {{value}} unit",
+      budgetEnforcement: "Budget {{value}} enforcement",
+      blockRequests: "Block requests",
+      return429: "Return 429",
+      auditOnly: "Audit only",
+      continueServing: "Continue serving",
+      addBudget: "Add budget",
+      loadingUsage: "Loading usage…",
+      liveUsageUnavailable: "Live usage is unavailable.",
+      budgetUsedOfLimit: "{{value}} of {{value}} used",
+      budgetUsageLive: "{{value}}% · resets {{value}}",
+      budgetUsageNotRecorded: "No usage recorded yet · {{value}} rolling window",
+      usdAmount: "${{value}}",
+      tokenAmount: "{{value}} tokens",
+      budgetSummaryTooltip: "{{value}} of {{value}} per {{value}}",
+      budget_one: "{{count}} budget",
+      budget_other: "{{count}} budgets",
+      pattern_one: "{{count}} pattern",
+      pattern_other: "{{count}} patterns",
+      patterns: "{{count}} patterns",
+      entry_one: "{{count}} entry",
+      entry_other: "{{count}} entries",
+      addAMetadataNameBeforeSavingThisVirtualApiKey:
+        "Add a metadata name before saving this virtual API key.",
+      cannotBeCombinedWithOtherModelPatterns:
+        "'*' cannot be combined with other model patterns.",
+      wildcardsAreOnlySupportedAtTheBeginningOrEndOfAPattern:
+        "Wildcards are only supported at the beginning or end of a pattern.",
+      aModelPatternCanContainAtMostOneWildcard:
+        "A model pattern can contain at most one wildcard.",
+      valueBudgets_one: "{{count}} budget",
+      valueBudgets_other: "{{count}} budgets",
+      valuePatterns_one: "{{count}} pattern",
+      valuePatterns_other: "{{count}} patterns",
+      valueEntries_one: "{{count}} entry",
+      valueEntries_other: "{{count}} entries",
+      removeBudgetValue: "Remove budget {{value}}",
+      examples24h7dOr30d: "Examples: 24h, 7d, or 30d.",
+      budgetValueAmount: "Budget {{value}} amount",
+      budgetValueUnit: "Budget {{value}} unit",
+      budgetValueEnforcement: "Budget {{value}} enforcement",
+      liveUsageIsUnavailable: "Live usage is unavailable.",
+      valueOfValueUsed: "{{value}} of {{value}} used",
+      valueResetsValue: "{{value}}% · resets {{value}}",
+      noUsageRecordedYetValueRollingWindow:
+        "No usage recorded yet · {{value}} rolling window",
+      valueOfValuePerValue: "{{value}} of {{value}} per {{value}}",
+      portConflict: "Port conflict",
+      conflict: "Conflict",
+      valueListenersInvolvedInPortConflicts:
+        "{{value}} listeners involved in port conflicts",
+      qualifiedListener: "{{value}} listener {{value}}",
+      valueListenerValue: "{{value}} listener {{value}}",
+      listenerSetValueValue: "ListenerSet {{value}}/{{value}}",
+      gatewayValueValue: "Gateway {{value}}/{{value}}",
+      routeGroupValue: "Route group: {{value}}",
+      mesh: "Mesh",
+      direct: "direct",
+      listenersAndRoutes: "{{value}} listeners · {{value}} routes",
+      theUiIsConfiguredAsReadOnlyEditingIsDisabled:
+        "The UI is configured as read-only. Editing is disabled.",
+      theUiIsConfiguredAsReadOnly: "The UI is configured as read-only.",
+      geminiChatModelsModelGenerateContent:
+        "Gemini chat (models/{model}:generateContent)",
+      geminiTokenCountModelsModelCountTokens:
+        "Gemini token count (models/{model}:countTokens)",
+      trajectory: "Trajectory",
+      turn: "Turn",
+      unknownTurn: "Unknown turn",
+      trajectorySteps_one: "{{count}} step",
+      trajectorySteps_other: "{{count}} steps",
+      trajectoryStep: "Step {{value}}: {{value}}",
+      trajectoryStepLabel: "Step {{value}} {{value}}",
+      widthShowsApproximateTokens: "Width shows approximate tokens",
+      jumpToConversation: "Jump to conversation",
+      trajectoryToolCall: "Tool call: {{value}}",
+      trajectoryToolResult: "Tool result: {{value}}",
+      trajectoryMessageValue: "{{value}}: {{value}}",
+      reasoningDetailsUnavailable: "Reasoning details unavailable",
+      encrypted: "Encrypted",
+      encryptedBytes: "Encrypted ({{value}} bytes)",
+      histogramRepresentationToCollectNativeHistogramsAreExposedOnlyThroughThePromethe_18b5wxk:
+        "Histogram representation to collect. Native histograms are exposed only through the Prometheus protobuf format. Defaults to classic.",
+      additionalRequestHeadersWhoseValuesShouldBeRedactedFromTraceAndDebugOutput:
+        "Additional request headers whose values should be redacted from trace and debug output.",
+      freeformCapabilityRoutingTagsForThisModel:
+        "Freeform capability/routing tags for this model.",
+      disallowWriteOperationsToTheConfigFromTheUi:
+        "Disallow write operations to the config from the UI",
+      collectClassicHistogramBucketsOnly: "Collect classic histogram buckets only.",
+      collectNativeHistogramBucketsOnly: "Collect native histogram buckets only.",
+      collectBothClassicAndNativeHistogramBuckets:
+        "Collect both classic and native histogram buckets.",
+      scopeValuesRequestedWhenObtainingTheIdJagFromTheIdentityProviderSentSpaceDelimited:
+        "Scope values requested when obtaining the ID-JAG from the identity provider, sent space-delimited.",
+      scopeValuesRequestedWhenExchangingTheIdJagForAnAccessTokenWhenUnsetInheritsScope_1veicy4:
+        "Scope values requested when exchanging the ID-JAG for an access token. When unset, inherits scopes. When empty, omits scope.",
+      jwtValidationOptionsControllingWhichClaimsMustBePresentInATokenTheRequiredClaims_24lqvf:
+        "JWT validation options controlling which claims must be present in a token.",
+      claimsThatMustBePresentInTheTokenBeforeValidationOnlyExpNbfAudIssSubAreEnforcedO_lq824y:
+        "Claims that must be present in the token before validation. Only exp, nbf, aud, iss, and sub are enforced; other claims, including iat and jti, are ignored. Defaults to [exp]. Use an empty list to add no claim requirements beyond those implied by the configured issuer and audiences.",
+      whichPartsOfTheRequestThisGuardInspects:
+        "Which parts of the request this guard inspects.",
+      aCategoryOfRequestContentThatAPromptGuardCanInspect:
+        "A category of request content that a prompt guard can inspect.",
+      theSystemDeveloperPrompt: "The system/developer prompt.",
+      regularUserAssistantMessageText: "Regular user/assistant message text.",
+      toolCallResults: "Tool call results.",
+      toolCallArgumentsInApisThatSendToolArgumentsAsOpaqueJsonSuchAsCompletionsTheArgu_16v73q:
+        "Tool call arguments. In APIs that send tool arguments as opaque JSON, such as Completions, the arguments are masked as a single string, meaning a prompt guard has the potential to rewrite the arguments into invalid JSON.",
+      geminiModelsModelGenerateContentAndModelsModelStreamGenerateContent:
+        "Gemini models/{model}:generateContent and models/{model}:streamGenerateContent",
+      geminiModelsModelCountTokens: "Gemini models/{model}:countTokens",
+      expectedTokenIssuerTheJwtIssClaimIsRequiredAndMustMatch:
+        "Expected token issuer. The JWT iss claim is required and must match.",
+      acceptedTokenAudiencesANonEmptyListRequiresAMatchingJwtAudClaim:
+        "Accepted token audiences. A non-empty list requires a matching JWT aud claim.",
+      optInMcpDnsRebindingProtectionHostOriginMustBeLocalhostOffByDefaultSeeHttpsGithu_eainyq:
+        "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost). Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+      resolveTheDialTargetFromDownstreamTlsSniAndTheOriginalDestinationPort:
+        "Resolve the dial target from downstream TLS SNI and the original destination port.",
+      celExpressionEvaluatedAgainstTcpConnectionContextToComputeAHostPortDialTargetAva_tnefsc:
+        "CEL expression evaluated against TCP connection context to compute a host:port dial target. Available fields include source.* and destination.*; for TLS, destination.hostname is the sniffed SNI.",
+      httpExternalAuthorizationPerformedOnceForEachDownstreamNetworkConnection:
+        "HTTP external authorization performed once for each downstream network connection.",
+      theRequestedDestinationHostnameWhenKnownForTlsConnectionsThisIsTheSniffedSni:
+        "The requested destination hostname, when known. For TLS connections this is the sniffed SNI.",
+      localSpiffeWorkloadApiConfigurationWhenSetListenersAndBackendsMaySourceTheirTlsI_hdlcfx:
+        "Local SPIFFE Workload API configuration\nWhen set, listeners and backends may source their TLS identity from SPIFFE.",
+      spiffeWorkloadApiEndpointEGUnixRunSpireAgentSock:
+        "SPIFFE Workload API endpoint (e.g. `unix:///run/spire/agent.sock`).",
+      maximumTimeToWaitWhenEstablishingAConnectionToAnUpstreamDefaultsTo11Seconds:
+        "Maximum time to wait when establishing a connection to an upstream. Defaults to 11 seconds.",
+      protocolHandlingForTheEntireBindWhenOmittedItIsInferredFromTheListeners:
+        "Protocol handling for the entire bind. When omitted, it is inferred from the listeners.",
+      experimentalDetectsTlsPlaintextHttpOrOpaqueTcpFromTheFirstBytesOfEachConnectionA_1r6erw6:
+        "EXPERIMENTAL: Detects TLS, plaintext HTTP, or opaque TCP from the first bytes of each connection and selects the corresponding listener. Prefer explicit protocols where possible. AUTO requires the client to send data first, and opaque protocols can look like TLS or an HTTP request.",
+      certificateSourceModeStaticModeUsesCertKeyAsTheLeafCertificateDynamicCaModeUsesC_ehwfvy:
+        "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA mode uses cert/key as the CA to issue SNI leaf certificates on demand.\nUnused when `spiffe` is set.",
+      pathToTheTlsCertificateFileLeafCertificateOrCaCertificateInDynamicCaModeRequired_1j2jxjv:
+        "Path to the TLS certificate file (leaf certificate; CA certificate in dynamic CA mode). Required unless `spiffe` is set.",
+      pathToARootCaCertificateFileUsedToValidateClientCertificatesMTlsOmitForOneWaySer_1fp8dve:
+        "Path to a root CA certificate file used to validate client certificates (mTLS).\nOmit for one-way server TLS. Unused when `spiffe` is set.",
+      sourceTheServingIdentityFromTheSpiffeWorkloadApiMutuallyExclusiveWithCertKeyRoot:
+        "Source the serving identity from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`.",
+      resolveSubstrateActorHostnamesForDynamicRouteBackendsOnIngress:
+        "Resolve Substrate actor hostnames for dynamic route backends on ingress.",
+      authorizeConnectEgressUsingTheOriginatingActorSDynamicPolicy:
+        "Authorize CONNECT egress using the originating actor's dynamic policy.",
+      getTheGatewaySClientIdentityAndTrustRootsFromTheSpiffeWorkloadApiMutuallyExclusi_1gwgyqy:
+        "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nOptionally pin specific upstream SPIFFE IDs with `subjectAltNames` (for example, `spiffe://td/ns/foo/sa/bar`); when `subjectAltNames` is omitted, accept any SVID chaining to the SPIFFE trust bundle.",
+      secretValueToSendToTheBackendFileReferencesAreWatchedSoRotatingTheFileReloadsItWithoutARestart:
+        "Secret value to send to the backend. File references are watched, so rotating the file reloads it without a restart.",
+      maximumTimeAConnectionToTheBackendMayStayOpenAConnectionPastThisDurationIsNotReu_o4pwvu:
+        "Maximum time a connection to the backend may stay open. A connection past this duration is not reused for new requests; a new connection is established without interrupting in-flight requests.",
+      howRequestsAreSentThroughTheProxy: "How requests are sent through the proxy.",
+      useConnectForTlsAndNonHttpTransportsAndAbsoluteFormRequestsForPlaintextHttp:
+        "Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.",
+      useConnectForAllTransportsIncludingPlaintextHttp:
+        "Use CONNECT for all transports, including plaintext HTTP.",
+      acceptedTokenAudiencesMatchedAgainstTheJwtAudClaimIfUnsetAudienceValidationIsDisabled:
+        "Accepted token audiences, matched against the JWT `aud` claim. If unset, audience validation is disabled.",
+      observeModeRecordWhatTheGuardWouldHaveDoneMetricsStructuredLogButNeverBlockOrMas_tmbdrm:
+        "Observe mode: record what the guard would have done (metrics and structured log) but never block or mask content—content always passes through unchanged.",
+      whetherToEnforceTheWebhookSVerdictOrOnlyObserveItDefaultsToRejectEnforce:
+        "Whether to enforce the webhook's verdict or only observe it.\nDefaults to `reject` (enforce).",
+      actionForGuardsThatCannotMaskOnlyRejectOrObserveBedrockWebhookOpenAiModerationGo_efrlc3:
+        "Action for guards that cannot mask and can only reject or observe. Bedrock, webhook, OpenAI moderation, Google Model Armor, and Azure Content Safety decide what to flag; the gateway decides whether to enforce that verdict or only record it.",
+      enforceTheGuardSNativeVerdictBlockOrForBedrockAnonymizeThisIsTheDefaultAndPreser_11tq0wd:
+        "Enforce the guard's native verdict (block, or anonymize for Bedrock).\nThis is the default and preserves the existing enforcement behavior.",
+      observeModeInvokeTheGuardAndRecordItsVerdictMetricsStructuredLogButNeverBlockOrM_1ny1vgr:
+        "Observe mode: invoke the guard and record its verdict (metrics and structured log) but never block or mask content—content always passes through unchanged.",
+      whetherToRejectFlaggedContentOrOnlyObserveItDefaultsToRejectEnforce:
+        "Whether to reject flagged content or only observe it.\nDefaults to `reject` (enforce).",
+      whetherToEnforceTheGuardrailSVerdictOrOnlyObserveItRejectTheDefaultEnforcesTheGu_16r281l:
+        "Whether to enforce the guardrail's verdict or only observe it.\n\n`reject` (the default) enforces the guardrail verdict: `BLOCKED` assessments reject the request/response and `ANONYMIZED` assessments mask matched content, exactly as before.\n\n`audit` records successful assessments without enforcing their verdict. Even if AWS is configured to `BLOCK`/`ANONYMIZE`, `audit` ensures the gateway does not block or mask.",
+      keepASuccessfullyValidatedJwtInItsOriginalLocation:
+        "Keep a successfully validated JWT in its original location.",
+      modelPatternsThisKeyIsAllowedToAccessOmittedMeansNoAdditionalConstraintAnEmptyLi_1nw65ly:
+        "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.",
+      independentBudgetsChargedAfterLlmResponsesARequestIsNotChargedWhenItsProviderDoe_7b0bcw:
+        "Independent budgets charged after LLM responses. A request is not charged when its provider does not report the usage or cost required by the budget unit.",
+      aNamedBudgetAttachedToAStandaloneApiKeyUsageIsChargedAfterAnLlmResponseWhenThePr_721r2j:
+        "A named budget attached to a standalone API key.\n\nUsage is charged when an LLM response completes after the provider reports the tokens or cost required by the configured unit. Requests without usage are recorded but cannot be charged or blocked later.",
+      stableNameForThisBudgetWithinItsOwningApiKey:
+        "Stable name for this budget within its owning API key.",
+      maximumUsageAllowedDuringTheWindow: "Maximum usage allowed during the window.",
+      rollingWindowOverWhichUsageWillBeAccumulated:
+        "Rolling window over which usage will be accumulated.",
+      actionTakenWhenTheBudgetIsExceeded: "Action taken when the budget is exceeded.",
+      durationOfTheFixedUsageWindowForExample1h24hOr30dWindowsAreAlignedToTheUnixEpoch_cdd7lt:
+        "Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.\nWindows are aligned to the Unix epoch rather than starting at the first request: `1h` follows UTC hour boundaries, `24h` starts at UTC midnight, and `30d` uses consecutive 30-day periods rather than calendar months.",
+      resolvesSubstrateActorHostnamesThroughTheAteApiForDynamicRouteBackends:
+        "Resolves Substrate actor hostnames through the ate-api for dynamic route backends.",
+      portOnTheResumedWorkerPodSAtunnelConnectListenerDefaultsTo8443:
+        "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.",
+      howLongSuccessfulActorAssignmentsAreReusedDefaultsTo5s0sDisablesReuse:
+        "How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.",
+      boundedRequestParkingWhileASuspendedActorIsWaitingForWorkerCapacity:
+        "Bounded request parking while a suspended actor is waiting for worker capacity.",
+      boundsRequestsHeldWhileAnActorIsWaitingForCapacityToResume:
+        "Bounds requests held while an actor is waiting for capacity to resume.",
+      maximumTimeToWaitForTheActorToBecomeRoutable:
+        "Maximum time to wait for the actor to become routable.",
+      maximumConcurrentRequestsThatMayWaitForActorResumptionSetTo0ToDisableParking:
+        "Maximum concurrent requests that may wait for actor resumption. Set to 0 to disable parking.",
+      initialDelayBetweenResumeActorRetriesWhileParked:
+        "Initial delay between ResumeActor retries while parked.",
+      multiplierAppliedToTheDelayAfterEachParkedRetry:
+        "Multiplier applied to the delay after each parked retry.",
+      authorizesAnActorSEgressToTheHostnameRecoveredFromAnInternalConnectListener:
+        "Authorizes an actor's egress to the hostname recovered from an internal CONNECT listener.",
+      maximumNumberOfInFlightHttpRequestsAcrossThisBindThisIncludesHttp1RequestsAndHtt_12ydm0j:
+        "Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests and HTTP/2 streams. Requests over the limit are rejected immediately.",
+      maximumNumberOfActiveDownstreamConnectionsOnThisBindConnectionsOverTheLimitAreClosedImmediately:
+        "Maximum number of active downstream connections on this bind. Connections over the limit are closed immediately.",
+      resolveTheDialTargetFromRequestMetadataUsingACelExpression:
+        "Resolve the dial target from request metadata using a CEL expression.",
+      theRawSpiffeIdFirstSpiffeUriSanOfTheDownstreamClientCertificateIfPresentUnlikeId_9zald1:
+        "The raw SPIFFE ID (first `spiffe://` URI SAN) of the downstream client certificate, if present. Unlike `identity`, this applies to any SPIFFE ID, not only Istio `spiffe://td/ns/<ns>/sa/<sa>` format.",
+      guardrailsContainsOneEntryPerPromptGuardGuardrailInterventionInEitherTheRequestO_6q207k:
+        "`guardrails` contains one entry per prompt-guard guardrail intervention in either the request or response phase. It is available only in CEL that runs after the request completes, such as log and metric fields.",
+      recordsOnePromptGuardGuardrailIntervention:
+        "Records one prompt-guard guardrail intervention.",
+      thePhaseTheGuardrailIntervenedInRequestOrResponse:
+        "The phase the guardrail intervened in: request or response.",
+      theGuardKindThatIntervenedSuchAsBedrockGuardrails:
+        "The guard kind that intervened, such as `bedrockGuardrails`.",
+      theActionTheGuardrailTookMaskRejectAuditFailOpen:
+        "The action the guardrail took (mask/reject/audit/failOpen).",
+      theConfiguredGuardrailIdentifier: "The configured guardrail identifier.",
+      theConfiguredGuardrailVersion: "The configured guardrail version.",
+      theReasonTheGuardrailReportedForItsAction:
+        "The reason the guardrail reported for its action.",
+      assessmentDetailReportedByTheGuardrailProviderRedactedToMetadataOnlyContentBeari_16jy1g:
+        "Assessment detail reported by the guardrail provider, redacted to metadata only; content-bearing fields (such as matched text) are never included.",
     },
   },
 } as const;

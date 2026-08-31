@@ -1,3 +1,7 @@
 # Save new dependencies as =1.2.3, not pnpm's default ^1.2.3.
 # https://pnpm.io/settings/other#saveprefix
 savePrefix: '='
+
+# Do not attempt to download the packageManager-pinned pnpm version.
+# Network-restricted environments should warn and use the installed version.
+pmOnFail: warn

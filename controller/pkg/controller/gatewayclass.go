@@ -175,15 +175,11 @@ func (r *gatewayClassReconciler) reconcileGatewayClass(name string, info *deploy
 
 func (r *gatewayClassReconciler) buildDesiredGatewayClass(name string, info *deployer.GatewayClassInfo) *gwv1.GatewayClass {
 	gwc := &gwv1.GatewayClass{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: wellknown.GatewayClassGVK.GroupVersion().String(),
-			Kind:       wellknown.GatewayClassKind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Annotations: info.Annotations,
-			Labels:      info.Labels,
-		},
+		APIVersion:  wellknown.GatewayClassGVK.GroupVersion().String(),
+		Kind:        wellknown.GatewayClassKind,
+		Name:        name,
+		Annotations: info.Annotations,
+		Labels:      info.Labels,
 		Spec: gwv1.GatewayClassSpec{
 			ControllerName: gwv1.GatewayController(r.getControllerName(name)),
 			ParametersRef:  info.ParametersRef,

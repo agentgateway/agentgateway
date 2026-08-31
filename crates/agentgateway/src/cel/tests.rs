@@ -159,7 +159,7 @@ async fn log_only_request_body_records_without_buffering() {
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
 
-	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None, None);
+	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"hello")
@@ -268,7 +268,7 @@ async fn log_only_response_body_records_without_buffering() {
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
 
-	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None);
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"world")
@@ -296,7 +296,7 @@ async fn log_only_response_body_prefix_records_up_to_buffer_limit() {
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
 
-	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None);
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"worl")
@@ -663,4 +663,33 @@ fn unset_values() {
 		Value::Bool(false),
 		eval_request("has(jwt.sub)", req()).unwrap()
 	);
+}
+
+#[test]
+fn log_guardrails_binding() {
+	let entries = vec![crate::cel::GuardrailInfo {
+		phase: "request".into(),
+		guard: "bedrockGuardrails".into(),
+		action: "reject".into(),
+		detail: crate::cel::GuardDetail {
+			guardrail_id: Some("gr-1".into()),
+			guardrail_version: Some("3".into()),
+			action_reason: Some("Guardrail blocked.".into()),
+			assessments: vec![serde_json::json!({
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{"type": "EMAIL", "action": "BLOCKED", "detected": true}]
+				}
+			})],
+		},
+	}];
+	let exec = Executor::new_logger(None, None, None, None, Some(&entries), None, None);
+
+	let exp = Expression::new_strict(
+		r#"guardrails.size() == 1
+			&& guardrails[0].action == "reject"
+			&& guardrails[0].guardrailId == "gr-1"
+			&& guardrails[0].assessments[0].sensitiveInformationPolicy.piiEntities[0].type == "EMAIL""#,
+	)
+	.unwrap();
+	assert!(exec.eval_bool(&exp));
 }

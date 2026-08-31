@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/util/sets"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -33,7 +34,7 @@ func AgwModelCollection(
 	models krt.Collection[*agentgateway.AgentgatewayModel],
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
-) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment]) {
+) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
 	modelStatus, modelResources := krt.NewStatusManyCollection(models, func(krtctx krt.HandlerContext, obj *agentgateway.AgentgatewayModel) (*agentgateway.AgentgatewayModelStatus, []agwir.AgwResource) {
 		ctx := inputs.WithCtx(krtctx)
 		rm := reports.NewReportMap()
@@ -52,7 +53,52 @@ func AgwModelCollection(
 	status.RegisterStatus(queue, modelStatus, GetStatus)
 
 	attachments := gatewayRouteAttachmentCollection(inputs, models, wellknown.AgentgatewayModelGVK, krtopts)
-	return modelResources, attachments
+	ancestors := krt.NewManyCollection(models, func(krtctx krt.HandlerContext, obj *agentgateway.AgentgatewayModel) []*utils.AncestorBackend {
+		return extractModelAncestorBackends(inputs.WithCtx(krtctx), obj)
+	}, krtopts.ToOptions("translator/ModelAncestorBackends")...)
+	return modelResources, attachments, ancestors
+}
+
+// extractModelAncestorBackends mirrors extractAncestorBackends for AgentgatewayModels, so
+// backends referenced only by a model (spec.custom.backendRef) still resolve to their
+// Gateways in the reference index.
+func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.AgentgatewayModel) []*utils.AncestorBackend {
+	custom := model.Spec.Custom
+	if custom == nil || custom.BackendRef == nil {
+		return nil
+	}
+	source := utils.TypedNamespacedName{
+		Namespace: model.Namespace,
+		Name:      model.Name,
+		Kind:      wellknown.AgentgatewayModelGVK.Kind,
+	}
+	gateways := sets.Set[types.NamespacedName]{}
+	for _, parent := range FilteredReferences(extractModelParentReferenceInfo(ctx, model)) {
+		gateways.Insert(parent.ParentGateway)
+	}
+	kind := wellknown.ServiceKind
+	if custom.BackendRef.Kind != nil {
+		kind = *custom.BackendRef.Kind
+	}
+	backend := utils.TypedNamespacedName{
+		// backendRef may target only namespace-local resources.
+		Namespace: model.Namespace,
+		Name:      custom.BackendRef.Name,
+		Kind:      kind,
+	}
+	gtw := gateways.UnsortedList()
+	slices.SortFunc(gtw, func(a, b types.NamespacedName) int {
+		return strings.Compare(a.String(), b.String())
+	})
+	res := make([]*utils.AncestorBackend, 0, len(gtw))
+	for _, gw := range gtw {
+		res = append(res, &utils.AncestorBackend{
+			Gateway: gw,
+			Backend: backend,
+			Source:  source,
+		})
+	}
+	return res
 }
 
 // extractModelParentReferenceInfo resolves an HTTPRoute parent to that route's
@@ -108,7 +154,7 @@ func extractModelParentReferenceInfo(ctx RouteContext, model *agentgateway.Agent
 		}
 		for _, gatewayParent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, route)) {
 			gatewayParent.OriginalReference = ref
-			gatewayParent.ParentKey = utils.TypedNamespacedName{NamespacedName: types.NamespacedName{Namespace: namespace, Name: route.Name}, Kind: wellknown.HTTPRouteKind}
+			gatewayParent.ParentKey = utils.TypedNamespacedName{Namespace: namespace, Name: route.Name, Kind: wellknown.HTTPRouteKind}
 			gatewayParent.ParentSection = ptr.OrEmpty(ref.SectionName)
 			gatewayParent.ModelRouterKey = routerKey
 			parents = append(parents, gatewayParent)
@@ -216,7 +262,7 @@ func modelServingRuleRouterKey(namespace, route string, ruleIndex int, rule gwv1
 	if len(backend.Filters) > 0 {
 		return "", true, fmt.Errorf("model-serving HTTPRoute backendRef must not have filters")
 	}
-	ruleKey := fmt.Sprintf("%d", ruleIndex)
+	ruleKey := fmt.Sprintf("index:%d", ruleIndex)
 	if rule.Name != nil {
 		ruleKey = string(*rule.Name)
 	}
@@ -521,7 +567,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	}
 	provider := &api.AIBackend_Provider{Name: providerName, InlinePolicies: inlinePolicies}
 	if model.BaseURL != nil {
-		provider.BaseUrl = new(string(*model.BaseURL))
+		provider.BaseUrl = new(*model.BaseURL)
 	}
 	if model.Provider != nil {
 		if preset, ok := modelProviderPreset(*model.Provider); ok {
@@ -540,15 +586,15 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	}
 	if provider.HostOverride == nil && llm.Host != "" {
 		provider.HostOverride = &api.AIBackend_HostOverride{
-			Host: string(llm.Host),
+			Host: llm.Host,
 			Port: ptr.NonEmptyOrDefault(llm.Port, 443),
 		}
 	}
 	if provider.PathOverride == nil && llm.Path != "" {
-		provider.PathOverride = new(string(llm.Path))
+		provider.PathOverride = new(llm.Path)
 	}
 	if provider.PathPrefix == nil && llm.PathPrefix != "" {
-		provider.PathPrefix = new(string(llm.PathPrefix))
+		provider.PathPrefix = new(llm.PathPrefix)
 	}
 
 	switch {
@@ -560,7 +606,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 			resourceType = api.AIBackend_FOUNDRY
 		}
 		provider.Provider = &api.AIBackend_Provider_Azure{Azure: &api.AIBackend_Azure{
-			ResourceName: string(llm.Azure.ResourceName),
+			ResourceName: llm.Azure.ResourceName,
 			ResourceType: resourceType,
 			Model:        providerModel(selectedModel, llm.Azure.Model),
 			ApiVersion:   stringPtr(llm.Azure.ApiVersion),
@@ -572,15 +618,15 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 		provider.Provider = &api.AIBackend_Provider_Gemini{Gemini: &api.AIBackend_Gemini{Model: providerModel(selectedModel, llm.Gemini.Model)}}
 	case llm.VertexAI != nil:
 		provider.Provider = &api.AIBackend_Provider_Vertex{Vertex: &api.AIBackend_Vertex{
-			Region:    string(llm.VertexAI.Region),
+			Region:    llm.VertexAI.Region,
 			Model:     providerModel(selectedModel, llm.VertexAI.Model),
-			ProjectId: string(llm.VertexAI.ProjectId),
+			ProjectId: llm.VertexAI.ProjectId,
 		}}
 	case llm.Bedrock != nil:
 		var guardrailIdentifier, guardrailVersion *string
 		if llm.Bedrock.Guardrail != nil {
-			guardrailIdentifier = new(string(llm.Bedrock.Guardrail.GuardrailIdentifier))
-			guardrailVersion = new(string(llm.Bedrock.Guardrail.GuardrailVersion))
+			guardrailIdentifier = new(llm.Bedrock.Guardrail.GuardrailIdentifier)
+			guardrailVersion = new(llm.Bedrock.Guardrail.GuardrailVersion)
 		}
 		provider.Provider = &api.AIBackend_Provider_Bedrock{Bedrock: &api.AIBackend_Bedrock{
 			Model:               providerModel(selectedModel, llm.Bedrock.Model),
@@ -594,8 +640,9 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 			return nil, err
 		}
 		provider.Provider = &api.AIBackend_Provider_Custom{Custom: &api.AIBackend_Custom{
-			Formats: formats,
-			Model:   providerModel(selectedModel, llm.Custom.Model),
+			Formats:          formats,
+			Model:            providerModel(selectedModel, llm.Custom.Model),
+			ProviderOverride: llm.Custom.ProviderOverride,
 		}}
 		if llm.Custom.BackendRef != nil {
 			ref, err := plugins.TranslateCustomProviderBackendRef(ctx.Krt, ctx.References.RouteBackend, namespace, *llm.Custom.BackendRef)
@@ -711,7 +758,7 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
 	var baseURL string
 	if model.BaseURL != nil {
-		baseURL = string(*model.BaseURL)
+		baseURL = *model.BaseURL
 	}
 	if model.Provider != nil && *model.Provider == agentgateway.ModelProviderOllama && baseURL == "" {
 		return fmt.Errorf("ollama requires baseURL")
@@ -799,7 +846,7 @@ func resolveModelTarget(ctx RouteContext, namespace string, target agentgateway.
 		return nil, "", fmt.Errorf("model target %s/%s not found", namespace, target.ModelRef.Name)
 	}
 	if target.Model != nil {
-		return ref, string(*target.Model), nil
+		return ref, *target.Model, nil
 	}
 	modelName := effectiveModelName(ref)
 	if strings.Contains(modelName, "*") {
@@ -834,7 +881,7 @@ func stringPtr[T ~string](v *T) *string {
 
 func effectiveModelName(model *agentgateway.AgentgatewayModel) string {
 	if model.Spec.Match != nil && model.Spec.Match.Model != nil {
-		return string(*model.Spec.Match.Model)
+		return *model.Spec.Match.Model
 	}
 	return model.Name
 }

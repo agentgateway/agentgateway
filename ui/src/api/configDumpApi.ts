@@ -1,6 +1,6 @@
-import type { AdminConfigDump } from "../types";
-import { requestJson } from "./base";
+import { requestJson } from '@/api/base';
+import type { AdminConfigDump } from '@/types';
 
 export function getConfigDump() {
-  return requestJson<AdminConfigDump>("/config_dump");
+	return requestJson<AdminConfigDump>('/config_dump');
 }

@@ -27,10 +27,9 @@ func gw(annotation string, ports ...gwv1.PortNumber) *gwv1.Gateway {
 }
 
 func ls(name, annotation string, created time.Time, ports ...gwv1.PortNumber) *gwv1.ListenerSet {
-	l := &gwv1.ListenerSet{ObjectMeta: metav1.ObjectMeta{
+	l := &gwv1.ListenerSet{
 		Name:              name,
-		CreationTimestamp: metav1.NewTime(created),
-	}}
+		CreationTimestamp: metav1.NewTime(created)}
 	if annotation != "" {
 		l.Annotations = map[string]string{annotations.InternalPorts: annotation}
 	}

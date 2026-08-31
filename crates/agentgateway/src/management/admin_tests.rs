@@ -16,7 +16,7 @@ async fn spawn_admin(cfg: &str) -> (SocketAddr, agent_core::drain::DrainTrigger)
 	let (drain_tx, drain_rx) = agent_core::drain::new();
 	let svc = Service::new(
 		config,
-		crate::llm::cost::ModelCatalog::empty(),
+		crate::llm::catalog::ModelCatalog::empty(),
 		None,
 		stores,
 		resource_manager,

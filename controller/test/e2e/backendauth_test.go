@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
-	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/transforms"
 )
@@ -70,26 +70,18 @@ func testInvalidJwtSign(t base.Test) {
 	t.Apply(manifest("backendauth", "invalid-jwt-sign.yaml"))
 	t.HTTPRouteAccepted("route-backendauth-invalid-jwt-sign", base.Namespace)
 
-	retry.UntilSuccessOrFail(t, func() error {
-		policy := &agentgateway.AgentgatewayPolicy{}
-		if err := t.TestInstallation.ClusterContext.ControllerClient.Get(
-			t.Ctx,
-			types.NamespacedName{Name: "backendauth-invalid-jwt-sign", Namespace: base.Namespace},
-			policy,
-		); err != nil {
-			return err
-		}
-		for _, ancestor := range policy.Status.Ancestors {
+	assertions.EventuallyAgwPolicyStatus(t, "backendauth-invalid-jwt-sign", base.Namespace, func(status gwv1.PolicyStatus) error {
+		for _, ancestor := range status.Ancestors {
 			for _, condition := range ancestor.Conditions {
-				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
+				if condition.Type == agentgateway.PolicyConditionAccepted &&
 					condition.Status == metav1.ConditionTrue &&
-					condition.Reason == string(agentgateway.PolicyReasonPartiallyValid) &&
+					condition.Reason == agentgateway.PolicyReasonPartiallyValid &&
 					strings.Contains(condition.Message, missingKeyRef) {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("policy status does not report the missing jwtSign secret: %+v", policy.Status)
+		return fmt.Errorf("policy status does not report the missing jwtSign secret: %+v", status)
 	})
 
 	t.Send("invalid-jwt-sign.example.com", &testmatchers.HttpResponse{

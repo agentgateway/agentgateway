@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/google/cel-go/cel"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -211,8 +212,8 @@ func TranslateAgentgatewayPolicy(
 		}
 
 		targetObject := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: targetNamespace, Name: string(name)},
-			Kind:           gk.Kind,
+			Namespace: targetNamespace, Name: string(name),
+			Kind: gk.Kind,
 		}
 
 		for _, policyTarget := range policyTargets {
@@ -268,7 +269,7 @@ func TranslateAgentgatewayPolicy(
 		}
 		var portNum int32
 		if port != nil {
-			portNum = int32(*port)
+			portNum = *port
 		}
 		key := targetKey{Group: gk.Group, Kind: gk.Kind, Name: string(name), Namespace: targetNamespace, SectionName: section, Port: portNum}
 		if _, ok := seen[key]; ok {
@@ -322,35 +323,35 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 	if err != nil {
 		// If we produced some policies alongside errors, treat as partial validity
 		if hasTranslatedPolicies {
-			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
+			conds[agentgateway.PolicyConditionAccepted] = &Condition{
 				Status:  metav1.ConditionTrue,
-				Reason:  string(agentgateway.PolicyReasonPartiallyValid),
+				Reason:  agentgateway.PolicyReasonPartiallyValid,
 				Message: err.Error(),
 			}
 		} else {
 			// No policies produced and error present -> invalid
-			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
+			conds[agentgateway.PolicyConditionAccepted] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(agentgateway.PolicyReasonInvalid),
+				Reason:  agentgateway.PolicyReasonInvalid,
 				Message: err.Error(),
 			}
-			conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
+			conds[agentgateway.PolicyConditionAttached] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(agentgateway.PolicyReasonPending),
+				Reason:  agentgateway.PolicyReasonPending,
 				Message: "Policy is not attached due to invalid status",
 			}
 		}
 	} else {
 		// Check for partial validity
 		// Build success conditions per ancestor
-		conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
+		conds[agentgateway.PolicyConditionAccepted] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(agentgateway.PolicyReasonValid),
+			Reason:  agentgateway.PolicyReasonValid,
 			Message: reporter.PolicyAcceptedMsg,
 		}
-		conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
+		conds[agentgateway.PolicyConditionAttached] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(agentgateway.PolicyReasonAttached),
+			Reason:  agentgateway.PolicyReasonAttached,
 			Message: reporter.PolicyAttachedMsg,
 		}
 	}
@@ -359,9 +360,9 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 
 func attachmentErrorConditionMap(baseConds map[string]*Condition, attachmentErrors []string) map[string]*Condition {
 	conds := maps.Clone(baseConds)
-	conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
+	conds[agentgateway.PolicyConditionAttached] = &Condition{
 		Status:  metav1.ConditionFalse,
-		Reason:  string(agentgateway.PolicyReasonPending),
+		Reason:  agentgateway.PolicyReasonPending,
 		Message: strings.Join(attachmentErrors, "\n"),
 	}
 	return conds
@@ -747,6 +748,7 @@ func processDirectResponseTraffic(_ PolicyCtx, directResponse *agentgateway.Dire
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
 	p.AuthorizationLocation = translateAuthorizationExtractionLocation(jwt.Location)
+	p.PreserveToken = jwt.PreserveToken
 
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
@@ -767,6 +769,10 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			Audiences: pp.Audiences,
 		}
 		if i := pp.JWKS.Inline; i != nil {
+			var ks jose.JSONWebKeySet
+			if err := json.Unmarshal([]byte(*i), &ks); err != nil {
+				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
+			}
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
 			p.Providers = append(p.Providers, jp)
 			continue
@@ -1909,7 +1915,7 @@ func buildPolicyBackendEndpoint(ctx PolicyCtx, endpoint agentgateway.PolicyBacke
 	if endpoint.URL == nil {
 		return nil, nil, nil, fmt.Errorf("backendRef or url is required")
 	}
-	parsed, p, err := remotehttp.ParseHTTPURL(string(*endpoint.URL))
+	parsed, p, err := remotehttp.ParseHTTPURL(*endpoint.URL)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -2188,8 +2194,8 @@ func BackendReferencesFromPolicyForSource(
 	}
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
-		Kind:           sourceGVK.Kind,
+		Namespace: policy.Namespace, Name: policy.Name,
+		Kind: sourceGVK.Kind,
 	}
 
 	seenTargets := make(map[utils.TypedNamespacedName]struct{})
@@ -2208,8 +2214,8 @@ func BackendReferencesFromPolicyForSource(
 			continue
 		}
 		addTarget(utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
-			Kind:           string(tgt.Kind),
+			Namespace: policy.Namespace, Name: string(tgt.Name),
+			Kind: string(tgt.Kind),
 		})
 	}
 	for _, selector := range s.TargetSelectors {
@@ -2218,8 +2224,8 @@ func BackendReferencesFromPolicyForSource(
 				continue
 			}
 			addTarget(utils.TypedNamespacedName{
-				NamespacedName: types.NamespacedName{Namespace: target.Namespace, Name: string(target.Name)},
-				Kind:           string(selector.Kind),
+				Namespace: target.Namespace, Name: string(target.Name),
+				Kind: string(selector.Kind),
 			})
 		}
 	}
@@ -2278,8 +2284,8 @@ func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.A
 			continue
 		}
 		backends = append(backends, utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
-			Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
+			Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name),
+			Kind: DefaultString(ref.Kind, wellknown.ServiceKind),
 		})
 	}
 	return backends

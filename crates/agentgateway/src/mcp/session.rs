@@ -29,7 +29,7 @@ use crate::mcp::subscriptions::ResourceSubscription;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
-use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop};
+use crate::telemetry::log::AsyncLog;
 use crate::types::agent::ResourceName;
 use crate::{mcp, *};
 
@@ -184,8 +184,6 @@ impl Session {
 	async fn authorize_prompt_request<'a, 'b: 'a>(
 		&'a self,
 		name: &'b str,
-		method: &str,
-		span: &mut SpanWriteOnDrop,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 		ctx: &IncomingRequestContext,
@@ -194,7 +192,6 @@ impl Session {
 			.relay
 			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
 			.await?;
-		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
 			l.set_prompt(service_name.to_string(), prompt.to_string());
 		});
@@ -217,12 +214,9 @@ impl Session {
 		&self,
 		service_name: &str,
 		uri: &str,
-		method: &str,
-		span: &mut SpanWriteOnDrop,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 	) -> Result<(), UpstreamError> {
-		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
 			l.set_resource(service_name.to_string(), uri.to_string());
 		});
@@ -246,12 +240,9 @@ impl Session {
 		&self,
 		service_name: &str,
 		task_id: &str,
-		method: &str,
-		span: &mut SpanWriteOnDrop,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 	) -> Result<(), UpstreamError> {
-		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
 			l.set_task(service_name.to_string(), task_id.to_string());
 		});
@@ -309,7 +300,7 @@ impl Session {
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
-		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "delete_session");
+		let (log, _cel) = mcp::handler::setup_request_log(parts);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
@@ -366,7 +357,7 @@ impl Session {
 	/// get_stream establishes a stream for server-sent messages
 	pub async fn get_stream(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
-		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "get_stream");
+		let (log, _cel) = mcp::handler::setup_request_log(parts);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
@@ -417,7 +408,7 @@ impl Session {
 	) -> Result<Response, UpstreamError> {
 		let method = init_request.method.as_str().to_string();
 		let ctx = IncomingRequestContext::new(&parts);
-		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
+		let (log, _) = mcp::handler::setup_request_log(parts);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			l.method_name = Some(method.clone());
@@ -447,7 +438,7 @@ impl Session {
 		};
 		let method = initialized.method.as_str().to_string();
 		let ctx = IncomingRequestContext::new(&parts);
-		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
+		let (log, _) = mcp::handler::setup_request_log(parts);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			l.method_name = Some(method.clone());
@@ -476,7 +467,7 @@ impl Session {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method().to_string();
 				let mut ctx = IncomingRequestContext::new(&parts);
-				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
+				let (log, cel) = mcp::handler::setup_request_log(parts);
 				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.clone());
@@ -537,14 +528,7 @@ impl Session {
 							.unwrap_or_default()
 						{
 							let (service_name, upstream_uri) = self.relay.parse_resource_uri(uri)?;
-							self.authorize_resource_request(
-								service_name,
-								&upstream_uri,
-								&method,
-								&mut span,
-								&log,
-								&cel,
-							)?;
+							self.authorize_resource_request(service_name, &upstream_uri, &log, &cel)?;
 							resource_subs.push(ResourceSubscription {
 								owner: service_name.to_string(),
 								client_uri: uri.clone(),
@@ -580,7 +564,6 @@ impl Session {
 							&ctx,
 						))
 						.await?;
-						span.rename_span(format!("{method} {service_name}"));
 						let call_arguments = ctr.params.arguments.clone();
 						log.non_atomic_mutate(|l| {
 							l.set_tool(service_name.to_string(), tool.to_string());
@@ -616,7 +599,6 @@ impl Session {
 							&ctx,
 						))
 						.await?;
-						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
 							l.set_prompt(service_name.to_string(), prompt.to_string());
 						});
@@ -639,7 +621,6 @@ impl Session {
 					ClientRequest::ReadResourceRequest(rrr) => {
 						let uri = rrr.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
 							l.set_resource(service_name.to_string(), original_uri.to_string());
 						});
@@ -662,28 +643,14 @@ impl Session {
 					ClientRequest::SubscribeRequest(sr) => {
 						let uri = sr.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(
-							service_name,
-							&original_uri,
-							&method,
-							&mut span,
-							&log,
-							&cel,
-						)?;
+						self.authorize_resource_request(service_name, &original_uri, &log, &cel)?;
 						sr.params.uri = original_uri;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UnsubscribeRequest(ur) => {
 						let uri = ur.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(
-							service_name,
-							&original_uri,
-							&method,
-							&mut span,
-							&log,
-							&cel,
-						)?;
+						self.authorize_resource_request(service_name, &original_uri, &log, &cel)?;
 						ur.params.uri = original_uri;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
@@ -691,42 +658,21 @@ impl Session {
 					ClientRequest::GetTaskRequest(gtr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &gtr.params.task_id)?;
-						self.authorize_task_request(
-							service_name,
-							&original_id,
-							&method,
-							&mut span,
-							&log,
-							&cel,
-						)?;
+						self.authorize_task_request(service_name, &original_id, &log, &cel)?;
 						gtr.params.task_id = original_id;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UpdateTaskRequest(utr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &utr.params.task_id)?;
-						self.authorize_task_request(
-							service_name,
-							&original_id,
-							&method,
-							&mut span,
-							&log,
-							&cel,
-						)?;
+						self.authorize_task_request(service_name, &original_id, &log, &cel)?;
 						utr.params.task_id = original_id;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CancelTaskRequest(ctr) => {
 						let (service_name, original_id) =
 							mcp::handler::parse_task_id(&self.relay.upstreams, &ctr.params.task_id)?;
-						self.authorize_task_request(
-							service_name,
-							&original_id,
-							&method,
-							&mut span,
-							&log,
-							&cel,
-						)?;
+						self.authorize_task_request(service_name, &original_id, &log, &cel)?;
 						ctr.params.task_id = original_id;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
@@ -743,24 +689,15 @@ impl Session {
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
-							let (service_name, prompt_name) = Box::pin(
-								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel, &ctx),
-							)
-							.await?;
+							let (service_name, prompt_name) =
+								Box::pin(self.authorize_prompt_request(&name, &log, &cel, &ctx)).await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
 							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},
 						Reference::Resource(resource) => {
 							let uri = resource.uri.clone();
 							let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-							self.authorize_resource_request(
-								service_name,
-								&original_uri,
-								&method,
-								&mut span,
-								&log,
-								&cel,
-							)?;
+							self.authorize_resource_request(service_name, &original_uri, &log, &cel)?;
 							cr.params.r#ref = Reference::for_resource(original_uri);
 							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 						},
@@ -779,7 +716,7 @@ impl Session {
 					_ => "unknown",
 				};
 				let ctx = IncomingRequestContext::new(&parts);
-				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, method);
+				let (log, _cel) = mcp::handler::setup_request_log(parts);
 				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
@@ -792,7 +729,7 @@ impl Session {
 
 			ClientJsonRpcMessage::Response(_) | ClientJsonRpcMessage::Error(_) => {
 				let ctx = IncomingRequestContext::new(&parts);
-				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "response");
+				let (log, _cel) = mcp::handler::setup_request_log(parts);
 				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.session_id = session_id;

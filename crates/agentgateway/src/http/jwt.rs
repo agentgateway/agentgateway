@@ -73,6 +73,7 @@ pub struct Jwt {
 	mode: Mode,
 	providers: Vec<Provider>,
 	location: AuthorizationLocation,
+	preserve_token: bool,
 }
 
 #[derive(Clone)]
@@ -93,11 +94,14 @@ impl serde::Serialize for Jwt {
 			mode: Mode,
 			providers: &'a Vec<Provider>,
 			location: &'a AuthorizationLocation,
+			#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+			preserve_token: bool,
 		}
 		Serde {
 			mode: self.mode,
 			providers: &self.providers,
 			location: &self.location,
+			preserve_token: self.preserve_token,
 		}
 		.serialize(serializer)
 	}
@@ -127,47 +131,114 @@ impl Debug for Jwt {
 	}
 }
 
-#[apply(schema_de!)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(untagged, deny_unknown_fields, rename_all_fields = "camelCase")
+)]
 pub enum LocalJwtConfig {
 	/// Validate JWTs against one or more trusted token issuers.
-	#[serde(rename_all = "camelCase")]
 	Multi {
 		/// Controls whether requests must include a JWT and how validation failures are handled.
-		#[serde(default)]
+		#[cfg_attr(feature = "schema", schemars(default))]
 		mode: Mode,
 		/// Where to read the JWT from in incoming requests.
-		#[serde(default)]
+		#[cfg_attr(feature = "schema", schemars(default))]
 		location: AuthorizationLocation,
+		/// Keep a successfully validated JWT in its original location.
+		#[cfg_attr(feature = "schema", schemars(default))]
+		preserve_token: bool,
 		/// Trusted issuers and their signing keys.
 		providers: Vec<ProviderConfig>,
 	},
 	/// Validate JWTs against a single trusted token issuer.
-	#[serde(rename_all = "camelCase")]
 	Single {
 		/// Controls whether requests must include a JWT and how validation failures are handled.
-		#[serde(default)]
+		#[cfg_attr(feature = "schema", schemars(default))]
 		mode: Mode,
 		/// Where to read the JWT from in incoming requests.
-		#[serde(default)]
+		#[cfg_attr(feature = "schema", schemars(default))]
 		location: AuthorizationLocation,
-		/// Expected token issuer, matched against the JWT `iss` claim.
+		/// Keep a successfully validated JWT in its original location.
+		#[cfg_attr(feature = "schema", schemars(default))]
+		preserve_token: bool,
+		/// Expected token issuer. The JWT `iss` claim is required and must match.
 		issuer: String,
-		/// Accepted token audiences, matched against the JWT `aud` claim when set.
+		/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
 		audiences: Option<Vec<String>>,
 		/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 		jwks: serdes::FileInlineOrRemote,
 		/// Claim requirements to enforce after the token signature is verified.
-		#[serde(default)]
+		#[cfg_attr(feature = "schema", schemars(default))]
 		jwt_validation_options: JWTValidationOptions,
 	},
 }
 
 #[apply(schema_de!)]
+struct LocalJwtMultiConfig {
+	#[serde(default)]
+	mode: Mode,
+	#[serde(default)]
+	location: AuthorizationLocation,
+	#[serde(default)]
+	preserve_token: bool,
+	providers: Vec<ProviderConfig>,
+}
+
+#[apply(schema_de!)]
+struct LocalJwtSingleConfig {
+	#[serde(default)]
+	mode: Mode,
+	#[serde(default)]
+	location: AuthorizationLocation,
+	#[serde(default)]
+	preserve_token: bool,
+	issuer: String,
+	audiences: Option<Vec<String>>,
+	jwks: serdes::FileInlineOrRemote,
+	#[serde(default)]
+	jwt_validation_options: JWTValidationOptions,
+}
+
+// Select the configuration shape before deserializing it so serde does not discard the
+// actionable error from each arm of an untagged enum.
+impl<'de> Deserialize<'de> for LocalJwtConfig {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let value = Value::deserialize(deserializer)?;
+		if value.get("providers").is_some() {
+			let config: LocalJwtMultiConfig =
+				serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+			Ok(Self::Multi {
+				mode: config.mode,
+				location: config.location,
+				preserve_token: config.preserve_token,
+				providers: config.providers,
+			})
+		} else {
+			let config: LocalJwtSingleConfig =
+				serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+			Ok(Self::Single {
+				mode: config.mode,
+				location: config.location,
+				preserve_token: config.preserve_token,
+				issuer: config.issuer,
+				audiences: config.audiences,
+				jwks: config.jwks,
+				jwt_validation_options: config.jwt_validation_options,
+			})
+		}
+	}
+}
+
+#[apply(schema_de!)]
 pub struct ProviderConfig {
-	/// Expected token issuer, matched against the JWT `iss` claim.
+	/// Expected token issuer. The JWT `iss` claim is required and must match.
 	pub issuer: String,
-	/// Accepted token audiences, matched against the JWT `aud` claim when set.
+	/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
 	pub audiences: Option<Vec<String>>,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 	pub jwks: serdes::FileInlineOrRemote,
@@ -199,9 +270,10 @@ pub enum Mode {
 /// claims such as `iat` and `jti` are **not** enforced by the underlying
 /// `jsonwebtoken` library and will be silently ignored.
 ///
-/// This only enforces **presence**. Standard claims like `exp` and `nbf`
-/// have their values validated independently (e.g., expiry is always checked
-/// when the `exp` claim is present, regardless of this setting).
+/// This only enforces **presence**. A configured issuer and non-empty audience
+/// list independently require `iss` and `aud`, respectively. Standard claims
+/// like `exp` and `nbf` have their values validated independently (e.g., expiry
+/// is always checked when the `exp` claim is present, regardless of this setting).
 ///
 /// Defaults to `["exp"]`.
 #[derive(Eq, PartialEq)]
@@ -210,7 +282,8 @@ pub struct JWTValidationOptions {
 	/// Claims that must be present in the token before validation.
 	/// Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
 	/// (including "iat" and "jti") are ignored.
-	/// Defaults to ["exp"]. Use an empty list to require no claims.
+	/// Defaults to ["exp"]. Use an empty list to add no claim requirements beyond
+	/// those implied by the configured issuer and audiences.
 	#[serde(default = "default_required_claims")]
 	pub required_claims: HashSet<String>,
 }
@@ -248,15 +321,17 @@ impl LocalJwtConfig {
 		self,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> Result<Jwt, JwkError> {
-		let (mode, authorization_location, providers_cfg) = match self {
+		let (mode, authorization_location, preserve_token, providers_cfg) = match self {
 			LocalJwtConfig::Multi {
 				mode,
 				location: authorization_location,
+				preserve_token,
 				providers,
-			} => (mode, authorization_location, providers),
+			} => (mode, authorization_location, preserve_token, providers),
 			LocalJwtConfig::Single {
 				mode,
 				location: authorization_location,
+				preserve_token,
 				issuer,
 				audiences,
 				jwks,
@@ -264,6 +339,7 @@ impl LocalJwtConfig {
 			} => (
 				mode,
 				authorization_location,
+				preserve_token,
 				vec![ProviderConfig {
 					issuer,
 					audiences,
@@ -287,6 +363,7 @@ impl LocalJwtConfig {
 			mode,
 			providers,
 			location: authorization_location,
+			preserve_token,
 		})
 	}
 }
@@ -375,18 +452,19 @@ impl Provider {
 			// The new() requires 1 algorithm, so just pass the first before we override it
 			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
 			validation.algorithms = supported_algorithms;
-			// only set audience if audiences were provided
-			// otherwise, disable audience validation
-			if let Some(audiences) = &audiences {
+			// Override required_spec_claims with the user-configured set. A configured
+			// issuer or audience also implies that the corresponding claim must exist;
+			// otherwise there is nothing to match against the configured value.
+			// validate_exp remains true, so exp is still validated if present.
+			validation.required_spec_claims = jwt_validation_options.required_claims.clone();
+			validation.set_issuer(std::slice::from_ref(&issuer));
+			validation.required_spec_claims.insert("iss".to_owned());
+			if let Some(audiences) = audiences.as_ref().filter(|audiences| !audiences.is_empty()) {
 				validation.set_audience(audiences);
+				validation.required_spec_claims.insert("aud".to_owned());
 			} else {
 				validation.validate_aud = false;
 			}
-			validation.set_issuer(std::slice::from_ref(&issuer));
-
-			// Override required_spec_claims with the user-configured set.
-			// validate_exp remains true, so exp is still validated if present.
-			validation.required_spec_claims = jwt_validation_options.required_claims.clone();
 
 			keys.insert(
 				kid,
@@ -406,11 +484,13 @@ impl Jwt {
 		providers: Vec<Provider>,
 		mode: Mode,
 		authorization_location: AuthorizationLocation,
+		preserve_token: bool,
 	) -> Jwt {
 		Jwt {
 			mode,
 			providers,
 			location: authorization_location,
+			preserve_token,
 		}
 	}
 }
@@ -535,11 +615,12 @@ impl Jwt {
 		{
 			log.jwt_sub = Some(sub.to_string());
 		};
-		// Remove the token.
-		self
-			.location
-			.remove(req)
-			.map_err(|e| TokenError::CredentialRemoval(e.to_string()))?;
+		if !self.preserve_token {
+			self
+				.location
+				.remove(req)
+				.map_err(|e| TokenError::CredentialRemoval(e.to_string()))?;
+		}
 		// Insert the claims into extensions so we can reference it later
 		dtrace::pol_result!(
 			dtrace::Severity::Info,

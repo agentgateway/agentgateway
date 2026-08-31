@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use tracing::warn;
+
 #[cfg(feature = "schema")]
 use super::TokenCacheConfig;
 use super::cache::InMemoryTokenCache;
@@ -56,9 +58,14 @@ pub(super) struct CrossAppAccessAuthConfig {
 	/// `resource` parameters naming the protected resource APIs.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub(super) resources: Vec<String>,
-	/// `scope` values for the requested token, sent space-delimited.
+	/// `scope` values requested when obtaining the ID-JAG from the identity provider, sent
+	/// space-delimited.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub(super) scopes: Vec<String>,
+	/// `scope` values requested when exchanging the ID-JAG for an access token. When unset,
+	/// inherits `scopes`. When empty, omits `scope`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub(super) access_token_scopes: Option<Vec<String>>,
 	/// Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read
 	/// from the Authorization Bearer header.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -115,6 +122,7 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			audience,
 			resources,
 			scopes,
+			access_token_scopes,
 			subject_token,
 			cache,
 		} = config;
@@ -124,7 +132,8 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			client_auth,
 		} = identity_provider;
 		let CrossAppAccessSubjectToken { source, token_type } = subject_token.unwrap_or_default();
-		let chained_exchange = resource_authorization_server.into_chained_exchange(scopes.clone());
+		let chained_scopes = access_token_scopes.unwrap_or_else(|| scopes.clone());
+		let chained_exchange = resource_authorization_server.into_chained_exchange(chained_scopes);
 		let oauth = OAuthTokenExchangeAuth {
 			target,
 			path,
@@ -154,7 +163,33 @@ impl CrossAppAccessAuth {
 			return Err("crossAppAccess subjectToken tokenType id-jag is not supported".into());
 		}
 		self.validate_endpoint_paths()?;
+		self.warn_on_unreachable_access_token_scopes();
 		self.oauth.validate_load()
+	}
+
+	// The ID-JAG's `scope` claim is the ceiling for the chained leg; asking for more invites
+	// `invalid_scope`. Warn only: the IdP may grant broader scopes than requested.
+	// TODO(mk): report via `Diagnostics` so the control plane can map this back to the source
+	// resource, alongside the rest of the oauth validation.
+	fn warn_on_unreachable_access_token_scopes(&self) {
+		let Some(chained_exchange) = &self.oauth.chained_exchange else {
+			return;
+		};
+		if self.oauth.scopes.is_empty() {
+			return;
+		}
+		let unreachable = chained_exchange
+			.scopes
+			.iter()
+			.filter(|scope| !self.oauth.scopes.contains(scope))
+			.map(String::as_str)
+			.collect::<Vec<_>>();
+		if !unreachable.is_empty() {
+			warn!(
+				scopes = unreachable.join(" "),
+				"crossAppAccess accessTokenScopes requests scopes absent from scopes; the ID-JAG is granted only scopes, so the resource authorization server is likely to reject the exchange with invalid_scope"
+			);
+		}
 	}
 
 	pub(super) fn audience(&self) -> &str {
@@ -194,10 +229,6 @@ impl CrossAppAccessAuth {
 			},
 		};
 
-		if self.oauth.scopes != chained_exchange.scopes {
-			return Err("cross app access root and chained scopes must match".to_string());
-		}
-
 		Ok(CrossAppAccessAuthConfig {
 			identity_provider: CrossAppAccessEndpoint {
 				target: self.oauth.target.clone(),
@@ -216,6 +247,8 @@ impl CrossAppAccessAuth {
 			}),
 			resources: self.oauth.resources.clone(),
 			scopes: self.oauth.scopes.clone(),
+			access_token_scopes: (chained_exchange.scopes != self.oauth.scopes)
+				.then(|| chained_exchange.scopes.clone()),
 			cache: self.oauth.cache.clone(),
 		})
 	}
@@ -273,6 +306,7 @@ impl CrossAppAccessAuth {
 			audience: t.audience,
 			resources: t.resources,
 			scopes: t.scopes,
+			access_token_scopes: t.access_token_scopes.map(|scopes| scopes.values),
 			subject_token,
 			cache: token_cache_from_proto(t.cache)?,
 		};
@@ -325,9 +359,6 @@ impl CrossAppAccessEndpoint {
 
 	// The root ID-JAG exchange sends configured resources to the IdP; the resulting
 	// assertion binds the resource, so the chained jwt-bearer leg omits `resource`.
-	// It still sends `scope`: RFC 7523 uses it to select the access-token scopes, and
-	// resource ASs (Okta, xaa.dev) issue an unscoped token without it. The draft's
-	// minimal example omits scope, but the ID-JAG's `scope` claim is only the ceiling.
 	fn into_chained_exchange(self, scopes: Vec<String>) -> ChainedExchange {
 		ChainedExchange {
 			target: self.target,

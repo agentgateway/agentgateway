@@ -117,7 +117,19 @@ func isDelegatedChildHTTPRoute(obj *gwv1.HTTPRoute) bool {
 	}
 	return false
 }
-func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
+func childAllowsParent(
+	krtctx krt.HandlerContext,
+	obj *gwv1.HTTPRoute,
+	parentRef resolvedBinding,
+	grants ReferenceGrants,
+	grantMode apisettings.BackendRefGrantMode,
+) bool {
+	if len(obj.Spec.ParentRefs) == 0 {
+		if obj.Namespace == parentRef.Parent.Namespace || !grantMode.RequireRouteBackendGrant() {
+			return true
+		}
+		return grants.ParentlessHTTPRouteAllowed(krtctx, parentRef.Parent.Namespace, config.NamespacedName(obj))
+	}
 	allowedParents := slices.MapFilter(obj.Spec.ParentRefs, func(ref gwv1.ParentReference) *types.NamespacedName {
 		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.HTTPRouteGVK.GroupKind() {
 			return nil
@@ -127,9 +139,6 @@ func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 			Name:      string(ref.Name),
 		})
 	})
-	if len(allowedParents) == 0 {
-		return true
-	}
 	return slices.Contains(allowedParents, parentRef.Parent)
 }
 
@@ -250,6 +259,9 @@ func buildDelegatedHTTPRoutes(
 		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, parentBinding := range findMatchingBindings(krtctx, sourceRoute) {
+			if !childAllowsParent(krtctx, sourceRoute, resolvedBinding{Parent: parentBinding.Source}, inputs.Grants, inputs.BackendRefGrantMode) {
+				continue
+			}
 			gateways.InsertAll(resolveGateways(krtctx, parentBinding, seen.Copy())...)
 		}
 		return slices.SortBy(gateways.UnsortedList(), types.NamespacedName.String)
@@ -290,7 +302,7 @@ func buildDelegatedHTTPRoutes(
 		ctx := inputs.WithCtx(krtctx)
 		var resources []agwir.AgwResource
 		for _, binding := range matchingBindings(krtctx, obj) {
-			if !childAllowsParent(obj, binding) {
+			if !childAllowsParent(krtctx, obj, binding, inputs.Grants, inputs.BackendRefGrantMode) {
 				continue
 			}
 			for n, rule := range obj.Spec.Rules {
@@ -319,16 +331,15 @@ func buildDelegatedHTTPRoutes(
 		if !isDelegatedChildHTTPRoute(obj) {
 			return nil
 		}
+		ctx := inputs.WithCtx(krtctx)
 		source := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{
-				Namespace: obj.Namespace,
-				Name:      obj.Name,
-			},
-			Kind: wellknown.HTTPRouteKind,
+			Namespace: obj.Namespace,
+			Name:      obj.Name,
+			Kind:      wellknown.HTTPRouteKind,
 		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, binding := range matchingBindings(krtctx, obj) {
-			if !childAllowsParent(obj, binding) {
+			if !childAllowsParent(krtctx, obj, binding, inputs.Grants, inputs.BackendRefGrantMode) {
 				continue
 			}
 			gateways.Insert(binding.Gateway)
@@ -343,12 +354,13 @@ func buildDelegatedHTTPRoutes(
 				if ref == wellknown.HTTPRouteGVK.GroupKind() {
 					continue
 				}
+				if !ancestorBackendAllowed(ctx, wellknown.HTTPRouteGVK, obj.Namespace, ref, refNs, refName) {
+					continue
+				}
 				backends.Insert(utils.TypedNamespacedName{
-					NamespacedName: types.NamespacedName{
-						Namespace: defaultString(refNs, obj.Namespace),
-						Name:      string(refName),
-					},
-					Kind: ref.Kind,
+					Namespace: defaultString(refNs, obj.Namespace),
+					Name:      string(refName),
+					Kind:      ref.Kind,
 				})
 			}
 		}
@@ -599,26 +611,26 @@ func AgwRouteCollection(
 	ancestorBackends := krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{
 		krt.NewManyCollection(httpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
-			return extractAncestorBackends(ctx, obj, "HTTPRoute", obj.Spec.Rules, func(r gwv1.HTTPRouteRule) []gwv1.HTTPBackendRef {
+			return extractAncestorBackends(ctx, obj, wellknown.HTTPRouteGVK, obj.Spec.Rules, func(r gwv1.HTTPRouteRule) []gwv1.HTTPBackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("translator/HTTPAncestors")...),
 		delegatedHTTPAncestors,
 		krt.NewManyCollection(grpcRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.GRPCRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
-			return extractAncestorBackends(ctx, obj, "GRPCRoute", obj.Spec.Rules, func(r gwv1.GRPCRouteRule) []gwv1.GRPCBackendRef {
+			return extractAncestorBackends(ctx, obj, wellknown.GRPCRouteGVK, obj.Spec.Rules, func(r gwv1.GRPCRouteRule) []gwv1.GRPCBackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("translator/GRPCAncestors")...),
 		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.TLSRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
-			return extractAncestorBackends(ctx, obj, "TLSRoute", obj.Spec.Rules, func(r gwv1.TLSRouteRule) []gwv1.BackendRef {
+			return extractAncestorBackends(ctx, obj, wellknown.TLSRouteGVK, obj.Spec.Rules, func(r gwv1.TLSRouteRule) []gwv1.BackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("translator/TLSAncestors")...),
 		krt.NewManyCollection(tcpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.TCPRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
-			return extractAncestorBackends(ctx, obj, "TCPRoute", obj.Spec.Rules, func(r gwv1.TCPRouteRule) []gwv1.BackendRef {
+			return extractAncestorBackends(ctx, obj, wellknown.TCPRouteGVK, obj.Spec.Rules, func(r gwv1.TCPRouteRule) []gwv1.BackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("translator/TCPAncestors")...),
@@ -1108,8 +1120,8 @@ func delegatedGatewayRouteAttachmentCountCollection(
 		//ctx := inputs.WithCtx(krtctx)
 		n := obj.Resource.GetRoute().GetName()
 		from := utils.TypedNamespacedName{
-			Kind:           wellknown.HTTPRouteKind,
-			NamespacedName: types.NamespacedName{Namespace: n.Namespace, Name: n.Name},
+			Kind:      wellknown.HTTPRouteKind,
+			Namespace: n.Namespace, Name: n.Name,
 		}
 		return []*plugins.RouteAttachment{{
 			From: from,
@@ -1123,13 +1135,11 @@ func delegatedGatewayRouteAttachmentCountCollection(
 	}, opts.ToOptions("translator/DelegatedHTTPRoute/count")...)
 }
 
-func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext, obj T, kind string, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
+func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext, obj T, sourceGVK schema.GroupVersionKind, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
 	source := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.GetName(),
-		},
-		Kind: kind,
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+		Kind:      sourceGVK.Kind,
 	}
 	gateways := sets.Set[types.NamespacedName]{}
 	for _, parent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, obj)) {
@@ -1142,12 +1152,13 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 			if ref == wellknown.HTTPRouteGVK.GroupKind() || ref == wellknown.AgentgatewayModelGVK.GroupKind() {
 				continue
 			}
+			if !ancestorBackendAllowed(ctx, sourceGVK, obj.GetNamespace(), ref, refNs, refName) {
+				continue
+			}
 			be := utils.TypedNamespacedName{
-				NamespacedName: types.NamespacedName{
-					Namespace: defaultString(refNs, obj.GetNamespace()),
-					Name:      string(refName),
-				},
-				Kind: ref.Kind,
+				Namespace: defaultString(refNs, obj.GetNamespace()),
+				Name:      string(refName),
+				Kind:      ref.Kind,
 			}
 			backends.Insert(be)
 		}
@@ -1165,6 +1176,13 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 		}
 	}
 	return res
+}
+
+func ancestorBackendAllowed(ctx RouteContext, sourceGVK schema.GroupVersionKind, sourceNamespace string, ref schema.GroupKind, refNamespace *gwv1.Namespace, refName gwv1.ObjectName) bool {
+	if refNamespace == nil || string(*refNamespace) == sourceNamespace {
+		return true
+	}
+	return ctx.Grants.BackendAllowed(ctx.Krt, sourceGVK, refName, *refNamespace, sourceNamespace, ref, ctx.BackendRefGrantMode)
 }
 
 func GetBackendRef[I any](spec I) (schema.GroupKind, *gwv1.Namespace, gwv1.ObjectName) {

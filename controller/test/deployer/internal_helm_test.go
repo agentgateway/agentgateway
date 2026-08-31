@@ -587,6 +587,19 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			},
 		},
 		{
+			Name:      "agentgateway with SPIFFE (default CSI socket source)",
+			InputFile: "agentgateway-spiffe",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "spiffe:\n        endpoint: unix:///spiffe-workload-api/spire-agent.sock",
+					"ConfigMap should set config.spiffe.endpoint to the default CSI mount path/socket")
+				assert.Contains(t, outputYaml, "driver: csi.spiffe.io",
+					"deployment should mount the SPIFFE CSI driver volume by default")
+				assert.Contains(t, outputYaml, "name: spiffe-workload-api",
+					"deployment should have a volume + mount for the SPIFFE Workload API socket")
+			},
+		},
+		{
 			Name:      "gateway with no listeners uses dummy port",
 			InputFile: "agentgateway-aws-nlb-dummy-port",
 			HelmValuesGeneratorOverride: func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {

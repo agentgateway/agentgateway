@@ -75,8 +75,8 @@ func virtualkeysFakeClient(t *testing.T, secret *corev1.Secret, policyObjects ..
 
 func virtualkeysFixturePolicy(name, namespace string) *agentgateway.AgentgatewayPolicy {
 	return &agentgateway.AgentgatewayPolicy{
-		TypeMeta:   metav1.TypeMeta{APIVersion: virtualkeysPolicyGVR.GroupVersion().String(), Kind: "AgentgatewayPolicy"},
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		APIVersion: virtualkeysPolicyGVR.GroupVersion().String(), Kind: "AgentgatewayPolicy",
+		Name: name, Namespace: namespace,
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			Traffic: &agentgateway.Traffic{
 				APIKeyAuthentication: &agentgateway.APIKeyAuthentication{
@@ -139,7 +139,7 @@ func TestVirtualkeysToKeyHashEntryEmptyValueErrors(t *testing.T) {
 
 func TestVirtualkeysBuildConfigMap(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
+		Name: "api-key", Namespace: "ns",
 		Data: map[string][]byte{
 			"client1": []byte("k-456"),
 		},
@@ -174,8 +174,8 @@ func TestVirtualkeysBuildConfigMap(t *testing.T) {
 
 func TestVirtualkeysBuildConfigMapNameScopedPerPolicy(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
-		Data:       map[string][]byte{"client1": []byte("k-456")},
+		Name: "api-key", Namespace: "ns",
+		Data: map[string][]byte{"client1": []byte("k-456")},
 	}
 
 	cmA, err := virtualkeysBuildConfigMap(secret, "policy-a", map[string]string{virtualkeysMigratedLabelKey: "policy-a"})
@@ -195,8 +195,8 @@ func TestVirtualkeysBuildConfigMapNameScopedPerPolicy(t *testing.T) {
 // Without apiVersion/kind on every document, `kubectl apply -f -` rejects the output.
 func TestVirtualkeysDryRunOutputIsApplyableYAML(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
-		Data:       map[string][]byte{"client1": []byte("k-456")},
+		Name: "api-key", Namespace: "ns",
+		Data: map[string][]byte{"client1": []byte("k-456")},
 	}
 	client := virtualkeysFakeClient(t, secret, virtualkeysFixturePolicy("my-policy", "ns"))
 
@@ -222,8 +222,8 @@ func TestVirtualkeysDryRunOutputIsApplyableYAML(t *testing.T) {
 // A resource without a matching apiKeyAuthentication shape must be skipped, not errored.
 func TestVirtualkeysDiscoveryIgnoresNonConformingResources(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
-		Data:       map[string][]byte{"client1": []byte("k-456")},
+		Name: "api-key", Namespace: "ns",
+		Data: map[string][]byte{"client1": []byte("k-456")},
 	}
 	noAuth := virtualkeysFixturePolicy("no-auth-policy", "ns")
 	noAuth.Spec.Traffic.APIKeyAuthentication = nil
@@ -241,8 +241,8 @@ func TestVirtualkeysDiscoveryIgnoresNonConformingResources(t *testing.T) {
 // Read-time fields on a fetched object must not leak into a manifest meant for GitOps.
 func TestVirtualkeysDryRunOutputStripsServerManagedFields(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
-		Data:       map[string][]byte{"client1": []byte("k-456")},
+		Name: "api-key", Namespace: "ns",
+		Data: map[string][]byte{"client1": []byte("k-456")},
 	}
 	policy := virtualkeysFixturePolicy("my-policy", "ns")
 	policy.ObjectMeta.ResourceVersion = "123456"
@@ -271,8 +271,8 @@ func TestVirtualkeysDryRunOutputStripsServerManagedFields(t *testing.T) {
 // discovery alone: found automatically, unrelated fields preserved, output clean and appliable.
 func TestVirtualkeysMigratesNewlyAddedKind(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
-		Data:       map[string][]byte{"client1": []byte("k-456")},
+		Name: "api-key", Namespace: "ns",
+		Data: map[string][]byte{"client1": []byte("k-456")},
 	}
 	kube := k8sfake.NewSimpleClientset(secret)
 

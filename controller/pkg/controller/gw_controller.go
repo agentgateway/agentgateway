@@ -345,15 +345,39 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 		}
 	}
 	objs = r.deployer.SetNamespaceAndOwnerWithGVK(gw, wellknown.GatewayGVK, objs)
-	err = r.deployer.DeployObjsWithSource(ctx, objs, gw)
-	if err != nil {
-		return err
+	deploymentErr := r.deployer.DeployObjsWithSource(ctx, objs, gw)
+	if deploymentErr == nil {
+		// Prune any PDB/HPA/VPA resources that are no longer desired
+		if err := r.deployer.PruneRemovedResources(ctx, gw, objs); err != nil {
+			deploymentErr = fmt.Errorf("error pruning removed resources for Gateway %s: %w", req, err)
+		}
 	}
-
-	// Prune any PDB/HPA/VPA resources that are no longer desired
-	err = r.deployer.PruneRemovedResources(ctx, gw, objs)
-	if err != nil {
-		return fmt.Errorf("error pruning removed resources for Gateway %s: %w", req, err)
+	if deploymentErr != nil {
+		condition := metav1.Condition{
+			Type:               string(gwv1.GatewayConditionProgrammed),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: gw.Generation,
+			Reason:             string(reports.GatewayReasonDeploymentFailed),
+			Message:            deploymentErr.Error(),
+		}
+		if statusErr := r.updateGatewayStatusWithRetry(gw, condition); statusErr != nil {
+			return fmt.Errorf("failed to update status for Gateway %s after deployment failed: %w", req, statusErr)
+		}
+		return deploymentErr
+	}
+	if existing := meta.FindStatusCondition(gw.Status.Conditions, string(gwv1.GatewayConditionProgrammed)); existing != nil &&
+		existing.Status == metav1.ConditionFalse &&
+		existing.Reason == string(reports.GatewayReasonDeploymentFailed) {
+		condition := metav1.Condition{
+			Type:               string(gwv1.GatewayConditionProgrammed),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: gw.Generation,
+			Reason:             string(gwv1.GatewayReasonProgrammed),
+			Message:            reports.GatewayProgrammedMessage,
+		}
+		if statusErr := r.updateGatewayStatusWithRetry(gw, condition); statusErr != nil {
+			return fmt.Errorf("failed to update status for Gateway %s: %w", req, statusErr)
+		}
 	}
 
 	// find the name/ns of the service we own so we can grab addresses

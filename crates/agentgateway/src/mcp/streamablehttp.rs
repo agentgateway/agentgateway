@@ -389,7 +389,7 @@ fn validate_standard_header(
 	Ok(())
 }
 
-fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
+pub(crate) fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
 	match message {
 		ClientJsonRpcMessage::Request(req) => Some(req.id.clone()),
 		_ => None,

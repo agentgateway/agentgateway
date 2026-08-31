@@ -74,6 +74,7 @@ fn test_id_token_validator() -> jwt::Jwt {
 		vec![provider],
 		jwt::Mode::Strict,
 		crate::http::auth::AuthorizationLocation::bearer_header(),
+		false,
 	)
 }
 

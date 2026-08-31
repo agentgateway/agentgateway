@@ -51,24 +51,38 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				"running with config: {}",
 				serdes::yamlviajson::to_string(&config)?
 			);
+			let database_pool = match config.database.as_ref() {
+				Some(database) => Some(
+					agentgateway::database::DatabasePool::connect_with_max_connections(
+						&database.url,
+						database.max_connections,
+					)
+					.await?,
+				),
+				None => None,
+			};
+			if let Some(pool) = database_pool.clone() {
+				config.budget_policy.initialize(pool).await?;
+			}
 			let config_resource_store = if config.storage.mode == ConfigStoreMode::Hybrid {
-				let database = config
-					.database
-					.as_ref()
-					.expect("hybrid config store requires config.database");
-				Some(agentgateway::config_store::setup(database).await?)
+				Some(
+					agentgateway::config_store::ConfigResourceStore::from_pool(
+						database_pool
+							.clone()
+							.expect("hybrid config store requires config.database"),
+					)
+					.await?,
+				)
 			} else {
 				None
 			};
 			let request_log_store = match config.logging.database.as_ref() {
 				Some(cfg) => {
-					let pool = config_resource_store.as_ref().and_then(|store| {
-						config
-							.database
-							.as_ref()
-							.filter(|database| cfg == *database)
-							.map(|_| store.pool())
-					});
+					let pool = config
+						.database
+						.as_ref()
+						.filter(|database| cfg == *database)
+						.and(database_pool.clone());
 					match agentgateway::telemetry::log_store::setup_with_pool(cfg, pool).await {
 						Ok(store) => Some(store),
 						Err(err) => {
@@ -79,7 +93,11 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				},
 				None => None,
 			};
-			let result = proxy(Arc::new(config), config_resource_store).await;
+			let config = Arc::new(config);
+			let result = proxy(config.clone(), config_resource_store).await;
+			if let Err(err) = config.budget_policy.flush().await {
+				error!(?err, "failed to flush budget usage during shutdown");
+			}
 			if let Some(request_log_store) = request_log_store {
 				request_log_store.shutdown_and_wait().await;
 			}

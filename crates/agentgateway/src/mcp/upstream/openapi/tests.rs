@@ -47,13 +47,16 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		metrics: Arc::new(crate::metrics::Metrics::new(
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
+			Default::default(),
 		)),
-		model_catalog: crate::llm::cost::ModelCatalog::empty(),
+		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
+		spiffe: None,
 
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+		admission: Default::default(),
 	});
 
 	let client = PolicyClient::new(pi.clone());
@@ -1095,6 +1098,117 @@ fn test_parse_openapi_schema_ignores_path_level_cookie_parameters() {
 	assert!(path_properties.contains_key("workspace_gid"));
 }
 
+#[test]
+fn test_parse_openapi_schema_bundles_recursive_component_schemas() {
+	let raw = r##"{
+		"openapi": "3.0.0",
+		"info": {"title": "Recursive schemas", "version": "1.0.0"},
+		"paths": {
+			"/nodes": {
+				"post": {
+					"operationId": "createNode",
+					"parameters": [{
+						"name": "root",
+						"in": "query",
+						"required": true,
+						"schema": {"$ref": "#/components/schemas/A"}
+					}],
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"schema": {"$ref": "#/components/schemas/Node"}
+							}
+						}
+					},
+					"responses": {"200": {"description": "ok"}}
+				}
+			}
+		},
+		"components": {
+			"schemas": {
+				"Node": {
+					"type": "object",
+					"properties": {
+						"children": {
+							"type": "array",
+							"items": {"$ref": "#/components/schemas/Node"}
+						}
+					}
+				},
+				"A": {
+					"type": "object",
+					"properties": {"b": {"$ref": "#/components/schemas/B"}}
+				},
+				"B": {
+					"type": "object",
+					"properties": {"a": {"$ref": "#/components/schemas/A"}}
+				},
+				"Unused": {"type": "string"}
+			}
+		}
+	}"##;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("recursive schemas should parse");
+
+	assert_eq!(
+		Value::Object(tool_schema_for(&tools, "createNode").clone()),
+		json!({
+			"type": "object",
+			"required": ["body", "query"],
+			"properties": {
+				"body": {"$ref": "#/$defs/Node"},
+				"query": {
+					"type": "object",
+					"required": ["root"],
+					"properties": {"root": {"$ref": "#/$defs/A"}}
+				}
+			},
+			"$defs": {
+				"Node": {
+					"type": "object",
+					"properties": {
+						"children": {
+							"type": "array",
+							"items": {"$ref": "#/$defs/Node"}
+						}
+					}
+				},
+				"A": {
+					"type": "object",
+					"properties": {"b": {"$ref": "#/$defs/B"}}
+				},
+				"B": {
+					"type": "object",
+					"properties": {"a": {"$ref": "#/$defs/A"}}
+				}
+			}
+		})
+	);
+}
+
+#[test]
+fn test_bundle_component_schema_refs_rejects_other_component_refs() {
+	let open_api: OpenAPI = serde_json::from_value(json!({
+		"openapi": "3.0.0",
+		"info": {"title": "Invalid schema ref", "version": "1.0.0"},
+		"paths": {},
+		"components": {
+			"schemas": {
+				"A": {"$ref": "#/components/parameters/not-a-schema"}
+			}
+		}
+	}))
+	.expect("valid OpenAPI document");
+	let mut schema = json!({"$ref": "#/components/schemas/A"});
+
+	assert!(matches!(
+		super::bundle_component_schema_refs(&mut schema, &open_api),
+		Err(ParseError::UnsupportedReference(reference))
+			if reference == "#/components/parameters/not-a-schema"
+	));
+}
+
 #[rstest]
 #[case::empty_string(json!({"verbose": ""}), vec![("verbose", "")])]
 #[case::string_value(json!({"verbose": "true"}), vec![("verbose", "true")])]
@@ -1556,6 +1670,7 @@ async fn test_openapi_from_url() {
 		stateful_mode: McpStatefulMode::Stateful,
 		prefix_mode: None,
 		failure_mode: None,
+		dns_rebinding_protection: false,
 	});
 
 	// Convert to runtime backends
@@ -1829,12 +1944,15 @@ async fn test_call_tool_with_binary_body() {
 		metrics: Arc::new(crate::metrics::Metrics::new(
 			agent_core::metrics::sub_registry(&mut prometheus_client::registry::Registry::default()),
 			Default::default(),
+			Default::default(),
 		)),
-		model_catalog: crate::llm::cost::ModelCatalog::empty(),
+		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
+		spiffe: None,
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+		admission: Default::default(),
 	});
 
 	let client = PolicyClient::new(pi.clone());

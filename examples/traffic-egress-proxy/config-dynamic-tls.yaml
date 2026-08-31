@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+
+# Handle CONNECT requests on port 3000
+binds:
+- port: 3000
+  tunnelProtocol: connect
+  listeners: []
+
+# Accept any `CONNECT *:443` requests
+- port: 443
+  mode: internal
+  listeners:
+  # Terminate each HTTPS stream, with a dynamic TLS certificate
+  - protocol: HTTPS
+    tls:
+      mode: dynamicCa
+      cert: examples/mcp-tls/certs/ca-cert.pem
+      key: examples/mcp-tls/certs/ca-key.pem
+    routes:
+    - backends:
+      # Send it to the hostname of the request
+      - dynamic: {}
+        policies:
+          # Add TLS back to the outgoing request.
+          backendTLS: {}
+      policies:
+        # Inject headers into the request and response to show we can operate on the HTTP traffic.
+        transformations:
+          request:
+            set:
+              x-agentgateway-req-message: "'Hello from AgentGateway!'"
+          response:
+            set:
+              x-agentgateway-resp-message: "'Hello from AgentGateway!'"

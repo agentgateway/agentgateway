@@ -79,7 +79,6 @@
         "protocol",
         "tunnelProtocol",
         "mode",
-        "listeners",
         "listeners"
       ]
     },
@@ -124,7 +123,7 @@
         }
       ]
     },
-    "Listener": {
+    "DumpListener": {
       "type": "object",
       "properties": {
         "key": {
@@ -155,6 +154,24 @@
         },
         "protocol": {
           "$ref": "#/$defs/ListenerProtocol"
+        },
+        "routes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Route"
+          }
+        },
+        "tcpRoutes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/TCPRoute"
+          }
         }
       },
       "additionalProperties": false,
@@ -239,68 +256,12 @@
       ]
     },
     "ServerTLSConfig": {
-      "type": "null"
-    },
-    "DumpListener": {
       "type": "object",
       "properties": {
-        "key": {
+        "certificateSource": {
           "type": "string"
-        },
-        "gatewayName": {
-          "type": "string"
-        },
-        "gatewayNamespace": {
-          "type": "string"
-        },
-        "listenerName": {
-          "type": "string"
-        },
-        "listenerSet": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResourceName"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "hostname": {
-          "description": "Can be a wildcard",
-          "type": "string"
-        },
-        "protocol": {
-          "$ref": "#/$defs/ListenerProtocol"
-        },
-        "routes": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/Route"
-          }
-        },
-        "tcpRoutes": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/TCPRoute"
-          }
         }
-      },
-      "additionalProperties": false,
-      "required": [
-        "key",
-        "gatewayName",
-        "gatewayNamespace",
-        "listenerName",
-        "hostname",
-        "protocol"
-      ]
+      }
     },
     "Route": {
       "type": "object",
@@ -737,7 +698,7 @@
           "default": 1
         },
         "backend": {
-          "$ref": "#/$defs/SimpleLocalBackendSerde"
+          "$ref": "#/$defs/LocalTCPBackend"
         },
         "inlinePolicies": {
           "type": "array",
@@ -750,8 +711,12 @@
         "backend"
       ]
     },
-    "SimpleLocalBackendSerde": {
+    "LocalTCPBackend": {
       "oneOf": [
+        {
+          "type": "string",
+          "enum": []
+        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
@@ -788,12 +753,38 @@
           "type": "object",
           "properties": {
             "host": {
-              "description": "Hostname or IP address",
               "type": "string"
             }
           },
           "required": [
             "host"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Resolve the dial target from downstream TLS SNI and the original destination port.",
+          "type": "object",
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "description": "CEL expression evaluated against TCP connection context to compute a\n`host:port` dial target. Available fields include `source.*` and\n`destination.*`; for TLS, `destination.hostname` is the sniffed SNI.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "dynamic"
           ],
           "additionalProperties": false
         },
@@ -811,6 +802,9 @@
           "additionalProperties": false
         }
       ]
+    },
+    "Expression": {
+      "type": "string"
     },
     "RoutesDump": {
       "type": "object",
@@ -1088,9 +1082,6 @@
         "model",
         "when"
       ]
-    },
-    "Expression": {
-      "type": "string"
     }
   }
 }

@@ -552,13 +552,13 @@ pub mod from_completions {
 
 	use super::helpers;
 	use crate::bedrock::Provider;
-	use crate::conversion::completions::extract_system_text;
 	use crate::types::ResponseType;
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	fn text_blocks_from_user_content(
 		content: &completions::RequestUserMessageContent,
+		cache_points_used: &mut usize,
 	) -> Result<Vec<bedrock::ContentBlock>, AIError> {
 		let mut out = Vec::new();
 		match content {
@@ -573,12 +573,22 @@ pub mod from_completions {
 						completions::RequestUserMessageContentPart::Text(text) => {
 							if !text.text.trim().is_empty() {
 								out.push(bedrock::ContentBlock::Text(text.text.clone()));
+								helpers::maybe_insert_cache_point(
+									&mut out,
+									text.prompt_cache_breakpoint.is_some(),
+									cache_points_used,
+								);
 							}
 						},
 						completions::RequestUserMessageContentPart::ImageUrl(image) => {
 							out.push(
 								super::CanonicalImage::from_data_url(&image.image_url.url)?
 									.into_bedrock_content_block(),
+							);
+							helpers::maybe_insert_cache_point(
+								&mut out,
+								image.prompt_cache_breakpoint.is_some(),
+								cache_points_used,
 							);
 						},
 						completions::RequestUserMessageContentPart::InputAudio(_)
@@ -593,6 +603,7 @@ pub mod from_completions {
 	fn assistant_content_to_bedrock(
 		msg: &completions::RequestAssistantMessage,
 		tool_name_map: &mut super::BedrockToolNameMap,
+		cache_points_used: &mut usize,
 	) -> Vec<bedrock::ContentBlock> {
 		let mut content = Vec::new();
 		// Replay a previously-emitted thinking block first. Anthropic (via Bedrock Converse) requires
@@ -622,6 +633,11 @@ pub mod from_completions {
 							completions::RequestAssistantMessageContentPart::Text(text) => {
 								if !text.text.trim().is_empty() {
 									content.push(bedrock::ContentBlock::Text(text.text.clone()));
+									helpers::maybe_insert_cache_point(
+										&mut content,
+										text.prompt_cache_breakpoint.is_some(),
+										cache_points_used,
+									);
 								}
 							},
 							completions::RequestAssistantMessageContentPart::Refusal(refusal) => {
@@ -672,7 +688,11 @@ pub mod from_completions {
 		content
 	}
 
-	fn tool_content_to_bedrock(msg: &completions::RequestToolMessage) -> Vec<bedrock::ContentBlock> {
+	fn tool_content_to_bedrock(
+		msg: &completions::RequestToolMessage,
+		cache_points_used: &mut usize,
+	) -> Vec<bedrock::ContentBlock> {
+		let mut marked = false;
 		let content = match &msg.content {
 			completions::RequestToolMessageContent::Text(text) => {
 				vec![bedrock::ToolResultContentBlock::Text(text.to_string())]
@@ -681,6 +701,7 @@ pub mod from_completions {
 				.iter()
 				.map(|part| match part {
 					completions::RequestToolMessageContentPart::Text(text) => {
+						marked |= text.prompt_cache_breakpoint.is_some();
 						bedrock::ToolResultContentBlock::Text(text.text.clone())
 					},
 				})
@@ -689,7 +710,7 @@ pub mod from_completions {
 		if content.is_empty() {
 			return Vec::new();
 		}
-		vec![bedrock::ContentBlock::ToolResult(
+		let mut blocks = vec![bedrock::ContentBlock::ToolResult(
 			bedrock::ToolResultBlock {
 				tool_use_id: msg.tool_call_id.clone(),
 				content,
@@ -697,7 +718,9 @@ pub mod from_completions {
 				// Keep this unset rather than asserting success.
 				status: None,
 			},
-		)]
+		)];
+		helpers::maybe_insert_cache_point(&mut blocks, marked, cache_points_used);
+		blocks
 	}
 
 	/// translate an OpenAI completions request to a Bedrock converse  request
@@ -756,13 +779,62 @@ pub mod from_completions {
 				};
 			}
 		}
-		// Extract and join system prompts from completions format
-		let system_text = req
-			.messages
-			.iter()
-			.filter_map(extract_system_text)
-			.collect::<Vec<String>>()
-			.join("\n");
+		let mut system_parts = Vec::new();
+		for message in &req.messages {
+			match message {
+				completions::RequestMessage::System(message) => match &message.content {
+					completions::RequestSystemMessageContent::Text(text) => {
+						if !text.trim().is_empty() {
+							system_parts.push((text.clone(), false));
+						}
+					},
+					completions::RequestSystemMessageContent::Array(parts) => {
+						for part in parts {
+							let completions::RequestSystemMessageContentPart::Text(text) = part;
+							if !text.text.trim().is_empty() {
+								system_parts.push((text.text.clone(), text.prompt_cache_breakpoint.is_some()));
+							}
+						}
+					},
+				},
+				completions::RequestMessage::Developer(message) => match &message.content {
+					completions::RequestDeveloperMessageContent::Text(text) => {
+						if !text.trim().is_empty() {
+							system_parts.push((text.clone(), false));
+						}
+					},
+					completions::RequestDeveloperMessageContent::Array(parts) => {
+						for part in parts {
+							let completions::RequestDeveloperMessageContentPart::Text(text) = part;
+							if !text.text.trim().is_empty() {
+								system_parts.push((text.text.clone(), text.prompt_cache_breakpoint.is_some()));
+							}
+						}
+					},
+				},
+				_ => {},
+			}
+		}
+		let mut cache_points_used = 0;
+		let has_explicit_system_cache = system_parts.iter().any(|(_, marked)| *marked);
+		let mut system_content = if system_parts.is_empty() {
+			None
+		} else if has_explicit_system_cache {
+			let mut blocks = Vec::new();
+			for (text, marked) in &system_parts {
+				blocks.push(bedrock::SystemContentBlock::Text { text: text.clone() });
+				helpers::maybe_insert_cache_point(&mut blocks, *marked, &mut cache_points_used);
+			}
+			Some(blocks)
+		} else {
+			Some(vec![bedrock::SystemContentBlock::Text {
+				text: system_parts
+					.iter()
+					.map(|(text, _)| text.as_str())
+					.collect::<Vec<_>>()
+					.join("\n"),
+			}])
+		};
 
 		let inference_config = bedrock::InferenceConfiguration {
 			max_tokens: req.max_tokens(),
@@ -817,21 +889,22 @@ pub mod from_completions {
 			let msg = match msg {
 				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => None,
 				completions::RequestMessage::User(user) => {
-					let content = text_blocks_from_user_content(&user.content)?;
+					let content = text_blocks_from_user_content(&user.content, &mut cache_points_used)?;
 					(!content.is_empty()).then_some(bedrock::Message {
 						role: bedrock::Role::User,
 						content,
 					})
 				},
 				completions::RequestMessage::Assistant(assistant) => {
-					let content = assistant_content_to_bedrock(assistant, &mut tool_name_map);
+					let content =
+						assistant_content_to_bedrock(assistant, &mut tool_name_map, &mut cache_points_used);
 					(!content.is_empty()).then_some(bedrock::Message {
 						role: bedrock::Role::Assistant,
 						content,
 					})
 				},
 				completions::RequestMessage::Tool(tool_result) => {
-					let content = tool_content_to_bedrock(tool_result);
+					let content = tool_content_to_bedrock(tool_result, &mut cache_points_used);
 					(!content.is_empty()).then_some(bedrock::Message {
 						role: bedrock::Role::User,
 						content,
@@ -905,10 +978,7 @@ pub mod from_completions {
 			.and_then(completions_response_format_to_bedrock_output_config);
 
 		let supports_caching = helpers::supports_prompt_caching(&model_id);
-		let system_content = if system_text.is_empty() {
-			None
-		} else {
-			let mut system_blocks = vec![bedrock::SystemContentBlock::Text { text: system_text }];
+		if let Some(system_blocks) = &mut system_content {
 			tracing::debug!(
 				"Prompt caching policy: {:?}, model: {}, supports caching: {}",
 				prompt_caching.map(|c| (c.cache_system, c.cache_messages, c.cache_tools)),
@@ -918,9 +988,11 @@ pub mod from_completions {
 			if let Some(caching) = prompt_caching
 				&& caching.cache_system
 				&& supports_caching
+				&& cache_points_used < 4
+				&& !has_explicit_system_cache
 			{
 				let meets_minimum = if let Some(min_tokens) = caching.min_tokens {
-					helpers::estimate_system_tokens(&system_blocks) >= min_tokens
+					helpers::estimate_system_tokens(system_blocks) >= min_tokens
 				} else {
 					true
 				};
@@ -928,10 +1000,10 @@ pub mod from_completions {
 					system_blocks.push(bedrock::SystemContentBlock::CachePoint {
 						cache_point: helpers::create_cache_point(),
 					});
+					cache_points_used += 1;
 				}
 			}
-			Some(system_blocks)
-		};
+		}
 
 		let mut bedrock_request = bedrock::ConverseRequest {
 			model_id,
@@ -948,14 +1020,18 @@ pub mod from_completions {
 			performance_config: None,
 		};
 		if let Some(caching) = prompt_caching {
-			if caching.cache_messages && supports_caching {
-				helpers::insert_message_cache_point(
+			if caching.cache_messages
+				&& supports_caching
+				&& cache_points_used < 4
+				&& helpers::insert_message_cache_point(
 					&mut bedrock_request.messages,
 					caching.cache_message_offset,
-				);
+				) {
+				cache_points_used += 1;
 			}
 			if caching.cache_tools
 				&& supports_caching
+				&& cache_points_used < 4
 				&& let Some(ref mut tool_config) = bedrock_request.tool_config
 				&& !tool_config.tools.is_empty()
 			{
@@ -1470,12 +1546,11 @@ pub mod from_messages {
 							} => {
 								result.push(bedrock::SystemContentBlock::Text { text: text.clone() });
 								// Insert cache point if this block has cache_control
-								if cache_control.is_some() && cache_points_used < 4 {
-									result.push(bedrock::SystemContentBlock::CachePoint {
-										cache_point: helpers::create_cache_point(),
-									});
-									cache_points_used += 1;
-								}
+								helpers::maybe_insert_cache_point(
+									&mut result,
+									cache_control.is_some(),
+									&mut cache_points_used,
+								);
 							},
 						}
 					}
@@ -1500,12 +1575,11 @@ pub mod from_messages {
 						{
 							let system_content = system_content.get_or_insert_with(Vec::new);
 							system_content.push(bedrock::SystemContentBlock::Text { text });
-							if cache_control.is_some() && cache_points_used < 4 {
-								system_content.push(bedrock::SystemContentBlock::CachePoint {
-									cache_point: helpers::create_cache_point(),
-								});
-								cache_points_used += 1;
-							}
+							helpers::maybe_insert_cache_point(
+								system_content,
+								cache_control.is_some(),
+								&mut cache_points_used,
+							);
 						}
 					}
 					continue;
@@ -1558,6 +1632,7 @@ pub mod from_messages {
 						is_error,
 						cache_control,
 					} => {
+						let mut has_cache_control = cache_control.is_some();
 						let bedrock_content = match tool_content {
 							messages::ToolResultContent::Text(text) => {
 								vec![bedrock::ToolResultContentBlock::Text(text)]
@@ -1565,23 +1640,33 @@ pub mod from_messages {
 							messages::ToolResultContent::Array(parts) => parts
 								.into_iter()
 								.filter_map(|part| match part {
-									messages::ToolResultContentPart::Text { text, .. } => {
+									messages::ToolResultContentPart::Text {
+										text,
+										cache_control,
+										..
+									} => {
+										has_cache_control |= cache_control.is_some();
 										Some(bedrock::ToolResultContentBlock::Text(text))
 									},
-									messages::ToolResultContentPart::Image { source, .. } => {
+									messages::ToolResultContentPart::Image {
+										source,
+										cache_control,
+									} => {
 										if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
 											&& let Some(data) = source.get("data").and_then(|v| v.as_str())
+											&& let Ok(image) =
+												super::CanonicalImage::from_media_type_and_base64(media_type, data)
 										{
-											super::CanonicalImage::from_media_type_and_base64(media_type, data)
-												.ok()
-												.map(|image| {
-													bedrock::ToolResultContentBlock::Image(image.into_bedrock_image_block())
-												})
+											has_cache_control |= cache_control.is_some();
+											Some(bedrock::ToolResultContentBlock::Image(
+												image.into_bedrock_image_block(),
+											))
 										} else {
 											None
 										}
 									},
-									_ => None,
+									messages::ToolResultContentPart::Document { .. }
+									| messages::ToolResultContentPart::SearchResult { .. } => None,
 								})
 								.collect(),
 						};
@@ -1597,7 +1682,7 @@ pub mod from_messages {
 								content: bedrock_content,
 								status,
 							}),
-							cache_control.is_some(),
+							has_cache_control,
 						)
 					},
 					messages::ContentBlock::Thinking {
@@ -1622,12 +1707,7 @@ pub mod from_messages {
 
 				content.push(bedrock_block);
 
-				if has_cache_control && cache_points_used < 4 {
-					content.push(bedrock::ContentBlock::CachePoint(
-						helpers::create_cache_point(),
-					));
-					cache_points_used += 1;
-				}
+				helpers::maybe_insert_cache_point(&mut content, has_cache_control, &mut cache_points_used);
 			}
 
 			messages.push(bedrock::Message { role, content });
@@ -1651,10 +1731,11 @@ pub mod from_messages {
 			let mut bedrock_tools = Vec::with_capacity(tools.len() * 2);
 			for (tool, has_cache_control) in tools {
 				bedrock_tools.push(tool);
-				if has_cache_control && cache_points_used < 4 {
-					bedrock_tools.push(bedrock::Tool::CachePoint(helpers::create_cache_point()));
-					cache_points_used += 1;
-				}
+				helpers::maybe_insert_cache_point(
+					&mut bedrock_tools,
+					has_cache_control,
+					&mut cache_points_used,
+				);
 			}
 			bedrock::ToolConfiguration {
 				tools: bedrock_tools,
@@ -2318,6 +2399,7 @@ pub mod from_responses {
 		};
 
 		let supports_caching = req.model.as_deref().is_some_and(supports_prompt_caching);
+		let mut cache_points_used = 0;
 
 		// Convert input to Bedrock messages and system content
 		let mut messages: Vec<bedrock::Message> = Vec::new();
@@ -2344,7 +2426,8 @@ pub mod from_responses {
 		// already used so repeated filenames (or missing ones) get a numeric suffix.
 		let used_doc_names = std::cell::RefCell::new(HashSet::<String>::new());
 		let input_parts_to_blocks = |parts: &[InputContent],
-		                             role: bedrock::Role|
+		                             role: bedrock::Role,
+		                             cache_points_used: &mut usize|
 		 -> Result<Vec<bedrock::ContentBlock>, AIError> {
 			let mut blocks = Vec::new();
 			tracing::debug!("Processing {} content parts", parts.len());
@@ -2353,6 +2436,11 @@ pub mod from_responses {
 					InputContent::InputText(input_text) => {
 						tracing::debug!("Found InputText with text: {}", input_text.text);
 						blocks.push(bedrock::ContentBlock::Text(input_text.text.clone()));
+						maybe_insert_cache_point(
+							&mut blocks,
+							input_text.prompt_cache_breakpoint.is_some(),
+							cache_points_used,
+						);
 					},
 					InputContent::InputImage(input_image) => {
 						if role != bedrock::Role::User {
@@ -2373,6 +2461,11 @@ pub mod from_responses {
 						};
 						blocks
 							.push(super::CanonicalImage::from_data_url(image_url)?.into_bedrock_content_block());
+						maybe_insert_cache_point(
+							&mut blocks,
+							input_image.prompt_cache_breakpoint.is_some(),
+							cache_points_used,
+						);
 					},
 					InputContent::InputFile(input_file) => {
 						if role != bedrock::Role::User {
@@ -2428,17 +2521,33 @@ pub mod from_responses {
 							name,
 							source: bedrock::DocumentSource { bytes },
 						}));
+						maybe_insert_cache_point(
+							&mut blocks,
+							input_file.prompt_cache_breakpoint.is_some(),
+							cache_points_used,
+						);
 					},
 				}
 			}
 			tracing::debug!("Created {} content blocks", blocks.len());
 			Ok(blocks)
 		};
-		let input_parts_to_system_text = |parts: &[InputContent]| -> Result<String, AIError> {
-			let mut text = Vec::new();
+		let input_parts_to_system_blocks = |parts: &[InputContent],
+		                                    cache_points_used: &mut usize|
+		 -> Result<Vec<bedrock::SystemContentBlock>, AIError> {
+			let mut blocks = Vec::new();
 			for part in parts {
 				match part {
-					InputContent::InputText(input_text) => text.push(input_text.text.clone()),
+					InputContent::InputText(input_text) => {
+						blocks.push(bedrock::SystemContentBlock::Text {
+							text: input_text.text.clone(),
+						});
+						maybe_insert_cache_point(
+							&mut blocks,
+							input_text.prompt_cache_breakpoint.is_some(),
+							cache_points_used,
+						);
+					},
 					InputContent::InputImage(_) => {
 						return Err(AIError::UnsupportedConversion(strng::literal!(
 							"bedrock image inputs are only supported on user messages"
@@ -2451,7 +2560,7 @@ pub mod from_responses {
 					},
 				}
 			}
-			Ok(text.join("\n"))
+			Ok(blocks)
 		};
 
 		// Process each input item
@@ -2462,11 +2571,15 @@ pub mod from_responses {
 						ResponsesRole::User => bedrock::Role::User,
 						ResponsesRole::Assistant => bedrock::Role::Assistant,
 						ResponsesRole::System | ResponsesRole::Developer => {
-							let text = match &msg.content {
-								EasyInputContent::Text(text) => text.clone(),
-								EasyInputContent::ContentList(parts) => input_parts_to_system_text(parts)?,
-							};
-							system_blocks.push(bedrock::SystemContentBlock::Text { text });
+							match &msg.content {
+								EasyInputContent::Text(text) => {
+									system_blocks.push(bedrock::SystemContentBlock::Text { text: text.clone() });
+								},
+								EasyInputContent::ContentList(parts) => {
+									system_blocks
+										.extend(input_parts_to_system_blocks(parts, &mut cache_points_used)?);
+								},
+							}
 							continue;
 						},
 					};
@@ -2475,7 +2588,9 @@ pub mod from_responses {
 						EasyInputContent::Text(text) => {
 							vec![bedrock::ContentBlock::Text(text.clone())]
 						},
-						EasyInputContent::ContentList(parts) => input_parts_to_blocks(parts, role)?,
+						EasyInputContent::ContentList(parts) => {
+							input_parts_to_blocks(parts, role, &mut cache_points_used)?
+						},
 					};
 
 					helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
@@ -2484,13 +2599,15 @@ pub mod from_responses {
 					let role = match msg.role {
 						InputRole::User => bedrock::Role::User,
 						InputRole::System | InputRole::Developer => {
-							let text = input_parts_to_system_text(&msg.content)?;
-							system_blocks.push(bedrock::SystemContentBlock::Text { text });
+							system_blocks.extend(input_parts_to_system_blocks(
+								&msg.content,
+								&mut cache_points_used,
+							)?);
 							continue;
 						},
 					};
 
-					let content = input_parts_to_blocks(&msg.content, role)?;
+					let content = input_parts_to_blocks(&msg.content, role, &mut cache_points_used)?;
 					helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
 				},
 				InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
@@ -2639,8 +2756,12 @@ pub mod from_responses {
 		if let Some(caching) = prompt_caching
 			&& caching.cache_system
 			&& supports_caching
+			&& cache_points_used < 4
 			&& let Some(ref mut system) = system_content
-		{
+			&& !matches!(
+				system.last(),
+				Some(bedrock::SystemContentBlock::CachePoint { .. })
+			) {
 			let meets_minimum = if let Some(min_tokens) = caching.min_tokens {
 				estimate_system_tokens(system) >= min_tokens
 			} else {
@@ -2650,6 +2771,7 @@ pub mod from_responses {
 				system.push(bedrock::SystemContentBlock::CachePoint {
 					cache_point: create_cache_point(),
 				});
+				cache_points_used += 1;
 			}
 		}
 
@@ -2723,11 +2845,16 @@ pub mod from_responses {
 
 		// Apply user message and tool caching
 		if let Some(caching) = prompt_caching {
-			if caching.cache_messages && supports_caching {
-				insert_message_cache_point(&mut bedrock_request.messages, caching.cache_message_offset);
+			if caching.cache_messages
+				&& supports_caching
+				&& cache_points_used < 4
+				&& insert_message_cache_point(&mut bedrock_request.messages, caching.cache_message_offset)
+			{
+				cache_points_used += 1;
 			}
 			if caching.cache_tools
 				&& supports_caching
+				&& cache_points_used < 4
 				&& let Some(ref mut tool_config) = bedrock_request.tool_config
 				&& !tool_config.tools.is_empty()
 			{
@@ -3346,6 +3473,40 @@ mod helpers {
 		}
 	}
 
+	pub trait CachePointTarget {
+		fn push_cache_point(&mut self, cache_point: bedrock::CachePointBlock);
+	}
+
+	impl CachePointTarget for Vec<bedrock::ContentBlock> {
+		fn push_cache_point(&mut self, cache_point: bedrock::CachePointBlock) {
+			self.push(bedrock::ContentBlock::CachePoint(cache_point));
+		}
+	}
+
+	impl CachePointTarget for Vec<bedrock::SystemContentBlock> {
+		fn push_cache_point(&mut self, cache_point: bedrock::CachePointBlock) {
+			self.push(bedrock::SystemContentBlock::CachePoint { cache_point });
+		}
+	}
+
+	impl CachePointTarget for Vec<bedrock::Tool> {
+		fn push_cache_point(&mut self, cache_point: bedrock::CachePointBlock) {
+			self.push(bedrock::Tool::CachePoint(cache_point));
+		}
+	}
+
+	pub fn maybe_insert_cache_point(
+		target: &mut impl CachePointTarget,
+		marked: bool,
+		cache_points_used: &mut usize,
+	) {
+		if !marked || *cache_points_used >= 4 {
+			return;
+		}
+		target.push_cache_point(create_cache_point());
+		*cache_points_used += 1;
+	}
+
 	pub fn supports_prompt_caching(model_id: &str) -> bool {
 		let model_lower = model_id.to_lowercase();
 		if model_lower.contains("anthropic.claude") {
@@ -3378,7 +3539,7 @@ mod helpers {
 		(word_count * 13) / 10
 	}
 
-	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) {
+	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) -> bool {
 		// Strategy: Cache everything BEFORE the last message (not including it)
 		// This caches the conversation history but not the current turn's input
 		//
@@ -3398,11 +3559,17 @@ mod helpers {
 
 		// If we have 0-1 messages, no point caching (nothing to reuse yet)
 		if len < 2 {
-			return;
+			return false;
 		}
 
 		// Clamp so the index never goes below 0
 		let target_idx = (len - 2).saturating_sub(offset);
+		if matches!(
+			messages[target_idx].content.last(),
+			Some(bedrock::ContentBlock::CachePoint(_))
+		) {
+			return false;
+		}
 		messages[target_idx]
 			.content
 			.push(bedrock::ContentBlock::CachePoint(create_cache_point()));
@@ -3412,6 +3579,7 @@ mod helpers {
 			target_idx,
 			offset
 		);
+		true
 	}
 
 	/// Extract metadata from x-bedrock-metadata header.

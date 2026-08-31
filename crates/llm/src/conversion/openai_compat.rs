@@ -634,6 +634,7 @@ pub mod to_responses {
 				let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
 
 				match evt {
+					SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 					SseJsonEvent::Done => {
 						if !flushed {
 							flushed = true;

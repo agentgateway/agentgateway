@@ -137,6 +137,7 @@ fn test_snapshot_matches_ref() {
 		None,
 		None,
 		None,
+		None,
 	);
 	let ref_executor = Executor::new_request(&req);
 
@@ -289,7 +290,7 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 
 	let mut req = build_test_request();
 	// The exact Decimal breakdown is projected to f64 lazily, per field, on CEL access.
-	req.extensions_mut().get_mut::<LLMContext>().unwrap().cost = Some(llm::cost::Breakdown {
+	req.extensions_mut().get_mut::<LLMContext>().unwrap().cost = Some(llm::catalog::Breakdown {
 		input: dec("0.5"),
 		output: dec("0.025"),
 		cache_read: dec("0"),
@@ -335,7 +336,7 @@ fn test_proxy_timing_is_native_duration() {
 		upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
 		response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
 	};
-	let executor = Executor::new_logger(None, None, None, None, None, Some(&proxy));
+	let executor = Executor::new_logger(None, None, None, None, None, None, Some(&proxy));
 	let expr = Expression::new_strict(
 		"proxy.requestProcessingDuration == duration('12ms') && \
 		 proxy.upstreamDuration == duration('675ms') && \
@@ -352,7 +353,7 @@ fn test_executor_snapshot_round_trip() {
 	let req_snapshot = snapshot_request(&mut req, true);
 
 	// Create executor from snapshot
-	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None, None);
+	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None, None, None);
 
 	// Serialize to JSON
 	let json = exec_to_json(&executor1);

@@ -308,6 +308,19 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the guardrail's verdict is enforced or only
+                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                        assessment rejects the request/response and an anonymized assessment masks
+                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                        invoked and its assessment recorded (metrics + structured log), but the
+                                        request/response is never blocked or masked.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.
@@ -695,6 +708,15 @@ spec:
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -795,6 +817,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -859,6 +888,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -907,6 +945,16 @@ spec:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     location:
                                       default: us-central1
                                       description: |-
@@ -1128,6 +1176,15 @@ spec:
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -1228,6 +1285,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -1292,6 +1356,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -1338,6 +1411,16 @@ spec:
                                     endpoint.
                                     See https://developers.openai.com/api/reference/resources/moderations for more information.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     model:
                                       description: |-
                                         Moderation model to use. For example,
@@ -1583,6 +1666,15 @@ spec:
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -1683,6 +1775,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -1747,6 +1846,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -1787,6 +1895,7 @@ spec:
                                         streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
+                                      - Audit
                                       - Mask
                                       - Reject
                                       type: string
@@ -1843,10 +1952,41 @@ spec:
                                       statusCode] must be set
                                     rule: '[has(self.message),has(self.statusCode)].filter(x,x==true).size()
                                       >= 1'
+                                scope:
+                                  description: |-
+                                    Which parts of the request this guard inspects. When unset, defaults to
+                                    `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+                                    inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+                                    In APIs that send tool arguments as opaque JSON, such as Completions, the
+                                    arguments are masked as a single string, meaning a prompt guard has the
+                                    potential to rewrite the arguments into invalid JSON.
+                                  items:
+                                    description: Which category of request content
+                                      a prompt guard inspects.
+                                    enum:
+                                    - Messages
+                                    - SystemPrompt
+                                    - ToolInput
+                                    - ToolOutput
+                                    type: string
+                                  maxItems: 4
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-type: set
                                 webhook:
                                   description: Webhook that receives requests for
                                     prompt guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                        without blocking or masking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     backendRef:
                                       description: |-
                                         Webhook server to reach.
@@ -1963,6 +2103,13 @@ spec:
                                   type: object
                               type: object
                               x-kubernetes-validations:
+                              - message: 'scope: only regex and bedrockGuardrails
+                                  guards support a non-default scope; other guard
+                                  kinds always inspect the default (SystemPrompt +
+                                  Messages)'
+                                rule: '!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails)
+                                  || (self.scope.size() == 2 && ''SystemPrompt'' in
+                                  self.scope && ''Messages'' in self.scope)'
                               - message: exactly one of the fields in [regex webhook
                                   openAIModeration bedrockGuardrails googleModelArmor]
                                   must be set
@@ -1983,6 +2130,19 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the guardrail's verdict is enforced or only
+                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                        assessment rejects the request/response and an anonymized assessment masks
+                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                        invoked and its assessment recorded (metrics + structured log), but the
+                                        request/response is never blocked or masked.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.
@@ -2370,6 +2530,15 @@ spec:
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -2470,6 +2639,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -2534,6 +2710,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -2582,6 +2767,16 @@ spec:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     location:
                                       default: us-central1
                                       description: |-
@@ -2803,6 +2998,15 @@ spec:
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
+                                            certificateSource:
+                                              default: Inline
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
+                                              enum:
+                                              - Inline
+                                              - SPIFFE
+                                              type: string
                                             insecureSkipVerify:
                                               description: |-
                                                 Originates TLS but skips verification of the backend's certificate
@@ -2903,6 +3107,13 @@ spec:
                                               may not be set together
                                             rule: 'has(self.insecureSkipVerify) ?
                                               !has(self.verifySubjectAltNames) : true'
+                                          - message: certificateSource SPIFFE may
+                                              not be combined with mtlsCertificateRef,
+                                              caCertificateRefs, or insecureSkipVerify
+                                            rule: '!has(self.certificateSource) ||
+                                              self.certificateSource != ''SPIFFE''
+                                              || (!has(self.mtlsCertificateRef) &&
+                                              !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
@@ -2967,6 +3178,15 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            mode:
+                                              default: Auto
+                                              description: |-
+                                                How requests are sent through the proxy.
+                                                Defaults to `Auto`.
+                                              enum:
+                                              - Auto
+                                              - Connect
+                                              type: string
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3020,6 +3240,7 @@ spec:
                                         streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
+                                      - Audit
                                       - Mask
                                       - Reject
                                       type: string
@@ -3080,6 +3301,16 @@ spec:
                                   description: Webhook that receives responses for
                                     prompt guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                        without blocking or masking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     backendRef:
                                       description: |-
                                         Webhook server to reach.
@@ -3226,6 +3457,8 @@ spec:
                           - Completions
                           - Detect
                           - Embeddings
+                          - GeminiCountTokens
+                          - GenerateContent
                           - Messages
                           - Models
                           - Passthrough
@@ -3411,19 +3644,29 @@ spec:
                         description: Azure authentication method for the backend.
                         properties:
                           managedIdentity:
-                            description: Managed identity authentication settings.
+                            description: |-
+                              Managed identity authentication settings. Leave this object empty to use
+                              the system-assigned identity. To use a user-assigned identity, set one of
+                              `clientId`, `objectId`, or `resourceId`.
                             properties:
                               clientId:
+                                description: Client ID of the user-assigned managed
+                                  identity.
                                 type: string
                               objectId:
+                                description: Object ID of the user-assigned managed
+                                  identity.
                                 type: string
                               resourceId:
+                                description: Resource ID of the user-assigned managed
+                                  identity.
                                 type: string
-                            required:
-                            - clientId
-                            - objectId
-                            - resourceId
                             type: object
+                            x-kubernetes-validations:
+                            - message: at most one of the fields in [clientId objectId
+                                resourceId] may be set
+                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                <= 1'
                           secretRef:
                             description: |-
                               Credential source for Azure credentials, defaulting to a Kubernetes
@@ -3571,6 +3814,14 @@ spec:
                         description: Cross App Access (Identity Assertion / ID-JAG)
                           authentication.
                         properties:
+                          accessTokenScopes:
+                            description: |-
+                              Scopes requested when exchanging the ID-JAG for an access token.
+                              When omitted, defaults to Scopes. Set to an empty list to omit scope.
+                            items:
+                              type: string
+                            maxItems: 64
+                            type: array
                           audience:
                             description: Identifier of the resource authorization
                               server. The issued ID-JAG is bound to this audience.
@@ -4119,7 +4370,8 @@ spec:
                             minItems: 1
                             type: array
                           scopes:
-                            description: Scopes sent to the token endpoint.
+                            description: Scopes requested when obtaining the ID-JAG
+                              from the identity provider.
                             items:
                               type: string
                             maxItems: 64
@@ -5886,6 +6138,14 @@ spec:
                         maxItems: 1
                         type: array
                         x-kubernetes-list-type: atomic
+                      certificateSource:
+                        default: Inline
+                        description: Source for the gateway's client identity and
+                          trust roots (`Inline` default, or `SPIFFE`).
+                        enum:
+                        - Inline
+                        - SPIFFE
+                        type: string
                       insecureSkipVerify:
                         description: |-
                           Originates TLS but skips verification of the backend's certificate
@@ -5980,6 +6240,11 @@ spec:
                         be set together
                       rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                         : true'
+                    - message: certificateSource SPIFFE may not be combined with mtlsCertificateRef,
+                        caCertificateRefs, or insecureSkipVerify
+                      rule: '!has(self.certificateSource) || self.certificateSource
+                        != ''SPIFFE'' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs)
+                        && !has(self.insecureSkipVerify))'
                     - message: at most one of the fields in [verifySubjectAltNames
                         insecureSkipVerify] may be set
                       rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -6271,6 +6536,15 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      mode:
+                        default: Auto
+                        description: |-
+                          How requests are sent through the proxy.
+                          Defaults to `Auto`.
+                        enum:
+                        - Auto
+                        - Connect
+                        type: string
                       url:
                         description: |-
                           `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -6660,6 +6934,14 @@ spec:
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
+                      maxConcurrentRequests:
+                        description: |-
+                          Maximum number of in-flight HTTP requests across this gateway/port.
+                          This includes HTTP/1 requests and HTTP/2 streams. Requests over the limit
+                          are rejected immediately with a 503 response. Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
                       maxConnectionDuration:
                         description: |-
                           Maximum time a connection is allowed to remain open.
@@ -6676,8 +6958,8 @@ spec:
                     - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
                         http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
-                        maxConnectionDuration] must be set
-                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        maxConcurrentRequests maxConnectionDuration] must be set
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -6843,10 +7125,19 @@ spec:
                             - message: time must be at least 1 second
                               rule: duration(self) >= duration('1s')
                         type: object
+                      maxConnections:
+                        description: |-
+                          Maximum number of active downstream connections on this gateway/port.
+                          Connections over the limit are closed immediately. Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [keepalive] must be set
-                      rule: '[has(self.keepalive)].filter(x,x==true).size() >= 1'
+                    - message: at least one of the fields in [keepalive maxConnections]
+                        must be set
+                      rule: '[has(self.keepalive),has(self.maxConnections)].filter(x,x==true).size()
+                        >= 1'
                   tls:
                     description: Settings for managing incoming TLS connections.
                     properties:
@@ -9366,6 +9657,12 @@ spec:
                         - Permissive
                         - Strict
                         type: string
+                      preserveToken:
+                        description: |-
+                          Keeps a successfully validated JWT in its original location. By default, the gateway removes
+                          the JWT after validation. When the token only needs to be forwarded to the selected backend,
+                          prefer `backendAuth.passthrough` so it is not exposed to other policies in the request path.
+                        type: boolean
                       providers:
                         items:
                           properties:

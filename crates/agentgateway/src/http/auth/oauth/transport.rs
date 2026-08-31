@@ -21,6 +21,7 @@ use crate::http::{self, Body};
 use crate::json;
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 
 /// Default token-endpoint timeout, overridable by backend request-timeout policy
@@ -211,6 +212,7 @@ pub(super) async fn request_token(
 		.insert(BackendRequestTimeout(DEFAULT_TOKEN_ENDPOINT_TIMEOUT));
 
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
 		.call_reference_with_policies(req, spec.target, spec.policies)
 		.await
 		.map_err(|e| FetchError::Upstream(anyhow!("token exchange request failed: {e}")))?;

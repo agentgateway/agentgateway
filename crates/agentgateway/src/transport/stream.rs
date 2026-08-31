@@ -129,6 +129,10 @@ impl Connection for Socket {
 #[derive(Debug, Clone, Default)]
 pub struct HttpProxy;
 
+/// Deadline after which the connection pool will not reuse this connection for new requests.
+#[derive(Debug, Clone, Copy)]
+pub struct ConnectionDeadline(pub Instant);
+
 impl agent_pool::connect::Connection for Socket {
 	fn connected(&self) -> agent_pool::connect::Connected {
 		let mut con = agent_pool::connect::Connected::new();
@@ -143,6 +147,9 @@ impl agent_pool::connect::Connection for Socket {
 			Some(Alpn::H2) => con = con.negotiated_h2(),
 			Some(Alpn::Http11) => con = con.negotiated_h1(),
 			_ => {},
+		}
+		if let Some(ConnectionDeadline(deadline)) = self.ext.get::<ConnectionDeadline>() {
+			con = con.valid_until(*deadline);
 		}
 		con
 	}
@@ -211,15 +218,25 @@ impl Socket {
 		metrics: Metrics,
 		tls: TlsStream<Box<SocketType>>,
 	) -> anyhow::Result<Self> {
-		Self::from_tls_with_identity(ext, metrics, tls, true)
+		Self::from_tls_with_identity(
+			ext,
+			metrics,
+			tls,
+			Some(crate::transport::tls::PeerIdentityMode::Istio),
+		)
 	}
 
 	pub fn from_tls_with_identity(
 		mut ext: Extension,
 		metrics: Metrics,
 		tls: TlsStream<Box<SocketType>>,
-		include_src_identity: bool,
+		peer_identity: Option<crate::transport::tls::PeerIdentityMode>,
 	) -> anyhow::Result<Self> {
+		// Nested TLS termination must not replace an identity authenticated by an
+		// outer layer, such as the Istio mTLS connection carrying HBONE.
+		let existing_src_identity = ext
+			.get::<TLSConnectionInfo>()
+			.and_then(|tls| tls.src_identity.clone());
 		let info = {
 			let server_name = match &tls {
 				TlsStream::Server(s) => {
@@ -230,11 +247,9 @@ impl Socket {
 			};
 			let (_, ssl) = tls.get_ref();
 			TLSConnectionInfo {
-				src_identity: if include_src_identity {
-					crate::transport::tls::identity_from_connection(ssl)
-				} else {
-					None
-				},
+				src_identity: existing_src_identity.or_else(|| {
+					peer_identity.and_then(|mode| crate::transport::tls::identity_from_connection(ssl, mode))
+				}),
 				negotiated_alpn: ssl.alpn_protocol().map(Alpn::from),
 				server_name,
 			}
@@ -369,12 +384,13 @@ impl Socket {
 
 	pub fn apply_tcp_settings(&mut self, settings: &TCP) {
 		if let SocketType::Tcp(tcp) = &self.inner
-			&& settings.keepalives.enabled
+			&& let Some(keepalives) = &settings.keepalives
+			&& keepalives.enabled
 		{
 			let ka = socket2::TcpKeepalive::new()
-				.with_time(settings.keepalives.time)
-				.with_retries(settings.keepalives.retries)
-				.with_interval(settings.keepalives.interval);
+				.with_time(keepalives.time)
+				.with_retries(keepalives.retries)
+				.with_interval(keepalives.interval);
 			let res = socket2::SockRef::from(tcp).set_tcp_keepalive(&ka);
 			tracing::trace!("set keepalive: {:?}", res);
 		}
@@ -572,7 +588,7 @@ impl Extension {
 	pub fn new() -> Self {
 		Extension::Single(http::Extensions::new())
 	}
-	fn wrap(ext: Arc<Extension>) -> Self {
+	pub(crate) fn wrap(ext: Arc<Extension>) -> Self {
 		Extension::Wrapped(http::Extensions::new(), ext)
 	}
 
