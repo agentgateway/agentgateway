@@ -224,12 +224,12 @@ export function useUpdateConfig() {
 		mutationFn: async (updater: (config: GatewayConfig) => GatewayConfig | void) => {
 			const runtime = await requireWritableRuntime(queryClient);
 			const overrideHybridFileWrite = takeHybridFileWriteOverride();
-				if (runtime.ui.configStoreMode === 'hybrid' && !overrideHybridFileWrite) {
-					throw new Error(
-						tr(
-							'copy.fileConfigurationIsReadOnlyInHybridModeCopyThisDiffAndUpdateTheConfigurationFileDirectly'
-						)
-					);
+			if (runtime.ui.configStoreMode === 'hybrid' && !overrideHybridFileWrite) {
+				throw new Error(
+					tr(
+						'copy.fileConfigurationIsReadOnlyInHybridModeCopyThisDiffAndUpdateTheConfigurationFileDirectly'
+					)
+				);
 			}
 			const current = queryClient.getQueryData<GatewayConfig>(['config']) ?? (await getConfig());
 			const next = cloneConfig(current);
