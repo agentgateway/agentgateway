@@ -237,6 +237,7 @@ dependencies = [
  "cookie",
  "core_affinity",
  "crossbeam",
+ "dashmap",
  "flagset",
  "frozen-collections",
  "fs-err",
@@ -246,6 +247,7 @@ dependencies = [
  "google-cloud-auth",
  "hashbrown 0.17.1",
  "headers",
+ "headers-accept",
  "heck",
  "hex",
  "hickory-resolver",
@@ -264,6 +266,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "libc",
+ "mediatype",
  "multer",
  "notify",
  "notify-debouncer-full",
@@ -308,6 +311,7 @@ dependencies = [
  "serde_yaml",
  "shellexpand",
  "socket2",
+ "spiffe",
  "sqlx",
  "sse-stream",
  "stacker",
@@ -2903,6 +2907,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "headers-accept"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78beb98ea9a8f76b4a38c5ca651db6aa84701f307b63b4e0d78342ad4219c7e4"
+dependencies = [
+ "headers-core",
+ "http 1.4.2",
+ "mediatype",
+]
+
+[[package]]
 name = "headers-core"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3827,6 +3842,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mediatype"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "120fa187be19d9962f0926633453784691731018a2bf936ddb4e29101b79c4a7"
+
+[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4703,6 +4724,10 @@ dependencies = [
  "itoa",
  "parking_lot",
  "prometheus-client-derive-encode",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "protox",
 ]
 
 [[package]]
@@ -6073,6 +6098,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "spiffe"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7d0a770f9a8571eb96f9c319b3b55dd7118e3047bd3629b894882506b9e8295"
+dependencies = [
+ "arc-swap",
+ "base64ct",
+ "fastrand",
+ "futures",
+ "hyper-util",
+ "log",
+ "pkcs8",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tonic-prost",
+ "tower",
+ "tracing",
+ "url",
+ "x509-parser",
+ "zeroize",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6191,6 +6246,7 @@ dependencies = [
  "sqlx-postgres",
  "sqlx-sqlite",
  "syn",
+ "thiserror 2.0.18",
  "tokio",
  "url",
 ]

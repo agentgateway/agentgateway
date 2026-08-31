@@ -9,6 +9,7 @@ use cel::test::data::OwnedRequest;
 use cel::types::dynamic::DynamicValue;
 use serde_json::json;
 
+use crate::parser::Parser;
 use crate::{Context, Program, Value};
 
 mod optimizer {
@@ -492,8 +493,8 @@ fn deep_arithmetic_chain() {
 	let n = 250;
 
 	let add = std::iter::repeat_n("1", n).collect::<Vec<_>>().join(" + ");
-	let p = Program::compile(&add).unwrap();
-	let res = Value::resolve(&p.expression, &ctx, &resolver).unwrap();
+	let expression = Parser::default().parse(&add).unwrap();
+	let res = Value::resolve(&expression, &ctx, &resolver).unwrap();
 	assert_eq!(res.json().unwrap(), json!(n as i64));
 
 	// Left-associative `0 - 1 - 1 - ... - 1` (n ones) == -n.
@@ -501,8 +502,8 @@ fn deep_arithmetic_chain() {
 		.chain(std::iter::repeat_n("1".to_string(), n))
 		.collect::<Vec<_>>()
 		.join(" - ");
-	let p = Program::compile(&sub).unwrap();
-	let res = Value::resolve(&p.expression, &ctx, &resolver).unwrap();
+	let expression = Parser::default().parse(&sub).unwrap();
+	let res = Value::resolve(&expression, &ctx, &resolver).unwrap();
 	assert_eq!(res.json().unwrap(), json!(-(n as i64)));
 }
 

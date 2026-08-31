@@ -1,15 +1,12 @@
-#![allow(clippy::module_inception)]
-#[allow(clippy::all)]
-mod r#gen;
-
 pub mod references;
 
 pub use crate::common::ast::IdedExpr as Expression;
 
 mod macros;
-mod parse;
-#[allow(non_snake_case)]
-mod parser;
+mod pratt_parser;
+mod shared;
 
-pub use parser::*;
+pub use pratt_parser::{PrattParser, PrattParser as Parser};
 pub use references::{CallSignature, ExpressionReferences};
+pub(crate) use shared::ParserHelper;
+pub use shared::{MacroExprHelper, ParseError, ParseErrors};

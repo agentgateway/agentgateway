@@ -13,7 +13,7 @@ pub mod context;
 pub mod parser;
 
 pub use common::ast::IdedExpr;
-use common::ast::SelectExpr;
+use common::ast::{EntryExpr, Expr, SelectExpr};
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
@@ -211,16 +211,69 @@ impl Program {
 		source: &str,
 		t: T,
 	) -> Result<Program, ParseErrors> {
-		Ok(Self::compile(source)?.optimized_with(t))
+		Self::compile(source)?.optimized_with(t).check_depth()
 	}
 	pub fn compile(source: &str) -> Result<Program, ParseErrors> {
-		Ok(Self::compile_unoptimized(source)?.optimized())
+		Self::compile_unoptimized(source)?.optimized().check_depth()
 	}
 	pub fn compile_unoptimized(source: &str) -> Result<Program, ParseErrors> {
 		let parser = Parser::default();
 		parser
 			.parse(source)
-			.map(|expression| Program { expression })
+			.map(|expression| Program { expression })?
+			.check_depth()
+	}
+
+	fn check_depth(self) -> Result<Self, ParseErrors> {
+		const MAX_DEPTH: usize = 128;
+		let mut pending = vec![(&self.expression, 1)];
+		while let Some((expression, depth)) = pending.pop() {
+			if depth > MAX_DEPTH {
+				return Err(ParseErrors {
+					errors: vec![ParseError {
+						source: None,
+						pos: (1, 1),
+						msg: format!("expression nesting exceeds limit of {MAX_DEPTH}"),
+						expr_id: expression.id,
+						source_info: None,
+					}],
+				});
+			}
+			let next_depth = depth + 1;
+			match &expression.expr {
+				Expr::Call(call) => {
+					pending.extend(call.target.iter().map(|e| (e.as_ref(), next_depth)));
+					pending.extend(call.args.iter().map(|e| (e, next_depth)));
+				},
+				Expr::Comprehension(c) => pending.extend([
+					(&c.iter_range, next_depth),
+					(&c.accu_init, next_depth),
+					(&c.loop_cond, next_depth),
+					(&c.loop_step, next_depth),
+					(&c.result, next_depth),
+				]),
+				Expr::List(list) => pending.extend(list.elements.iter().map(|e| (e, next_depth))),
+				Expr::Map(map) => {
+					for entry in &map.entries {
+						if let EntryExpr::MapEntry(entry) = &entry.expr {
+							pending.push((&entry.key, next_depth));
+							pending.push((&entry.value, next_depth));
+						}
+					}
+				},
+				Expr::Select(select) => pending.push((&select.operand, next_depth)),
+				Expr::Struct(s) => {
+					for entry in &s.entries {
+						if let EntryExpr::StructField(entry) = &entry.expr {
+							pending.push((&entry.value, next_depth));
+						}
+					}
+				},
+				Expr::Optimized { original, .. } => pending.push((original, next_depth)),
+				Expr::Unspecified | Expr::Ident(_) | Expr::Literal(_) | Expr::Inline(_) => {},
+			}
+		}
+		Ok(self)
 	}
 
 	fn optimized(self) -> Program {
@@ -333,6 +386,12 @@ mod tests {
 	#[test]
 	fn parse() {
 		Program::compile("1 + 1").unwrap();
+	}
+
+	#[test]
+	fn rejects_deep_expression() {
+		let expression = "1".to_string() + &"+1-1".repeat(128);
+		assert!(Program::compile(&expression).is_err());
 	}
 
 	#[test]
