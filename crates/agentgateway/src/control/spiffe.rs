@@ -335,6 +335,7 @@ fn svid_identity(
 #[cfg(all(test, target_family = "unix"))]
 mod tests {
 	use std::sync::atomic::{AtomicU32, Ordering};
+
 	use futures::StreamExt;
 	use protos::spiffe_workload_api::spiffe_workload_api_server::{
 		SpiffeWorkloadApi, SpiffeWorkloadApiServer,
