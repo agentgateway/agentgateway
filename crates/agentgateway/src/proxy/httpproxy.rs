@@ -613,19 +613,6 @@ where
 	}
 }
 
-/// The message to record in `log.error` for a failed proxy attempt, or `None`
-/// if `e` doesn't represent a gateway-side failure. A raw upstream HTTP
-/// response the MCP layer is passing through unmodified (`mcp::Error::UpstreamError`)
-/// is not a gateway fault: the gateway did its job successfully, the upstream
-/// just responded with an error.
-fn gateway_error_message(e: &ProxyResponse) -> Option<String> {
-	match e {
-		ProxyResponse::Error(ProxyError::MCP(mcp::Error::UpstreamError(_))) => None,
-		ProxyResponse::Error(e) => Some(e.to_string()),
-		ProxyResponse::DirectResponse(_) => None,
-	}
-}
-
 impl HTTPProxy {
 	pub async fn proxy(&self, connection: Arc<Extension>, mut req: Request) -> Response {
 		let start = agent_core::Timestamp::now();
@@ -665,7 +652,13 @@ impl HTTPProxy {
 			.map_err(|e| e.0);
 
 		log.with(|l| {
-			l.error = ret.as_ref().err().and_then(gateway_error_message);
+			l.error = ret.as_ref().err().and_then(|e| {
+				if let ProxyResponse::Error(e) = e {
+					Some(e.to_string())
+				} else {
+					None
+				}
+			})
 		});
 		let reason = match &ret {
 			Ok(_) => ProxyResponseReason::Upstream,
@@ -3268,7 +3261,7 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		apply_auto_hostname, apply_llm_request_policies, gateway_error_message, hop_by_hop_headers,
+		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
 		resolved_workload_target_hostname, select_service_target_port,
 	};
 	use crate::http::filters::AutoHostname;
@@ -3277,39 +3270,12 @@ mod tests {
 		ResponseGuardKind,
 	};
 	use crate::proxy::request_builder::RequestBuilder;
-	use crate::proxy::{ProxyError, ProxyResponse};
 	use crate::store::LLMRequestPolicies;
 	use crate::test_helpers::proxymock;
 	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
 	use crate::{http, llm};
-
-	#[test]
-	fn gateway_error_message_excludes_mcp_upstream_passthrough() {
-		let upstream_resp = crate::http::SendDirectResponse(
-			::http::Response::builder()
-				.status(500)
-				.body(bytes::Bytes::new())
-				.unwrap(),
-		);
-		let err = ProxyResponse::Error(ProxyError::MCP(crate::mcp::Error::UpstreamError(Box::new(
-			upstream_resp,
-		))));
-
-		// A raw upstream response the MCP layer is just passing through is not a
-		// gateway-side failure, so it must not be recorded as one.
-		assert_eq!(gateway_error_message(&err), None);
-	}
-
-	#[test]
-	fn gateway_error_message_reports_genuine_gateway_faults() {
-		let err = ProxyResponse::Error(ProxyError::RouteNotFound);
-		assert_eq!(
-			gateway_error_message(&err),
-			Some(ProxyError::RouteNotFound.to_string())
-		);
-	}
 
 	#[test]
 	fn configured_request_headers_are_marked_sensitive_at_ingress() {

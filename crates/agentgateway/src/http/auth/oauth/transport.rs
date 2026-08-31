@@ -243,9 +243,7 @@ fn classify_token_endpoint_error(status: StatusCode, body: String) -> FetchError
 			source: detailed,
 		}
 	} else {
-		// 401/403 are expected client-auth rejections and stay at debug; a 5xx from
-		// the authorization server is a real backend failure and should be visible
-		// by default.
+		// Only authorization server failures warrant a warning.
 		if status.is_server_error() {
 			warn!(%status, error = %detailed, "oauth token exchange returned non-success status");
 		} else {

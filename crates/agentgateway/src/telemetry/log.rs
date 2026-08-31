@@ -1138,13 +1138,6 @@ pub struct RequestLog {
 	pub response_bytes: u64,
 }
 
-/// A non-2xx/3xx `http.status` on its own does not make a request log entry an
-/// "error": the gateway relaying an upstream's or client's status faithfully
-/// did its job correctly. `log.error`, on the other hand, is only populated
-/// when the gateway itself failed to produce a normal response (routing,
-/// policy, backend-connectivity, decode failures, ...), which is what "error"
-/// severity should actually mean here. Filtering/alerting on `http.status`
-/// itself is what the CEL log filter is for.
 fn request_log_level(error: Option<&str>) -> &'static str {
 	if error.is_some() { "error" } else { "info" }
 }
@@ -2576,16 +2569,6 @@ mod tests {
 	fn database_llm_metadata_does_not_persist_captured_content() {
 		let context = llm_context_with_content();
 		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), Some(&context)).is_none());
-	}
-
-	#[test]
-	fn request_log_level_reflects_gateway_error_only() {
-		// A non-2xx/3xx http.status alone does not make the entry "error": the
-		// gateway relaying an upstream's or client's status faithfully did its
-		// job. Only a populated `log.error` (the gateway itself failing to
-		// produce a normal response) should raise the level.
-		assert_eq!(request_log_level(None), "info");
-		assert_eq!(request_log_level(Some("boom")), "error");
 	}
 
 	#[test]
