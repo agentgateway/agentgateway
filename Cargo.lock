@@ -281,7 +281,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "libc",
- "mediatype 0.23.0",
+ "mediatype",
  "mimalloc",
  "multer",
  "notify",
@@ -3233,7 +3233,7 @@ checksum = "78beb98ea9a8f76b4a38c5ca651db6aa84701f307b63b4e0d78342ad4219c7e4"
 dependencies = [
  "headers-core",
  "http 1.5.0",
- "mediatype 0.21.0",
+ "mediatype",
 ]
 
 [[package]]
@@ -4301,12 +4301,6 @@ name = "mediatype"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "120fa187be19d9962f0926633453784691731018a2bf936ddb4e29101b79c4a7"
-
-[[package]]
-name = "mediatype"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0695a693e38d35838dd34bc3ab19911395f6837ccf55c7271189cfb12cb8b57f"
 
 [[package]]
 name = "memchr"
