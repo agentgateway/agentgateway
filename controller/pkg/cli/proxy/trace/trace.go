@@ -53,6 +53,7 @@ var (
 )
 
 type traceEnvelope struct {
+	RequestID  uint64     `json:"requestId"`
 	EventStart *uint64    `json:"eventStart"`
 	EventEnd   uint64     `json:"eventEnd"`
 	Severity   string     `json:"severity"`
@@ -62,6 +63,7 @@ type traceEnvelope struct {
 
 type traceEvent struct {
 	Type            string            `json:"type"`
+	ID              uint64            `json:"id,omitempty"`
 	Message         string            `json:"message,omitempty"`
 	Expr            string            `json:"expr,omitempty"`
 	RequestState    json.RawMessage   `json:"requestState,omitempty"`
@@ -153,6 +155,10 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 		}
 		return runTUI(cmd, target, body, nil, 0)
 	}
+	follow := cmd.Flags().Changed("follow")
+	if follow {
+		writeFollowWarning(cmd, flags.followDuration)
+	}
 
 	var (
 		target *traceTarget
@@ -173,7 +179,7 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 	}
 	defer closeAdmin()
 
-	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression)
+	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression, follow, flags.followDuration)
 	if err != nil {
 		return err
 	}
@@ -183,6 +189,14 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 		return runRaw(cmd, target, traceResp.Body, requestArgs, flags.port)
 	}
 	return runTUI(cmd, target, traceResp.Body, requestArgs, flags.port)
+}
+
+func writeFollowWarning(cmd *cobra.Command, maxDuration time.Duration) {
+	fmt.Fprintf(
+		cmd.ErrOrStderr(),
+		"Warning: --follow continuously traces matching requests and may impact gateway performance; tracing will stop after %s.\n",
+		maxDuration,
+	)
 }
 
 type traceTarget struct {
@@ -251,7 +265,7 @@ func traceAdminAddress(target *traceTarget, adminPort int) (string, func(), erro
 	return adminForwarder.Address(), adminForwarder.Close, nil
 }
 
-func traceStreamURL(adminAddress, expression string) string {
+func traceStreamURL(adminAddress, expression string, follow bool, maxDuration time.Duration) string {
 	u := url.URL{
 		Scheme: "http",
 		Host:   adminAddress,
@@ -262,11 +276,16 @@ func traceStreamURL(adminAddress, expression string) string {
 		q.Set("expression", expression)
 		u.RawQuery = q.Encode()
 	}
+	if follow {
+		q := u.Query()
+		q.Set("follow", maxDuration.String())
+		u.RawQuery = q.Encode()
+	}
 	return u.String()
 }
 
-func openTraceStream(ctx context.Context, adminAddress, expression string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression), nil)
+func openTraceStream(ctx context.Context, adminAddress, expression string, follow bool, maxDuration time.Duration) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression, follow, maxDuration), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct trace request: %w", err)
 	}
@@ -303,7 +322,7 @@ func runRaw(cmd *cobra.Command, target *traceTarget, body io.ReadCloser, request
 
 	printErrCh := make(chan error, 1)
 	go func() {
-		printErrCh <- consumeTrace(body, func(raw string, _ traceEnvelope) error {
+		printErrCh <- consumeTrace(body, false, func(raw string, _ traceEnvelope) error {
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), raw)
 			return err
 		})
@@ -524,16 +543,23 @@ func curlConnectTo(localAddress string, requestURL *url.URL) (string, error) {
 	return fmt.Sprintf("%s:%s:%s:%s", requestHost, requestPort, localHost, localPort), nil
 }
 
-func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelope) error) error {
+func consumeTrace(body io.Reader, readErrorsAsEvents bool, onEvent func(raw string, envelope traceEnvelope) error) error {
 	reader := bufio.NewReader(body)
 
 	var dataLines []string
+	emitted := false
+	var callbackErr error
 	emit := func(raw string) error {
 		var envelope traceEnvelope
 		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
 			return fmt.Errorf("failed to decode trace event: %w", err)
 		}
-		return onEvent(raw, envelope)
+		if err := onEvent(raw, envelope); err != nil {
+			callbackErr = err
+			return err
+		}
+		emitted = true
+		return nil
 	}
 	flush := func() error {
 		if len(dataLines) == 0 {
@@ -546,26 +572,52 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 
 	for {
 		line, err := reader.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			return fmt.Errorf("failed to read trace stream: %w", err)
-		}
 		if line != "" {
 			line = strings.TrimSuffix(line, "\n")
 			line = strings.TrimSuffix(line, "\r")
 		}
+		var processErr error
 		if line == "" {
-			if err := flush(); err != nil {
-				return err
-			}
+			processErr = flush()
 		} else if after, ok := strings.CutPrefix(line, "data: "); ok {
 			dataLines = append(dataLines, after)
 		} else if strings.HasPrefix(strings.TrimSpace(line), "{") {
-			if err := flush(); err != nil {
-				return err
+			processErr = flush()
+			if processErr == nil {
+				processErr = emit(strings.TrimSpace(line))
 			}
-			if err := emit(strings.TrimSpace(line)); err != nil {
-				return err
+		}
+
+		if err != nil && !errors.Is(err, io.EOF) {
+			if processErr == nil {
+				processErr = flush()
 			}
+			if callbackErr != nil {
+				return callbackErr
+			}
+			if !emitted || !readErrorsAsEvents {
+				return fmt.Errorf("failed to read trace stream: %w", err)
+			}
+
+			message := fmt.Sprintf("failed to read trace stream: %v", err)
+			if processErr != nil {
+				message += fmt.Sprintf("; failed to process final trace event: %v", processErr)
+			}
+			envelope := traceEnvelope{
+				Severity: "error",
+				Message: traceEvent{
+					Type:    "message",
+					Message: message,
+				},
+			}
+			raw, marshalErr := json.Marshal(envelope)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			return onEvent(string(raw), envelope)
+		}
+		if processErr != nil {
+			return processErr
 		}
 
 		if errors.Is(err, io.EOF) {
@@ -576,23 +628,28 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 }
 
 func streamTraceRows(body io.Reader, onRow func(traceRow)) error {
-	var currentSnapshot json.RawMessage
-	var previousSnapshot json.RawMessage
+	type snapshotState struct {
+		current  json.RawMessage
+		previous json.RawMessage
+	}
+	states := map[uint64]snapshotState{}
 
-	return consumeTrace(body, func(raw string, envelope traceEnvelope) error {
+	return consumeTrace(body, true, func(raw string, envelope traceEnvelope) error {
+		state := states[envelope.RequestID]
 		row := traceRow{
 			RawJSON:          raw,
 			Envelope:         envelope,
 			Summary:          summarizeEnvelope(envelope),
-			CurrentSnapshot:  currentSnapshot,
-			PreviousSnapshot: previousSnapshot,
+			CurrentSnapshot:  state.current,
+			PreviousSnapshot: state.previous,
 		}
 
 		if snapshot := eventSnapshot(envelope.Message); len(snapshot) > 0 {
 			row.CurrentSnapshot = cloneRaw(snapshot)
-			row.PreviousSnapshot = cloneRaw(currentSnapshot)
-			previousSnapshot = cloneRaw(currentSnapshot)
-			currentSnapshot = cloneRaw(snapshot)
+			row.PreviousSnapshot = cloneRaw(state.current)
+			state.previous = cloneRaw(state.current)
+			state.current = cloneRaw(snapshot)
+			states[envelope.RequestID] = state
 		}
 
 		onRow(row)
@@ -664,6 +721,8 @@ func displayEventType(eventType string) string {
 		return "Request Done"
 	case "bodySnapshot":
 		return "Body Snapshot"
+	case "bodySnapshotStart":
+		return "Body Snapshot"
 	case "llmRouteResolved":
 		return "LLM Route"
 	case "llmRequestDetected":
@@ -729,6 +788,8 @@ func summarizeEvent(event traceEvent) string {
 		return truncate(strings.Join(parts, " "), 120)
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
+	case "bodySnapshotStart":
+		return fmt.Sprintf("%s body snapshot (pending)", event.Stage)
 	case "llmRouteResolved":
 		return strings.TrimSpace(fmt.Sprintf(
 			"%s %s",
@@ -1340,7 +1401,7 @@ func (m *traceModel) root() tview.Primitive {
 }
 
 func (m *traceModel) setHeader() {
-	headers := []string{"#", "Type", "Summary"}
+	headers := []string{"#", "Request", "Type", "Summary"}
 	for col, header := range headers {
 		m.table.SetCell(
 			0,
@@ -1355,13 +1416,45 @@ func (m *traceModel) setHeader() {
 }
 
 func (m *traceModel) addRow(row traceRow) {
+	if row.Envelope.Message.Type == "bodySnapshot" {
+		for rowIndex := range m.rows {
+			pending := &m.rows[rowIndex]
+			if pending.Envelope.Message.Type == "bodySnapshotStart" &&
+				pending.Envelope.Message.ID == row.Envelope.Message.ID {
+				row.CurrentSnapshot = pending.CurrentSnapshot
+				row.PreviousSnapshot = pending.PreviousSnapshot
+				m.rows[rowIndex] = row
+				m.renderRow(rowIndex)
+				selectedRow, _ := m.table.GetSelection()
+				if selectedRow == rowIndex+m.headerRows {
+					m.renderDetails(selectedRow)
+				}
+				return
+			}
+		}
+	}
+
 	rowIndex := len(m.rows)
 	m.rows = append(m.rows, row)
+	m.renderRow(rowIndex)
 
+	tableRow := rowIndex + m.headerRows
+	selectedRow, _ := m.table.GetSelection()
+	shouldFollow := selectedRow == 0 || selectedRow == tableRow-1
+	if shouldFollow {
+		m.table.Select(tableRow, 0)
+	}
+	m.table.ScrollToEnd()
+	m.setStatus(fmt.Sprintf("%d events", len(m.rows)))
+}
+
+func (m *traceModel) renderRow(rowIndex int) {
+	row := m.rows[rowIndex]
 	tableRow := rowIndex + m.headerRows
 	textColor := traceSeverityColor(row.Envelope.Severity)
 	for col, text := range []string{
 		fmt.Sprintf("%d", rowIndex+1),
+		fmt.Sprintf("%d", row.Envelope.RequestID),
 		displayEventType(row.Envelope.Message.Type),
 		row.Summary,
 	} {
@@ -1372,14 +1465,6 @@ func (m *traceModel) addRow(row traceRow) {
 			SetSelectedStyle(tcell.StyleDefault.Reverse(true))
 		m.table.SetCell(tableRow, col, cell)
 	}
-
-	selectedRow, _ := m.table.GetSelection()
-	shouldFollow := selectedRow == 0 || selectedRow == tableRow-1
-	if shouldFollow {
-		m.table.Select(tableRow, 0)
-	}
-	m.table.ScrollToEnd()
-	m.setStatus(fmt.Sprintf("%d events", len(m.rows)))
 }
 
 func (m *traceModel) setStatus(text string) {

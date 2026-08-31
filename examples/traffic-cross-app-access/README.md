@@ -65,7 +65,16 @@ authenticates the user:
   endpoints are configured as backend references rather than raw URLs.
 - `resources` (optional) — protected resource/API identifiers (RFC 8707). Configure these
   explicitly when the authorization server expects them.
-- `scopes` (optional) — scopes to request; the authorization server may grant a subset.
+- `scopes` (optional) — scopes requested when obtaining the ID-JAG. By default, the same scopes
+  are requested when exchanging the ID-JAG for an access token.
+- `accessTokenScopes` (optional) — overrides the scopes requested for the access token. Set it to
+  an empty list to omit the `scope` parameter from that exchange:
+
+  ```yaml
+  scopes: [mcp:read]
+  accessTokenScopes: []
+  ```
+
 - `cache.defaultTtl` (optional) — fallback TTL when the final token response omits `expires_in`.
   The cache is capped by the subject token's JWT `exp` when present.
 

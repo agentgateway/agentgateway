@@ -9,7 +9,6 @@ import (
 	"istio.io/istio/pilot/pkg/config/kube/crd"
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/slices"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 )
@@ -41,16 +40,12 @@ func (t *TestStatusQueue) dump() []crd.IstioKind {
 			continue
 		}
 		obj := crd.IstioKind{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       k.Kind,
-				APIVersion: k.GroupVersion().String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      k.Name,
-				Namespace: k.Namespace,
-			},
-			Spec:   nil,
-			Status: new(json.RawMessage(statusj)),
+			Kind:       k.Kind,
+			APIVersion: k.GroupVersion().String(),
+			Name:       k.Name,
+			Namespace:  k.Namespace,
+			Spec:       nil,
+			Status:     new(json.RawMessage(statusj)),
 		}
 		objs = append(objs, obj)
 	}

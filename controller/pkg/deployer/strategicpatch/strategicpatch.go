@@ -499,15 +499,11 @@ func deserializeToObject(data []byte, gvk schema.GroupVersionKind) (client.Objec
 func createPodDisruptionBudget(workload *gatewayWorkload) *policyv1.PodDisruptionBudget {
 	// Create base PDB with selector matching the workload
 	pdb := &policyv1.PodDisruptionBudget{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: wellknown.PodDisruptionBudgetGVK.GroupVersion().String(),
-			Kind:       wellknown.PodDisruptionBudgetGVK.Kind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      workload.name,
-			Namespace: workload.namespace,
-			Labels:    maps.Clone(workload.labels),
-		},
+		APIVersion: wellknown.PodDisruptionBudgetGVK.GroupVersion().String(),
+		Kind:       wellknown.PodDisruptionBudgetGVK.Kind,
+		Name:       workload.name,
+		Namespace:  workload.namespace,
+		Labels:     maps.Clone(workload.labels),
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			Selector: workload.selector,
 		},
@@ -520,15 +516,11 @@ func createPodDisruptionBudget(workload *gatewayWorkload) *policyv1.PodDisruptio
 func createHorizontalPodAutoscaler(workload *gatewayWorkload) *autoscalingv2.HorizontalPodAutoscaler {
 	// Create base HPA with scaleTargetRef pointing to the workload
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: wellknown.HorizontalPodAutoscalerGVK.GroupVersion().String(),
-			Kind:       wellknown.HorizontalPodAutoscalerGVK.Kind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      workload.name,
-			Namespace: workload.namespace,
-			Labels:    maps.Clone(workload.labels),
-		},
+		APIVersion: wellknown.HorizontalPodAutoscalerGVK.GroupVersion().String(),
+		Kind:       wellknown.HorizontalPodAutoscalerGVK.Kind,
+		Name:       workload.name,
+		Namespace:  workload.namespace,
+		Labels:     maps.Clone(workload.labels),
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 			ScaleTargetRef: workload.targetRef(),
 		},

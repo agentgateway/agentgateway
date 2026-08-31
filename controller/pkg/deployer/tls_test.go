@@ -13,7 +13,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestExtractXdsCACertificatePrefersCACrt(t *testing.T) {
@@ -44,11 +43,9 @@ func TestExtractXdsCACertificateUsesCertManagerStyleCASecret(t *testing.T) {
 
 func xdsTLSSecret(data map[string][]byte) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "xds",
-			Namespace: "default",
-		},
-		Data: data,
+		Name:      "xds",
+		Namespace: "default",
+		Data:      data,
 	}
 }
 

@@ -129,6 +129,7 @@ gen: generate-apis generate-schema format
 .PHONY: generate-schema
 generate-schema:
 	@cargo xtask schema
+	@cargo xtask metrics
 
 # Code generation for xds apis
 .PHONY: generate-apis

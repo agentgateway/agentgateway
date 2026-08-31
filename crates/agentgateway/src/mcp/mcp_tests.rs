@@ -956,14 +956,22 @@ async fn stateless_vnext_tools_list_reaches_upstream() {
 
 #[tokio::test]
 async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize() {
-	let old = mock_streamable_http_server_without_discover().await;
+	let down = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let down_addr = down.local_addr().unwrap();
+	drop(down);
+	let old = mock_streamable_http_server_rejecting_discover().await;
 	let new = mock_modern_streamable_http_server().await;
 	let t = setup_proxy_test("{}")
 		.unwrap()
-		.with_multiplex_mcp_backend(
+		.with_multiplex_mcp_backend_failure_mode(
 			"mcp",
-			vec![("old", old.addr, false), ("new", new.addr, false)],
+			vec![
+				("down", down_addr, false),
+				("old", old.addr, false),
+				("new", new.addr, false),
+			],
 			true,
+			FailureMode::FailOpen,
 		)
 		.with_bind(simple_bind())
 		.with_route(basic_named_route(strng::new("/mcp")));
@@ -994,11 +1002,8 @@ async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize()
 		discover.headers().get("mcp-session-id").is_none(),
 		"modern discover must not create a legacy session"
 	);
-	let discover_body = discover.text().await.unwrap();
-	assert!(
-		discover_body.contains("server/discover") || discover_body.contains("method"),
-		"mixed old/new discover should surface an error that lets the client fall back, got {discover_body}"
-	);
+	let discover_body = read_response_message(discover).await;
+	assert_eq!(discover_body["error"]["code"], -32601, "{discover_body}");
 
 	let init = serde_json::json!({
 		"jsonrpc": "2.0",
@@ -1655,6 +1660,108 @@ fn mcp_json_post<'a>(
 		)
 		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
 		.json(body)
+}
+
+fn mcp_initialize_body() -> serde_json::Value {
+	serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	})
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_off_allows_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let forbidden = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(forbidden.status(), reqwest::StatusCode::FORBIDDEN);
+
+	let null_origin = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "null")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(null_origin.status(), reqwest::StatusCode::FORBIDDEN);
+
+	// Well-known GETs normally bypass the MCP service and pass directly to the
+	// upstream. DNS rebinding validation must still run before that fast path.
+	let forbidden_well_known = client
+		.get(format!("http://{io}/.well-known/oauth-protected-resource"))
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		forbidden_well_known.status(),
+		reqwest::StatusCode::FORBIDDEN
+	);
+
+	let allowed = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", format!("http://127.0.0.1:{}", io.port()))
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(allowed.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_host() {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	let body = mcp_initialize_body().to_string();
+	let req = format!(
+		"POST /mcp HTTP/1.1\r\nHost: evil.example\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	stream.write_all(req.as_bytes()).await.unwrap();
+	let mut buf = Vec::new();
+	stream.read_to_end(&mut buf).await.unwrap();
+	let text = String::from_utf8_lossy(&buf);
+	assert!(
+		text.starts_with("HTTP/1.1 403"),
+		"expected 403 for Host: evil.example, got: {text}"
+	);
 }
 
 #[tokio::test]
@@ -3219,6 +3326,7 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 			vec![],
 			crate::http::jwt::Mode::Strict,
 			crate::http::auth::AuthorizationLocation::bearer_header(),
+			false,
 		)),
 		mode: crate::types::agent::McpAuthenticationMode::Strict,
 		client_id: None,
@@ -3678,6 +3786,7 @@ async fn setup_proxy_policies_with_target(
 			legacy_sse,
 			policies,
 			target_policies,
+			false,
 		)
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));
@@ -3796,17 +3905,22 @@ async fn mock_modern_streamable_http_server() -> MockServer {
 }
 
 async fn mock_streamable_http_server_without_discover() -> MockServer {
-	mock_streamable_http_server_with_discover_versions(None).await
+	mock_streamable_http_server_with_discover_versions(None, false).await
+}
+
+async fn mock_streamable_http_server_rejecting_discover() -> MockServer {
+	mock_streamable_http_server_with_discover_versions(None, true).await
 }
 
 // Variant of `mock_modern_streamable_http_server` for tests that need custom upstream
 // `server/discover` versions.
 async fn mock_modern_streamable_http_server_with_versions(versions: &[&str]) -> MockServer {
-	mock_streamable_http_server_with_discover_versions(Some(versions)).await
+	mock_streamable_http_server_with_discover_versions(Some(versions), false).await
 }
 
 async fn mock_streamable_http_server_with_discover_versions(
 	versions: Option<&[&str]>,
+	reject_discover: bool,
 ) -> MockServer {
 	agent_core::telemetry::testing::setup_test_logging();
 	let (tx, rx) = tokio::sync::oneshot::channel();
@@ -3828,15 +3942,18 @@ async fn mock_streamable_http_server_with_discover_versions(
 				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
 				let result = match method {
 					"server/discover" => {
+						if reject_discover {
+							return Err(http::StatusCode::BAD_REQUEST);
+						}
 						let Some(versions) = versions else {
-							return axum::Json(serde_json::json!({
+							return Ok(axum::Json(serde_json::json!({
 								"jsonrpc": "2.0",
 								"id": id,
 								"error": {
 									"code": -32601,
 									"message": method
 								}
-							}));
+							})));
 						};
 						serde_json::json!({
 							"resultType": "complete",
@@ -3876,21 +3993,21 @@ async fn mock_streamable_http_server_with_discover_versions(
 						}]
 					}),
 					_ => {
-						return axum::Json(serde_json::json!({
-							"jsonrpc": "2.0",
-							"id": id,
-							"error": {
-								"code": -32601,
-								"message": method
-							}
-						}));
+						return Ok(axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {
+									"code": -32601,
+									"message": method
+								}
+						})));
 					},
 				};
-				axum::Json(serde_json::json!({
+				Ok(axum::Json(serde_json::json!({
 					"jsonrpc": "2.0",
 					"id": id,
 					"result": result
-				}))
+				})))
 			}
 		}),
 	);
@@ -5870,6 +5987,7 @@ async fn test_runtime_fanout_fail_open() {
 		merge,
 		empty_cel(),
 		FailureMode::FailOpen,
+		false,
 	);
 
 	let res = ms.next().await;
@@ -5917,6 +6035,7 @@ async fn test_runtime_fanout_fail_open_skips_jsonrpc_error_frames() {
 		merge,
 		empty_cel(),
 		FailureMode::FailOpen,
+		false,
 	);
 
 	let res = ms.next().await;
@@ -5951,6 +6070,7 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 		merge,
 		empty_cel(),
 		FailureMode::FailOpen,
+		false,
 	);
 
 	let res = ms.next().await;
@@ -6008,7 +6128,17 @@ async fn mcp_local_ratelimit() {
 				.with_arguments(serde_json::json!({"n": 3}).as_object().cloned().unwrap()),
 		)
 		.await;
-	assert!(result3.is_err(), "Third request should be rate limited");
+	let err = result3.expect_err("Third request should be rate limited");
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(
+		e.code.0, -32003,
+		"rate limit should map to RESOURCE_EXHAUSTED"
+	);
+	let data = e.data.as_ref().expect("error should carry retry data");
+	assert_eq!(data["limit"], 5);
+	assert!(data.get("retryAfterSeconds").is_some());
 }
 
 #[tokio::test]
@@ -6060,6 +6190,7 @@ async fn mcp_extauth_deny() {
 	);
 }
 
+#[allow(clippy::result_large_err)]
 async fn try_mcp_streamable_client(
 	s: SocketAddr,
 ) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
@@ -6120,11 +6251,318 @@ async fn mcp_remote_ratelimit_deny() {
 	// Client should fail to initialize due to rate limit denial
 	let result = try_mcp_streamable_client(io).await;
 	let err = result.expect_err("Client initialization should be rate limited");
-	let err_msg = err.to_string();
+	let err_msg = format!("{err:?}");
 	assert!(
-		err_msg.contains("429") && err_msg.contains("rate limit exceeded by mock"),
-		"Expected 429 rate limit from remote service, got: {err_msg}"
+		err_msg.contains("rate limit exceeded by mock"),
+		"Expected RLS denial body in the error, got: {err_msg}"
 	);
+}
+
+/// Proxy with a 1-token local rate limit: the first request consumes the budget, the
+/// second is over limit.
+async fn one_shot_ratelimited_proxy() -> (MockServer, TestBind, SocketAddr) {
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"localRateLimit": [{
+			"maxTokens": 1,
+			"tokensPerFill": 1,
+			"fillInterval": "60s",
+			"type": "requests"
+		}]
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+	(mock, t, io)
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_jsonrpc_error() {
+	// An agent whose tools/list hits the limit gets a JSON-RPC error its model can act
+	// on: HTTP 200, RESOURCE_EXHAUSTED, retry info in data, x-ratelimit headers.
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert_eq!(
+		resp.headers().get("content-type").unwrap(),
+		"application/json"
+	);
+	assert_eq!(resp.headers().get("x-ratelimit-limit").unwrap(), "1");
+	assert!(resp.headers().get("x-ratelimit-reset").is_some());
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 2);
+	assert_eq!(body["error"]["code"], -32003);
+	assert_eq!(body["error"]["data"]["limit"], 1);
+	assert_eq!(body["error"]["data"]["remaining"], 0);
+	assert!(body["error"]["data"].get("retryAfterSeconds").is_some());
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_notification_plain_429() {
+	// A notification has no id to answer, so JSON-RPC can't carry the rejection; the
+	// client gets the plain 429.
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+	assert!(resp.headers().get("x-ratelimit-reset").is_some());
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_bad_body_plain_429() {
+	// A body we can't parse has no id either; rate limiting wins over a 400.
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = client
+		.post(&url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.body("{not json")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_get_plain_429() {
+	// SSE stream opens are not JSON-RPC requests; they keep the plain 429.
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = client
+		.get(&url)
+		.header(http::header::ACCEPT.as_str(), "text/event-stream")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::TOO_MANY_REQUESTS);
+	assert!(resp.headers().get("x-ratelimit-reset").is_some());
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_initialize_no_session() {
+	// A rate-limited initialize is answered with the JSON-RPC error and must not
+	// allocate a session.
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert!(resp.headers().get("mcp-session-id").is_none());
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 1);
+	assert_eq!(body["error"]["code"], -32003);
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_local_deny_skips_remote() {
+	// A request already denied by the local limiter must not burn shared RLS quota.
+	static RLS_CALLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+	struct CountingRls;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for CountingRls {
+		async fn should_rate_limit(
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			RLS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
+			crate::test_helpers::ratelimitmock::ok_response()
+		}
+	}
+
+	let ratelimit = RateLimitMock::new(|| CountingRls).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"localRateLimit": [{
+			"maxTokens": 1,
+			"tokensPerFill": 1,
+			"fillInterval": "60s",
+			"type": "requests"
+		}],
+		"remoteRateLimit": {
+			"host": ratelimit.address.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+	assert!(
+		RLS_CALLED.swap(false, std::sync::atomic::Ordering::SeqCst),
+		"first (allowed) request should consult the RLS"
+	);
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["error"]["code"], -32003);
+	assert!(
+		!RLS_CALLED.load(std::sync::atomic::Ordering::SeqCst),
+		"locally-denied request must not consume RLS quota"
+	);
+}
+
+#[tokio::test]
+async fn mcp_remote_ratelimit_retry_data() {
+	// The RLS reports how long until quota resets; that reaches the model as
+	// retryAfterSeconds, and operator-configured RLS headers still land on the response.
+	struct DenyWithStatus;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for DenyWithStatus {
+		async fn should_rate_limit(
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			use crate::http::remoteratelimit::proto;
+			Ok(proto::RateLimitResponse {
+				overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+				statuses: vec![proto::rate_limit_response::DescriptorStatus {
+					code: proto::rate_limit_response::Code::OverLimit as i32,
+					current_limit: Some(proto::rate_limit_response::RateLimit {
+						name: String::new(),
+						requests_per_unit: 5,
+						unit: proto::rate_limit_response::rate_limit::Unit::Minute as i32,
+					}),
+					limit_remaining: 0,
+					duration_until_reset: Some(prost_types::Duration {
+						seconds: 7,
+						nanos: 0,
+					}),
+					quota: None,
+				}],
+				response_headers_to_add: vec![proto::HeaderValue {
+					key: "x-mock-rls".to_string(),
+					value: "hit".to_string(),
+					raw_value: vec![],
+				}],
+				request_headers_to_add: vec![],
+				raw_body: vec![],
+				dynamic_metadata: None,
+				quota: None,
+			})
+		}
+	}
+
+	let ratelimit = RateLimitMock::new(|| DenyWithStatus).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"remoteRateLimit": {
+			"host": ratelimit.address.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({"jsonrpc": "2.0", "id": 3, "method": "tools/list"}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert_eq!(resp.headers().get("x-mock-rls").unwrap(), "hit");
+	assert_eq!(resp.headers().get("x-ratelimit-reset").unwrap(), "7");
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 3);
+	assert_eq!(body["error"]["code"], -32003);
+	assert_eq!(body["error"]["data"]["limit"], 5);
+	assert_eq!(body["error"]["data"]["retryAfterSeconds"], 7);
 }
 
 // =========================== mcpGuardrails test helpers ============================

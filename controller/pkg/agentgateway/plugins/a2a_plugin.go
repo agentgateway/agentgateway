@@ -44,11 +44,9 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 	gatewayTargets := func() []types.NamespacedName {
 		if computedGatewayTargets == nil {
 			computedGatewayTargets = new(references.LookupGatewaysForBackend(krtctx, utils.TypedNamespacedName{
-				Kind: wellknown.ServiceKind,
-				NamespacedName: types.NamespacedName{
-					Namespace: svc.Namespace,
-					Name:      svc.Name,
-				},
+				Kind:      wellknown.ServiceKind,
+				Namespace: svc.Namespace,
+				Name:      svc.Name,
 			}).UnsortedList())
 		}
 		return *computedGatewayTargets

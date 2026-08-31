@@ -20,7 +20,7 @@ use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
-use opentelemetry::trace::SpanKind;
+use opentelemetry::trace::{SpanKind, Status};
 use opentelemetry::{Key, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
@@ -36,12 +36,12 @@ use value_bag::visit::Visit;
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
-use crate::llm::cost::{CostLookupStatus, ModelCatalog};
+use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
-	RouteIdentifier,
+	OutboundCallLabels, RouteIdentifier,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, trc};
@@ -67,20 +67,64 @@ struct DatabaseAttributes {
 
 fn database_llm_payload(
 	mode: Option<crate::types::frontend::DatabaseLlmMode>,
+	input_messages: Option<&[agent_llm::types::NormalizedMessage]>,
 	info: Option<&LLMContext>,
 ) -> Option<log_store::StoredRequestLogPayload> {
 	if mode == Some(crate::types::frontend::DatabaseLlmMode::Metadata) {
 		return None;
 	}
-	let info = info?;
-	let request_prompt_json = info
-		.prompt
-		.as_ref()
-		.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
-	let response_completion_json = info
-		.completion
-		.as_ref()
-		.and_then(|completion| serde_json::to_value(completion).ok());
+	let request_prompt_json = if mode == Some(crate::types::frontend::DatabaseLlmMode::Full) {
+		input_messages
+			.and_then(|messages| serde_json::to_value(messages).ok())
+			.or_else(|| {
+				info?
+					.prompt
+					.as_ref()
+					.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok())
+			})
+	} else {
+		info?
+			.prompt
+			.as_ref()
+			.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok())
+	};
+	let response_completion_json = if mode == Some(crate::types::frontend::DatabaseLlmMode::Full) {
+		info.and_then(|info| {
+			// Response capture exposes visible text and structured tool calls separately. Recombine them
+			// into the same provider-neutral message shape used for the stored request.
+			let mut parts = info
+				.completion
+				.iter()
+				.flatten()
+				// Tool-call-only responses may initialize completion capture with an empty string. Omitting
+				// it prevents a phantom empty assistant message in the conversation view.
+				.filter(|completion| !completion.trim().is_empty())
+				.map(|completion| agent_llm::types::NormalizedMessagePart::text(completion.as_str().into()))
+				.collect::<Vec<_>>();
+			parts.extend(info.tool_calls.iter().flatten().map(|call| {
+				agent_llm::types::NormalizedMessagePart::tool_call(
+					call.id.clone(),
+					call.name.clone(),
+					call.arguments.clone(),
+				)
+			}));
+			if parts.is_empty() {
+				return None;
+			}
+			serde_json::to_value([agent_llm::types::NormalizedMessage {
+				role: "assistant".into(),
+				parts,
+			}])
+			.ok()
+		})
+	} else {
+		info.and_then(|info| {
+			info
+				.completion
+				.as_ref()
+				.and_then(|completion| serde_json::to_value(completion).ok())
+		})
+	};
 	(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
 		log_store::StoredRequestLogPayload {
 			request_prompt_json,
@@ -221,6 +265,16 @@ impl<T> AsyncLog<T> {
 	}
 }
 
+impl<T: Default> AsyncLog<T> {
+	// Like non_atomic_mutate, but initializes with T::default() when the cell is empty
+	// instead of skipping the mutation.
+	pub fn mutate_or_default(&self, f: impl FnOnce(&mut T)) {
+		let mut cur = self.0.take().unwrap_or_default();
+		f(&mut cur);
+		self.0.store(Some(cur));
+	}
+}
+
 impl<T> AsyncLog<T> {
 	pub fn store(&self, v: Option<T>) {
 		self.0.store(v)
@@ -247,6 +301,9 @@ impl<T: Debug> Debug for AsyncLog<T> {
 		f.debug_struct("AsyncLog").finish_non_exhaustive()
 	}
 }
+
+/// Per-request accumulator of prompt-guard guardrail interventions.
+pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 
 #[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
@@ -642,6 +699,7 @@ impl CelLogging {
 				inputs.resp,
 				inputs.llm_response,
 				inputs.mcp,
+				inputs.guardrails,
 				Some(inputs.end_time),
 				inputs.proxy,
 			)
@@ -663,6 +721,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub resp: Option<&'a cel::ResponseSnapshot>,
 	pub llm_response: Option<&'a LLMContext>,
 	pub mcp: Option<&'a MCPInfo>,
+	pub guardrails: Option<&'a Vec<cel::GuardrailInfo>>,
 	pub end_time: &'a cel::RequestTime,
 	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
@@ -919,6 +978,7 @@ impl RequestLog {
 		RequestLog {
 			cel,
 			database_llm: Default::default(),
+			input_messages: Default::default(),
 			metrics,
 			model_catalog,
 			start,
@@ -959,9 +1019,13 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
+			guardrails: Default::default(),
+			budgets: None,
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
+			ate_actor_id: None,
+			ate_atespace: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -971,8 +1035,15 @@ impl RequestLog {
 	}
 
 	pub fn span_writer(&self) -> SpanWriter {
-		let inner = self.span_writer_inner();
+		let inner = self.span_writer_inner().map(Arc::new);
 		SpanWriter { inner }
+	}
+	pub fn insert_span_writer(&self, extensions: &mut ::http::Extensions) {
+		if let Some(inner) = self.span_writer_inner() {
+			extensions.insert(SpanWriter {
+				inner: Some(Arc::new(inner)),
+			});
+		}
 	}
 	fn span_writer_inner(&self) -> Option<SpanWriterInner> {
 		// Early return if there is no tracer enabled at all
@@ -1039,6 +1110,7 @@ impl RequestLog {
 			resp: response_snapshot,
 			llm_response,
 			mcp: mcp.filter(|m| !m.is_empty()),
+			guardrails: None,
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
 			proxy: Some(&proxy_timing),
@@ -1057,6 +1129,8 @@ pub struct RequestLog {
 	/// dedicated payload table. `None` preserves the legacy behavior of persisting content captured
 	/// by CEL expressions. This is independent from CEL attribute capture.
 	pub database_llm: Option<crate::types::frontend::DatabaseLlmMode>,
+	/// Provider-neutral input messages retained for full database payload logging.
+	pub input_messages: Option<Arc<Vec<agent_llm::types::NormalizedMessage>>>,
 	pub metrics: Arc<Metrics>,
 	pub model_catalog: Arc<ModelCatalog>,
 	pub start: Timestamp,
@@ -1116,11 +1190,16 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
+	pub guardrails: GuardrailLog,
+	pub budgets: Option<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
 	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
+
+	pub ate_actor_id: Option<String>,
+	pub ate_atespace: Option<String>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1197,8 +1276,12 @@ impl Drop for DropOnLog {
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 			}
+			if let (Some(budgets), Some(llm_response)) = (log.budgets.take(), llm_response.as_ref()) {
+				budgets.settle(llm_response);
+			}
 
 			let mcp = log.mcp_status.take();
+			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so
@@ -1218,6 +1301,7 @@ impl Drop for DropOnLog {
 				resp: log.response_snapshot.as_ref(),
 				llm_response: llm_response.as_ref(),
 				mcp: mcp.as_ref().filter(|m| !m.is_empty()),
+				guardrails: guardrails.as_ref(),
 				end_time: &cel_end_time,
 				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),
@@ -1389,6 +1473,10 @@ impl Drop for DropOnLog {
 				}
 			});
 
+			let guardrails_json = guardrails
+				.as_ref()
+				.map(|g| serde_json::Value::Array(g.iter().map(cel::GuardrailInfo::minimal).collect()));
+
 			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 			let mut kv = vec![
 				(
@@ -1414,6 +1502,15 @@ impl Drop for DropOnLog {
 				("route", route_identifier.route.as_deref().map(display)),
 				("endpoint", log.endpoint.display()),
 				("src.addr", Some(display(&log.tcp_info.peer_addr))),
+				(
+					"src.identity",
+					log
+						.tls_info
+						.as_ref()
+						.and_then(|tls| tls.src_identity.as_ref())
+						.and_then(|tls| tls.identity.as_ref())
+						.map(display),
+				),
 				("http.method", log.method.display()),
 				("http.host", log.host.display()),
 				("http.path", log.path.display()),
@@ -1466,6 +1563,14 @@ impl Drop for DropOnLog {
 						.map(display),
 				),
 				(
+					"a2a.context.id",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.context_id.as_ref())
+						.map(display),
+				),
+				(
 					"mcp.method.name",
 					mcp
 						.as_ref()
@@ -1502,6 +1607,8 @@ impl Drop for DropOnLog {
 					"inferencepool.selected_endpoint",
 					log.inference_pool.display(),
 				),
+				("ate.actor.id", log.ate_actor_id.display()),
+				("ate.atespace", log.ate_atespace.display()),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",
@@ -1656,6 +1763,11 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.params.seed)
 						.map(Into::into),
 				),
+				// Not part of official semconv
+				(
+					"agw.ai.guardrails",
+					guardrails_json.as_ref().map(json_value_to_value_bag),
+				),
 				("retry.attempt", log.retry_attempt.display()),
 				("error", log.error.quoted()),
 				("reason", reason.display()),
@@ -1667,6 +1779,14 @@ impl Drop for DropOnLog {
 				extra_kv_capacity += fields.add.len();
 			}
 			kv.reserve_exact(extra_kv_capacity);
+			let protocol_span_name = mcp
+				.as_ref()
+				.and_then(|mcp| mcp.method_name.clone())
+				.or_else(|| {
+					let request = log.request_snapshot.as_ref()?;
+					crate::http::is_grpc_content_type(&request.headers)
+						.then(|| request.path.path().trim_start_matches('/').to_owned())
+				});
 
 			if enable_trace && let Some(t) = &log.tracer {
 				let base_len = kv.len();
@@ -1677,7 +1797,13 @@ impl Drop for DropOnLog {
 							.map(|(key, value)| (*key, Some(value.as_str().into()))),
 					);
 				}
-				t.send(&log, &end_time, &cel_exec, kv.as_slice());
+				t.send(
+					&log,
+					&end_time,
+					&cel_exec,
+					protocol_span_name.as_deref(),
+					kv.as_slice(),
+				);
 				kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
@@ -1781,7 +1907,11 @@ impl Drop for DropOnLog {
 						}
 					}
 					let attributes = database_attributes(&db_kv);
-					let payload = database_llm_payload(log.database_llm, llm_response.as_ref());
+					let payload = database_llm_payload(
+						log.database_llm,
+						log.input_messages.as_deref().map(Vec::as_slice),
+						llm_response.as_ref(),
+					);
 					let has_payload = payload.is_some();
 					let total_tokens = llm_response.as_ref().and_then(|llm| {
 						llm
@@ -2163,13 +2293,37 @@ impl OtelLogSink for OtelAccessLogger {
 // SpanWriter is a construct that can start otel spans
 #[derive(Debug, Default, Clone)]
 pub struct SpanWriter {
-	inner: Option<SpanWriterInner>,
+	inner: Option<Arc<SpanWriterInner>>,
+}
+
+pub fn copy_span_writer(source: &::http::Extensions, target: &mut ::http::Extensions) {
+	if let Some(writer) = source.get::<SpanWriter>() {
+		target.insert(writer.clone());
+	}
 }
 
 impl SpanWriter {
+	pub(crate) fn is_enabled(&self) -> bool {
+		self.inner.is_some()
+	}
+
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
 		match &self.inner {
 			Some(i) => i.start(name),
+			None => SpanWriteOnDrop::default(),
+		}
+	}
+
+	pub fn start_outbound(&self, labels: OutboundCallLabels) -> SpanWriteOnDrop {
+		match &self.inner {
+			Some(i) => i.start_with_details(
+				labels.subtype.as_str(),
+				SpanKind::Client,
+				vec![
+					KeyValue::new("agentgateway.outbound.kind", labels.kind.as_str()),
+					KeyValue::new("agentgateway.outbound.subtype", labels.subtype.as_str()),
+				],
+			),
 			None => SpanWriteOnDrop::default(),
 		}
 	}
@@ -2183,12 +2337,24 @@ pub struct SpanWriterInner {
 
 impl SpanWriterInner {
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+		self.start_with_details(name, SpanKind::Server, Vec::new())
+	}
+
+	fn start_with_details(
+		&self,
+		name: impl Into<Cow<'static, str>>,
+		span_kind: SpanKind,
+		attributes: Vec<KeyValue>,
+	) -> SpanWriteOnDrop {
 		// Create a unique child span ID for this recorded span.
 		let child = self.parent.new_span();
 
 		SpanWriteOnDrop {
 			name: Some(name.into()),
+			span_kind,
 			start_time: Some(SystemTime::now()),
+			attributes,
+			status: Status::default(),
 			inner: self.inner.clone(),
 			parent: Some(self.parent.clone()),
 			span: Some(child),
@@ -2196,19 +2362,98 @@ impl SpanWriterInner {
 	}
 }
 
-#[derive(Default)]
 pub struct SpanWriteOnDrop {
 	name: Option<Cow<'static, str>>,
+	span_kind: SpanKind,
 	start_time: Option<SystemTime>,
+	attributes: Vec<KeyValue>,
+	status: Status,
 	inner: Arc<Mutex<Vec<BufferedSpan>>>,
 	parent: Option<trc::TraceParent>,
 	span: Option<trc::TraceParent>,
 }
+impl Default for SpanWriteOnDrop {
+	fn default() -> Self {
+		Self {
+			name: None,
+			span_kind: SpanKind::Internal,
+			start_time: None,
+			attributes: Vec::new(),
+			status: Status::default(),
+			inner: Arc::default(),
+			parent: None,
+			span: None,
+		}
+	}
+}
 impl SpanWriteOnDrop {
+	pub fn span_writer(&self) -> SpanWriter {
+		let inner = self.span.clone().map(|parent| {
+			Arc::new(SpanWriterInner {
+				parent,
+				inner: self.inner.clone(),
+			})
+		});
+		SpanWriter { inner }
+	}
+
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
 		if self.parent.is_some() {
 			self.name = Some(name.into());
 		}
+	}
+
+	pub fn inject_context(&self, req: &mut Request) {
+		if let Some(span) = &self.span {
+			span.insert_header(req);
+		}
+	}
+
+	pub fn inject_headers(&self, headers: &mut ::http::HeaderMap) {
+		if let Some(span) = &self.span {
+			span.insert_headers(headers);
+		}
+	}
+
+	pub fn inject_grpc_context<T>(&self, req: &mut tonic::Request<T>) {
+		let Some(span) = &self.span else {
+			return;
+		};
+		let traceparent = format!("{span:?}");
+		if let Ok(value) = tonic::metadata::MetadataValue::try_from(traceparent.as_str()) {
+			req.metadata_mut().insert("traceparent", value);
+		}
+	}
+
+	pub fn add_attribute(&mut self, attribute: KeyValue) {
+		if self.parent.is_some() {
+			self.attributes.push(attribute);
+		}
+	}
+
+	pub fn set_error(&mut self, error_type: impl Into<String>, description: impl Into<String>) {
+		if self.parent.is_some() {
+			self
+				.attributes
+				.push(KeyValue::new("error.type", error_type.into()));
+			self.status = Status::error(description.into());
+		}
+	}
+
+	pub fn record_grpc_result<T>(&mut self, result: &Result<tonic::Response<T>, tonic::Status>) {
+		match result {
+			Ok(_) => self.add_attribute(KeyValue::new("grpc.status", 0_i64)),
+			Err(status) => self.record_grpc_error(status),
+		}
+	}
+
+	pub fn record_grpc_status(&mut self, code: tonic::Code) {
+		self.add_attribute(KeyValue::new("grpc.status", i64::from(code as i32)));
+	}
+
+	pub fn record_grpc_error(&mut self, status: &tonic::Status) {
+		self.record_grpc_status(status.code());
+		self.set_error(format!("{:?}", status.code()), status.to_string());
 	}
 }
 impl Drop for SpanWriteOnDrop {
@@ -2224,10 +2469,11 @@ impl Drop for SpanWriteOnDrop {
 		if let Ok(mut spans) = self.inner.lock() {
 			spans.push(BufferedSpan {
 				name,
-				span_kind: SpanKind::Server,
+				span_kind: self.span_kind.clone(),
 				start_time: self.start_time.unwrap_or(end_time),
 				end_time,
-				attributes: Vec::new(),
+				attributes: std::mem::take(&mut self.attributes),
+				status: std::mem::take(&mut self.status),
 				parent,
 				span,
 			});
@@ -2242,6 +2488,7 @@ pub struct BufferedSpan {
 	start_time: SystemTime,
 	end_time: SystemTime,
 	attributes: Vec<KeyValue>,
+	status: Status,
 	parent: trc::TraceParent,
 	span: trc::TraceParent,
 }
@@ -2252,10 +2499,11 @@ impl BufferedSpan {
 			self.name,
 			self.span_kind,
 			&self.span,
-			Some(&self.parent),
+			Some((&self.parent, false)),
 			self.start_time,
 			self.end_time,
 			self.attributes,
+			self.status,
 		)
 	}
 }
@@ -2273,7 +2521,9 @@ mod tests {
 	use prometheus_client::registry::Registry;
 
 	use super::*;
-	use crate::telemetry::metrics::Metrics;
+	use crate::telemetry::metrics::{
+		Metrics, OutboundCallKind, OutboundCallLabels, OutboundCallSubtype,
+	};
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
 	use crate::types::frontend::{DatabaseLlmMode, LoggingPolicy};
@@ -2327,7 +2577,11 @@ mod tests {
 			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
-		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));
+		let metrics = Arc::new(Metrics::new(
+			&mut registry,
+			Default::default(),
+			Default::default(),
+		));
 		RequestLog::new(
 			cel,
 			metrics,
@@ -2375,7 +2629,7 @@ mod tests {
 		assert_eq!(log.database_llm, None);
 		assert!(!log.cel.cel_context.needs_llm_prompt());
 		assert!(!log.cel.cel_context.needs_llm_completion());
-		assert!(database_llm_payload(None, Some(&llm_context_with_content())).is_some());
+		assert!(database_llm_payload(None, None, Some(&llm_context_with_content())).is_some());
 	}
 
 	#[test]
@@ -2389,14 +2643,15 @@ mod tests {
 		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
 
 		assert_eq!(log.database_llm, Some(DatabaseLlmMode::Full));
-		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_prompt());
 		assert!(log.cel.cel_context.needs_llm_completion());
+		assert!(log.cel.cel_context.needs_llm_tool_calls());
 	}
 
 	#[test]
 	fn database_llm_metadata_does_not_persist_captured_content() {
 		let context = llm_context_with_content();
-		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), Some(&context)).is_none());
+		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), None, Some(&context)).is_none());
 	}
 
 	#[test]
@@ -2425,6 +2680,7 @@ mod tests {
 		assert!(
 			database_llm_payload(
 				Some(DatabaseLlmMode::Metadata),
+				None,
 				Some(&llm_context_with_content())
 			)
 			.is_none()
@@ -2433,15 +2689,41 @@ mod tests {
 
 	#[test]
 	fn database_llm_full_persists_content_in_payload_only() {
-		let context = llm_context_with_content();
-		let payload = database_llm_payload(Some(DatabaseLlmMode::Full), Some(&context)).unwrap();
+		let mut context = llm_context_with_content();
+		context.completion = Some(vec![String::new()]);
+		context.tool_calls = Some(vec![agent_llm::types::ToolCall {
+			id: "call-1".into(),
+			name: "lookup".into(),
+			arguments: serde_json::json!({"query": "weather"}),
+		}]);
+		let messages = vec![agent_llm::types::NormalizedMessage {
+			role: "user".into(),
+			parts: vec![agent_llm::types::NormalizedMessagePart::text(
+				"hello".into(),
+			)],
+		}];
+		let payload =
+			database_llm_payload(Some(DatabaseLlmMode::Full), Some(&messages), Some(&context)).unwrap();
 		assert_eq!(
 			payload.request_prompt_json,
-			Some(serde_json::json!([{"role": "user", "content": "hello"}]))
+			Some(serde_json::json!([{
+				"role": "user",
+				"parts": [{"type": "text", "text": "hello"}]
+			}]))
 		);
 		assert_eq!(
 			payload.response_completion_json,
-			Some(serde_json::json!(["world"]))
+			Some(serde_json::json!([{
+				"role": "assistant",
+				"parts": [
+					{
+						"type": "toolCall",
+						"id": "call-1",
+						"name": "lookup",
+						"arguments": {"query": "weather"}
+					}
+				]
+			}]))
 		);
 	}
 
@@ -2483,7 +2765,58 @@ mod tests {
 		assert_eq!(child.span_kind, SpanKind::Server);
 		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
-		assert!(child.parent_span_is_remote);
+		assert!(!child.parent_span_is_remote);
+	}
+
+	#[test]
+	fn span_writer_records_outbound_client_span_and_propagates_it() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer.clone());
+
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing.clone());
+
+		let mut outbound_request = ::http::Request::new(crate::http::Body::empty());
+		{
+			let mut span = request.span_writer().start_outbound(OutboundCallLabels {
+				kind: OutboundCallKind::Policy,
+				subtype: OutboundCallSubtype::ExtAuthz,
+			});
+			span.inject_context(&mut outbound_request);
+			span.set_error(
+				ProxyResponseReason::ExtAuth.to_string(),
+				"authorization denied",
+			);
+		}
+		let propagated = trc::TraceParent::from_request(&outbound_request).unwrap();
+
+		drop(DropOnLog::from(request));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let child = spans
+			.iter()
+			.find(|span| span.name.as_ref() == OutboundCallSubtype::ExtAuthz.as_str())
+			.expect("outbound span should be exported");
+		assert_eq!(child.span_kind, SpanKind::Client);
+		assert_eq!(child.parent_span_id, outgoing.span_id.into());
+		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
+		assert_eq!(child.span_context.span_id(), propagated.span_id.into());
+		assert!(child.attributes.contains(&KeyValue::new(
+			"agentgateway.outbound.kind",
+			OutboundCallKind::Policy.as_str(),
+		)));
+		assert!(child.attributes.contains(&KeyValue::new(
+			"agentgateway.outbound.subtype",
+			OutboundCallSubtype::ExtAuthz.as_str(),
+		)));
+		assert!(child.attributes.contains(&KeyValue::new(
+			"error.type",
+			ProxyResponseReason::ExtAuth.to_string(),
+		)));
+		assert_eq!(child.status, Status::error("authorization denied"));
 	}
 
 	#[test]
@@ -2679,6 +3012,7 @@ mod tests {
 			error_code: Some(-32602),
 			result_kind: Some(strng::literal!("task")),
 			task_state: Some(strng::literal!("failed")),
+			context_id: Some(strng::literal!("ctx-123")),
 		});
 
 		drop(DropOnLog::from(log));
@@ -2695,6 +3029,7 @@ mod tests {
 			"a2a.response.error_code",
 			"a2a.result.kind",
 			"a2a.task.state",
+			"a2a.context.id",
 		] {
 			assert!(has(expected), "expected {expected} span attribute");
 		}

@@ -3,7 +3,7 @@ use futures_core::Stream;
 use futures_core::stream::BoxStream;
 use futures_util::StreamExt;
 use itertools::Itertools;
-use rmcp::model::{RequestId, ServerJsonRpcMessage, ServerResult};
+use rmcp::model::{ErrorCode, RequestId, ServerJsonRpcMessage, ServerResult};
 use tracing::warn;
 
 use crate::mcp::rbac::CelExecWrapper;
@@ -155,12 +155,21 @@ pub struct MergeStream {
 	// Present iff `merge` is; supplied to the merge fn for RBAC filtering.
 	cel: Option<CelExecWrapper>,
 	failure_mode: FailureMode,
+	// Discovery rejection is a compatibility signal that FailOpen must not hide.
+	fail_on_discovery_rejection: bool,
 	first_failure: Option<Result<ServerJsonRpcMessage, ClientError>>,
 }
 
 impl MergeStream {
 	pub fn new_without_merge(streams: Vec<(Strng, Messages)>, failure_mode: FailureMode) -> Self {
-		Self::new_internal(streams, RequestId::Number(0), None, None, failure_mode)
+		Self::new_internal(
+			streams,
+			RequestId::Number(0),
+			None,
+			None,
+			failure_mode,
+			false,
+		)
 	}
 	pub fn new(
 		streams: Vec<(Strng, Messages)>,
@@ -168,8 +177,16 @@ impl MergeStream {
 		merge: Box<MergeFn>,
 		cel: CelExecWrapper,
 		failure_mode: FailureMode,
+		fail_on_discovery_rejection: bool,
 	) -> Self {
-		Self::new_internal(streams, req_id, Some(merge), Some(cel), failure_mode)
+		Self::new_internal(
+			streams,
+			req_id,
+			Some(merge),
+			Some(cel),
+			failure_mode,
+			fail_on_discovery_rejection,
+		)
 	}
 	fn new_internal(
 		streams: Vec<(Strng, Messages)>,
@@ -177,6 +194,7 @@ impl MergeStream {
 		merge: Option<Box<MergeFn>>,
 		cel: Option<CelExecWrapper>,
 		failure_mode: FailureMode,
+		fail_on_discovery_rejection: bool,
 	) -> Self {
 		let terminal_messages = streams.iter().map(|_| None).collect::<Vec<_>>();
 		Self {
@@ -187,6 +205,7 @@ impl MergeStream {
 			merge,
 			cel,
 			failure_mode,
+			fail_on_discovery_rejection,
 			first_failure: None,
 		}
 	}
@@ -239,7 +258,12 @@ impl Stream for MergeStream {
 							// This stream is done, never look at it again
 						},
 						Ok(ServerJsonRpcMessage::Error(e)) => {
-							if self.failure_mode == FailureMode::FailOpen {
+							let discovery_rejection = self.fail_on_discovery_rejection
+								&& matches!(
+									e.error.code,
+									ErrorCode::METHOD_NOT_FOUND | ErrorCode::UNSUPPORTED_PROTOCOL_VERSION
+								);
+							if self.failure_mode == FailureMode::FailOpen && !discovery_rejection {
 								warn!(
 									"upstream JSON-RPC error, skipping (failure_mode=FailOpen): {:?}",
 									e

@@ -3,7 +3,10 @@ use agent_core::strng::Strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{OutputMessage, OutputMessagePart, ResponseType, SimpleChatCompletionMessage};
+use crate::types::{
+	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
+	ResponseType, SimpleChatCompletionMessage,
+};
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, json};
 
@@ -316,6 +319,14 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 	(!messages.is_empty()).then_some(messages)
 }
 
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic-style cache breakpoint, accepted by OpenAI-compat providers (Bedrock, OpenRouter)
+	"cache_control",
+	// OpenAI explicit prompt-cache breakpoint
+	"prompt_cache_breakpoint",
+];
+
 impl super::RequestType for Request {
 	fn body_is_json(&self) -> bool {
 		true
@@ -382,22 +393,11 @@ impl super::RequestType for Request {
 				let content = m
 					.content
 					.as_ref()
-					.and_then(|c| match c {
-						Content::Text(t) => Some(strng::new(t)),
-						Content::Array(parts) if !parts.is_empty() => {
-							let text = parts.iter().filter_map(|part| part.text.as_deref()).fold(
-								String::new(),
-								|mut acc, s| {
-									if !acc.is_empty() {
-										acc.push(' ');
-									}
-									acc.push_str(s);
-									acc
-								},
-							);
-							Some(strng::new(&text))
+					.map(|c| match c {
+						Content::Text(t) => strng::new(t),
+						Content::Array(parts) => {
+							super::join_text(parts.iter().filter_map(|part| part.text.as_deref()), ' ')
 						},
-						_ => None,
 					})
 					.unwrap_or_default();
 				SimpleChatCompletionMessage {
@@ -408,23 +408,111 @@ impl super::RequestType for Request {
 			.collect()
 	}
 
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		let mut messages = self
+			.messages
+			.iter()
+			.map(|message| {
+				let mut parts = Vec::new();
+				if let Some(rest) = message.rest.as_object() {
+					let reasoning = rest
+						.iter()
+						.filter(|(key, _)| {
+							key.as_str() == "reasoning"
+								|| key.starts_with("reasoning_")
+								|| key.as_str() == "thinking_blocks"
+						})
+						.map(|(key, value)| (key.clone(), value.clone()))
+						.collect::<serde_json::Map<_, _>>();
+					if !reasoning.is_empty() {
+						parts.push(NormalizedMessagePart::reasoning(serde_json::Value::Object(
+							reasoning,
+						)));
+					}
+				}
+				if matches!(message.role.as_str(), "tool" | "function") {
+					if let Some(content) = &message.content
+						&& let Ok(content) = serde_json::to_value(content)
+					{
+						parts.push(NormalizedMessagePart::tool_result(
+							message.tool_call_id.as_deref().map(strng::new),
+							message.name.as_deref().map(strng::new),
+							content,
+							None,
+						));
+					}
+				} else {
+					match &message.content {
+						Some(Content::Text(text)) => parts.push(NormalizedMessagePart::text(strng::new(text))),
+						Some(Content::Array(content)) => parts.extend(
+							content
+								.iter()
+								.filter_map(|part| part.text.as_deref())
+								.map(|text| NormalizedMessagePart::text(strng::new(text))),
+						),
+						None => {},
+					}
+				}
+				parts.extend(
+					message
+						.tool_calls
+						.iter()
+						.flatten()
+						.filter_map(crate::types::normalized_tool_call),
+				);
+				if let Some(function_call) = message.rest.get("function_call")
+					&& let Some(call) = crate::types::normalized_tool_call(function_call)
+				{
+					parts.push(call);
+				}
+				NormalizedMessage {
+					role: strng::new(&message.role),
+					parts,
+				}
+			})
+			.collect::<Vec<_>>();
+		crate::types::attach_tool_result_names(&mut messages);
+		messages
+	}
+
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		for msg in &mut self.messages {
-			// TODO opt-in setting to apply guards to tool results
-			if msg.role == "tool" {
-				continue;
-			}
+			let scope = match msg.role.as_str() {
+				"tool" | "function" => ContentScope::ToolOutput,
+				"system" | "developer" => ContentScope::SystemPrompt,
+				_ => ContentScope::Messages,
+			};
 			match &mut msg.content {
-				Some(Content::Text(text)) => f(text),
+				Some(Content::Text(text)) => f(scope, text),
 				Some(Content::Array(parts)) => {
-					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), f);
+					super::scan_text_runs(
+						parts,
+						" ",
+						|p| p.text.as_mut(),
+						|p| Some(&mut p.rest),
+						PRESERVED_REST_KEYS,
+						&mut |text| f(scope, text),
+					);
 				},
 				None => {},
 			}
+
+			// in completions API, tool call args are json-in-json
+			// avoiding parsing means a mask can potentially break the json
+			for call in msg.tool_calls.iter_mut().flatten() {
+				super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
+				super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+			}
+			super::visit_json_at(
+				&mut msg.rest,
+				&["function_call", "arguments"],
+				ContentScope::ToolInput,
+				f,
+			);
 		}
 	}
 }

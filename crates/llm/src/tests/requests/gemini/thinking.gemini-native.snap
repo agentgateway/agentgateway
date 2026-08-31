@@ -1,0 +1,91 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/gemini/thinking.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: Prove that sqrt(2) is irrational.
+    - role: model
+      parts:
+        - text: The classic argument is by contradiction.
+          thought: true
+          thoughtSignature: Ck0BdGhvdWdodC1zaWduYXR1cmUtb25l
+        - text: Suppose sqrt(2) = a/b in lowest terms.
+          thoughtSignature: Ck0BdGhvdWdodC1zaWduYXR1cmUtdHdv
+    - role: user
+      parts:
+        - text: Continue.
+  generationConfig:
+    temperature: 1
+    thinkingConfig:
+      thinkingLevel: high
+      includeThoughts: true
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Prove that sqrt(2) is irrational."
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "The classic argument is by contradiction.",
+            "thought": true,
+            "thoughtSignature": "Ck0BdGhvdWdodC1zaWduYXR1cmUtb25l"
+          },
+          {
+            "text": "Suppose sqrt(2) = a/b in lowest terms.",
+            "thoughtSignature": "Ck0BdGhvdWdodC1zaWduYXR1cmUtdHdv"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Continue."
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "temperature": 1.0,
+      "thinkingConfig": {
+        "thinkingLevel": "high",
+        "includeThoughts": true
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Gemini",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "",
+    "provider": "gemini-native",
+    "streaming": false,
+    "params": {
+      "temperature": 1.0
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Prove that sqrt(2) is irrational."
+      },
+      {
+        "role": "assistant",
+        "content": "The classic argument is by contradiction. Suppose sqrt(2) = a/b in lowest terms."
+      },
+      {
+        "role": "user",
+        "content": "Continue."
+      }
+    ]
+  }
+}

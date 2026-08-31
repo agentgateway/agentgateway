@@ -82,7 +82,7 @@ binds:
             audience: https://$AUTH0_DOMAIN/
 
             # Scopes to request (the AS may grant a subset). Match an Auth0 API scope.
-            # Sent on both legs: to Okta (the ID-JAG's `scope` claim) and to Auth0.
+            # Sent on both legs by default: to Okta (the ID-JAG's `scope` claim) and to Auth0.
             scopes:
             - $SCOPE
 

@@ -1,0 +1,60 @@
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agentgateway-role-default
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentgateway-local-role-default
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: Role
+  name: agentgateway-default-local
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentgateway-write-role-default
+  namespace: team-a
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentgateway-write-role-default
+  namespace: team-b
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default-deployer
+  apiGroup: rbac.authorization.k8s.io
+

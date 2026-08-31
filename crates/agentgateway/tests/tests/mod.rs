@@ -1,3 +1,4 @@
+mod admission;
 mod auth;
 mod auto_protocol;
 mod basic;
@@ -12,5 +13,6 @@ mod llm;
 mod llm_providers;
 mod policy;
 mod smoke;
+mod substrate;
 mod tls;
 mod waypoint;

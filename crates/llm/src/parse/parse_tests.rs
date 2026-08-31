@@ -61,6 +61,11 @@ struct Test {
 	msg: u8,
 }
 
+#[derive(Serialize)]
+struct StatusOutput {
+	status: &'static str,
+}
+
 #[tokio::test]
 async fn test_sse_json() {
 	let msg1 = r#"data: {"msg": 1}
@@ -247,6 +252,7 @@ async fn test_sse_json_transform_multi_named_events_and_done() {
 					status: "done",
 				},
 			)],
+			sse::SseJsonEvent::Eof | sse::SseJsonEvent::Error => Vec::new(),
 		});
 
 	let result = transformed.collect().await.unwrap().to_bytes();
@@ -310,6 +316,7 @@ async fn test_sse_json_transform_multi_parse_error_path() {
 				},
 			)],
 			sse::SseJsonEvent::Done => vec![("done", Output { status: "done" })],
+			sse::SseJsonEvent::Eof | sse::SseJsonEvent::Error => Vec::new(),
 		});
 
 	let result = transformed.collect().await.unwrap().to_bytes();
@@ -326,4 +333,123 @@ async fn test_sse_json_transform_multi_parse_error_path() {
 		result.contains("event: done"),
 		"missing done event after parse error:\n{result}"
 	);
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_reports_eof() {
+	let body = Body::from("data: {\"msg\": 1}\n\n");
+	let transformed =
+		sse::json_transform_multi::<Test, StatusOutput, _>(body, 1024, |event| match event {
+			sse::SseJsonEvent::Data(Ok(_)) => Vec::new(),
+			sse::SseJsonEvent::Data(Err(_)) | sse::SseJsonEvent::Done => Vec::new(),
+			sse::SseJsonEvent::Eof => vec![("eof", StatusOutput { status: "eof" })],
+			sse::SseJsonEvent::Error => Vec::new(),
+		});
+	let result = transformed.collect().await.unwrap().to_bytes();
+	let result = String::from_utf8_lossy(&result);
+
+	assert!(
+		result.contains("event: eof"),
+		"missing EOF event:\n{result}"
+	);
+	assert!(
+		result.contains(r#"data: {"status":"eof"}"#),
+		"missing EOF payload:\n{result}"
+	);
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_reports_body_error() {
+	let body = Body::from_stream(futures_util::stream::iter(vec![Err::<Bytes, io::Error>(
+		io::Error::other("upstream failed"),
+	)]));
+	let transformed = sse::json_transform_multi::<Test, StatusOutput, _>(body, 1024, |event| {
+		if matches!(event, sse::SseJsonEvent::Error) {
+			vec![("error", StatusOutput { status: "error" })]
+		} else {
+			Vec::new()
+		}
+	});
+	let result = transformed.collect().await.unwrap().to_bytes();
+	let result = String::from_utf8_lossy(&result);
+
+	assert!(
+		result.contains("event: error"),
+		"missing body error event:\n{result}"
+	);
+	assert!(result.contains(r#"data: {"status":"error"}"#));
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_reports_decoder_error() {
+	let body = Body::from("data: {\"msg\": 123456789}\n\n");
+	let transformed = sse::json_transform_multi::<Test, StatusOutput, _>(body, 8, |event| {
+		if matches!(event, sse::SseJsonEvent::Error) {
+			vec![("error", StatusOutput { status: "error" })]
+		} else {
+			Vec::new()
+		}
+	});
+	let result = transformed.collect().await.unwrap().to_bytes();
+	let result = String::from_utf8_lossy(&result);
+
+	assert!(
+		result.contains("event: error"),
+		"missing decoder error event:\n{result}"
+	);
+	assert!(result.contains(r#"data: {"status":"error"}"#));
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_reports_truncated_frame_as_error() {
+	let observed = Arc::new(Mutex::new(Vec::new()));
+	let captured = observed.clone();
+	let body = Body::from("data: {\"msg\":1}\n");
+	let transformed =
+		sse::json_transform_multi::<Test, StatusOutput, _>(body, 1024, move |event| match event {
+			sse::SseJsonEvent::Error => {
+				captured.lock().unwrap().push("error");
+				vec![("error", StatusOutput { status: "error" })]
+			},
+			sse::SseJsonEvent::Eof => {
+				captured.lock().unwrap().push("eof");
+				Vec::new()
+			},
+			_ => Vec::new(),
+		});
+	let result = transformed.collect().await.unwrap().to_bytes();
+
+	assert_eq!(*observed.lock().unwrap(), ["error"]);
+	assert!(String::from_utf8_lossy(&result).contains(r#"data: {"status":"error"}"#));
+}
+
+#[tokio::test]
+async fn test_sse_json_transform_multi_propagates_decoder_error_after_output() {
+	let body = Body::from("data: {\"msg\":1}\n\ndata: {\"msg\":123456789}\n\n");
+	let saw_error = Arc::new(Mutex::new(false));
+	let captured_error = saw_error.clone();
+	let mut transformed =
+		sse::json_transform_multi::<Test, StatusOutput, _>(body, 12, move |event| match event {
+			sse::SseJsonEvent::Data(Ok(_)) => vec![("delta", StatusOutput { status: "ok" })],
+			sse::SseJsonEvent::Error => {
+				*captured_error.lock().unwrap() = true;
+				Vec::new()
+			},
+			_ => Vec::new(),
+		});
+
+	let first = transformed
+		.frame()
+		.await
+		.expect("valid output must precede the decoder error")
+		.expect("the first frame must contain the valid output");
+	let data = first.data_ref().expect("the first frame must be data");
+	assert!(String::from_utf8_lossy(data).contains(r#"data: {"status":"ok"}"#));
+
+	transformed
+		.frame()
+		.await
+		.expect("the decoder error must be returned")
+		.expect_err("decoder error after valid output must propagate");
+	assert!(*saw_error.lock().unwrap(), "decoder error was not observed");
 }

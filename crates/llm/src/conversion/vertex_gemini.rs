@@ -31,6 +31,75 @@ fn join_tool_call_id(base: String, signature: Option<&str>) -> String {
 	}
 }
 
+/// Passthrough for native Gemini inbound: forward the `:streamGenerateContent?alt=sse` SSE
+/// bytes untouched while extracting usage for telemetry. Gemini attaches cumulative
+/// `usageMetadata` to chunks with the full totals on the final event, so updating on every
+/// chunk leaves the last event's counts in the log even on early client disconnect.
+pub fn passthrough_stream(
+	b: axum_core::body::Body,
+	buffer_limit: usize,
+	log: crate::StreamingUsageGuard,
+	log_content: crate::LogContentFields,
+) -> axum_core::body::Body {
+	use std::time::Instant;
+	let mut saw_token = false;
+	crate::parse::sse::json_passthrough::<vg::GenerateContentResponse>(b, buffer_limit, move |f| {
+		// Gemini never sends a [DONE] sentinel, so f(None) does not fire; all bookkeeping
+		// happens per-chunk and the guard flushes on drop.
+		let Some(Ok(chunk)) = f else {
+			return;
+		};
+		if !saw_token {
+			saw_token = true;
+			log.update(|r| r.response.first_token = Some(Instant::now()));
+		}
+		if let Some(m) = &chunk.model_version {
+			log.update(|r| {
+				if r.response.provider_model.is_none() {
+					r.response.provider_model = Some(strng::new(m));
+				}
+			});
+		}
+		if let Some(um) = &chunk.usage_metadata {
+			let (prompt, completion, total) = um.counts();
+			log.update(|r| {
+				r.response.input_tokens = Some(prompt);
+				r.response.output_tokens = Some(completion);
+				r.response.total_tokens = Some(total);
+				r.response.cached_input_tokens = um.cached_content_token_count;
+				r.response.reasoning_tokens = um.thoughts_token_count;
+			});
+		}
+		if log_content.completion {
+			let text: String = chunk
+				.candidates
+				.first()
+				.and_then(|c| c.content.as_ref())
+				.map(|c| {
+					c.parts
+						.iter()
+						.filter_map(|p| match p {
+							vg::Part::Text(t) if t.thought != Some(true) => Some(t.text.as_str()),
+							_ => None,
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			if !text.is_empty() {
+				log.update(|r| {
+					let completion = r
+						.response
+						.completion
+						.get_or_insert_with(|| vec![String::new()]);
+					if let Some(first) = completion.first_mut() {
+						first.push_str(&text);
+					}
+				});
+			}
+		}
+	})
+}
+
 pub mod from_completions {
 	use serde::Deserialize;
 	use serde_json::{Value, json};
@@ -170,6 +239,7 @@ pub mod from_completions {
 			safety_settings,
 			cached_content,
 			labels,
+			rest: Default::default(),
 		})
 	}
 
@@ -323,6 +393,9 @@ pub mod from_completions {
 						"image_url" => {
 							parts.push(image_part(p.rest.get("image_url"))?);
 						},
+						"file" => {
+							parts.push(file_part(p.rest.get("file"))?);
+						},
 						_ => {},
 					}
 				}
@@ -332,6 +405,28 @@ pub mod from_completions {
 		Ok(parts)
 	}
 
+	fn inline_data_part(mime: &str, data: &str) -> vg::Part {
+		vg::Part::InlineData(vg::InlineDataPart {
+			inline_data: vg::Blob {
+				mime_type: canonical_mime(mime).to_string(),
+				data: data.to_string(),
+				rest: Value::Null,
+			},
+			rest: Value::Null,
+		})
+	}
+
+	fn file_data_part(mime: &str, uri: &str) -> vg::Part {
+		vg::Part::FileData(vg::FileDataPart {
+			file_data: vg::FileData {
+				mime_type: Some(canonical_mime(mime).to_string()),
+				file_uri: uri.to_string(),
+				rest: Value::Null,
+			},
+			rest: Value::Null,
+		})
+	}
+
 	fn image_part(image_url: Option<&Value>) -> Result<vg::Part, AIError> {
 		let url = image_url
 			.and_then(|u| u.get("url"))
@@ -339,14 +434,7 @@ pub mod from_completions {
 			.unwrap_or_default();
 
 		if let Some((mime, data)) = parse_data_url(url) {
-			return Ok(vg::Part::InlineData(vg::InlineDataPart {
-				inline_data: vg::Blob {
-					mime_type: canonical_mime(mime).to_string(),
-					data: data.to_string(),
-					rest: Value::Null,
-				},
-				rest: Value::Null,
-			}));
+			return Ok(inline_data_part(mime, data));
 		}
 
 		if url.starts_with("gs://") {
@@ -354,24 +442,87 @@ pub mod from_completions {
 			let Some(mime) =
 				explicit_mime_hint(image_url).or_else(|| mime_from_extension(url).map(str::to_string))
 			else {
-				return Err(AIError::InvalidResponse(strng::new(format!(
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
 					"gs:// image_url ({url}) has no recognised extension or MIME hint; pass image_url.format (or mime_type/content_type), or use an object with a known extension"
 				))));
 			};
-			return Ok(vg::Part::FileData(vg::FileDataPart {
-				file_data: vg::FileData {
-					mime_type: Some(canonical_mime(&mime).to_string()),
-					file_uri: url.to_string(),
-					rest: Value::Null,
-				},
-				rest: Value::Null,
-			}));
+			return Ok(file_data_part(&mime, url));
 		}
 
 		// http(s) and anything else are not fetchable by Vertex.
-		Err(AIError::InvalidResponse(strng::new(format!(
+		Err(AIError::UnsupportedConversion(strng::new(format!(
 			"native Gemini path rejects http(s) image_url ({url}); upload to gs:// or send inline data:"
 		))))
+	}
+
+	/// Convert an OpenAI `file` content part into a Gemini part.
+	///
+	/// Mirrors [`image_part`]: inline `data:` payloads become `inlineData`, `gs://`
+	/// objects become `fileData`, and anything Vertex cannot fetch is rejected rather
+	/// than dropped.
+	fn file_part(file: Option<&Value>) -> Result<vg::Part, AIError> {
+		let field = |k: &str| {
+			file
+				.and_then(|f| f.get(k))
+				.and_then(Value::as_str)
+				.unwrap_or_default()
+		};
+		let file_data = field("file_data");
+		let file_id = field("file_id");
+
+		if let Some((mime, data)) = parse_data_url(file_data) {
+			if !mime.is_empty() {
+				return Ok(inline_data_part(mime, data));
+			}
+			// RFC 2397 allows an absent media type; Vertex rejects an empty mimeType.
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"data: file_data has no media type; pass file.filename with a known extension (or mime_type/content_type)"
+				)));
+			};
+			return Ok(inline_data_part(&mime, data));
+		}
+
+		// Clients carry a gs:// object in either field; Vertex fetches those directly.
+		if let Some(uri) = [file_data, file_id]
+			.into_iter()
+			.find(|u| u.starts_with("gs://"))
+		{
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+				.or_else(|| mime_from_extension(uri).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
+					"gs:// file ({uri}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use an object with a known extension"
+				))));
+			};
+			return Ok(file_data_part(&mime, uri));
+		}
+
+		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
+		// A malformed `data:` value must not reach here, or its header becomes payload.
+		if !file_data.is_empty() && !file_data.contains("://") && !file_data.starts_with("data:") {
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"raw base64 file_data has no MIME source; pass file.filename with a known extension (or mime_type/content_type), or wrap it in a data: URI"
+				)));
+			};
+			return Ok(inline_data_part(&mime, file_data));
+		}
+
+		if !file_id.is_empty() {
+			return Err(AIError::UnsupportedConversion(strng::new(format!(
+				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or reference a gs:// object"
+			))));
+		}
+
+		Err(AIError::UnsupportedConversion(strng::new(
+			"file content part has neither an inline data: file_data nor a gs:// reference",
+		)))
 	}
 
 	fn text_part(text: &str) -> vg::Part {
@@ -477,6 +628,7 @@ pub mod from_completions {
 					.and_then(Value::as_str)
 					.map(str::to_string),
 				parameters: f.get("parameters").map(normalize_gemini_schema),
+				rest: Default::default(),
 			})
 			.collect();
 		if decls.is_empty() {
@@ -484,6 +636,7 @@ pub mod from_completions {
 		} else {
 			vec![vg::Tool {
 				function_declarations: decls,
+				rest: Default::default(),
 			}]
 		}
 	}
@@ -513,12 +666,14 @@ pub mod from_completions {
 				vg::FunctionCallingConfig {
 					mode: Some("ANY".into()),
 					allowed_function_names: name.map(|n| vec![n.to_string()]).unwrap_or_default(),
+					rest: Default::default(),
 				}
 			},
 			_ => return None,
 		};
 		Some(vg::ToolConfig {
 			function_calling_config: Some(cfg),
+			rest: Default::default(),
 		})
 	}
 
@@ -556,6 +711,7 @@ pub mod from_completions {
 			response_mime_type,
 			response_schema,
 			thinking_config,
+			rest: Default::default(),
 		};
 
 		if cfg == vg::GenerationConfig::default() {
@@ -925,6 +1081,7 @@ pub mod from_completions {
 				thinking_level: Some(level.into()),
 				thinking_budget: None,
 				include_thoughts: Some(true),
+				rest: Default::default(),
 			})
 		} else {
 			// Gemini 2.5 takes the shared conservative budget scale. Some models cap the
@@ -935,6 +1092,7 @@ pub mod from_completions {
 				thinking_level: None,
 				thinking_budget: Some(budget),
 				include_thoughts: Some(true),
+				rest: Default::default(),
 			})
 		}
 	}
@@ -1330,7 +1488,9 @@ pub mod to_completions {
 					tracing::debug!("failed to parse gemini stream chunk: {e}");
 					return vec![];
 				},
-				parse::sse::SseJsonEvent::Done => return vec![],
+				parse::sse::SseJsonEvent::Done
+				| parse::sse::SseJsonEvent::Eof
+				| parse::sse::SseJsonEvent::Error => return vec![],
 			};
 
 			if !saw_token {
@@ -1345,7 +1505,7 @@ pub mod to_completions {
 				});
 			}
 			if let Some(um) = &chunk.usage_metadata {
-				let (prompt, completion, total) = usage_counts(um);
+				let (prompt, completion, total) = um.counts();
 				log.update(|r| {
 					r.response.input_tokens = Some(prompt);
 					r.response.output_tokens = Some(completion);
@@ -1419,17 +1579,8 @@ pub mod to_completions {
 		parse::sse::append_done_on_success(body)
 	}
 
-	/// Prompt, completion, and total token counts from Gemini usage metadata
-	/// (total falls back to prompt + completion when absent).
-	fn usage_counts(um: &vg::UsageMetadata) -> (u64, u64, u64) {
-		let prompt = um.prompt_token_count.unwrap_or(0);
-		let completion = um.candidates_token_count.unwrap_or(0);
-		let total = um.total_token_count.unwrap_or(prompt + completion);
-		(prompt, completion, total)
-	}
-
 	fn build_usage(um: &vg::UsageMetadata) -> completions::Usage {
-		let (prompt, completion, total) = usage_counts(um);
+		let (prompt, completion, total) = um.counts();
 		completions::Usage {
 			prompt_tokens: prompt as u32,
 			completion_tokens: completion as u32,

@@ -63,6 +63,7 @@
 //! [`Write`]: hyper::rt::Write
 //! [`Connection`]: Connection
 use std::fmt;
+use std::time::Instant;
 
 use ::http::Extensions;
 
@@ -87,6 +88,7 @@ pub struct Connected {
 	pub(super) alpn: Alpn,
 	pub(super) is_proxied: bool,
 	pub(super) extra: Option<Extra>,
+	pub(super) valid_until: Option<Instant>,
 }
 
 pub(super) struct Extra(Box<dyn ExtraInner>);
@@ -111,6 +113,7 @@ impl Connected {
 			alpn: Alpn::None,
 			is_proxied: false,
 			extra: None,
+			valid_until: None,
 		}
 	}
 
@@ -159,6 +162,31 @@ impl Connected {
 		}
 	}
 
+	/// Set a deadline after which the connection is no longer used for new requests.
+	///
+	/// The pool treats a connection past its deadline like an idle-expired one at checkout:
+	/// it is dropped and a fresh connection is established instead. Requests already in
+	/// flight on the connection are not interrupted.
+	///
+	/// If a deadline is already set, the earlier of the two is kept.
+	pub fn valid_until(mut self, deadline: Instant) -> Connected {
+		self.valid_until = Some(match self.valid_until {
+			Some(existing) => existing.min(deadline),
+			None => deadline,
+		});
+		self
+	}
+
+	/// Returns the deadline after which the connection is no longer used for new requests, if any.
+	pub fn get_valid_until(&self) -> Option<Instant> {
+		self.valid_until
+	}
+
+	/// Returns whether the connection's reuse deadline has passed as of `now`.
+	pub fn past_deadline(&self, now: Instant) -> bool {
+		self.valid_until.is_some_and(|deadline| now >= deadline)
+	}
+
 	/// Set that the connected transport negotiated HTTP/2 as its next protocol.
 	pub fn negotiated_h2(mut self) -> Connected {
 		self.alpn = Alpn::H2;
@@ -178,6 +206,7 @@ impl Connected {
 			alpn: self.alpn,
 			is_proxied: self.is_proxied,
 			extra: self.extra.clone(),
+			valid_until: self.valid_until,
 		}
 	}
 }

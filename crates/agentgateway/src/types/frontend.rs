@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 use frozen_collections::{FzHashSet, Len};
@@ -93,6 +94,11 @@ pub struct HTTP {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	#[serde(default)]
 	pub max_connection_duration: Option<Duration>,
+
+	/// Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests
+	/// and HTTP/2 streams. Requests over the limit are rejected immediately.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_concurrent_requests: Option<NonZeroU32>,
 }
 
 impl Default for HTTP {
@@ -113,6 +119,7 @@ impl Default for HTTP {
 			http2_keepalive_timeout: None,
 
 			max_connection_duration: None,
+			max_concurrent_requests: None,
 		}
 	}
 }
@@ -160,7 +167,12 @@ impl Default for TLS {
 #[cfg_attr(feature = "schema", schemars(rename = "FrontendTCP"))]
 pub struct TCP {
 	/// TCP keepalive settings for downstream connections.
-	pub keepalives: super::agent::KeepaliveConfig,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub keepalives: Option<super::agent::KeepaliveConfig>,
+	/// Maximum number of active downstream connections on this bind. Connections over the limit
+	/// are closed immediately.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_connections: Option<NonZeroU32>,
 }
 
 #[apply(schema_enum!)]

@@ -113,6 +113,7 @@
 |`source.identity.trustDomain`|string|The trust domain of the identity.|
 |`source.identity.namespace`|string|The namespace of the identity.|
 |`source.identity.serviceAccount`|string|The service account of the identity.|
+|`source.spiffeId`|string|The raw SPIFFE ID (first `spiffe://` URI SAN) of the downstream client certificate, if<br>present. Unlike `identity`, this is populated for any SPIFFE ID, not only the Istio<br>`spiffe://td/ns/<ns>/sa/<sa>` format.|
 |`source.subjectAltNames`|[]string|The subject alt names from the downstream certificate, if available.|
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|
@@ -126,6 +127,7 @@
 |`destination`|object|`destination` contains attributes about the downstream request destination at agentgateway.|
 |`destination.address`|string|The IP address of the downstream request destination at agentgateway.|
 |`destination.port`|integer|The port of the downstream request destination at agentgateway.|
+|`destination.hostname`|string|The requested destination hostname, when known. For TLS connections this is the sniffed SNI.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||
@@ -151,4 +153,12 @@
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
 |`extproc`|object|`extproc` contains dynamic metadata from ext_proc filters|
 |`mcpGuardrails`|object|`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.|
+|`guardrails`|[]object|`guardrails` contains one entry per prompt-guard guardrail intervention, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
+|`guardrails[].phase`|string|The phase the guardrail intervened in: `request` or `response`.|
+|`guardrails[].guard`|string|The guard kind that intervened, such as `bedrockGuardrails`.|
+|`guardrails[].action`|string|The action the guardrail took (mask/reject/audit/failOpen).|
+|`guardrails[].guardrailId`|string|The configured guardrail identifier.|
+|`guardrails[].guardrailVersion`|string|The configured guardrail version.|
+|`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|
+|`guardrails[].assessments`|array|Assessment detail reported by the guardrail provider, redacted to metadata<br>only. Content-bearing fields (such as the matched text) are never included.|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|

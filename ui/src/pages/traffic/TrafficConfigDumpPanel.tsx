@@ -44,6 +44,10 @@ export type DumpListenerRow = {
   listener: DumpListener;
 };
 
+type RuntimeDumpListenerRow = DumpListenerRow & {
+  conflicted: boolean;
+};
+
 export type DumpRouteRow = {
   type: "HTTP" | "TCP";
   source: "listener" | "mesh" | "route group";
@@ -118,10 +122,10 @@ export function TrafficDumpListenersView(props: {
   isLoading?: boolean;
   error?: Error | null;
 }) {
-  const inventory = props.dump ? buildTrafficInventory(props.dump) : null;
+  const rows = props.dump?.binds.flatMap(buildRuntimeListenerRows) ?? [];
   const [selectedListenerKey, setSelectedListenerKey] =
     useStickyQueryParam("listener");
-  const selectedListener = inventory?.listeners.find(
+  const selectedListener = rows.find(
     ({ listener }) => listener.key === selectedListenerKey,
   );
   return (
@@ -135,7 +139,7 @@ export function TrafficDumpListenersView(props: {
         <StatusBanner state="bad" title={tr("copy.configDumpUnavailable")}>
           {props.error.message}
         </StatusBanner>
-      ) : !inventory?.listeners.length ? (
+      ) : !rows.length ? (
         <EmptyState
           title={tr("copy.noRuntimeListeners")}
           description={tr("copy.noListenersArePresentInTheActiveGatewayDump")}
@@ -143,30 +147,37 @@ export function TrafficDumpListenersView(props: {
       ) : (
         <div className="traffic-bind-list">
           {props.dump?.binds.map((bind) => {
-            const listeners = Object.values(bind.listeners ?? {});
+            const bindRows = rows.filter((row) => row.bind.key === bind.key);
+            const conflictCount = bindRows.filter((row) => row.conflicted).length;
             return (
               <section className="traffic-bind readonly" key={bind.key}>
                 <div className="traffic-bind-header">
                   <div>
                     <h3>{bindDisplayName(bind.address)}</h3>
                     <p>
-                      {listeners.length}
-                      {tr("copy.listeners_1fzojr3")}
-                      {listenerRouteCount(bind)} {tr("copy.routes")}
+                      {tr("copy.listenersAndRoutes", [
+                        bindRows.length,
+                        listenerRouteCount(bind),
+                      ])}
                     </p>
                   </div>
                   <div className="button-row">
                     <span className="badge">
-                      {bind.tunnelProtocol ?? "direct"}
+                      {bind.tunnelProtocol ?? tr("copy.direct")}
                     </span>
                     <span className="badge">
                       {bindProtocolLabel(bind.protocol)}
                     </span>
+                    {conflictCount ? (
+                      <span className="badge bad">
+                        {tr("copy.valueListenersInvolvedInPortConflicts", conflictCount)}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
-                {listeners.length ? (
+                {bindRows.length ? (
                   <RuntimeListenerTable
-                    rows={listeners.map((listener) => ({ bind, listener }))}
+                    rows={bindRows}
                     onSelect={(listener) =>
                       setSelectedListenerKey(listener.key)
                     }
@@ -280,7 +291,7 @@ export function TrafficDumpRoutesView(props: {
 }
 
 function RuntimeListenerTable(props: {
-  rows: DumpListenerRow[];
+  rows: RuntimeDumpListenerRow[];
   onSelect: (listener: DumpListener) => void;
 }) {
   return (
@@ -289,6 +300,7 @@ function RuntimeListenerTable(props: {
         <thead>
           <tr>
             <th>{tr("copy.name")}</th>
+            <th>{tr("copy.portConflict")}</th>
             <th>{tr("copy.hostname")}</th>
             <th>{tr("copy.protocol")}</th>
             <th>{tr("copy.routes_14u6307")}</th>
@@ -297,12 +309,22 @@ function RuntimeListenerTable(props: {
           </tr>
         </thead>
         <tbody>
-          {props.rows.map(({ listener }) => (
+          {props.rows.map(({ listener, conflicted }) => (
             <tr key={listener.key}>
-              <td className="strong">
-                {listener.listenerName || listener.key}
+              <td>
+                <div className="resource-name-cell">
+                  <strong>{listenerDisplayName(listener)}</strong>
+                  <small>{listenerSourceDisplayName(listener)}</small>
+                </div>
               </td>
-              <td>{listener.hostname || "*"}</td>
+              <td>
+                {conflicted ? (
+                  <span className="badge bad">{tr("copy.conflict")}</span>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>{listenerHostname(listener)}</td>
               <td>
                 <span className="badge">
                   {listenerProtocolLabel(listener.protocol)}
@@ -339,7 +361,7 @@ function ListenerDumpDrawer(props: {
   const backendCount = listenerBackendCount(listener);
   return (
     <Drawer
-      title={listener.listenerName || listener.key}
+      title={qualifiedListenerDisplayName(listener)}
       onClose={props.onClose}
     >
       <div className="drawer-summary-list">
@@ -349,7 +371,7 @@ function ListenerDumpDrawer(props: {
         </div>
         <div>
           <span>{tr("copy.hostname")}</span>
-          <strong>{listener.hostname || "*"}</strong>
+          <strong>{listenerHostname(listener)}</strong>
         </div>
         <div>
           <span>{tr("copy.protocol")}</span>
@@ -518,17 +540,24 @@ export function hasTrafficInventory(
 
 function listenerProtocolLabel(protocol: DumpListener["protocol"]) {
   if (typeof protocol === "string") return protocol;
-  return Object.keys(protocol)[0] ?? "unknown";
+  return Object.keys(protocol)[0] ?? tr("copy.unknown");
+}
+
+function listenerProtocolFamily(listener: DumpListener) {
+  const protocol = listenerProtocolLabel(listener.protocol);
+  return protocol === "HTTPS" || protocol === "TLS"
+    ? "tls"
+    : protocol.toLowerCase();
 }
 
 function bindProtocolLabel(protocol: DumpBind["protocol"]) {
   if (typeof protocol === "string") return protocol;
-  return Object.keys(protocol)[0] ?? "unknown";
+  return Object.keys(protocol)[0] ?? tr("copy.unknown");
 }
 
 function bindDisplayName(address: string) {
   const port = bindPort(address);
-  return port ? `Port ${port}` : address;
+  return port ? tr("copy.portValue", [port]) : address;
 }
 
 function bindPort(address: string) {
@@ -547,8 +576,53 @@ function listenerDisplayName(listener: DumpListener) {
   return listener.listenerName || listener.key;
 }
 
+function qualifiedListenerDisplayName(listener: DumpListener) {
+  return tr("copy.valueListenerValue", [
+    listenerSourceDisplayName(listener),
+    listenerDisplayName(listener),
+  ]);
+}
+
+function listenerSourceDisplayName(listener: DumpListener) {
+  return listener.listenerSet
+    ? tr("copy.listenerSetValueValue", [
+        listener.listenerSet.namespace,
+        listener.listenerSet.name,
+      ])
+    : tr("copy.gatewayValueValue", [
+        listener.gatewayNamespace,
+        listener.gatewayName,
+      ]);
+}
+
+function listenerHostname(listener: DumpListener) {
+  return listener.hostname || "*";
+}
+
+function buildRuntimeListenerRows(bind: DumpBind): RuntimeDumpListenerRow[] {
+  const listeners = Object.values(bind.listeners ?? {});
+  return listeners.map((listener) => ({
+    bind,
+    listener,
+    conflicted: listeners.some(
+      (peer) => peer !== listener && runtimeListenersConflict(listener, peer),
+    ),
+  }));
+}
+
+function runtimeListenersConflict(
+  left: DumpListener,
+  right: DumpListener,
+) {
+  const leftFamily = listenerProtocolFamily(left);
+  const rightFamily = listenerProtocolFamily(right);
+  if (leftFamily !== rightFamily) return true;
+  if (leftFamily !== "http" && leftFamily !== "tls") return true;
+  return listenerHostname(left) === listenerHostname(right);
+}
+
 function routeListenerCell(row: DumpRouteRow) {
-  if (!row.listener) return row.source;
+  if (!row.listener) return routeSourceLabel(row.source);
   return (
     <Link
       className="table-link"
@@ -696,7 +770,7 @@ function normalizeBackendName(value: string) {
 }
 
 function backendListSummary(backends: unknown[]) {
-  if (!backends.length) return "none";
+  if (!backends.length) return tr("copy.none");
   const labels = backends.map(routeBackendLabel);
   return (
     labels.slice(0, 2).join(", ") +
@@ -705,7 +779,7 @@ function backendListSummary(backends: unknown[]) {
 }
 
 function routeBackendLabel(value: unknown) {
-  if (!value || typeof value !== "object") return "unknown";
+  if (!value || typeof value !== "object") return tr("copy.unknown");
   const backend = value as Record<string, unknown>;
   if ("backend" in backend) return backendKind(backend.backend);
   if ("service" in backend) {
@@ -716,11 +790,11 @@ function routeBackendLabel(value: unknown) {
     const namespace = service?.name?.namespace;
     const hostname = service?.name?.hostname;
     const port = service?.port;
-    return `${namespace ? `${namespace}/` : ""}${hostname ?? "service"}${port ? `:${port}` : ""}`;
+    return `${namespace ? `${namespace}/` : ""}${hostname ?? tr("copy.service")}${port ? `:${port}` : ""}`;
   }
   if ("routeGroup" in backend)
-    return `route group: ${String(backend.routeGroup)}`;
-  if ("invalid" in backend) return "invalid";
+    return tr("copy.routeGroupValue", [String(backend.routeGroup)]);
+  if ("invalid" in backend) return tr("copy.invalid");
   return backendKind(value);
 }
 
@@ -734,7 +808,13 @@ function hostnamesSummary(hostnames: string[] | undefined) {
 
 function backendKind(value: unknown) {
   if (typeof value === "string") return value;
-  if (!value || typeof value !== "object") return "unknown";
+  if (!value || typeof value !== "object") return tr("copy.unknown");
   const key = Object.keys(value as Record<string, unknown>)[0];
-  return key ?? "unknown";
+  return key ?? tr("copy.unknown");
+}
+
+function routeSourceLabel(source: DumpRouteRow["source"]) {
+  if (source === "listener") return tr("copy.listener");
+  if (source === "route group") return tr("copy.routeGroup");
+  return tr("copy.mesh");
 }

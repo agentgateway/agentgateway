@@ -12,8 +12,6 @@ spec:
     auth:
       azure:
         managedIdentity:
-          objectId: mi-object-id
-          resourceId: my-resource-id
           clientId: my-client-id
 ---
 # Output

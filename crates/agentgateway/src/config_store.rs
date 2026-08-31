@@ -150,7 +150,7 @@ impl ConfigResourceStore {
 		Self::from_pool(DatabasePool::connect_with_max_connections(url, max_connections).await?).await
 	}
 
-	async fn from_pool(pool: DatabasePool) -> anyhow::Result<Self> {
+	pub async fn from_pool(pool: DatabasePool) -> anyhow::Result<Self> {
 		let (change_tx, _) = watch::channel(());
 		match &pool {
 			DatabasePool::Sqlite(pool) => {
@@ -325,14 +325,37 @@ pub(crate) const MCP_SETTINGS_FIELDS: [&str; 5] = [
 	"failureMode",
 ];
 
+const API_KEY_METADATA_PREFIX: &str = "agentgateway.dev/";
+const API_KEY_ID_METADATA: &str = "agentgateway.dev/id";
+const API_KEY_CREATED_AT_METADATA: &str = "agentgateway.dev/createdAt";
+
 /// Older file keys have no stored ID, so expose their array position to the resource API.
 fn file_api_key_id(value: &Value, index: usize) -> String {
-	value
-		.pointer("/metadata/id")
+	api_key_metadata(value)
+		.and_then(|metadata| metadata.get(API_KEY_ID_METADATA))
 		.and_then(Value::as_str)
 		.filter(|id| !id.is_empty())
 		.map(ToString::to_string)
 		.unwrap_or_else(|| format!("@index:{index}"))
+}
+
+fn api_key_metadata(value: &Value) -> Option<&serde_json::Map<String, Value>> {
+	value.get("metadata").and_then(Value::as_object)
+}
+
+pub(crate) fn file_api_key_created_at(config: &Value, id: &str) -> Option<i64> {
+	crate::json::traverse(config, &["llm", "policies", "apiKey", "keys"])
+		.and_then(Value::as_array)?
+		.iter()
+		.enumerate()
+		.find(|(index, value)| file_api_key_id(value, *index) == id)
+		.and_then(|(_, value)| api_key_created_at(value))
+}
+
+pub(crate) fn api_key_created_at(value: &Value) -> Option<i64> {
+	api_key_metadata(value)?
+		.get(API_KEY_CREATED_AT_METADATA)?
+		.as_i64()
 }
 
 /// Direct mappings from a resource kind to its native YAML collection.
@@ -565,12 +588,13 @@ fn upsert_file_map_resource(
 			.get("apiKey")
 			.and_then(|policy| policy.get("keys"))
 			.cloned();
-		if let Some(keys) = existing_keys {
-			value
-				.as_object_mut()
-				.ok_or_else(|| anyhow::anyhow!("llm.policy/apiKey must be an object"))?
-				.insert("keys".to_string(), keys);
-		}
+		value
+			.as_object_mut()
+			.ok_or_else(|| anyhow::anyhow!("llm.policy/apiKey must be an object"))?
+			.insert(
+				"keys".to_string(),
+				existing_keys.unwrap_or_else(|| Value::Array(Vec::new())),
+			);
 	}
 	// A gateway's resource ID is the key in the YAML map, not a field in its value.
 	if prepared.kind == ConfigResourceKind::TrafficGateway {
@@ -690,11 +714,12 @@ fn delete_file_model_catalog(config: &mut Value) -> anyhow::Result<bool> {
 pub(crate) fn prepare_file_api_key_update(
 	id: String,
 	mut value: Value,
+	created_at: Option<i64>,
 ) -> anyhow::Result<PreparedResource> {
 	validate_id(&id)?;
-	ensure_no_api_key_id(&value)?;
+	validate_api_key_metadata(&value)?;
 	if !id.starts_with("@index:") {
-		set_api_key_id(&mut value, id.clone())?;
+		set_api_key_managed_metadata(&mut value, id.clone(), created_at)?;
 	}
 	Ok(PreparedResource {
 		kind: ConfigResourceKind::LlmApiKey,
@@ -716,10 +741,11 @@ pub(crate) fn prepare_resources(
 pub(crate) fn prepare_api_key_update(
 	id: String,
 	mut value: Value,
+	created_at: Option<i64>,
 ) -> anyhow::Result<PreparedResource> {
 	validate_id(&id)?;
-	ensure_no_api_key_id(&value)?;
-	set_api_key_id(&mut value, id.clone())?;
+	validate_api_key_metadata(&value)?;
+	set_api_key_managed_metadata(&mut value, id.clone(), created_at)?;
 	Ok(PreparedResource {
 		kind: ConfigResourceKind::LlmApiKey,
 		id,
@@ -1246,9 +1272,9 @@ pub(crate) fn prepare_resource(
 ) -> anyhow::Result<PreparedResource> {
 	let id = match kind {
 		ConfigResourceKind::LlmApiKey => {
-			ensure_no_api_key_id(&value)?;
+			validate_api_key_metadata(&value)?;
 			let id = uuid::Uuid::new_v4().to_string();
-			set_api_key_id(&mut value, id.clone())?;
+			set_api_key_managed_metadata(&mut value, id.clone(), Some(Utc::now().timestamp()))?;
 			id
 		},
 		ConfigResourceKind::LlmPolicy
@@ -1284,13 +1310,15 @@ fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String
 			})
 		}),
 		ConfigResourceKind::LlmApiKey => value
-			.pointer("/metadata/id")
+			.get("metadata")
+			.and_then(Value::as_object)
+			.and_then(|metadata| metadata.get(API_KEY_ID_METADATA))
 			.and_then(Value::as_str)
 			.map(ToString::to_string)
 			.ok_or_else(|| {
-				ConfigResourceError::InvalidRequest(
-					"llm.apiKey resources require value.metadata.id".to_string(),
-				)
+				ConfigResourceError::InvalidRequest(format!(
+					"llm.apiKey resources require value.metadata.{API_KEY_ID_METADATA}"
+				))
 				.into()
 			}),
 		ConfigResourceKind::LlmPolicy
@@ -1301,19 +1329,30 @@ fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String
 	}
 }
 
-fn ensure_no_api_key_id(value: &Value) -> anyhow::Result<()> {
-	if value.pointer("/metadata/id").is_some() {
+fn validate_api_key_metadata(value: &Value) -> anyhow::Result<()> {
+	if let Some(field) = value
+		.get("metadata")
+		.and_then(Value::as_object)
+		.and_then(|metadata| {
+			metadata
+				.keys()
+				.find(|field| field.starts_with(API_KEY_METADATA_PREFIX))
+		}) {
 		return Err(
-			ConfigResourceError::InvalidRequest(
-				"llm.apiKey resources must not include value.metadata.id".to_string(),
-			)
+			ConfigResourceError::InvalidRequest(format!(
+				"llm.apiKey metadata field {field} uses the reserved agentgateway.dev/ prefix"
+			))
 			.into(),
 		);
 	}
 	Ok(())
 }
 
-fn set_api_key_id(value: &mut Value, id: String) -> anyhow::Result<()> {
+fn set_api_key_managed_metadata(
+	value: &mut Value,
+	id: String,
+	created_at: Option<i64>,
+) -> anyhow::Result<()> {
 	let Some(object) = value.as_object_mut() else {
 		return Err(
 			ConfigResourceError::InvalidRequest("llm.apiKey resources must be JSON objects".to_string())
@@ -1331,7 +1370,13 @@ fn set_api_key_id(value: &mut Value, id: String) -> anyhow::Result<()> {
 			.into(),
 		);
 	};
-	metadata.insert("id".to_string(), Value::String(id));
+	metadata.insert(API_KEY_ID_METADATA.to_string(), Value::String(id));
+	if let Some(created_at) = created_at {
+		metadata.insert(
+			API_KEY_CREATED_AT_METADATA.to_string(),
+			Value::Number(created_at.into()),
+		);
+	}
 	Ok(())
 }
 
@@ -1852,13 +1897,41 @@ mod tests {
 		.expect("api key id");
 		uuid::Uuid::parse_str(&created.id).expect("UUID v4");
 		assert_eq!(
-			created.value.pointer("/metadata/id"),
+			created
+				.value
+				.get("metadata")
+				.and_then(Value::as_object)
+				.and_then(|metadata| metadata.get(API_KEY_ID_METADATA)),
+			Some(&Value::String(created.id.clone()))
+		);
+		let created_at = api_key_created_at(&created.value).expect("managed creation timestamp");
+		assert!(created_at > 0);
+		let updated = prepare_api_key_update(
+			created.id.clone(),
+			json!({"metadata": {"name": "updated"}}),
+			Some(created_at),
+		)
+		.expect("API key update");
+		assert_eq!(api_key_created_at(&updated.value), Some(created_at));
+		assert_eq!(
+			api_key_metadata(&updated.value).and_then(|metadata| metadata.get(API_KEY_ID_METADATA)),
 			Some(&Value::String(created.id))
 		);
+		let err = prepare_resource(
+			ConfigResourceKind::LlmApiKey,
+			json!({"metadata": {"agentgateway.dev/owner": "client"}}),
+		)
+		.expect_err("reserved API key metadata should fail");
 		assert!(
-			prepare_resource(
-				ConfigResourceKind::LlmApiKey,
-				json!({"metadata": {"id": "client-id"}}),
+			err
+				.to_string()
+				.contains("reserved agentgateway.dev/ prefix")
+		);
+		assert!(
+			prepare_api_key_update(
+				"key-id".to_string(),
+				json!({"metadata": {"agentgateway.dev/owner": "client"}}),
+				None,
 			)
 			.is_err()
 		);
@@ -2010,7 +2083,7 @@ mcp:
 			test_resource(
 				ConfigResourceKind::LlmApiKey,
 				"key_01",
-				json!({"key": "agw_sk_test", "metadata": {"id": "key_01", "name": "test"}}),
+				json!({"key": "agw_sk_test", "metadata": {"agentgateway.dev/id": "key_01", "name": "test"}}),
 			),
 			test_resource(ConfigResourceKind::UiPolicy, "csrf", json!({})),
 			test_resource(
@@ -2287,7 +2360,7 @@ routes:
 		assert_eq!(config.pointer("/gateways/private/port"), Some(&json!(8081)));
 
 		let missing_key =
-			prepare_file_api_key_update("missing".to_string(), json!({"key": "agw_missing"}))
+			prepare_file_api_key_update("missing".to_string(), json!({"key": "agw_missing"}), None)
 				.expect("prepare API key update");
 		let err = upsert_file_config_resource(&mut config, &missing_key, Some("missing"))
 			.expect_err("missing API key update must fail");

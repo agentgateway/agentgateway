@@ -1157,7 +1157,7 @@ const zhCN = {
       explicitEndpoints: "显式端点",
       explicitOutgoingModel: "显式传出模型",
       export: "导出",
-      exposeHeaders: "公开请求头",
+      exposeHeaders: "公开响应头",
       exposeTheUiOnATrafficGatewayAndConfigurePoliciesThatProtectTheUi:
         "在流量网关上公开 UI 并配置保护 UI 的策略。",
       exposeToolNamesWithoutAddingTheTargetName:
@@ -1274,7 +1274,7 @@ const zhCN = {
       handleCsrfProtectionByValidatingRequestOriginsAgainstConfiguredAllowedOrigins:
         "通过根据配置的允许来源验证请求来源来处理 CSRF 保护。",
       headerAllowlist: "请求头允许列表",
-      headerCasingBehaviorForHttp1Responses: "HTTP/1 响应的请求头大小写行为。",
+      headerCasingBehaviorForHttp1Responses: "HTTP/1 响应头的大小写行为。",
       headerLocation: "请求头位置",
       headerName: "请求头名称",
       headerName_8vzq77: "请求头名称",
@@ -1286,7 +1286,7 @@ const zhCN = {
       headersToAddToTheAuthorizationRequestUsingCelExpressionsEmptyMeansAllHeaders:
         "使用 CEL 表达式添加到授权请求的请求头。留空表示所有请求头。",
       headersToAddSetOrRemoveFromTheRejectionResponse:
-        "要从拒绝响应中添加、设置或删除的请求头。",
+        "要在拒绝响应中添加、设置或删除的响应头。",
       headersToAppendUsingCelExpressionsForValues:
         "使用 CEL 表达式附加值的请求或响应头。",
       headersToAppendWithoutReplacingExistingValues:
@@ -3108,6 +3108,283 @@ const zhCN = {
         "要删除“{{value}}”吗？删除后，流量将无法再发送到此目标。",
       deleteRouteQuestion:
         "要删除“{{value}}”吗？匹配此路由的流量将不再到达其后端。",
+      invalid: "无效",
+      unrestricted: "不限制",
+      unrestrictedLowercase: "不限制",
+      denyAll: "全部拒绝",
+      denyAllLowercase: "全部拒绝",
+      allModels: "所有模型",
+      modelAccess: "模型访问",
+      selectedModels: "指定模型",
+      accessMode: "访问模式",
+      allowedModelPatterns: "允许的模型模式",
+      modelPatternPlaceholder: "gpt-5.5 或 openai/*",
+      noModelPatternsConfigured: "未配置模型模式。",
+      invalidModelAccess: "模型访问配置无效",
+      addAtLeastOneModelPatternOrSelectDenyAll:
+        "至少添加一个模型模式，或选择“全部拒绝”。",
+      wildcardCannotBeCombinedWithOtherModelPatterns:
+        "“*”不能与其他模型模式同时使用。",
+      wildcardsOnlySupportedAtPatternBeginningOrEnd:
+        "通配符仅支持出现在模式开头或结尾。",
+      modelPatternCanContainAtMostOneWildcard:
+        "每个模型模式最多包含一个通配符。",
+      thisKeyCanRequestAnyModel: "此密钥可请求任意模型。",
+      requestsMayOnlyUseModelsMatchingPatternsBelow:
+        "请求只能使用与以下模式匹配的模型。",
+      thisKeyCannotRequestAnyModel: "此密钥不能请求任何模型。",
+      capHowMuchThisKeyCanSpendOrConsumeDuringEachRollingWindow:
+        "限制此密钥在每个滚动时间窗口内可支出的金额或可消耗的令牌数。",
+      budgetNamesMustBePresentAndUniqueRollingWindowsAreRequiredAndAmountsMustBeNonNegative:
+        "预算名称必须填写且唯一，必须设置滚动时间窗口，金额必须为非负值；令牌限额必须为整数。",
+      noBudgetsConfiguredUsageIsUnlimited:
+        "未配置预算，用量不受限制。",
+      untitledBudget: "未命名预算",
+      exceeded: "已超限",
+      done: "完成",
+      removeBudget: "移除预算 {{value}}",
+      stableIdentifierUsedForAccounting: "用于核算的稳定标识符。",
+      monthlySpend: "monthly-spend",
+      rollingWindow: "滚动窗口",
+      rollingWindowExamples: "示例：24h、7d 或 30d。",
+      limitAmount: "限额",
+      limitUnit: "限额单位",
+      whenLimitIsReached: "达到限额时",
+      budgetAmount: "预算 {{value}} 金额",
+      budgetUnit: "预算 {{value}} 单位",
+      budgetEnforcement: "预算 {{value}} 执行方式",
+      blockRequests: "阻止请求",
+      return429: "返回 429",
+      auditOnly: "仅审计",
+      continueServing: "继续提供服务",
+      addBudget: "添加预算",
+      loadingUsage: "正在加载用量…",
+      liveUsageUnavailable: "实时用量不可用。",
+      budgetUsedOfLimit: "{{value}} / {{value}} 已使用",
+      budgetUsageLive: "{{value}}% · 将于{{value}}重置",
+      budgetUsageNotRecorded: "尚未记录用量 · {{value}} 滚动窗口",
+      usdAmount: "${{value}}",
+      tokenAmount: "{{value}} 个令牌",
+      budgetSummaryTooltip: "{{value}} / {{value}}，每{{value}}",
+      budget_one: "{{count}} 个预算",
+      budget_other: "{{count}} 个预算",
+      pattern_one: "{{count}} 个模式",
+      pattern_other: "{{count}} 个模式",
+      patterns: "{{count}} 个模式",
+      entry_one: "{{count}} 项",
+      entry_other: "{{count}} 项",
+      addAMetadataNameBeforeSavingThisVirtualApiKey:
+        "保存此虚拟 API key 前，请先添加元数据名称。",
+      cannotBeCombinedWithOtherModelPatterns:
+        "`*` 不能与其他模型匹配模式组合。",
+      wildcardsAreOnlySupportedAtTheBeginningOrEndOfAPattern:
+        "通配符只能位于匹配模式的开头或结尾。",
+      aModelPatternCanContainAtMostOneWildcard:
+        "一个模型匹配模式最多只能包含一个通配符。",
+      valueBudgets_one: "{{count}} 个预算",
+      valueBudgets_other: "{{count}} 个预算",
+      valuePatterns_one: "{{count}} 个匹配模式",
+      valuePatterns_other: "{{count}} 个匹配模式",
+      valueEntries_one: "{{count}} 项",
+      valueEntries_other: "{{count}} 项",
+      removeBudgetValue: "移除预算{{value}}",
+      examples24h7dOr30d: "例如：24h、7d 或 30d。",
+      budgetValueAmount: "预算{{value}}金额",
+      budgetValueUnit: "预算{{value}}单位",
+      budgetValueEnforcement: "预算{{value}}执行方式",
+      liveUsageIsUnavailable: "实时用量不可用。",
+      valueOfValueUsed: "已使用 {{value}} / {{value}}",
+      valueResetsValue: "{{value}}% · 重置时间：{{value}}",
+      noUsageRecordedYetValueRollingWindow:
+        "尚无用量记录 · {{value}} 滚动窗口",
+      valueOfValuePerValue: "{{value}} / {{value}}（每{{value}}）",
+      portConflict: "端口冲突",
+      conflict: "冲突",
+      valueListenersInvolvedInPortConflicts:
+        "有 {{value}} 个监听器涉及端口冲突",
+      qualifiedListener: "{{value}} 监听器 {{value}}",
+      valueListenerValue: "{{value}} 监听器 {{value}}",
+      listenerSetValueValue: "ListenerSet {{value}}/{{value}}",
+      gatewayValueValue: "网关 {{value}}/{{value}}",
+      routeGroupValue: "路由组：{{value}}",
+      mesh: "网格",
+      direct: "直连",
+      listenersAndRoutes: "{{value}} 个监听器 · {{value}} 个路由",
+      theUiIsConfiguredAsReadOnlyEditingIsDisabled:
+        "UI 已配置为只读，编辑功能已禁用。",
+      theUiIsConfiguredAsReadOnly: "UI 已配置为只读。",
+      geminiChatModelsModelGenerateContent:
+        "Gemini 聊天（models/{model}:generateContent）",
+      geminiTokenCountModelsModelCountTokens:
+        "Gemini 令牌计数（models/{model}:countTokens）",
+      trajectory: "轨迹",
+      turn: "轮次",
+      unknownTurn: "未知轮次",
+      trajectorySteps_one: "{{count}} 步",
+      trajectorySteps_other: "{{count}} 步",
+      trajectoryStep: "第 {{value}} 步：{{value}}",
+      trajectoryStepLabel: "第 {{value}} 步 {{value}}",
+      widthShowsApproximateTokens: "宽度表示近似令牌数",
+      jumpToConversation: "跳转到对话",
+      trajectoryToolCall: "工具调用：{{value}}",
+      trajectoryToolResult: "工具结果：{{value}}",
+      trajectoryMessageValue: "{{value}}：{{value}}",
+      reasoningDetailsUnavailable: "无法获取推理详情",
+      encrypted: "已加密",
+      encryptedBytes: "已加密（{{value}} 字节）",
+      histogramRepresentationToCollectNativeHistogramsAreExposedOnlyThroughThePromethe_18b5wxk:
+        "要采集的直方图表示形式。原生直方图仅通过 Prometheus protobuf 格式公开。默认为 classic。",
+      additionalRequestHeadersWhoseValuesShouldBeRedactedFromTraceAndDebugOutput:
+        "其值应从跟踪和调试输出中脱敏的额外请求头。",
+      freeformCapabilityRoutingTagsForThisModel:
+        "此模型的自由格式能力/路由标签。",
+      disallowWriteOperationsToTheConfigFromTheUi:
+        "禁止 UI 对配置执行写操作。",
+      collectClassicHistogramBucketsOnly: "仅采集经典直方图桶。",
+      collectNativeHistogramBucketsOnly: "仅采集原生直方图桶。",
+      collectBothClassicAndNativeHistogramBuckets:
+        "同时采集经典和原生直方图桶。",
+      scopeValuesRequestedWhenObtainingTheIdJagFromTheIdentityProviderSentSpaceDelimited:
+        "在从身份提供商获取 ID-JAG 时请求的 scope 值，以空格分隔发送。",
+      scopeValuesRequestedWhenExchangingTheIdJagForAnAccessTokenWhenUnsetInheritsScope_1veicy4:
+        "在将 ID-JAG 交换为访问令牌时请求的 scope 值。未设置时继承 scopes；为空时省略 scope。",
+      jwtValidationOptionsControllingWhichClaimsMustBePresentInATokenTheRequiredClaims_24lqvf:
+        "JWT 验证选项，用于控制令牌中必须存在的声明。required_claims 集合指定令牌负载中必须存在的 RFC 7519 注册声明，验证才会继续。仅识别 exp、nbf、aud、iss、sub。底层 jsonwebtoken 库不会强制检查 iat、jti 等其他注册声明，并会静默忽略。此设置仅检查声明是否存在；配置的签发者和非空受众列表还会分别要求 iss 和 aud。标准声明的值仍会单独验证。默认为 [exp]。",
+      claimsThatMustBePresentInTheTokenBeforeValidationOnlyExpNbfAudIssSubAreEnforcedO_lq824y:
+        "令牌验证前必须存在的声明。仅强制检查 exp、nbf、aud、iss、sub；其他声明（包括 iat 和 jti）会被忽略。默认为 [exp]。使用空列表时，除配置的签发者和受众所隐含的要求外，不增加任何声明要求。",
+      whichPartsOfTheRequestThisGuardInspects:
+        "此防护规则检查请求的哪些部分。",
+      aCategoryOfRequestContentThatAPromptGuardCanInspect:
+        "提示词防护规则可以检查的请求内容类别。",
+      theSystemDeveloperPrompt: "系统/开发者提示词。",
+      regularUserAssistantMessageText: "普通用户/助手消息文本。",
+      toolCallResults: "工具调用结果。",
+      toolCallArgumentsInApisThatSendToolArgumentsAsOpaqueJsonSuchAsCompletionsTheArgu_16v73q:
+        "工具调用参数。对于 Completions 等将工具参数作为不透明 JSON 发送的 API，参数会作为单个字符串进行脱敏，这意味着提示词防护规则可能会将参数改写为无效 JSON。",
+      geminiModelsModelGenerateContentAndModelsModelStreamGenerateContent:
+        "Gemini models/{model}:generateContent 和 models/{model}:streamGenerateContent。",
+      geminiModelsModelCountTokens: "Gemini models/{model}:countTokens。",
+      expectedTokenIssuerTheJwtIssClaimIsRequiredAndMustMatch:
+        "预期的令牌签发者。JWT iss 声明为必需项且必须匹配。",
+      acceptedTokenAudiencesANonEmptyListRequiresAMatchingJwtAudClaim:
+        "已接受的令牌受众。非空列表要求匹配的 JWT aud 声明。",
+      optInMcpDnsRebindingProtectionHostOriginMustBeLocalhostOffByDefaultSeeHttpsGithu_eainyq:
+        "选择启用 MCP DNS 重绑定保护（Host/Origin 必须为 localhost）。默认关闭；参见 https://github.com/agentgateway/agentgateway/issues/1855。",
+      resolveTheDialTargetFromDownstreamTlsSniAndTheOriginalDestinationPort:
+        "根据下游 TLS SNI 和原始目标端口解析拨号目标。",
+      celExpressionEvaluatedAgainstTcpConnectionContextToComputeAHostPortDialTargetAva_tnefsc:
+        "针对 TCP 连接上下文求值、用于计算 host:port 拨号目标的 CEL 表达式。可用字段包括 source.* 和 destination.*；对于 TLS，destination.hostname 是嗅探到的 SNI。",
+      httpExternalAuthorizationPerformedOnceForEachDownstreamNetworkConnection:
+        "对每个下游网络连接执行一次 HTTP 外部授权。",
+      theRequestedDestinationHostnameWhenKnownForTlsConnectionsThisIsTheSniffedSni:
+        "已知时的请求目标主机名。对于 TLS 连接，这是嗅探到的 SNI。",
+      localSpiffeWorkloadApiConfigurationWhenSetListenersAndBackendsMaySourceTheirTlsI_hdlcfx:
+        "本地 SPIFFE Workload API 配置\n设置后，监听器和后端可从 SPIFFE 获取 TLS 身份。",
+      spiffeWorkloadApiEndpointEGUnixRunSpireAgentSock:
+        "SPIFFE Workload API 端点（例如 `unix:///run/spire/agent.sock`）。",
+      maximumTimeToWaitWhenEstablishingAConnectionToAnUpstreamDefaultsTo11Seconds:
+        "与上游建立连接时的最长等待时间。默认为 11 秒。",
+      protocolHandlingForTheEntireBindWhenOmittedItIsInferredFromTheListeners:
+        "整个绑定的协议处理方式。省略时根据监听器推断。",
+      experimentalDetectsTlsPlaintextHttpOrOpaqueTcpFromTheFirstBytesOfEachConnectionA_1r6erw6:
+        "实验性：根据每个连接的首字节检测 TLS、明文 HTTP 或不透明 TCP，并选择相应的监听器。尽可能使用显式协议。AUTO 要求客户端先发送数据，不透明协议可能表现得像 TLS 或 HTTP 请求。",
+      certificateSourceModeStaticModeUsesCertKeyAsTheLeafCertificateDynamicCaModeUsesC_ehwfvy:
+        "证书来源模式。静态模式将 cert/key 用作叶证书；动态 CA 模式将 cert/key 用作 CA，以按需签发 SNI 叶证书。\n设置 `spiffe` 时不使用。",
+      pathToTheTlsCertificateFileLeafCertificateOrCaCertificateInDynamicCaModeRequired_1j2jxjv:
+        "TLS 证书文件路径（叶证书；动态 CA 模式下为 CA 证书）。除非设置 `spiffe`，否则必填。",
+      pathToARootCaCertificateFileUsedToValidateClientCertificatesMTlsOmitForOneWaySer_1fp8dve:
+        "用于验证客户端证书（mTLS）的根 CA 证书文件路径。\n单向服务器 TLS 时可省略。设置 `spiffe` 时不使用。",
+      sourceTheServingIdentityFromTheSpiffeWorkloadApiMutuallyExclusiveWithCertKeyRoot:
+        "从 SPIFFE Workload API 获取服务端身份。\n不能与 `cert`/`key`/`root` 同时设置。",
+      resolveSubstrateActorHostnamesForDynamicRouteBackendsOnIngress:
+        "在入口侧为动态路由后端解析 Substrate actor 主机名。",
+      authorizeConnectEgressUsingTheOriginatingActorSDynamicPolicy:
+        "使用发起方 actor 的动态策略授权 CONNECT 出站流量。",
+      getTheGatewaySClientIdentityAndTrustRootsFromTheSpiffeWorkloadApiMutuallyExclusi_1gwgyqy:
+        "从 SPIFFE Workload API 获取网关的客户端身份和信任根。\n不能与 `cert`/`key`/`root`/`insecure`/`insecureHost` 同时设置。\n可通过 `subjectAltNames` 固定指定的上游 SPIFFE ID（例如 `spiffe://td/ns/foo/sa/bar`）；省略 `subjectAltNames` 时，接受链到 SPIFFE 信任包的任意 SVID。",
+      secretValueToSendToTheBackendFileReferencesAreWatchedSoRotatingTheFileReloadsItWithoutARestart:
+        "要发送到后端的机密值。文件引用会被监视，因此轮换文件后无需重启即可重新加载。",
+      maximumTimeAConnectionToTheBackendMayStayOpenAConnectionPastThisDurationIsNotReu_o4pwvu:
+        "后端连接允许保持打开的最长时间。超过此时长的连接不会再用于新请求；系统会建立新连接，同时不会中断进行中的请求。",
+      howRequestsAreSentThroughTheProxy: "请求通过代理发送的方式。",
+      useConnectForTlsAndNonHttpTransportsAndAbsoluteFormRequestsForPlaintextHttp:
+        "TLS 和非 HTTP 传输使用 CONNECT；明文 HTTP 使用绝对形式请求。",
+      useConnectForAllTransportsIncludingPlaintextHttp:
+        "所有传输（包括明文 HTTP）均使用 CONNECT。",
+      acceptedTokenAudiencesMatchedAgainstTheJwtAudClaimIfUnsetAudienceValidationIsDisabled:
+        "接受的令牌受众，与 JWT 的 `aud` 声明匹配。未设置时禁用受众验证。",
+      observeModeRecordWhatTheGuardWouldHaveDoneMetricsStructuredLogButNeverBlockOrMas_tmbdrm:
+        "观察模式：记录防护器本会采取的操作（指标和结构化日志），但从不阻止或遮蔽内容——内容始终原样通过。",
+      whetherToEnforceTheWebhookSVerdictOrOnlyObserveItDefaultsToRejectEnforce:
+        "是执行 Webhook 的判定，还是仅进行观察。\n默认为 `reject`（执行）。",
+      actionForGuardsThatCannotMaskOnlyRejectOrObserveBedrockWebhookOpenAiModerationGo_efrlc3:
+        "适用于无法遮蔽内容、只能拒绝或观察的防护器的操作。Bedrock、Webhook、OpenAI moderation、Google Model Armor 和 Azure Content Safety 决定要标记的内容；网关只决定是执行该判定，还是仅记录它。",
+      enforceTheGuardSNativeVerdictBlockOrForBedrockAnonymizeThisIsTheDefaultAndPreser_11tq0wd:
+        "执行防护器的原生判定（阻止；对于 Bedrock，则为匿名化）。\n这是默认值，会保留原有的强制执行行为。",
+      observeModeInvokeTheGuardAndRecordItsVerdictMetricsStructuredLogButNeverBlockOrM_1ny1vgr:
+        "观察模式：调用防护器并记录其判定（指标和结构化日志），但从不阻止或遮蔽内容——内容始终原样通过。",
+      whetherToRejectFlaggedContentOrOnlyObserveItDefaultsToRejectEnforce:
+        "是拒绝被标记的内容，还是仅进行观察。\n默认为 `reject`（执行）。",
+      whetherToEnforceTheGuardrailSVerdictOrOnlyObserveItRejectTheDefaultEnforcesTheGu_16r281l:
+        "是执行防护栏的判定，还是仅进行观察。\n\n`reject`（默认值）会执行防护栏判定：`BLOCKED` 评估会拒绝请求/响应，`ANONYMIZED` 评估会遮蔽匹配内容，与之前完全相同。\n\n`audit` 会记录成功的评估，但不执行其判定。即使 AWS 资源配置为 `BLOCK`/`ANONYMIZE`，`audit` 也保证网关侧不执行阻止或遮蔽。",
+      keepASuccessfullyValidatedJwtInItsOriginalLocation:
+        "将验证成功的 JWT 保留在原始位置。",
+      modelPatternsThisKeyIsAllowedToAccessOmittedMeansNoAdditionalConstraintAnEmptyLi_1nw65ly:
+        "此密钥允许访问的模型匹配模式。\n省略表示不增加限制；空列表表示拒绝所有模型。",
+      independentBudgetsChargedAfterLlmResponsesARequestIsNotChargedWhenItsProviderDoe_7b0bcw:
+        "在 LLM 响应完成后计费的独立预算。若提供商未上报预算单位所需的用量或成本，则不会对请求计费。",
+      aNamedBudgetAttachedToAStandaloneApiKeyUsageIsChargedAfterAnLlmResponseWhenThePr_721r2j:
+        "附加到独立 API key 的命名预算。\n\n提供商上报配置单位所需的令牌或成本后，在 LLM 响应完成时计费用量。用量不可用的请求会被记录，但无法事后计费或阻止。",
+      stableNameForThisBudgetWithinItsOwningApiKey:
+        "此预算在所属 API key 内的稳定名称。",
+      maximumUsageAllowedDuringTheWindow: "该窗口内允许的最大用量。",
+      rollingWindowOverWhichUsageWillBeAccumulated:
+        "累计用量所覆盖的滚动窗口。",
+      actionTakenWhenTheBudgetIsExceeded: "超出预算时采取的操作。",
+      durationOfTheFixedUsageWindowForExample1h24hOr30dWindowsAreAlignedToTheUnixEpoch_cdd7lt:
+        "固定用量窗口的时长，例如 `1h`、`24h` 或 `30d`。\n窗口按 Unix 纪元对齐，而不是从第一个请求开始：`1h` 遵循 UTC 整点，`24h` 从 UTC 午夜开始，`30d` 使用连续的 30 天周期，而不是日历月。",
+      resolvesSubstrateActorHostnamesThroughTheAteApiForDynamicRouteBackends:
+        "通过 ate-api 为动态路由后端解析 Substrate actor 主机名。",
+      portOnTheResumedWorkerPodSAtunnelConnectListenerDefaultsTo8443:
+        "恢复的 worker Pod 上 atunnel CONNECT 监听器的端口。默认为 8443。",
+      howLongSuccessfulActorAssignmentsAreReusedDefaultsTo5s0sDisablesReuse:
+        "成功的 actor 分配可复用多久。默认为 5s；设置为 0s 可禁用复用。",
+      boundedRequestParkingWhileASuspendedActorIsWaitingForWorkerCapacity:
+        "暂停中的 actor 等待 worker 容量期间的有界请求排队。",
+      boundsRequestsHeldWhileAnActorIsWaitingForCapacityToResume:
+        "限制 actor 等待容量恢复期间可暂存的请求。",
+      maximumTimeToWaitForTheActorToBecomeRoutable:
+        "等待 actor 恢复为可路由状态的最长时间。",
+      maximumConcurrentRequestsThatMayWaitForActorResumptionSetTo0ToDisableParking:
+        "等待 actor 恢复的并发请求数上限。设为 0 可禁用请求排队。",
+      initialDelayBetweenResumeActorRetriesWhileParked:
+        "请求排队期间，重试 ResumeActor 之间的初始延迟。",
+      multiplierAppliedToTheDelayAfterEachParkedRetry:
+        "每次排队重试后应用于延迟的乘数。",
+      authorizesAnActorSEgressToTheHostnameRecoveredFromAnInternalConnectListener:
+        "授权 actor 向从内部 CONNECT 监听器恢复出的主机名发起出站连接。",
+      maximumNumberOfInFlightHttpRequestsAcrossThisBindThisIncludesHttp1RequestsAndHtt_12ydm0j:
+        "此绑定上允许同时进行的 HTTP 请求数上限。包括 HTTP/1 请求和 HTTP/2 流。超过上限的请求会立即被拒绝。",
+      maximumNumberOfActiveDownstreamConnectionsOnThisBindConnectionsOverTheLimitAreClosedImmediately:
+        "此绑定上活动下游连接数上限。超过上限的连接会立即关闭。",
+      resolveTheDialTargetFromRequestMetadataUsingACelExpression:
+        "使用 CEL 表达式从请求元数据解析拨号目标。",
+      theRawSpiffeIdFirstSpiffeUriSanOfTheDownstreamClientCertificateIfPresentUnlikeId_9zald1:
+        "下游客户端证书中的原始 SPIFFE ID（第一个 `spiffe://` URI SAN）（如果存在）。不同于 `identity`，该字段适用于任意 SPIFFE ID，而不仅是 Istio `spiffe://td/ns/<ns>/sa/<sa>` 格式。",
+      guardrailsContainsOneEntryPerPromptGuardGuardrailInterventionInEitherTheRequestO_6q207k:
+        "`guardrails` 中每个条目对应一次 prompt-guard 防护栏干预，发生在请求或响应阶段。仅在请求完成后运行的 CEL 中提供，例如日志和指标字段。",
+      recordsOnePromptGuardGuardrailIntervention: "记录一次 prompt-guard 防护栏干预。",
+      thePhaseTheGuardrailIntervenedInRequestOrResponse:
+        "防护栏介入的阶段：`request` 或 `response`。",
+      theGuardKindThatIntervenedSuchAsBedrockGuardrails:
+        "发生干预的防护栏类型，例如 `bedrockGuardrails`。",
+      theActionTheGuardrailTookMaskRejectAuditFailOpen:
+        "防护栏采取的操作（mask/reject/audit/failOpen）。",
+      theConfiguredGuardrailIdentifier: "已配置的防护栏标识符。",
+      theConfiguredGuardrailVersion: "已配置的防护栏版本。",
+      theReasonTheGuardrailReportedForItsAction: "防护栏报告的操作原因。",
+      assessmentDetailReportedByTheGuardrailProviderRedactedToMetadataOnlyContentBeari_16jy1g:
+        "防护栏提供商报告的评估详情，仅保留为元数据；绝不会包含承载内容的字段（例如匹配到的文本）。",
     },
   },
 } as const satisfies LocaleShape<typeof en>;

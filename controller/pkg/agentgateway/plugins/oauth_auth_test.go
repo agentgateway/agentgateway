@@ -1,13 +1,13 @@
 package plugins
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -64,7 +64,7 @@ func crossAppAccessEndpoint(name string) agentgateway.CrossAppAccessEndpoint {
 		Name:  gwv1.ObjectName(name),
 	}
 	return agentgateway.CrossAppAccessEndpoint{
-		PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{BackendRef: &ref},
+		BackendRef: &ref,
 		ClientAuth: agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
 			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodClientSecretPost),
@@ -76,11 +76,9 @@ func TestOAuthTokenExchangeTokenEndpointIsReferencedBackend(t *testing.T) {
 	policy := &agentgateway.AgentgatewayPolicy{
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			Backend: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					Auth: &agentgateway.BackendAuth{
-						OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
-							PolicyBackendEndpoint: oauthTokenEndpoint(),
-						},
+				Auth: &agentgateway.BackendAuth{
+					OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
+						PolicyBackendEndpoint: oauthTokenEndpoint(),
 					},
 				},
 			},
@@ -103,13 +101,11 @@ func TestCrossAppAccessTokenEndpointsAreReferencedBackends(t *testing.T) {
 	policy := &agentgateway.AgentgatewayPolicy{
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			Backend: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					Auth: &agentgateway.BackendAuth{
-						CrossAppAccess: &agentgateway.CrossAppAccessAuth{
-							IdentityProvider:            crossAppAccessEndpoint("idp"),
-							ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
-							Audience:                    "https://resource.example.com",
-						},
+				Auth: &agentgateway.BackendAuth{
+					CrossAppAccess: &agentgateway.CrossAppAccessAuth{
+						IdentityProvider:            crossAppAccessEndpoint("idp"),
+						ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+						Audience:                    "https://resource.example.com",
 					},
 				},
 			},
@@ -143,9 +139,7 @@ func TestBuildOAuthTokenExchangeURL(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 
 	oauth, err := BuildOAuthTokenExchange(ctx, &agentgateway.OAuthTokenExchange{
-		PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
-			URL: ptr.Of(agentgateway.LongString("https://auth.example.com:9443/oauth/token")),
-		},
+		URL: ptr.Of(agentgateway.LongString("https://auth.example.com:9443/oauth/token")),
 	}, "default", nil)
 	if err != nil {
 		t.Fatalf("BuildOAuthTokenExchange() error = %v, want nil", err)
@@ -261,6 +255,44 @@ func TestBuildCrossAppAccessSubjectTokenTypes(t *testing.T) {
 			}
 			if got.GetSubjectToken().GetTokenType() != tt.want {
 				t.Fatalf("subject token type = %q, want %q", got.GetSubjectToken().GetTokenType(), tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildCrossAppAccessPreservesAccessTokenScopePresence(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	empty := []string{}
+	override := []string{"backend.read"}
+
+	tests := []struct {
+		name   string
+		scopes *[]string
+		want   []string
+		set    bool
+	}{
+		{name: "absent"},
+		{name: "empty", scopes: &empty, want: []string{}, set: true},
+		{name: "override", scopes: &override, want: override, set: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+				IdentityProvider:            crossAppAccessEndpoint("idp"),
+				ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+				Audience:                    "https://resource.example.com",
+				Scopes:                      []string{"read"},
+				AccessTokenScopes:           tt.scopes,
+			}, "default")
+			if err != nil {
+				t.Fatalf("BuildCrossAppAccess() error = %v, want nil", err)
+			}
+			if (got.AccessTokenScopes != nil) != tt.set {
+				t.Fatalf("access token scopes presence = %t, want %t", got.AccessTokenScopes != nil, tt.set)
+			}
+			if tt.set && !slices.Equal(got.AccessTokenScopes.Values, tt.want) {
+				t.Fatalf("access token scopes = %v, want %v", got.AccessTokenScopes.Values, tt.want)
 			}
 		})
 	}
@@ -387,10 +419,8 @@ func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 
 func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretIntent(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "oauth-client",
-		},
+		Namespace: "default",
+		Name:      "oauth-client",
 		Data: map[string][]byte{
 			"other": []byte("value"),
 		},
@@ -420,10 +450,8 @@ func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretInte
 
 func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "oauth-signing-key",
-		},
+		Namespace: "default",
+		Name:      "oauth-signing-key",
 		Data: map[string][]byte{
 			"signingKey":  []byte("-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"),
 			"certificate": []byte("-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----"),
@@ -655,20 +683,16 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 func TestTranslateBackendAuthPreservesInvalidOAuthPolicy(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 	policy := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "oauth",
-		},
+		Namespace: "default",
+		Name:      "oauth",
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			Backend: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					Auth: &agentgateway.BackendAuth{
-						OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
-							PolicyBackendEndpoint: oauthTokenEndpoint(),
-							SubjectToken: &agentgateway.OAuthTokenSpec{
-								Source: &agentgateway.AuthorizationExtractionLocation{
-									Expression: ptr.Of(agentgateway.CELExpression("((")),
-								},
+				Auth: &agentgateway.BackendAuth{
+					OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
+						PolicyBackendEndpoint: oauthTokenEndpoint(),
+						SubjectToken: &agentgateway.OAuthTokenSpec{
+							Source: &agentgateway.AuthorizationExtractionLocation{
+								Expression: ptr.Of(agentgateway.CELExpression("((")),
 							},
 						},
 					},
@@ -688,10 +712,8 @@ func TestTranslateBackendAuthPreservesInvalidOAuthPolicy(t *testing.T) {
 
 func TestOAuthTokenExchangeEnumDefaulting(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "oauth-client",
-		},
+		Namespace: "default",
+		Name:      "oauth-client",
 		Data: map[string][]byte{
 			"clientSecret": []byte("s3cr3t"),
 		},
@@ -740,9 +762,7 @@ func TestOAuthTokenExchangeTokenTypeTranslation(t *testing.T) {
 		},
 		RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeIDToken),
 		Location: &agentgateway.AuthorizationLocation{
-			AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
-				Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Exchanged-Token"},
-			},
+			Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Exchanged-Token"},
 		},
 	}, "default")
 	if err != nil {

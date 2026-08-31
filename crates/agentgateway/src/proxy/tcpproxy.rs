@@ -13,9 +13,8 @@ use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo};
 use crate::types::agent::{
-	BackendTrafficPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
-	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
-	TransportProtocol,
+	Backend, BackendReference, BackendTrafficPolicy, BackendWithPolicies, BindKey, Listener,
+	ListenerProtocol, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target, TransportProtocol,
 };
 use crate::types::discovery::{NetworkAddress, WaypointIdentity};
 use crate::types::{agent, frontend};
@@ -37,17 +36,10 @@ impl TCPProxy {
 		let tcp = connection
 			.ext::<TCPConnectionInfo>()
 			.expect("tcp connection must be set");
-		let tls = connection.ext::<TLSConnectionInfo>();
-		let unverified_workload = crate::cel::WorkloadContext::from_stores(
-			&self.inputs.stores,
-			&self.inputs.cfg.network,
-			tcp.peer_addr.ip(),
-		);
-		let src = SourceContext::from_tcp_connection(
-			tcp,
-			tls.and_then(|t| t.src_identity.clone()),
-			unverified_workload,
-		);
+		let src = connection
+			.ext::<SourceContext>()
+			.expect("source context must be set by the gateway")
+			.clone();
 		let mut log: DropOnLog = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
@@ -110,6 +102,23 @@ impl TCPProxy {
 					.as_ref()
 					.expect("expected source context"),
 			)?;
+		}
+		if let Some(authz) = frontend_policies.network_ext_authz.as_ref() {
+			authz
+				.check_network(
+					httpproxy::PolicyClient::new(self.inputs.clone()),
+					log
+						.source_context
+						.as_ref()
+						.expect("expected source context")
+						.clone(),
+					crate::cel::DestinationContext::from_tcp_connection(
+						connection
+							.ext::<TCPConnectionInfo>()
+							.expect("tcp connection must be set"),
+					),
+				)
+				.await?;
 		}
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::tcp);
@@ -176,14 +185,27 @@ impl TCPProxy {
 			.ext::<WaypointService>()
 			.map(|_| crate::client::HboneSourceRole::Waypoint)
 			.or(Some(crate::client::HboneSourceRole::Gateway));
-		let backend_call = Self::build_backend_call(
+		let destination = crate::cel::DestinationContext {
+			address: self.target_address.ip(),
+			port: self.target_address.port(),
+			hostname: sni.as_deref().map(strng::new),
+		};
+		let mut backend_call = Self::build_backend_call(
 			&mut Some(log),
-			sni,
+			Some(&destination),
 			&inputs,
 			&selected_backend.backend.backend,
 			backend_policies,
 			hbone_source,
 		)?;
+		if let Some(tunnel) = backend_call.backend_policies.tunnel.clone() {
+			backend_call.set_tunnel_proxy(resolve_tunnel_backend_call(
+				&mut Some(log),
+				Some(&destination),
+				&inputs,
+				&tunnel,
+			)?);
+		}
 
 		let bi = selected_backend.backend.backend.backend_info();
 		log.endpoint = Some(backend_call.target.clone());
@@ -209,7 +231,11 @@ impl TCPProxy {
 			.call_tcp(client::TCPCall {
 				source: connection,
 				target: backend_call.target,
-				transport,
+				connection: client::ConnectionConfig {
+					transport,
+					tcp: backend_call.backend_policies.tcp.clone(),
+					max_connection_duration: None,
+				},
 			})
 			.await?;
 		Ok(())
@@ -217,25 +243,43 @@ impl TCPProxy {
 
 	pub fn build_backend_call(
 		log: &mut Option<&mut RequestLog>,
-		sni: Option<String>,
+		destination: Option<&crate::cel::DestinationContext>,
 		inputs: &ProxyInputs,
-		selected_backend: &SimpleBackend,
+		selected_backend: &Backend,
 		backend_policies: BackendPolicies,
 		hbone_source: Option<crate::client::HboneSourceRole>,
 	) -> Result<BackendCall, ProxyError> {
 		let backend_call = match &selected_backend {
-			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
+			Backend::Service(svc, port) => httpproxy::build_service_call(
 				inputs,
 				backend_policies.into(),
 				log,
 				httpproxy::ServiceCallOverride::default(),
 				svc,
 				port,
-				sni.as_deref(),
+				destination.and_then(|destination| destination.hostname.as_deref()),
 				hbone_source,
 			)?,
-			SimpleBackend::Opaque(_, target) => BackendCall::new(target.clone(), backend_policies),
-			SimpleBackend::Aws(_, config) => {
+			Backend::Opaque(_, target) => BackendCall::new(target.clone(), backend_policies),
+			Backend::Dynamic(_, target) => {
+				let destination = destination.ok_or_else(|| {
+					ProxyError::ProcessingString(
+						"dynamic TCP backend requires destination context".to_string(),
+					)
+				})?;
+				let source = log.as_deref().and_then(|log| log.source_context.as_ref());
+				let executor = crate::cel::Executor::new_tcp(source, destination);
+				let target = httpproxy::resolve_dynamic_backend_target(None, &executor, target, || {
+					let hostname = destination.hostname.as_ref().ok_or_else(|| {
+						ProxyError::ProcessingString(
+							"dynamic TCP backend requires a TLS SNI hostname".to_string(),
+						)
+					})?;
+					Ok(Target::from((hostname.as_str(), destination.port)))
+				})?;
+				BackendCall::new(target, backend_policies)
+			},
+			Backend::Aws(_, config) => {
 				let default_policies = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(http::auth::BackendAuth::new(
@@ -254,7 +298,11 @@ impl TCPProxy {
 					default_policies.merge(backend_policies),
 				)
 			},
-			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
+			Backend::Invalid => return Err(ProxyError::BackendDoesNotExist),
+			Backend::MCP(_, _)
+			| Backend::AI(_, _)
+			| Backend::LLMRouter(_, _)
+			| Backend::Internal(_, _) => return Err(ProxyError::InvalidBackendType),
 		};
 		Ok(backend_call)
 	}
@@ -273,14 +321,70 @@ impl TCPProxy {
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default().to_string();
 			start.io.rewind();
-			let existing = ext.remove().unwrap_or_default();
-			ext.insert(TLSConnectionInfo {
-				server_name: Some(sni),
-				..existing
-			});
+			set_sniffed_tls_server_name(&mut ext, sni);
 			Ok(Socket::from_rewind(ext, counter, start.io))
 		};
 		tokio::time::timeout(to, handshake).await?
+	}
+}
+
+fn resolve_tunnel_backend_call(
+	log: &mut Option<&mut RequestLog>,
+	destination: Option<&crate::cel::DestinationContext>,
+	inputs: &ProxyInputs,
+	tunnel: &crate::types::backend::Tunnel,
+) -> Result<BackendCall, ProxyError> {
+	let backend = super::resolve_tunnel_backend(&tunnel.proxy, inputs)?;
+	let policies = get_backend_policies(inputs, &backend, &tunnel.policies, None);
+	TCPProxy::build_backend_call(log, destination, inputs, &backend.backend, policies, None)
+}
+
+// Preserve TLS metadata authenticated by an outer transport layer while recording
+// information observed from the inner TLS ClientHello.
+fn set_sniffed_tls_server_name(ext: &mut crate::transport::stream::Extension, server_name: String) {
+	let existing = ext.get::<TLSConnectionInfo>().cloned().unwrap_or_default();
+	ext.insert(TLSConnectionInfo {
+		server_name: Some(server_name),
+		..existing
+	});
+}
+
+#[cfg(test)]
+mod sniff_tls_sni_tests {
+	use std::sync::Arc;
+
+	use agent_core::strng;
+
+	use crate::transport::stream::{Extension, TLSConnectionInfo};
+	use crate::transport::tls::{IstioIdentity, TlsInfo};
+
+	#[test]
+	fn preserves_identity_from_wrapped_hbone_extension() {
+		let src_identity = TlsInfo {
+			identity: Some(IstioIdentity::new(
+				strng::literal!("cluster.local"),
+				strng::literal!("default"),
+				strng::literal!("client"),
+			)),
+			spiffe_id: Some(strng::literal!(
+				"spiffe://cluster.local/ns/default/sa/client"
+			)),
+			..Default::default()
+		};
+		let mut hbone = Extension::new();
+		hbone.insert(TLSConnectionInfo {
+			src_identity: Some(src_identity.clone()),
+			..Default::default()
+		});
+		let mut stream = Extension::wrap(Arc::new(hbone));
+
+		super::set_sniffed_tls_server_name(&mut stream, "backend.example.com".to_string());
+
+		let info = stream
+			.get::<TLSConnectionInfo>()
+			.expect("sniffed TLS info must be present");
+		assert_eq!(info.src_identity.as_ref(), Some(&src_identity));
+		assert_eq!(info.server_name.as_deref(), Some("backend.example.com"));
 	}
 }
 
@@ -354,7 +458,7 @@ fn select_best_route(
 			hostnames: vec![],
 			backends: vec![TCPRouteBackendReference {
 				weight: 1,
-				backend: SimpleBackendReference::Service {
+				backend: BackendReference::Service {
 					name: svc.namespaced_hostname(),
 					port: dst.port(),
 				},
@@ -421,7 +525,7 @@ fn resolve_backend(
 	b: TCPRouteBackendReference,
 	pi: &ProxyInputs,
 ) -> Result<TCPRouteBackend, ProxyError> {
-	let backend = super::resolve_simple_backend(&b.backend, pi)?;
+	let backend = super::resolve_backend(&b.backend, pi)?;
 	Ok(TCPRouteBackend {
 		weight: b.weight,
 		backend,
@@ -431,12 +535,12 @@ fn resolve_backend(
 
 pub fn get_backend_policies(
 	inputs: &ProxyInputs,
-	backend: &SimpleBackendWithPolicies,
+	backend: &BackendWithPolicies,
 	inline_policies: &[BackendTrafficPolicy],
 	route_path: Option<RoutePath>,
 ) -> BackendPolicies {
 	inputs.stores.read_binds().backend_policies(
-		backend.backend.target(),
+		backend.backend.target_ref(),
 		&[&backend.inline_policies, inline_policies],
 		route_path,
 	)
@@ -449,9 +553,9 @@ mod tests {
 
 	use agent_core::strng;
 
-	use crate::llm::cost::ModelCatalog;
+	use crate::llm::catalog::ModelCatalog;
 	use crate::store::{BackendPolicies, Stores};
-	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
+	use crate::types::agent::{BackendReference, ListenerProtocol, SimpleBackendReference};
 	use crate::types::discovery::gatewayaddress::Destination;
 	use crate::types::discovery::{
 		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
@@ -550,7 +654,7 @@ mod tests {
 		assert_eq!(route.key.as_str(), "_waypoint-default-tcp");
 		assert_eq!(route.backends.len(), 1);
 		match &route.backends[0].backend {
-			SimpleBackendReference::Service { name, port } => {
+			BackendReference::Service { name, port } => {
 				assert_eq!(name.hostname.as_str(), "mysql-db.default.svc.cluster.local");
 				assert_eq!(*port, 3306);
 			},
@@ -928,18 +1032,21 @@ mod tests {
 			metrics: Arc::new(crate::metrics::Metrics::new(
 				metrics::sub_registry(&mut Registry::default()),
 				Default::default(),
+				Default::default(),
 			)),
 			model_catalog: ModelCatalog::empty(),
 			admin: None,
 			upstream: client,
 			ca: None,
+			spiffe: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
+			admission: Default::default(),
 		})
 	}
 
-	fn make_aws_simple_backend() -> super::SimpleBackend {
+	fn make_aws_simple_backend() -> super::Backend {
 		use crate::aws::{AwsBackendConfig, AwsService};
-		super::SimpleBackend::Aws(
+		super::Backend::Aws(
 			crate::types::agent::ResourceName::new(strng::new("test-aws"), strng::new("ns")),
 			AwsBackendConfig {
 				service: AwsService::AgentCore(
@@ -951,6 +1058,138 @@ mod tests {
 				),
 			},
 		)
+	}
+
+	#[test]
+	fn test_build_backend_call_dynamic_uses_sni_and_destination_port() {
+		let inputs = make_proxy_inputs();
+		let backend = super::Backend::Dynamic(
+			crate::types::agent::ResourceName::new(strng::new("dynamic"), strng::new("ns")),
+			None,
+		);
+		let destination = crate::cel::DestinationContext {
+			address: "127.0.0.1".parse().unwrap(),
+			port: 443,
+			hostname: Some(strng::new("pypi.org")),
+		};
+		let result = super::TCPProxy::build_backend_call(
+			&mut None,
+			Some(&destination),
+			&inputs,
+			&backend,
+			BackendPolicies::default(),
+			None,
+		)
+		.unwrap();
+
+		assert!(matches!(
+			result.target,
+			super::Target::Hostname(host, 443) if host.as_str() == "pypi.org"
+		));
+
+		let destination_without_sni = crate::cel::DestinationContext {
+			hostname: None,
+			..destination
+		};
+		let error = super::TCPProxy::build_backend_call(
+			&mut None,
+			Some(&destination_without_sni),
+			&inputs,
+			&backend,
+			BackendPolicies::default(),
+			None,
+		)
+		.err()
+		.expect("missing SNI must reject a dynamic TCP backend");
+		assert!(error.to_string().contains("requires a TLS SNI hostname"));
+	}
+
+	#[test]
+	fn test_build_backend_call_dynamic_evaluates_tcp_target_expression() {
+		let inputs = make_proxy_inputs();
+		let target = crate::cel::Expression::new_strict(
+			r#"destination.hostname == "pypi.org" ? "mirror.example.com:8443" : destination.hostname + ":" + string(destination.port)"#,
+		)
+		.unwrap();
+		let backend = super::Backend::Dynamic(
+			crate::types::agent::ResourceName::new(strng::new("dynamic"), strng::new("ns")),
+			Some(Arc::new(target)),
+		);
+		let destination = crate::cel::DestinationContext {
+			address: "127.0.0.1".parse().unwrap(),
+			port: 443,
+			hostname: Some(strng::new("pypi.org")),
+		};
+		let result = super::TCPProxy::build_backend_call(
+			&mut None,
+			Some(&destination),
+			&inputs,
+			&backend,
+			BackendPolicies::default(),
+			None,
+		)
+		.unwrap();
+
+		assert!(matches!(
+			result.target,
+			super::Target::Hostname(host, 8443) if host.as_str() == "mirror.example.com"
+		));
+	}
+
+	#[test]
+	fn test_named_dynamic_tunnel_backend_uses_tcp_context_and_rejects_internal() {
+		let inputs = make_proxy_inputs();
+		let target = crate::cel::Expression::new_strict(
+			r#"destination.hostname + ":" + string(destination.port)"#,
+		)
+		.unwrap();
+		let backend = super::Backend::Dynamic(
+			crate::types::agent::ResourceName::new(strng::new("proxy"), strng::new("ns")),
+			Some(Arc::new(target)),
+		);
+		let backend_name = backend.name();
+		inputs
+			.stores
+			.binds
+			.write()
+			.insert_backend(backend_name.clone(), backend.into());
+		let mut tunnel = crate::types::backend::Tunnel {
+			proxy: Arc::new(SimpleBackendReference::Backend(backend_name)),
+			mode: crate::types::backend::TunnelMode::Auto,
+			policies: vec![],
+		};
+		let destination = crate::cel::DestinationContext {
+			address: "127.0.0.1".parse().unwrap(),
+			port: 443,
+			hostname: Some(strng::new("pypi.org")),
+		};
+		let result =
+			super::resolve_tunnel_backend_call(&mut None, Some(&destination), &inputs, &tunnel).unwrap();
+		assert!(matches!(
+			result.target,
+			super::Target::Hostname(host, 443) if host.as_str() == "pypi.org"
+		));
+
+		let backend = super::Backend::Internal(
+			crate::types::agent::ResourceName::new(strng::new("internal"), strng::new("ns")),
+			crate::types::local::InternalBackend::Forward,
+		);
+		let backend_name = backend.name();
+		inputs
+			.stores
+			.binds
+			.write()
+			.insert_backend(backend_name.clone(), backend.into());
+		tunnel.proxy = Arc::new(SimpleBackendReference::Backend(backend_name));
+		let error =
+			match super::resolve_tunnel_backend_call(&mut None, Some(&destination), &inputs, &tunnel) {
+				Ok(_) => panic!("internal tunnel backend must be rejected"),
+				Err(error) => error,
+			};
+		assert!(matches!(
+			error,
+			crate::proxy::ProxyError::InvalidBackendType
+		));
 	}
 
 	#[test]

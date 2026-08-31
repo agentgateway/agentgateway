@@ -34,11 +34,12 @@ import {
 import { useEffect, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Dropdown, Tooltip, useDismissiblePopover } from "./Primitives";
+import { Dropdown, StatusBanner, Tooltip, useDismissiblePopover } from "./Primitives";
 import {
   useConfigDumpMode,
   useEffectiveGatewayConfig,
   useMcpConfigData,
+  useRuntimeInfo,
   useTrafficConfigData,
 } from "../hooks";
 import logoDark from "../assets/agw-dark.svg";
@@ -57,6 +58,7 @@ type NavItemConfig = {
 export function Shell() {
   const { t } = useTranslation();
   const router = useRouterState();
+  const runtime = useRuntimeInfo();
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
   const config = useEffectiveGatewayConfig({
@@ -261,6 +263,11 @@ export function Shell() {
           </div>
         </header>
         <main className="content">
+          {runtime.data?.ui.configStoreMode == "readOnly" ? (
+            <StatusBanner state="info" title={tr("copy.readonlyMode")}>
+              {tr("copy.theUiIsConfiguredAsReadOnlyEditingIsDisabled")}
+            </StatusBanner>
+          ) : null}
           <Outlet />
         </main>
       </div>

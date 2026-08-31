@@ -7,7 +7,7 @@ use agent_core::{drain, metrics, readiness, signal};
 use prometheus_client::registry::Registry;
 use tokio::task::JoinSet;
 
-use crate::control::caclient;
+use crate::control::{caclient, spiffe};
 use crate::telemetry::trc;
 use crate::{Config, ProxyInputs, client, config_store, mcp, proxy, state_manager};
 
@@ -66,6 +66,17 @@ pub async fn run(
 	} else {
 		None
 	};
+	let spiffe = if let Some(cfg) = &config.spiffe {
+		let client = Arc::new(
+			spiffe::SpiffeClient::new(cfg.endpoint.clone())
+				.await
+				.context("connect to SPIFFE workload API")?,
+		);
+		Some(client)
+	} else {
+		debug!("SPIFFE not configured; skipping workload API client");
+		None
+	};
 	let pool = ca
 		.clone()
 		.map(|ca| agent_hbone::pool::WorkloadHBONEPool::new(config.hbone.clone(), ca));
@@ -74,10 +85,12 @@ pub async fn run(
 	let metrics_handle = Arc::new(crate::metrics::Metrics::new(
 		sub_registry,
 		config.metrics.excluded_metrics.clone(),
+		config.histograms,
 	));
-	let client = client::Client::new(
+	let client = client::Client::new_with_h2_config(
 		&config.dns,
 		pool,
+		Arc::new(config.hbone.h2.clone()),
 		config.backend.clone(),
 		Some(metrics_handle.clone()),
 	);
@@ -92,7 +105,7 @@ pub async fn run(
 	} else {
 		config.model_catalog.sources.clone()
 	};
-	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources).await?;
+	let model_catalog = crate::llm::catalog::ModelCatalog::new(model_catalog_sources).await?;
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
 	let state_mgr = state_manager::StateManager::new(
@@ -142,8 +155,10 @@ pub async fn run(
 		admin: Some(admin_server.service()),
 		upstream: client.clone(),
 		ca,
+		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
+		admission: Default::default(),
 	};
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());

@@ -111,6 +111,7 @@ fn cross_app_access_config(
 		audience: "https://resource-as.example".into(),
 		resources: vec![],
 		scopes: vec!["read".into()],
+		access_token_scopes: None,
 		subject_token: None,
 		cache: Some(InMemoryTokenCache::default()),
 	}
@@ -620,6 +621,40 @@ async fn id_jag_chain_exchanges_two_legs_and_caches_final_token() {
 }
 
 #[tokio::test]
+async fn id_jag_chain_omits_explicitly_empty_access_token_scopes() {
+	let idp = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "id-jag-assertion",
+		"token_type": "N_A",
+		"issued_token_type": TOKEN_TYPE_ID_JAG,
+	})))
+	.await;
+	let resource_as = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "resource-access-token",
+		"token_type": "Bearer",
+	})))
+	.await;
+	let mut config = cross_app_access_config(endpoint(&idp), endpoint(&resource_as));
+	config.access_token_scopes = Some(vec![]);
+	let identity = CrossAppAccessAuth::from(config);
+
+	fetch_token(
+		&policy_client(),
+		identity.oauth_token_exchange(),
+		exchange_req("id-token", TOKEN_TYPE_ID),
+	)
+	.await
+	.expect("id-jag chain succeeds");
+
+	let idp_pairs = sent_form_params(&idp).await;
+	assert_eq!(idp_pairs["scope"], "read");
+	let resource_pairs = sent_form_params(&resource_as).await;
+	assert!(
+		!resource_pairs.contains_key("scope"),
+		"empty accessTokenScopes must omit scope"
+	);
+}
+
+#[tokio::test]
 async fn id_jag_intermediate_rejects_bearer_token_type() {
 	let idp = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
 		"access_token": "id-jag-assertion",
@@ -1021,6 +1056,32 @@ fn deserializes_cross_app_access_local_config_shape() {
 	assert_eq!(chained_exchange.scopes, ["chat.read", "chat.history"]);
 }
 
+#[rstest]
+#[case::absent(None, &["read"])]
+#[case::empty(Some(vec![]), &[])]
+#[case::override_scopes(Some(vec!["backend.read".into()]), &["backend.read"])]
+fn cross_app_access_resolves_access_token_scopes(
+	#[case] access_token_scopes: Option<Vec<String>>,
+	#[case] expected: &[&str],
+) {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	config.access_token_scopes = access_token_scopes;
+
+	let auth = CrossAppAccessAuth::from(config);
+	assert_eq!(
+		auth
+			.oauth_token_exchange()
+			.chained_exchange
+			.as_ref()
+			.expect("chained exchange")
+			.scopes,
+		expected
+	);
+}
+
 #[test]
 fn cross_app_access_subject_token_source_override() {
 	let mut config = cross_app_access_config(
@@ -1109,6 +1170,7 @@ fn serializes_cross_app_access_local_config_shape() {
 		json!(["https://api.chat.example.com/"])
 	);
 	assert_eq!(serialized["scopes"], json!(["chat.read", "chat.history"]));
+	assert!(serialized.get("accessTokenScopes").is_none());
 	assert_eq!(serialized["identityProvider"]["path"], "/oauth2/token");
 	assert_eq!(
 		serialized["subjectToken"]["source"],
@@ -1124,6 +1186,23 @@ fn serializes_cross_app_access_local_config_shape() {
 	);
 	assert!(serialized.get("oauthTokenExchange").is_none());
 	assert!(serialized.get("cache").is_none());
+}
+
+#[rstest]
+#[case::unset(None, None)]
+#[case::matching(Some(vec!["read".into()]), None)]
+#[case::empty(Some(vec![]), Some(json!([])))]
+#[case::different(Some(vec!["backend.read".into()]), Some(json!(["backend.read"])))]
+fn serializes_cross_app_access_scope_override(
+	#[case] access_token_scopes: Option<Vec<String>>,
+	#[case] expected: Option<serde_json::Value>,
+) {
+	let backend = || Arc::new(SimpleBackendReference::Invalid);
+	let mut config = cross_app_access_config(backend(), backend());
+	config.access_token_scopes = access_token_scopes;
+
+	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
+	assert_eq!(serialized.get("accessTokenScopes"), expected.as_ref());
 }
 
 #[test]
@@ -1256,6 +1335,7 @@ fn cross_app_access_from_proto_derives_oauth_chain(
 			audience: "https://resource.example.com".to_string(),
 			resources: vec!["https://api.example.com".to_string()],
 			scopes: vec!["read".to_string()],
+			access_token_scopes: None,
 			subject_token: Some(proto::cross_app_access_auth::SubjectToken {
 				source: Some(proto::AuthorizationLocation {
 					kind: Some(proto::authorization_location::Kind::Expression(
@@ -1283,6 +1363,72 @@ fn cross_app_access_from_proto_derives_oauth_chain(
 	let chained_exchange = oauth.chained_exchange.as_ref().expect("chained exchange");
 	assert_eq!(chained_exchange.scopes, ["read"]);
 	assert!(chained_exchange.resources.is_empty());
+}
+
+#[rstest]
+#[case::absent(None, &["read"])]
+#[case::empty(
+	Some(proto::cross_app_access_auth::ScopeOverride { values: vec![] }),
+	&[]
+)]
+#[case::override_scopes(
+	Some(proto::cross_app_access_auth::ScopeOverride {
+		values: vec!["backend.read".into()],
+	}),
+	&["backend.read"]
+)]
+fn cross_app_access_from_proto_resolves_access_token_scopes(
+	#[case] access_token_scopes: Option<proto::cross_app_access_auth::ScopeOverride>,
+	#[case] expected: &[&str],
+) {
+	let auth = CrossAppAccessAuth::from_proto(
+		proto::CrossAppAccessAuth {
+			identity_provider: Some(proto::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::BackendReference {
+					kind: Some(proto::backend_reference::Kind::Backend(
+						"default/idp".into(),
+					)),
+					..Default::default()
+				}),
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-idp".into(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			resource_authorization_server: Some(proto::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::BackendReference {
+					kind: Some(proto::backend_reference::Kind::Backend(
+						"default/resource-as".into(),
+					)),
+					..Default::default()
+				}),
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-resource".into(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			audience: "https://resource.example.com".into(),
+			scopes: vec!["read".into()],
+			access_token_scopes,
+			..Default::default()
+		},
+		&mut Diagnostics::default(),
+	)
+	.unwrap();
+
+	assert_eq!(
+		auth
+			.oauth_token_exchange()
+			.chained_exchange
+			.as_ref()
+			.expect("chained exchange")
+			.scopes,
+		expected
+	);
 }
 
 #[test]

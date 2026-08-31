@@ -86,6 +86,12 @@ impl RateLimitStatus {
 			(a, b) => a.or(b),
 		}
 	}
+
+	pub(crate) fn to_headers(self) -> http::HeaderMap {
+		let mut hm = http::HeaderMap::new();
+		http::x_headers::set_ratelimit_headers(&mut hm, self.limit, self.remaining, self.reset_seconds);
+		hm
+	}
 }
 
 impl RateLimit {
@@ -175,14 +181,7 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 		}
 		let mut res = http::PolicyResponse::default();
 		if let Some(status) = status {
-			let mut hm = http::HeaderMap::new();
-			http::x_headers::set_ratelimit_headers(
-				&mut hm,
-				status.limit,
-				status.remaining,
-				status.reset_seconds,
-			);
-			res.response_headers = Some(hm);
+			res.response_headers = Some(status.to_headers());
 		}
 		Ok(res)
 	}

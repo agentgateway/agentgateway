@@ -90,6 +90,8 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 			wellknown.ServiceGVK.GroupKind(),
 			wellknown.SecretGVK.GroupKind(),
 			wellknown.AgentgatewayBackendGVK.GroupKind(),
+			wellknown.HTTPRouteGVK.GroupKind(),
+			wellknown.InferencePoolGVK.GroupKind(),
 		),
 		// AgentgatewayPolicy targets
 		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName, port *gwv1.PortNumber) ([]*api.PolicyTarget, error) {

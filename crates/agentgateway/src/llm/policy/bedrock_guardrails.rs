@@ -2,9 +2,9 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use crate::cel::GuardDetail;
 use crate::http::auth::{AwsAuth, BackendAuthKind};
 use crate::http::jwt::Claims;
-use crate::llm::RequestType;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::{BedrockGuardrails, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
@@ -28,7 +28,7 @@ pub struct GuardrailTextBlock {
 
 /// Content block for guardrail evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct GuardrailContentBlock {
 	pub text: GuardrailTextBlock,
 }
@@ -41,7 +41,7 @@ pub struct GuardrailOutputContent {
 
 /// Request body for ApplyGuardrail API
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct ApplyGuardrailRequest {
 	/// The source of the content (INPUT for requests, OUTPUT for responses)
 	pub source: GuardrailSource,
@@ -61,10 +61,13 @@ pub enum GuardrailAction {
 
 /// Response from ApplyGuardrail API
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct ApplyGuardrailResponse {
 	/// The action taken by the guardrail
 	pub action: GuardrailAction,
+	/// The reason the guardrail reported for its action
+	#[serde(default)]
+	pub action_reason: Option<String>,
 	/// Outputs with masked text (if configured with mask)
 	#[serde(default)]
 	pub outputs: Vec<GuardrailOutputContent>,
@@ -74,39 +77,125 @@ pub struct ApplyGuardrailResponse {
 }
 
 impl ApplyGuardrailResponse {
+	/// Returns true if the guardrail intervened at all
+	pub fn is_intervened(&self) -> bool {
+		self.action == GuardrailAction::GuardrailIntervened
+	}
+
 	/// Returns true if the guardrail blocked content
 	pub fn is_blocked(&self) -> bool {
-		self.action == GuardrailAction::GuardrailIntervened && self.has_blocked_assessment()
+		self.is_intervened() && self.has_assessment_action("BLOCKED")
 	}
 
-	/// Returns true if the guardrail anonymized/masked content
+	/// Returns true if the guardrail anonymized/masked content without blocking.
 	pub fn is_anonymized(&self) -> bool {
-		self.action == GuardrailAction::GuardrailIntervened && !self.has_blocked_assessment()
+		self.is_intervened()
+			&& !self.has_assessment_action("BLOCKED")
+			&& self.has_assessment_action("ANONYMIZED")
 	}
 
-	/// Returns the masked output texts
-	pub fn output_texts(&self) -> Vec<String> {
-		self.outputs.iter().map(|o| o.text.clone()).collect()
+	pub fn into_output_texts(self) -> Vec<String> {
+		self.outputs.into_iter().map(|o| o.text).collect()
 	}
 
-	/// Check if any assessment contains a BLOCKED action
-	fn has_blocked_assessment(&self) -> bool {
-		self.assessments.iter().any(Self::value_contains_blocked)
+	fn has_assessment_action(&self, action: &str) -> bool {
+		self
+			.assessments
+			.iter()
+			.any(|a| Self::value_contains_action(a, action))
 	}
 
-	/// Search for "action": "BLOCKED" in JSON value
-	fn value_contains_blocked(value: &serde_json::Value) -> bool {
+	/// Search for `"action": "<action>"` in JSON value
+	fn value_contains_action(value: &serde_json::Value, action: &str) -> bool {
 		match value {
 			serde_json::Value::Object(map) => {
-				if let Some(serde_json::Value::String(action)) = map.get("action")
-					&& action == "BLOCKED"
+				if let Some(serde_json::Value::String(a)) = map.get("action")
+					&& a == action
 				{
 					return true;
 				}
-				map.values().any(Self::value_contains_blocked)
+				map.values().any(|v| Self::value_contains_action(v, action))
 			},
-			serde_json::Value::Array(arr) => arr.iter().any(Self::value_contains_blocked),
+			serde_json::Value::Array(arr) => arr.iter().any(|v| Self::value_contains_action(v, action)),
 			_ => false,
+		}
+	}
+}
+
+/// Assessment keys that are safe to log. Top-level keys are policy names (fixed
+/// API schema), so an unknown policy is kept as `"[redacted]"` to show what
+/// fired; below that, unknown keys are dropped wholesale so content — and key
+/// names that could carry it in future API shapes — never reaches logs or CEL.
+const ASSESSMENT_METADATA_KEYS: &[&str] = &[
+	// policy containers
+	"topicPolicy",
+	"topics",
+	"contentPolicy",
+	"filters",
+	"sensitiveInformationPolicy",
+	"piiEntities",
+	"regexes",
+	"wordPolicy",
+	"customWords",
+	"managedWordLists",
+	"contextualGroundingPolicy",
+	"invocationMetrics",
+	"appliedGuardrailDetails",
+	// metadata leaves
+	"name",
+	"type",
+	"action",
+	"detected",
+	"confidence",
+	"filterStrength",
+	"threshold",
+	"score",
+	"guardrailProcessingLatency",
+	"guardrailId",
+	"guardrailVersion",
+	"guardrailOrigin",
+];
+
+fn redact_assessment(value: &mut serde_json::Value) {
+	let serde_json::Value::Object(map) = value else {
+		*value = serde_json::Value::String("[redacted]".to_string());
+		return;
+	};
+	for (k, v) in map.iter_mut() {
+		if ASSESSMENT_METADATA_KEYS.contains(&k.as_str()) {
+			filter_assessment_fields(v);
+		} else {
+			*v = serde_json::Value::String("[redacted]".to_string());
+		}
+	}
+}
+
+fn filter_assessment_fields(value: &mut serde_json::Value) {
+	match value {
+		serde_json::Value::Object(map) => {
+			map.retain(|k, _| ASSESSMENT_METADATA_KEYS.contains(&k.as_str()));
+			map.values_mut().for_each(filter_assessment_fields);
+		},
+		serde_json::Value::Array(arr) => arr.iter_mut().for_each(filter_assessment_fields),
+		_ => {},
+	}
+}
+
+impl ApplyGuardrailResponse {
+	/// Guardrail-log detail for this intervention, with assessments redacted.
+	pub(super) fn build_detail(&mut self, config: &BedrockGuardrails) -> GuardDetail {
+		let assessments = std::mem::take(&mut self.assessments)
+			.into_iter()
+			.map(|mut a| {
+				redact_assessment(&mut a);
+				a
+			})
+			.collect();
+		GuardDetail {
+			guardrail_id: Some(config.guardrail_identifier.clone()),
+			guardrail_version: Some(config.guardrail_version.clone()),
+			action_reason: self.action_reason.take(),
+			assessments,
 		}
 	}
 }
@@ -132,35 +221,9 @@ impl BedrockGuardrails {
 	}
 }
 
-/// Send a request to the Bedrock Guardrails ApplyGuardrail API for request content
-pub async fn send_request(
-	req: &mut dyn RequestType,
-	claims: Option<Claims>,
-	client: &PolicyClient,
-	guardrails: &BedrockGuardrails,
-) -> anyhow::Result<ApplyGuardrailResponse> {
-	let content = req
-		.get_messages()
-		.into_iter()
-		.map(|m| GuardrailContentBlock {
-			text: GuardrailTextBlock {
-				text: m.content.to_string(),
-			},
-		})
-		.collect_vec();
-
-	send_guardrail_request(
-		client,
-		claims.clone(),
-		guardrails,
-		GuardrailSource::Input,
-		content,
-	)
-	.await
-}
-
-/// Send a request to the Bedrock Guardrails ApplyGuardrail API for response content
-pub async fn send_response(
+/// Send content to the Bedrock Guardrails ApplyGuardrail API
+pub async fn send(
+	source: GuardrailSource,
 	content: Vec<String>,
 	claims: Option<Claims>,
 	client: &PolicyClient,
@@ -173,23 +236,6 @@ pub async fn send_response(
 		})
 		.collect_vec();
 
-	send_guardrail_request(
-		client,
-		claims.clone(),
-		guardrails,
-		GuardrailSource::Output,
-		content,
-	)
-	.await
-}
-
-async fn send_guardrail_request(
-	client: &PolicyClient,
-	claims: Option<Claims>,
-	guardrails: &BedrockGuardrails,
-	source: GuardrailSource,
-	content: Vec<GuardrailContentBlock>,
-) -> anyhow::Result<ApplyGuardrailResponse> {
 	let request_body = ApplyGuardrailRequest { source, content };
 	let host = strng::format!("bedrock-runtime.{}.amazonaws.com", guardrails.region);
 	let path = format!(
@@ -199,7 +245,8 @@ async fn send_guardrail_request(
 	let uri = format!("https://{}{}", host, path);
 
 	tracing::debug!(
-		request_body = %serde_json::to_string_pretty(&request_body).unwrap_or_default(),
+		source = ?request_body.source,
+		content_blocks = request_body.content.len(),
 		uri = %uri,
 		"Sending Bedrock guardrail request"
 	);
@@ -255,19 +302,14 @@ async fn send_guardrail_request(
 	let resp: ApplyGuardrailResponse = serde_json::from_slice(&bytes)
 		.map_err(|e| anyhow::anyhow!("Failed to parse Bedrock guardrail response: {e}"))?;
 
-	if resp.is_blocked() {
+	if resp.is_intervened() {
 		tracing::debug!(
 			guardrail_id = %guardrails.guardrail_identifier,
 			guardrail_version = %guardrails.guardrail_version,
 			source = ?source,
-			"Bedrock guardrail blocked content"
-		);
-	} else if resp.is_anonymized() {
-		tracing::debug!(
-			guardrail_id = %guardrails.guardrail_identifier,
-			guardrail_version = %guardrails.guardrail_version,
-			source = ?source,
-			"Bedrock guardrail anonymized content"
+			blocked = resp.is_blocked(),
+			anonymized = resp.is_anonymized(),
+			"Bedrock guardrail intervened"
 		);
 	}
 

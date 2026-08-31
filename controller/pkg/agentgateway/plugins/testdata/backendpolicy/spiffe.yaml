@@ -1,0 +1,72 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw-spiffe
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    tls:
+      certificateSource: SPIFFE
+      verifySubjectAltNames:
+        - spiffe://example.org/ns/default/sa/upstream
+      sni: upstream.example
+      alpnProtocols:
+        - h2
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          alpn:
+            protocols:
+            - h2
+          certificateSource: SPIFFE
+          hostname: upstream.example
+          verifySubjectAltNames:
+          - spiffe://example.org/ns/default/sa/upstream
+      key: default/agw-spiffe:tls:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw-spiffe
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw-spiffe
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

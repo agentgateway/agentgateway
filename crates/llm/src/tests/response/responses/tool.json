@@ -1,0 +1,43 @@
+{
+  "id": "resp_tool",
+  "object": "response",
+  "created_at": 123,
+  "status": "completed",
+  "model": "gpt-4.1-mini",
+  "service_tier": "default",
+  "output": [
+    {
+      "type": "message",
+      "id": "msg_text",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "I will check that.",
+          "annotations": []
+        }
+      ]
+    },
+    {
+      "type": "function_call",
+      "id": "fc_1",
+      "call_id": "call_weather",
+      "name": "get_weather",
+      "arguments": "{\"location\":\"San Francisco\"}",
+      "status": "completed"
+    }
+  ],
+  "usage": {
+    "input_tokens": 30,
+    "input_tokens_details": {
+      "cached_tokens": 4,
+      "cache_write_tokens": 6
+    },
+    "output_tokens": 5,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 35
+  }
+}

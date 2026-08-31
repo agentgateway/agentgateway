@@ -19,6 +19,12 @@ serviceAccount:
   # -- Set the name of the service account to use. If not set and create is true, a name is generated using the fullname template.
   name: ""
 
+# -- Configure the RBAC permissions created for the controller.
+rbac:
+  # -- Restrict namespaced write permissions to these namespaces. The namespaces must already exist. An empty list preserves the default cluster-wide write access. Cluster-wide read permissions and writes to cluster-scoped resources are unaffected.
+  # Restricting this list means only Gateways in these namespaces can be used.
+  gatewayNamespaces: []
+
 # -- Add annotations to the agentgateway deployment.
 deploymentAnnotations: {}
 
@@ -49,6 +55,9 @@ tolerations: []
 
 # -- Set affinity rules for pod scheduling, such as 'nodeAffinity:'.
 affinity: {}
+
+# -- Configure how controller pods are spread across topology domains, such as nodes or zones.
+topologySpreadConstraints: []
 
 # -- Set the pod DNS configuration, such as 'options: [{name: ndots, value: "3"}]'. Merged with the DNS settings the kubelet derives from the pod's dnsPolicy.
 dnsConfig: {}
@@ -249,6 +258,10 @@ controllerName: ""
 
 # -- Control-plane-wide Istio mesh defaults.
 istio:
+  # -- Grant the controller permission to discover Istio ServiceEntry and WorkloadEntry resources.
+  #    Set to false only when the Istio CRDs are not installed. This controls RBAC generation; it
+  #    does not disable Istio integration in the controller.
+  enabled: true
   # -- Enable Istio integration by default on all built-in-class gateways.
   #    When false (default), gateways opt in via AgentgatewayParameters spec.istio;
   #    when true, individual gateways can opt out via spec.istio.enabled=false.

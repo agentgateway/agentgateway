@@ -49,3 +49,17 @@ agentgateway_requests_total{gateway="bind/3000",method="POST",status="202"} 4
 agentgateway_requests_total{gateway="bind/3000",method="GET",status="200"} 1
 agentgateway_requests_total{gateway="bind/3000",method="DELETE",status="202"} 2
 ```
+
+## Metrics Formats
+
+Metrics are available as OpenMetrics text or Prometheus protobuf, selected using the request's `Accept` header. When multiple formats are requested, standard quality parameters determine which supported format is returned.
+
+For OpenMetrics text, use:
+
+* `Accept: application/openmetrics-text;version=1.0.0`
+
+For Prometheus protobuf, use:
+
+* `Accept: application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited`
+
+The protobuf response is a length-delimited stream of `io.prometheus.client.MetricFamily` messages defined by the official [Prometheus client model](https://github.com/prometheus/client_model/blob/master/io/prometheus/client/metrics.proto).

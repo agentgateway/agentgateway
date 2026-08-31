@@ -154,20 +154,33 @@ func TestFrontendHTTPInvalidByteSizeDecodesAsUnsetValue(t *testing.T) {
 	}
 }
 
-func TestAzureManagedIdentityJSONOmitsSecretRef(t *testing.T) {
-	auth := AzureAuth{
-		ManagedIdentity: &AzureManagedIdentity{
-			ClientID:   "client-id",
-			ObjectID:   "object-id",
-			ResourceID: "resource-id",
-		},
+func TestAzureManagedIdentityJSONPreservesFlatFields(t *testing.T) {
+	want := `{"managedIdentity":{"clientId":"client-id","objectId":"object-id","resourceId":"resource-id"}}`
+	var auth AzureAuth
+	if err := json.Unmarshal([]byte(want), &auth); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
 	}
 
 	got, err := json.Marshal(auth)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
-	want := `{"managedIdentity":{"clientId":"client-id","objectId":"object-id","resourceId":"resource-id"}}`
+	if string(got) != want {
+		t.Fatalf("Marshal() = %s, want %s", got, want)
+	}
+}
+
+func TestAzureManagedIdentityEmptyJSON(t *testing.T) {
+	var auth AzureAuth
+	if err := json.Unmarshal([]byte(`{"managedIdentity":{}}`), &auth); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+
+	got, err := json.Marshal(auth)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	want := `{"managedIdentity":{}}`
 	if string(got) != want {
 		t.Fatalf("Marshal() = %s, want %s", got, want)
 	}

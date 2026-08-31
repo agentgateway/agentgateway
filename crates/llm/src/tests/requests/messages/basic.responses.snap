@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/basic.json
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Hello, world"
+          }
+        ]
+      }
+    ],
+    "model": "claude-sonnet-4-20250514",
+    "max_output_tokens": 1024,
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-20250514",
+    "provider": "responses",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ]
+  }
+}

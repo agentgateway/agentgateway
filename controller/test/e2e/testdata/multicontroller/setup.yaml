@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentgateway-secondary-workload
+  labels:
+    e2e.agentgateway.dev/controller: secondary
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentgateway-unselected
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secondary-backend
+  namespace: agentgateway-secondary-workload
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secondary-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secondary-backend
+    spec:
+      securityContext:
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      containers:
+        - name: testbox
+          image: ghcr.io/agentgateway/testbox:0.0.1
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          env:
+            - name: INSTANCE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 1
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: secondary-backend
+  namespace: agentgateway-secondary-workload
+spec:
+  selector:
+    app.kubernetes.io/name: secondary-backend
+  ports:
+    - name: http
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: secondary-gateway
+  namespace: agentgateway-secondary-workload
+spec:
+  gatewayClassName: agentgateway-secondary
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: secondary-route
+  namespace: agentgateway-secondary-workload
+spec:
+  parentRefs:
+    - name: secondary-gateway
+  hostnames:
+    - secondary.multicontroller.example
+  rules:
+    - backendRefs:
+        - name: secondary-backend
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: primary-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - primary.multicontroller.example
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80

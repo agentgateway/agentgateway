@@ -16,7 +16,6 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -48,11 +47,9 @@ func newSyncedSecretClient(t *testing.T, objects ...client.Object) kclient.Clien
 // annotation so GetPortsValues excludes them from the Service/container ports.
 func TestGatewayIRFromInternalPorts(t *testing.T) {
 	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "gw",
-			Namespace:   "ns",
-			Annotations: map[string]string{annotations.InternalPorts: "8080"},
-		},
+		Name:        "gw",
+		Namespace:   "ns",
+		Annotations: map[string]string{annotations.InternalPorts: "8080"},
 		Spec: gwv1.GatewaySpec{
 			Listeners: []gwv1.Listener{
 				{Name: "internal", Port: 8080, Protocol: gwv1.HTTPProtocolType},
@@ -181,10 +178,8 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_PreservesSessionKeyEnvV
 
 func TestApplyManagedSessionKeyDefaults_UsesUserProvidedSessionKey(t *testing.T) {
 	vals := &AgentgatewayHelmGateway{
-		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
-			Env: []corev1.EnvVar{
-				{Name: "SESSION_KEY", Value: "inline-key"},
-			},
+		Env: []corev1.EnvVar{
+			{Name: "SESSION_KEY", Value: "inline-key"},
 		},
 	}
 
@@ -474,10 +469,8 @@ func agentgatewayParametersWithWorkloadKind(
 	overlays agentgateway.AgentgatewayParametersOverlays,
 ) *agentgateway.AgentgatewayParameters {
 	params := &agentgateway.AgentgatewayParameters{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "default",
-		},
+		Name:      name,
+		Namespace: "default",
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: overlays,
 		},
@@ -512,13 +505,9 @@ func TestAgentgatewayParametersApplier_ApplyOverlaysToObjects(t *testing.T) {
 	applier := NewAgentgatewayParametersApplier(params)
 
 	deployment := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-deployment",
-		},
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "test-deployment",
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr.To[int32](1),
 		},
@@ -537,13 +526,9 @@ func TestAgentgatewayParametersApplier_ApplyOverlaysToObjects_NilParams(t *testi
 	applier := NewAgentgatewayParametersApplier(nil)
 
 	deployment := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-deployment",
-		},
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "test-deployment",
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr.To[int32](1),
 		},
@@ -574,10 +559,8 @@ func TestGetObjsToDeploy_MergesSupportResourceOverlays(t *testing.T) {
 	listenerProtocol := gwv1.HTTPProtocolType
 
 	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gatewayName,
-			Namespace: namespace,
-		},
+		Name:      gatewayName,
+		Namespace: namespace,
 		Spec: gwv1.GatewaySpec{
 			GatewayClassName: gwv1.ObjectName(wellknown.DefaultAgwClassName),
 			Infrastructure: &gwv1.GatewayInfrastructure{
@@ -596,7 +579,7 @@ func TestGetObjsToDeploy_MergesSupportResourceOverlays(t *testing.T) {
 	}
 	gw.SetGroupVersionKind(wellknown.GatewayGVK)
 	gwc := &gwv1.GatewayClass{
-		ObjectMeta: metav1.ObjectMeta{Name: wellknown.DefaultAgwClassName},
+		Name: wellknown.DefaultAgwClassName,
 		Spec: gwv1.GatewayClassSpec{
 			ControllerName: gwv1.GatewayController(wellknown.DefaultAgwControllerName),
 			ParametersRef: &gwv1.ParametersReference{
@@ -608,7 +591,7 @@ func TestGetObjsToDeploy_MergesSupportResourceOverlays(t *testing.T) {
 		},
 	}
 	classParams := &agentgateway.AgentgatewayParameters{
-		ObjectMeta: metav1.ObjectMeta{Name: classParamsName, Namespace: namespace},
+		Name: classParamsName, Namespace: namespace,
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
 				PodDisruptionBudget: &agentgateway.KubernetesResourceOverlay{
@@ -627,7 +610,7 @@ func TestGetObjsToDeploy_MergesSupportResourceOverlays(t *testing.T) {
 		},
 	}
 	gwParams := &agentgateway.AgentgatewayParameters{
-		ObjectMeta: metav1.ObjectMeta{Name: gwParamsName, Namespace: namespace},
+		Name: gwParamsName, Namespace: namespace,
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
 				PodDisruptionBudget: &agentgateway.KubernetesResourceOverlay{
@@ -827,10 +810,8 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_RawConfigWithLogging(t 
 func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
 	const existingKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw-session-key",
-			Namespace: "default",
-		},
+		Name:      "gw-session-key",
+		Namespace: "default",
 		Data: map[string][]byte{
 			"key": []byte(existingKey),
 		},
@@ -842,10 +823,8 @@ func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
 		},
 	}
 	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw",
-			Namespace: "default",
-		},
+		Name:      "gw",
+		Namespace: "default",
 		Spec: gwv1.GatewaySpec{
 			GatewayClassName: "agentgateway",
 		},
@@ -861,10 +840,8 @@ func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
 
 func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw-session-key",
-			Namespace: "default",
-		},
+		Name:      "gw-session-key",
+		Namespace: "default",
 		Data: map[string][]byte{
 			"key": []byte("not-a-valid-key"),
 		},
@@ -876,10 +853,8 @@ func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
 		},
 	}
 	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw",
-			Namespace: "default",
-		},
+		Name:      "gw",
+		Namespace: "default",
 	}
 
 	_, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
@@ -891,10 +866,8 @@ func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
 	deployment := &appsv1.Deployment{}
 	daemonSet := &appsv1.DaemonSet{}
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw-session-key",
-			Namespace: "default",
-		},
+		Name:      "gw-session-key",
+		Namespace: "default",
 		Data: map[string][]byte{
 			"key": []byte("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
 		},

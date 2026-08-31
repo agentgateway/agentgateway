@@ -35,7 +35,9 @@ use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::ProtoError;
 use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
-use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
+use crate::types::proto::agent::backend_policy_spec::ai::{
+	ActionKind, RejectAuditAction, response_guard,
+};
 use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
 use crate::types::proto::agent::frontend_policy_spec::http::HttpHeaderCase;
 use crate::types::proto::agent::mcp_target::Protocol;
@@ -433,6 +435,17 @@ fn server_tls_config_from_proto(
 		return ServerTLSConfig::istio_workload(require_client_cert, default_alpns);
 	}
 
+	if certificate_source == proto::agent::tls_config::CertificateSource::Spiffe {
+		// SPIFFE always requires client SVIDs (mutual TLS); mtls_mode does not apply.
+		if mtls_mode != proto::agent::tls_config::MtlsMode::Strict {
+			diagnostics.add_warning(
+				"mtls_mode is ignored for SPIFFE certificates; client SVIDs are always required"
+					.to_string(),
+			);
+		}
+		return ServerTLSConfig::spiffe(default_alpns);
+	}
+
 	if certificate_source == proto::agent::tls_config::CertificateSource::DynamicCa {
 		if value.root.is_some() {
 			diagnostics.add_warning("mTLS is not supported with DYNAMIC_CA certificates");
@@ -577,6 +590,7 @@ fn mcp_authentication_from_proto(
 		jwt_provider.into_iter().collect(),
 		mode.into(),
 		http::auth::AuthorizationLocation::bearer_header(),
+		false,
 	);
 	Ok(build_mcp_authentication(
 		m.issuer.clone(),
@@ -688,6 +702,8 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
 		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
 		Ok(ProtoRT::Rerank) => llm::RouteType::Rerank,
+		Ok(ProtoRT::GenerateContent) => llm::RouteType::GenerateContent,
+		Ok(ProtoRT::GeminiCountTokens) => llm::RouteType::GeminiCountTokens,
 		Err(_) => {
 			diagnostics.add_warning(format!(
 				"unknown proto RouteType value {}, defaulting to Completions",
@@ -851,6 +867,26 @@ fn convert_provider_format_config(
 	})
 }
 
+fn convert_content_scopes(scopes: &[i32]) -> Result<Vec<llm::ContentScope>, ProtoError> {
+	use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+	if scopes.is_empty() {
+		return Ok(llm::policy::default_content_scope());
+	}
+	scopes
+		.iter()
+		.map(|s| match ProtoScope::try_from(*s) {
+			Ok(ProtoScope::SystemPrompt) => Ok(llm::ContentScope::SystemPrompt),
+			Ok(ProtoScope::Messages) => Ok(llm::ContentScope::Messages),
+			Ok(ProtoScope::ToolOutput) => Ok(llm::ContentScope::ToolOutput),
+			Ok(ProtoScope::ToolInput) => Ok(llm::ContentScope::ToolInput),
+			Ok(ProtoScope::Unspecified) | Err(_) => Err(ProtoError::Generic(format!(
+				"unknown prompt guard content scope value {s}"
+			))),
+		})
+		.collect()
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -894,6 +930,7 @@ fn convert_backend_ai_policy(
 							.collect::<Result<Vec<_>, _>>()?;
 						let md = llm::policy::Moderation {
 							model: m.model.as_deref().map(strng::new),
+							action: convert_reject_audit(m.action),
 							policies: pols,
 						};
 						llm::policy::RequestGuardKind::OpenAIModeration(md)
@@ -908,6 +945,7 @@ fn convert_backend_ai_policy(
 							template_id: strng::new(&gma.template_id),
 							project_id: strng::new(&gma.project_id),
 							location: gma.location.as_ref().map(strng::new),
+							action: convert_reject_audit(gma.action),
 							policies: pols,
 						})
 					},
@@ -921,6 +959,7 @@ fn convert_backend_ai_policy(
 							guardrail_identifier: strng::new(&bg.identifier),
 							guardrail_version: strng::new(&bg.version),
 							region: strng::new(&bg.region),
+							action: convert_reject_audit(bg.action),
 							policies: pols,
 						})
 					},
@@ -932,6 +971,7 @@ fn convert_backend_ai_policy(
 							.collect::<Result<Vec<_>, _>>()?;
 						llm::policy::RequestGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 							endpoint: strng::new(&acs.endpoint),
+							action: convert_reject_audit(acs.action),
 							policies: pols,
 							cached_azure_auth: Default::default(),
 							analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -948,7 +988,17 @@ fn convert_backend_ai_policy(
 						})
 					},
 				};
-				Ok(llm::policy::RequestGuard { rejection, kind })
+				let guard = llm::policy::RequestGuard {
+					rejection,
+					scope: convert_content_scopes(&reqp.scope)?,
+					kind,
+				};
+
+				// TODO not all guard types properly scan all scopes
+				// avoids silently ignoring configured scopes
+				guard.validate_scope().map_err(ProtoError::Generic)?;
+
+				Ok(guard)
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
@@ -985,6 +1035,7 @@ fn convert_backend_ai_policy(
 						template_id: strng::new(&gma.template_id),
 						project_id: strng::new(&gma.project_id),
 						location: gma.location.as_ref().map(strng::new),
+						action: convert_reject_audit(gma.action),
 						policies: pols,
 					})
 				},
@@ -998,6 +1049,7 @@ fn convert_backend_ai_policy(
 						guardrail_identifier: strng::new(&bg.identifier),
 						guardrail_version: strng::new(&bg.version),
 						region: strng::new(&bg.region),
+						action: convert_reject_audit(bg.action),
 						policies: pols,
 					})
 				},
@@ -1009,6 +1061,7 @@ fn convert_backend_ai_policy(
 						.collect::<Vec<_>>();
 					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 						endpoint: strng::new(&acs.endpoint),
+						action: convert_reject_audit(acs.action),
 						policies: pols,
 						cached_azure_auth: Default::default(),
 						analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -1439,7 +1492,6 @@ impl Bind {
 		Ok(Self {
 			key: s.key.clone().into(),
 			address,
-			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,
 				proto::agent::bind::Protocol::Tcp => BindProtocol::tcp,
@@ -1516,7 +1568,7 @@ impl TCPRoute {
 				.iter()
 				.map(|b| TCPRouteBackendReference {
 					weight: b.weight as usize,
-					backend: resolve_simple_reference(b.backend.as_ref()),
+					backend: resolve_reference(b.backend.as_ref()),
 					inline_policies: Vec::new(),
 				})
 				.collect::<Vec<_>>(),
@@ -2002,6 +2054,7 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 				},
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection: false,
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {
@@ -2239,21 +2292,22 @@ fn backend_policy_from_proto(
 					HttpVersion::Http2 => Some(::http::Version::HTTP_2),
 				},
 				request_timeout: bhttp.request_timeout.map(convert_duration),
+				max_connection_duration: bhttp.max_connection_duration.map(convert_duration),
 			})
 		},
 		Some(bps::Kind::BackendTcp(btcp)) => BackendTrafficPolicy::TCP(backend::TCP {
-			connect_timeout: btcp
-				.connect_timeout
-				.map(convert_duration)
-				.unwrap_or(backend::defaults::connect_timeout()),
+			connect_timeout: btcp.connect_timeout.map(convert_duration),
 			keepalives: btcp
 				.keepalive
 				.as_ref()
-				.map(types::agent::KeepaliveConfig::from)
-				.unwrap_or_default(),
+				.map(types::agent::KeepaliveConfig::from),
 		}),
 		Some(bps::Kind::BackendTunnel(bt)) => BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())),
+			mode: match bt.mode() {
+				bps::backend_tunnel::Mode::Connect => backend::TunnelMode::Connect,
+				bps::backend_tunnel::Mode::Auto => backend::TunnelMode::Auto,
+			},
 			policies: backend_policies_from_proto(&bt.inline_policies, diagnostics)?,
 		}),
 		Some(bps::Kind::BackendTls(btls)) => {
@@ -2275,6 +2329,9 @@ fn backend_policy_from_proto(
 					&btls.key_exchange_groups,
 					diagnostics,
 				),
+				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
+					.unwrap_or_default()
+					== bps::backend_tls::CertificateSource::Spiffe,
 			}
 			.try_into()
 			.map_err(|e| ProtoError::Generic(e.to_string()))?;
@@ -2577,6 +2634,7 @@ fn traffic_policy_from_proto(
 					jwt.authorization_location.as_ref(),
 					http::auth::AuthorizationLocation::bearer_header(),
 				)?,
+				jwt.preserve_token,
 			);
 			let mcp = match &jwt.mcp {
 				Some(mcp) => {
@@ -2947,7 +3005,14 @@ fn traffic_policy_from_proto(
 							));
 						},
 					};
-					Ok::<_, ProtoError>((key, meta))
+					Ok::<_, ProtoError>((
+						key,
+						http::apikey::APIKeyPolicy {
+							metadata: meta,
+							allowed_models: Default::default(),
+							budgets: None,
+						},
+					))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
 			TrafficPolicy::APIKey(RequestPolicy::single(http::apikey::APIKeyAuthentication {
@@ -3155,7 +3220,12 @@ fn external_auth_from_proto(
 }
 
 fn convert_duration(d: prost_types::Duration) -> Duration {
-	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
+	// Proto duration fields are signed,
+	// but the standard duration type only represents positive spans of time.
+	// Clamp negative components at zero to avoid unexpected behaviors.
+	let secs = d.seconds.max(0) as u64;
+	let nanos = d.nanos.max(0) as u32;
+	Duration::new(secs, nanos)
 }
 
 fn convert_jwt_sign_ttl(ttl: Option<prost_types::Duration>) -> Result<Option<Duration>, String> {
@@ -3276,6 +3346,9 @@ fn frontend_policy_from_proto(
 			http2_keepalive_interval: h.http2_keepalive_interval.map(convert_duration),
 			http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
 			max_connection_duration: h.max_connection_duration.map(convert_duration),
+			max_concurrent_requests: h
+				.max_concurrent_requests
+				.and_then(std::num::NonZeroU32::new),
 		}),
 		Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
 			handshake_timeout: t
@@ -3295,8 +3368,8 @@ fn frontend_policy_from_proto(
 			keepalives: t
 				.keepalives
 				.as_ref()
-				.map(types::agent::KeepaliveConfig::from)
-				.unwrap_or_default(),
+				.map(types::agent::KeepaliveConfig::from),
+			max_connections: t.max_connections.and_then(std::num::NonZeroU32::new),
 		}),
 		Some(fps::Kind::NetworkAuthorization(rbac)) => {
 			let mut allow_exprs = Vec::new();
@@ -3811,11 +3884,14 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
 		TrafficPolicy::RemoteRateLimit(_) => "remoteRateLimit",
 		TrafficPolicy::ExtAuthz(_) => "extAuthz",
+		TrafficPolicy::SubstrateEgress(_) => "substrateEgress",
+		TrafficPolicy::SubstrateIngress(_) => "substrateIngress",
 		TrafficPolicy::ExtProc(_) => "extProc",
 		TrafficPolicy::JwtAuth(_) => "jwt",
 		TrafficPolicy::Oidc(_) => "oidc",
 		TrafficPolicy::BasicAuth(_) => "basicAuth",
 		TrafficPolicy::APIKey(_) => "apiKey",
+		TrafficPolicy::Budget(_) => "budget",
 		TrafficPolicy::Transformation(_) => "transformation",
 		TrafficPolicy::Csrf(_) => "csrf",
 		TrafficPolicy::RequestHeaderModifier(_) => "requestHeaderModifier",
@@ -3934,6 +4010,14 @@ fn convert_prompt_caching(
 	}
 }
 
+fn convert_reject_audit(action: i32) -> llm::policy::RejectAuditAction {
+	if action == RejectAuditAction::Audit as i32 {
+		llm::policy::RejectAuditAction::Audit
+	} else {
+		llm::policy::RejectAuditAction::Reject
+	}
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
@@ -3979,6 +4063,7 @@ fn convert_webhook(
 		headers,
 		forward_header_matches,
 		failure_mode,
+		action: convert_reject_audit(w.action),
 	})
 }
 
@@ -3992,6 +4077,7 @@ fn convert_regex_rules(
 			llm::policy::Action::Mask
 		},
 		Some(ActionKind::Reject) => llm::policy::Action::Reject,
+		Some(ActionKind::Audit) => llm::policy::Action::Audit,
 	};
 	let rules = rr
 		.rules
@@ -4108,6 +4194,48 @@ mod tests {
 	use super::*;
 	use crate::store::RequestPolicyTrait;
 	use crate::types::proto::agent::backend_policy_spec::Ai;
+
+	#[test]
+	fn prompt_guard_scope_from_proto() {
+		use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+		// unset scope keeps today's default so existing configs are unaffected
+		assert_eq!(
+			convert_content_scopes(&[]).unwrap(),
+			llm::policy::default_content_scope()
+		);
+		// opting in to tool scanning
+		assert_eq!(
+			convert_content_scopes(&[
+				ProtoScope::Messages as i32,
+				ProtoScope::ToolOutput as i32,
+				ProtoScope::ToolInput as i32,
+			])
+			.unwrap(),
+			vec![
+				llm::ContentScope::Messages,
+				llm::ContentScope::ToolOutput,
+				llm::ContentScope::ToolInput,
+			]
+		);
+		convert_content_scopes(&[ProtoScope::Unspecified as i32]).unwrap_err();
+		convert_content_scopes(&[42]).unwrap_err();
+
+		// TODO respect scopes in all guard types
+		let ai = Ai {
+			prompt_guard: Some(proto::agent::backend_policy_spec::ai::PromptGuard {
+				request: vec![proto::agent::backend_policy_spec::ai::RequestGuard {
+					rejection: None,
+					kind: Some(Kind::OpenaiModeration(Default::default())),
+					scope: vec![ProtoScope::ToolInput as i32],
+				}],
+				..Default::default()
+			}),
+			..Default::default()
+		};
+		let err = convert_backend_ai_policy(&ai, &mut Diagnostics::default()).unwrap_err();
+		assert!(err.to_string().contains("non-default scope"), "{err}");
+	}
 
 	#[test]
 	fn inline_backend_reference_validates_target() {
@@ -4737,6 +4865,14 @@ mod tests {
 					),
 					("/v1/messages".to_string(), RouteType::Messages as i32),
 					("/v1/detect".to_string(), RouteType::Detect as i32),
+					(
+						"/v1beta/models".to_string(),
+						RouteType::GenerateContent as i32,
+					),
+					(
+						"/v1beta/models:countTokens".to_string(),
+						RouteType::GeminiCountTokens as i32,
+					),
 				]
 				.into_iter()
 				.collect(),
@@ -4790,7 +4926,7 @@ mod tests {
 			assert!(post_transformation_policy.get("max_tokens").is_some());
 
 			// Verify routes conversion
-			assert_eq!(ai_policy.routes.len(), 3);
+			assert_eq!(ai_policy.routes.len(), 5);
 			assert_eq!(
 				ai_policy.routes.get("/v1/chat/completions"),
 				Some(&llm::RouteType::Completions)
@@ -4802,6 +4938,14 @@ mod tests {
 			assert_eq!(
 				ai_policy.routes.get("/v1/detect"),
 				Some(&llm::RouteType::Detect)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models"),
+				Some(&llm::RouteType::GenerateContent)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models:countTokens"),
+				Some(&llm::RouteType::GeminiCountTokens)
 			);
 		} else {
 			panic!("Expected AI policy variant");
@@ -4950,6 +5094,28 @@ mod tests {
 			}))
 			.unwrap(),
 			Some(Duration::from_millis(1500))
+		);
+	}
+
+	#[test]
+	fn convert_duration_negative_seconds_and_nanos_becomes_zero() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: -500_000_000,
+			}),
+			Duration::ZERO
+		);
+	}
+
+	#[test]
+	fn convert_duration_mixed_sign_clamps_negative_component() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: 500_000_000,
+			}),
+			Duration::from_millis(500)
 		);
 	}
 
@@ -5657,6 +5823,7 @@ mod tests {
 			headers: Default::default(),
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5681,6 +5848,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5709,6 +5877,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
@@ -5734,6 +5903,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: 0,
+			action: 0,
 		};
 		let mut diag = Diagnostics::default();
 		// convert_webhook returns Result, but invalid header names produce warnings not errors
@@ -5754,6 +5924,84 @@ mod tests {
 				.into_warnings()
 				.iter()
 				.any(|w| w.contains("skipping webhook header"))
+		);
+	}
+
+	#[tokio::test]
+	async fn server_tls_config_from_proto_maps_spiffe_source() {
+		use proto::agent::tls_config::{CertificateSource, MtlsMode};
+
+		// mtls_mode is ignored for SPIFFE (client SVIDs are always required); a non-Strict mode warns.
+		let tls = proto::agent::TlsConfig {
+			certificate_source: CertificateSource::Spiffe as i32,
+			mtls_mode: MtlsMode::Disable as i32,
+			..Default::default()
+		};
+		let mut diags = Diagnostics::default();
+		let cfg =
+			server_tls_config_from_proto(&tls, &mut diags, crate::DynamicCaCertCacheConfig::default());
+
+		let err = cfg
+			.config_for(None, None, None)
+			.await
+			.expect_err("SPIFFE config_for should require a SpiffeClient");
+		assert!(
+			err.to_string().contains("SPIFFE source is required"),
+			"unexpected error: {err}"
+		);
+
+		assert!(
+			diags
+				.warnings
+				.iter()
+				.any(|w| w.contains("mtls_mode is ignored for SPIFFE")),
+			"expected the mtls_mode-ignored warning, got {:?}",
+			diags.warnings
+		);
+
+		// Strict is the clean path the controller emits for SPIFFE: no warning.
+		let strict = proto::agent::TlsConfig {
+			certificate_source: CertificateSource::Spiffe as i32,
+			mtls_mode: MtlsMode::Strict as i32,
+			..Default::default()
+		};
+		let mut strict_diags = Diagnostics::default();
+		let _ = server_tls_config_from_proto(
+			&strict,
+			&mut strict_diags,
+			crate::DynamicCaCertCacheConfig::default(),
+		);
+		assert!(
+			strict_diags.warnings.is_empty(),
+			"Strict mtls_mode should not warn for SPIFFE, got {:?}",
+			strict_diags.warnings
+		);
+	}
+
+	#[test]
+	fn backend_policy_from_proto_maps_spiffe_source() {
+		use crate::http::backendtls::BackendTLSSource;
+		use crate::types::proto::agent::backend_policy_spec as bps;
+
+		let spec = proto::agent::BackendPolicySpec {
+			kind: Some(bps::Kind::BackendTls(bps::BackendTls {
+				certificate_source: bps::backend_tls::CertificateSource::Spiffe as i32,
+				verify_subject_alt_names: vec!["spiffe://example.org/ns/default/sa/upstream".to_string()],
+				..Default::default()
+			})),
+		};
+		let policy = backend_policy_from_proto(&spec, &mut Diagnostics::default())
+			.expect("backend TLS policy should translate");
+
+		let BackendTrafficPolicy::BackendTLS(bt) = policy else {
+			panic!("expected a BackendTLS policy");
+		};
+		let BackendTLSSource::Spiffe(spiffe) = bt.source else {
+			panic!("expected a SPIFFE-sourced upstream TLS config");
+		};
+		assert_eq!(
+			spiffe.verify_sans,
+			vec!["spiffe://example.org/ns/default/sa/upstream".to_string()]
 		);
 	}
 }

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -10,7 +10,7 @@ use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
 use once_cell::sync::Lazy;
-use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
+use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
 use regex::{Captures, Regex, Replacer};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
@@ -37,8 +37,6 @@ pub struct UpstreamOpenAPICall {
 pub enum ParseError {
 	#[error("missing components")]
 	MissingComponents,
-	#[error("invalid reference: {0}")]
-	InvalidReference(String),
 	#[error("missing reference")]
 	MissingReference(String),
 	#[error("unsupported reference")]
@@ -100,138 +98,71 @@ pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> 
 	}
 }
 
-fn resolve_schema<'a>(
-	reference: &'a ReferenceOr<Schema>,
-	doc: &'a OpenAPI,
-) -> Result<&'a Schema, ParseError> {
-	match reference {
-		ReferenceOr::Reference { reference } => {
-			let reference = reference
-				.strip_prefix("#/components/schemas/")
-				.ok_or(ParseError::InvalidReference(reference.to_string()))?;
-			let components: &openapiv3::Components = doc
-				.components
-				.as_ref()
-				.ok_or(ParseError::MissingComponents)?;
-			let schema = components
-				.schemas
-				.get(reference)
-				.ok_or(ParseError::MissingReference(reference.to_string()))?;
-			resolve_schema(schema, doc)
-		},
-		ReferenceOr::Item(schema) => Ok(schema),
-	}
-}
+const COMPONENT_SCHEMA_PREFIX: &str = "#/components/schemas/";
+const JSON_SCHEMA_DEFS_PREFIX: &str = "#/$defs/";
 
-/// Recursively resolves all nested schema references (`$ref`) within a given schema,
-/// returning a new `Schema` object with all references replaced by their corresponding items.
-fn resolve_nested_schema<'a>(
-	reference: &'a ReferenceOr<Schema>,
-	doc: &'a OpenAPI,
-) -> Result<Schema, ParseError> {
-	// 1. Resolve the initial reference to get the base Schema object (immutable borrow)
-	let base_schema = resolve_schema(reference, doc)?;
-
-	// 2. Clone the base schema to create a mutable owned version we can modify
-	let mut resolved_schema = base_schema.clone();
-
-	// 3. Match on the kind and recursively resolve + update the mutable clone
-	match &mut resolved_schema.schema_kind {
-		SchemaKind::Type(Type::Object(obj)) => {
-			for prop_ref_box in obj.properties.values_mut() {
-				let owned_prop_ref_or_box = prop_ref_box.clone();
-				let temp_prop_ref = match owned_prop_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_prop = resolve_nested_schema(&temp_prop_ref, doc)?;
-				*prop_ref_box = ReferenceOr::Item(Box::new(resolved_prop));
-			}
-		},
-		SchemaKind::Type(Type::Array(arr)) => {
-			if let Some(items_ref_box) = arr.items.as_mut() {
-				let owned_items_ref_or_box = items_ref_box.clone();
-				let temp_items_ref = match owned_items_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_items = resolve_nested_schema(&temp_items_ref, doc)?;
-				*items_ref_box = ReferenceOr::Item(Box::new(resolved_items));
-			}
-		},
-		// Handle combiners (OneOf, AllOf, AnyOf) with separate arms
-		SchemaKind::OneOf { one_of } => {
-			for ref_or_schema in one_of.iter_mut() {
-				let temp_ref = ref_or_schema.clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*ref_or_schema = ReferenceOr::Item(resolved);
-			}
-		},
-		SchemaKind::AllOf { all_of } => {
-			for ref_or_schema in all_of.iter_mut() {
-				let temp_ref = ref_or_schema.clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*ref_or_schema = ReferenceOr::Item(resolved);
-			}
-		},
-		SchemaKind::AnyOf { any_of } => {
-			for ref_or_schema in any_of.iter_mut() {
-				let temp_ref = ref_or_schema.clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*ref_or_schema = ReferenceOr::Item(resolved);
-			}
-		},
-		SchemaKind::Not { not } => {
-			let temp_ref = (**not).clone();
-			let resolved = resolve_nested_schema(&temp_ref, doc)?;
-			**not = ReferenceOr::Item(resolved);
-		},
-		SchemaKind::Any(any_schema) => {
-			// Properties
-			for prop_ref_box in any_schema.properties.values_mut() {
-				let owned_prop_ref_or_box = prop_ref_box.clone();
-				let temp_prop_ref = match owned_prop_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_prop = resolve_nested_schema(&temp_prop_ref, doc)?;
-				*prop_ref_box = ReferenceOr::Item(Box::new(resolved_prop));
-			}
-			// Items
-			if let Some(items_ref_box) = any_schema.items.as_mut() {
-				let owned_items_ref_or_box = items_ref_box.clone();
-				let temp_items_ref = match owned_items_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_items = resolve_nested_schema(&temp_items_ref, doc)?;
-				*items_ref_box = ReferenceOr::Item(Box::new(resolved_items));
-			}
-			// oneOf, allOf, anyOf
-			for vec_ref in [
-				&mut any_schema.one_of,
-				&mut any_schema.all_of,
-				&mut any_schema.any_of,
-			] {
-				for ref_or_schema in vec_ref.iter_mut() {
-					let temp_ref = ref_or_schema.clone();
-					let resolved = resolve_nested_schema(&temp_ref, doc)?;
-					*ref_or_schema = ReferenceOr::Item(resolved);
+fn visit_component_schema_refs(
+	value: &mut Value,
+	refs: &mut BTreeSet<String>,
+) -> Result<(), ParseError> {
+	match value {
+		Value::Object(object) => {
+			if let Some(Value::String(reference)) = object.get_mut("$ref") {
+				if let Some(name) = reference.strip_prefix(COMPONENT_SCHEMA_PREFIX) {
+					refs.insert(name.to_string());
+					*reference = format!("{JSON_SCHEMA_DEFS_PREFIX}{name}");
+				} else if reference.starts_with("#/components/") {
+					return Err(ParseError::UnsupportedReference(reference.clone()));
 				}
 			}
-			// not
-			if let Some(not_box) = any_schema.not.as_mut() {
-				let temp_ref = (**not_box).clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				**not_box = ReferenceOr::Item(resolved);
+			for value in object.values_mut() {
+				visit_component_schema_refs(value, refs)?;
 			}
 		},
-		// Base types (String, Number, Integer, Boolean) - no nested schemas to resolve further
-		SchemaKind::Type(_) => {}, // Do nothing, already resolved.
+		Value::Array(array) => {
+			for value in array {
+				visit_component_schema_refs(value, refs)?;
+			}
+		},
+		_ => {},
+	}
+	Ok(())
+}
+
+fn bundle_component_schema_refs(value: &mut Value, doc: &OpenAPI) -> Result<(), ParseError> {
+	let mut referenced = BTreeSet::new();
+	visit_component_schema_refs(value, &mut referenced)?;
+	if referenced.is_empty() {
+		return Ok(());
 	}
 
-	// 4. Return the modified owned schema
-	Ok(resolved_schema)
+	let components = doc
+		.components
+		.as_ref()
+		.ok_or(ParseError::MissingComponents)?;
+	let mut pending: VecDeque<_> = referenced.into_iter().collect();
+	let mut defs = JsonObject::new();
+
+	while let Some(name) = pending.pop_front() {
+		if defs.contains_key(&name) {
+			continue;
+		}
+		let schema = components
+			.schemas
+			.get(&name)
+			.ok_or_else(|| ParseError::MissingReference(name.clone()))?;
+		let mut schema = serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
+		let mut referenced = BTreeSet::new();
+		visit_component_schema_refs(&mut schema, &mut referenced)?;
+		pending.extend(referenced);
+		defs.insert(name, schema);
+	}
+
+	value
+		.as_object_mut()
+		.ok_or_else(|| ParseError::UnsupportedReference("final schema is not an object".to_string()))?
+		.insert("$defs".to_string(), Value::Object(defs));
+	Ok(())
 }
 
 fn resolve_parameter<'a>(
@@ -343,12 +274,8 @@ pub(crate) fn parse_openapi_schema(
 											.schema
 											.as_ref()
 											.ok_or(ParseError::MissingReference("application/json".to_string()))?;
-										let schema = resolve_nested_schema(schema_ref, open_api)?;
 										let body_schema =
-											serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
-										final_schema
-											.properties
-											.insert(BODY_NAME.clone(), body_schema.clone());
+											serde_json::to_value(schema_ref).map_err(ParseError::SerdeError)?;
 										Some((BODY_NAME.clone(), body_schema, body.required))
 									} else if body.content.contains_key("application/octet-stream") {
 										request_content_type = Some("application/octet-stream".to_string());
@@ -357,9 +284,6 @@ pub(crate) fn parse_openapi_schema(
 											"format": "byte",
 											"description": "Base64-encoded binary content"
 										});
-										final_schema
-											.properties
-											.insert(BODY_NAME.clone(), body_schema.clone());
 										Some((BODY_NAME.clone(), body_schema, body.required))
 									} else {
 										None
@@ -408,7 +332,7 @@ pub(crate) fn parse_openapi_schema(
 							parameters
 								.iter()
 								.try_for_each(|parameter| -> Result<(), ParseError> {
-									let (name, schema, required) = build_schema_property(open_api, parameter)?;
+									let (name, schema, required) = build_schema_property(parameter)?;
 									param_schemas
 										.entry(parameter_type(parameter)?)
 										.or_insert_with(Vec::new)
@@ -443,8 +367,9 @@ pub(crate) fn parse_openapi_schema(
 									.insert(param_type.to_string(), json!(sub_schema));
 							}
 
-							let final_json =
+							let mut final_json =
 								serde_json::to_value(final_schema).map_err(ParseError::SerdeError)?;
+							bundle_component_schema_refs(&mut final_json, open_api)?;
 							let final_json = final_json
 								.as_object()
 								.ok_or(ParseError::UnsupportedReference(
@@ -518,23 +443,17 @@ impl std::fmt::Display for ParameterType {
 	}
 }
 
-fn build_schema_property(
-	open_api: &OpenAPI,
-	item: &Parameter,
-) -> Result<(String, JsonObject, bool), ParseError> {
+fn build_schema_property(item: &Parameter) -> Result<(String, JsonObject, bool), ParseError> {
 	let p = item.parameter_data_ref();
 	let mut schema = match &p.format {
-		openapiv3::ParameterSchemaOrContent::Schema(reference) => {
-			let resolved_schema = resolve_schema(reference, open_api)?;
-			serde_json::to_value(resolved_schema)
-				.map_err(ParseError::SerdeError)?
-				.as_object()
-				.ok_or(ParseError::UnsupportedReference(format!(
-					"parameter {} is not an object",
-					p.name
-				)))?
-				.clone()
-		},
+		openapiv3::ParameterSchemaOrContent::Schema(reference) => serde_json::to_value(reference)
+			.map_err(ParseError::SerdeError)?
+			.as_object()
+			.ok_or(ParseError::UnsupportedReference(format!(
+				"parameter {} is not an object",
+				p.name
+			)))?
+			.clone(),
 		openapiv3::ParameterSchemaOrContent::Content(content) => {
 			return Err(ParseError::UnsupportedReference(format!(
 				"content is not supported for parameters: {content:?}"
