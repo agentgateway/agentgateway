@@ -259,7 +259,7 @@ export function ProvidersPage() {
 				<ConfirmDialog
 					title={tr('copy.deleteProvider_1j44lo')}
 					destructive
-					confirmLabel="Delete provider"
+					confirmLabel={tr('copy.deleteProvider')}
 					confirmDisabled={saving}
 					onCancel={() => setDeletingProvider(null)}
 					onConfirm={() => deleteProvider(deletingProvider)}
