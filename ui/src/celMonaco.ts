@@ -1,6 +1,7 @@
 import type * as Monaco from 'monaco-editor';
 
 import { publicAssetPath } from '@/basePath';
+import { translateText } from '@/i18n';
 
 let celConfigured = false;
 let schemaPromise: Promise<CelSchemaIndex> | null = null;
@@ -641,6 +642,6 @@ function schemaEntry(label: string, node: JsonSchemaNode): CelCompletionEntry {
 	return {
 		label,
 		detail,
-		documentation: node.description
+		documentation: node.description ? translateText(node.description) : undefined
 	};
 }

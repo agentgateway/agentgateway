@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { Dropdown, Field, FieldGroup } from '@/components/Primitives';
+import { tr } from '@/i18n';
 import type { GatewayConfig } from '@/types';
 
 const dedicatedPort = '__port__';
@@ -57,8 +58,8 @@ export function GatewayBindingEditor(props: {
 							? [
 									{
 										value: dedicatedPort,
-										label: 'Dedicated port',
-										description: 'Bind this surface on its own listener port.'
+										label: tr('copy.dedicatedPort'),
+										description: tr('copy.bindThisSurfaceOnItsOwnListenerPort')
 									},
 									...options
 								]
@@ -129,14 +130,14 @@ function gatewayOptions(config: GatewayConfig | null | undefined) {
 		return [
 			{
 				value: name,
-				label: `${name} (all listeners)`,
-				description: `${listeners.length} listeners`
+				label: tr('copy.valueAllListeners', [name]),
+				description: tr('copy.valueListeners', { count: listeners.length })
 			},
 			...listeners.map((listener, index) => {
 				const listenerName = listener.name ?? `listener${index}`;
 				return {
 					value: `${name}/${listenerName}`,
-					label: `${name}/${listenerName}`,
+					label: tr('copy.valueValue', [name, listenerName]),
 					description: gateway.port ? `Port ${gateway.port}` : undefined
 				};
 			})

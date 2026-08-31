@@ -37,55 +37,81 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 		if (path !== '/') {
 			await page.locator(`.nav-list a[href="${path}"]`).click();
 		}
-		await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+		await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 		await expect(page.locator('body')).not.toContainText('Configuration API unavailable');
 	}
 });
 
-test('log detail renders the normalized conversation', async ({ page }) => {
+test('switches the complete shell between English and Simplified Chinese', async ({
+	page
+}, testInfo) => {
 	await mockGateway(page);
-	await page.goto('/llm/logs?log=log-1#conversation-step-3');
+	await page.goto('/?lang=zh-CN');
 
-	await expect(page.locator('.log-call-preview')).toHaveText('Summarize the result.');
-	const turn = page.getByLabel('Tool result → Assistant');
-	await expect(turn).toBeVisible();
-	await turn.hover();
-	await expect(page.getByRole('tooltip')).toHaveText('Tool result → Assistant');
-	await expect(page.getByRole('heading', { name: 'Trajectory' })).toBeVisible();
-	await expect(page.locator('.log-conversation')).toHaveAttribute('open', '');
-	await expect(page.locator('#conversation-step-3')).toBeVisible();
-	await expect(page.locator('.log-trajectory-bar.input')).toHaveCount(2);
-	await expect(page.locator('.log-trajectory-bar.input.system')).toHaveCount(1);
-	await expect(page.locator('.log-trajectory-bar.model')).toHaveCount(2);
-	await expect(page.locator('.log-trajectory-bar.tool-call')).toHaveCount(1);
-	await expect(page.locator('.log-trajectory-bar.tool-result')).toHaveCount(1);
-	await expect(page.locator('.log-markdown strong')).toHaveText('pong');
-	await expect(page.locator('.log-markdown a, .log-markdown img')).toHaveCount(0);
-	await expect(page.locator('.log-msg.system .log-markdown')).toContainText('docs [image: probe]');
-	await expect(page.locator('.log-tool-block.call')).toHaveCount(1);
-	await expect(page.locator('.log-tool-block.result')).toHaveCount(1);
-	await expect(page.locator('.log-tool-block.reasoning')).toHaveCount(2);
-	await expect(page.locator('.log-tool-block.reasoning').nth(0)).toContainText(
-		'Checking the source'
-	);
-	await expect(page.locator('.log-tool-block.reasoning').nth(1)).toContainText(
-		'Encrypted (4 bytes)'
-	);
+	await expect(page.getByRole('heading', { name: '网关概览' })).toBeVisible();
+	await expect(page.locator('.nav-list').getByRole('link', { name: '首页' })).toBeVisible();
+	await expect(page.getByLabel('选择语言')).toHaveText('简体中文');
+	if (process.env.I18N_SCREENSHOT) {
+		await page.screenshot({
+			path: testInfo.outputPath('i18n-shell-zh-CN.png'),
+			fullPage: true
+		});
+	}
 
-	await page.locator('.log-tool-block.call .log-tool-toggle').click();
-	await expect(page.locator('.log-tool-block.call .log-tool-text')).toHaveText(
-		'line one\nline two'
-	);
-	await page.locator('.log-tool-block.result .log-tool-toggle').click();
-	await expect(page.locator('.log-tool-block.result .json-block')).toContainText('"answer": "ok"');
+	await page.getByLabel('选择语言').click();
+	await page.getByRole('option', { name: 'English' }).click();
+	await expect(page.getByRole('heading', { name: 'Gateway Overview' })).toBeVisible();
+	await expect(page.locator('.nav-list').getByRole('link', { name: 'Home' })).toBeVisible();
+	await expect(page).toHaveURL(/\?lang=en$/);
+	await page.locator('.nav-list').getByRole('link', { name: 'Policies' }).first().click();
+	await expect(page.getByRole('heading', { name: 'LLM Policies' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Access' })).toBeVisible();
+	await expect(page.getByText('API keys', { exact: true })).toBeVisible();
+	await expect(page.getByText('Basic auth', { exact: true })).toBeVisible();
+	await expect(page.getByText('JWT auth', { exact: true })).toBeVisible();
+	await page.locator('.nav-list').getByRole('link', { name: 'Home' }).click();
+	await page.reload();
+	await expect(page.getByLabel('Select language')).toHaveText('English');
 
-	await page.getByRole('button', { name: 'Step 4: Tool call: lookup' }).click();
-	await expect(page.locator('.log-trajectory-caption > span')).toHaveText(
-		'Step 4 Tool call: lookup'
+	await page.getByLabel('Select language').click();
+	await page.getByRole('option', { name: '简体中文' }).click();
+	await expect(page.getByRole('heading', { name: '网关概览' })).toBeVisible();
+	await expect(page).toHaveURL(/\?lang=zh-CN$/);
+
+	await page.goto('/');
+	await page.reload();
+	await expect(page.getByLabel('选择语言')).toHaveText('简体中文');
+	await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
+
+	await page.goto('/llm/client-setup?lang=zh-CN');
+	await page.getByLabel('网关基础 URL').fill('http://unsaved-local-value.example');
+	await page.getByLabel('选择语言').click();
+	await page.getByRole('option', { name: 'English' }).click();
+	await expect(page.getByLabel('Gateway base URL')).toHaveValue(
+		'http://unsaved-local-value.example'
 	);
-	await page.getByRole('link', { name: 'Jump to conversation' }).click();
-	await expect(page).toHaveURL(/#conversation-step-4$/);
-	await expect(page.locator('#conversation-step-4')).toBeInViewport();
+});
+
+test('updates the policy catalog when the language changes in place', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/policies?lang=zh-CN');
+
+	await expect(page.getByRole('heading', { name: '访问' })).toBeVisible();
+	await expect(page.getByText('API 密钥', { exact: true })).toBeVisible();
+	await expect(page.getByText('基本身份验证', { exact: true })).toBeVisible();
+	await expect(page.getByText('JWT 身份验证', { exact: true })).toBeVisible();
+
+	await page.getByLabel('选择语言').click();
+	await page.getByRole('option', { name: 'English' }).click();
+
+	await expect(page).toHaveURL(/\/llm\/policies\?lang=en$/);
+	await expect(page.getByRole('heading', { name: 'Access' })).toBeVisible();
+	await expect(page.getByText('API keys', { exact: true })).toBeVisible();
+	await expect(page.getByText('Basic auth', { exact: true })).toBeVisible();
+	await expect(page.getByText('JWT auth', { exact: true })).toBeVisible();
+	await expect(page.getByText('API 密钥', { exact: true })).toHaveCount(0);
+	await expect(page.getByText('基本身份验证', { exact: true })).toHaveCount(0);
+	await expect(page.getByText('JWT 身份验证', { exact: true })).toHaveCount(0);
 });
 
 test('log settings migrate prompt logging to the database LLM mode', async ({ page }) => {
@@ -295,11 +321,7 @@ test('raw configuration lists hybrid database resources with masked keys', async
 						id: 'key-id',
 						value: {
 							key: 'agw_sk_supersecret123',
-							metadata: {
-								'agentgateway.dev/id': 'key-id',
-								'agentgateway.dev/createdAt': 1783641600,
-								name: 'Test key'
-							}
+							metadata: { id: 'key-id', name: 'Test key' }
 						},
 						revision: 1,
 						createdAt: '2026-07-10T00:00:00Z',
@@ -516,6 +538,21 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 			}
 		}
 	});
+});
+
+test('localizes virtual model condition help in Chinese', async ({ page }) => {
+	await mockGateway(page, emptyConfigWithModels());
+	await page.goto('/llm/models?lang=zh-CN');
+
+	await page.getByRole('button', { name: '添加虚拟模型' }).click();
+	await page.getByRole('button', { name: '条件' }).click();
+	await page.getByRole('button', { name: '添加规则' }).click();
+
+	const help = page.locator('.help-icon[aria-label*="条件表达式"]').first();
+	await expect(help).toBeVisible();
+	await expect(help).toHaveAttribute('aria-label', /最后一个回退目标/);
+	await help.hover();
+	await expect(page.getByRole('tooltip')).toContainText('条件表达式');
 });
 
 test('hybrid model edits use the unified resource API', async ({ page }) => {

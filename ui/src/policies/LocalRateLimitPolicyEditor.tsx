@@ -4,6 +4,7 @@ import { UnsupportedYamlFallback } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { RateLimitSpec } from '@/gateway-config';
+import { tr } from '@/i18n';
 import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { LocalRateLimitConfig, LocalRateLimitDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
@@ -32,13 +33,14 @@ export function LocalRateLimitPolicyEditor(props: {
 	if (props.localRateLimit && !Array.isArray(props.localRateLimit)) {
 		return (
 			<UnsupportedYamlFallback
-				title="Unsupported rate limit shape"
+				title={tr('copy.unsupportedRateLimitShape')}
 				value={props.localRateLimit}
 				schema={props.help.node(['$defs', 'LocalRateLimit'])}
 				help={props.help}
 			>
-				This policy uses conditional rate limit entries. The visual editor currently supports simple
-				rate limits only.
+				{tr(
+					'copy.thisPolicyUsesConditionalRateLimitEntriesTheVisualEditorCurrentlySupportsSimpleRateLimitsOnly'
+				)}
 			</UnsupportedYamlFallback>
 		);
 	}
@@ -55,7 +57,7 @@ export function LocalRateLimitPolicyEditor(props: {
 		>
 			<div className="form-grid">
 				<FieldGroup
-					label="Limit type"
+					label={tr('copy.limitType')}
 					tooltip={props.help.field<RateLimitSpec>('RateLimitSpec', 'type')}
 				>
 					<EnumSelector
@@ -64,13 +66,13 @@ export function LocalRateLimitPolicyEditor(props: {
 						options={[
 							{
 								value: 'requests',
-								label: 'Requests',
-								description: 'Limit by request count.'
+								label: tr('copy.requests'),
+								description: tr('copy.limitByRequestCount')
 							},
 							{
 								value: 'tokens',
-								label: 'Tokens',
-								description: 'Limit by token count.'
+								label: tr('copy.tokens'),
+								description: tr('copy.limitByTokenCount')
 							}
 						]}
 						schema={props.help.node(['$defs', 'RateLimitSpec', 'properties', 'type'])}
@@ -78,7 +80,7 @@ export function LocalRateLimitPolicyEditor(props: {
 					/>
 				</FieldGroup>
 				<Field
-					label="Fill interval"
+					label={tr('copy.fillInterval')}
 					tooltip={props.help.field<RateLimitSpec>('RateLimitSpec', 'fillInterval')}
 				>
 					<input
@@ -88,7 +90,7 @@ export function LocalRateLimitPolicyEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Max tokens"
+					label={tr('copy.maxTokens')}
 					tooltip={props.help.field<RateLimitSpec>('RateLimitSpec', 'maxTokens')}
 				>
 					<input
@@ -98,7 +100,7 @@ export function LocalRateLimitPolicyEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Tokens per fill"
+					label={tr('copy.tokensPerFill')}
 					tooltip={props.help.field<RateLimitSpec>('RateLimitSpec', 'tokensPerFill')}
 				>
 					<input

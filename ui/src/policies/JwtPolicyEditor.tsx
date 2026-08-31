@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
 import type { JWTValidationOptions, LocalJwtConfig } from '@/gateway-config';
+import { tr } from '@/i18n';
 import {
 	authorizationLocationFrom,
 	authorizationLocationToValue,
@@ -37,18 +38,30 @@ const modeOptions: Array<{
 }> = [
 	{
 		value: 'strict',
-		label: 'Strict',
-		description: 'Reject requests that do not carry a valid token.'
+		get label() {
+			return tr('copy.strict');
+		},
+		get description() {
+			return tr('copy.rejectRequestsThatDoNotCarryAValidToken');
+		}
 	},
 	{
 		value: 'optional',
-		label: 'Optional',
-		description: 'Validate a token when one is present.'
+		get label() {
+			return tr('copy.optional_1yfbac9');
+		},
+		get description() {
+			return tr('copy.validateATokenWhenOneIsPresent');
+		}
 	},
 	{
 		value: 'permissive',
-		label: 'Permissive',
-		description: 'Keep serving traffic while surfacing JWT data when possible.'
+		get label() {
+			return tr('copy.permissive');
+		},
+		get description() {
+			return tr('copy.keepServingTrafficWhileSurfacingJwtDataWhenPossible');
+		}
 	}
 ];
 
@@ -59,18 +72,30 @@ const jwksOptions: Array<{
 }> = [
 	{
 		value: 'url',
-		label: 'Remote URL',
-		description: 'Fetch signing keys from the issuer JWKS endpoint.'
+		get label() {
+			return tr('copy.remoteUrl');
+		},
+		get description() {
+			return tr('copy.fetchSigningKeysFromTheIssuerJwksEndpoint');
+		}
 	},
 	{
 		value: 'file',
-		label: 'Local file',
-		description: 'Read signing keys from a file on the gateway host.'
+		get label() {
+			return tr('copy.localFile');
+		},
+		get description() {
+			return tr('copy.readSigningKeysFromAFileOnTheGatewayHost');
+		}
 	},
 	{
 		value: 'inline',
-		label: 'Inline JSON',
-		description: 'Paste a JWKS document directly into the policy.'
+		get label() {
+			return tr('copy.inlineJson');
+		},
+		get description() {
+			return tr('copy.pasteAJwksDocumentDirectlyIntoThePolicy');
+		}
 	}
 ];
 
@@ -150,7 +175,7 @@ export function JwtPolicyEditor(props: {
 			const validationErrors = validateJwtPolicy();
 			setFieldErrors(validationErrors);
 			if (Object.keys(validationErrors).length) {
-				setError('Fix the highlighted fields before saving.');
+				setError(tr('copy.fixTheHighlightedFieldsBeforeSaving'));
 				return;
 			}
 			props.onSave(buildJwtPolicy());
@@ -189,11 +214,13 @@ export function JwtPolicyEditor(props: {
 		>
 			<PolicySection
 				icon={<ShieldCheck size={17} />}
-				title="Enforcement"
-				description="Choose how the gateway behaves when a request has no token or a token cannot be verified."
+				title={tr('copy.enforcement')}
+				description={tr(
+					'copy.chooseHowTheGatewayBehavesWhenARequestHasNoTokenOrATokenCannotBeVerified'
+				)}
 			>
 				<FieldGroup
-					label="Validation mode"
+					label={tr('copy.validationMode')}
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'mode')}
 				>
 					<div className="option-card-grid">
@@ -214,11 +241,11 @@ export function JwtPolicyEditor(props: {
 
 			<PolicySection
 				icon={jwksMode === 'url' ? <DatabaseZap size={17} /> : <FileKey2 size={17} />}
-				title="Signing keys"
-				description="Configure the JWKS source used to verify token signatures."
+				title={tr('copy.signingKeys')}
+				description={tr('copy.configureTheJwksSourceUsedToVerifyTokenSignatures')}
 			>
 				<FieldGroup
-					label="JWKS source"
+					label={tr('copy.jwksSource')}
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'jwks')}
 				>
 					<div className="option-card-grid">
@@ -240,7 +267,7 @@ export function JwtPolicyEditor(props: {
 				</FieldGroup>
 				{jwksMode === 'file' ? (
 					<Field
-						label="JWKS file"
+						label={tr('copy.jwksFile')}
 						tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'jwks')}
 						className={fieldErrors.jwksFile ? 'invalid' : undefined}
 						hint={fieldErrors.jwksFile}
@@ -257,7 +284,7 @@ export function JwtPolicyEditor(props: {
 					</Field>
 				) : jwksMode === 'url' ? (
 					<Field
-						label="JWKS URL"
+						label={tr('copy.jwksUrl')}
 						tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'jwks')}
 						className={fieldErrors.jwksUrl ? 'invalid' : undefined}
 						hint={fieldErrors.jwksUrl}
@@ -274,7 +301,7 @@ export function JwtPolicyEditor(props: {
 					</Field>
 				) : (
 					<FieldGroup
-						label="Inline JWKS"
+						label={tr('copy.inlineJwks')}
 						tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'jwks')}
 						className={fieldErrors.jwksInline ? 'invalid' : undefined}
 						hint={fieldErrors.jwksInline}
@@ -294,11 +321,11 @@ export function JwtPolicyEditor(props: {
 
 			<PolicySection
 				icon={<Globe2 size={17} />}
-				title="Token validation"
-				description="Restrict accepted tokens by issuer, audience, and required claims."
+				title={tr('copy.tokenValidation')}
+				description={tr('copy.restrictAcceptedTokensByIssuerAudienceAndRequiredClaims')}
 			>
 				<Field
-					label="Issuer"
+					label={tr('copy.issuer')}
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'issuer')}
 					className={fieldErrors.issuer ? 'invalid' : undefined}
 					hint={fieldErrors.issuer}
@@ -315,16 +342,16 @@ export function JwtPolicyEditor(props: {
 				</Field>
 
 				<ListEditor
-					label="Audiences"
+					label={tr('copy.audiences')}
 					tooltip={props.help.field<LocalJwtConfig>('LocalJwtConfig', 'audiences')}
 					values={audiences}
 					placeholder="api://gateway"
-					emptyText="No audience restriction configured."
+					emptyText={tr('copy.noAudienceRestrictionConfigured')}
 					onChange={setAudiences}
 				/>
 
 				<FieldGroup
-					label="Required claims"
+					label={tr('copy.requiredClaims')}
 					tooltip={props.help.field<JWTValidationOptions>('JWTValidationOptions', 'requiredClaims')}
 				>
 					<div className="method-grid">
@@ -346,14 +373,14 @@ export function JwtPolicyEditor(props: {
 				value={location}
 				help={props.help}
 				defaultDescription="Default: Authorization: Bearer token"
-				description="Override where this policy reads the JWT from."
+				description={tr('copy.overrideWhereThisPolicyReadsTheCredential')}
 				onChange={setLocation}
 			/>
 
 			<ResultingYaml value={preview} />
 
 			{error ? (
-				<StatusBanner state="bad" title="Invalid JWT policy">
+				<StatusBanner state="bad" title={tr('copy.invalidJwtPolicy')}>
 					{error}
 				</StatusBanner>
 			) : null}

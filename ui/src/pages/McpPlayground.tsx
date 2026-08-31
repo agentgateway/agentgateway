@@ -18,6 +18,7 @@ import {
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from '@/cors';
 import { mcpPlaygroundEndpoint } from '@/gatewayUrls';
 import { useMcpConfigData, useStoredStringState, useUpsertPolicyResource } from '@/hooks';
+import { tr } from '@/i18n';
 import { extractMcpTools, type McpTool, nextRpcId, sendInitializedNotification } from '@/mcp';
 
 type JsonSchema = {
@@ -166,13 +167,15 @@ export function McpPlaygroundPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="MCP Playground"
-				description="Initialize a gateway MCP session, list tools, and call a tool through the MCP listener."
+				title={tr('copy.mcpPlayground')}
+				description={tr(
+					'copy.initializeAGatewayMcpSessionListToolsAndCallAToolThroughTheMcpListener'
+				)}
 			/>
 			{needsCors ? (
 				<StatusBanner
 					state="warn"
-					title="Browser access is not allowed"
+					title={tr('copy.browserAccessIsNotAllowed')}
 					action={
 						mcpData.hybrid && fileCorsOwned ? (
 							<Link className="button" to="/mcp/policies" hash="cors">
@@ -196,17 +199,16 @@ export function McpPlaygroundPage() {
 						)
 					}
 				>
-					Add {currentOrigin()} to the MCP CORS policy and expose Mcp-Session-Id so this playground
-					can keep a browser session.
+					{tr('copy.playgroundMcpSessionCorsInstruction', [currentOrigin()])}
 				</StatusBanner>
 			) : null}
 			{targets.length === 0 ? (
-				<StatusBanner state="warn" title="No MCP servers">
-					Create an MCP server before testing MCP traffic.
+				<StatusBanner state="warn" title={tr('copy.noMcpServers')}>
+					{tr('copy.createAnMcpServerBeforeTestingMcpTraffic')}
 				</StatusBanner>
 			) : null}
 			{error ? (
-				<StatusBanner state="bad" title="MCP request failed">
+				<StatusBanner state="bad" title={tr('copy.mcpRequestFailed')}>
 					{error}
 				</StatusBanner>
 			) : null}
@@ -214,9 +216,9 @@ export function McpPlaygroundPage() {
 				<Panel>
 					<div className="mcp-session-bar">
 						<div>
-							<span>Session</span>
+							<span>{tr('copy.session')}</span>
 							<strong className="mono">
-								{initialized ? sessionId || 'initialized' : 'not initialized'}
+								{initialized ? sessionId || tr('copy.initialized') : tr('copy.notInitialized')}
 							</strong>
 						</div>
 						{initialized ? (
@@ -233,7 +235,7 @@ export function McpPlaygroundPage() {
 								}}
 							>
 								<RotateCcw size={16} />
-								Reset
+								{tr('copy.reset')}
 							</button>
 						) : (
 							<button
@@ -243,14 +245,14 @@ export function McpPlaygroundPage() {
 								onClick={initialize}
 							>
 								<Cable size={16} />
-								Initialize
+								{tr('copy.initialize')}
 							</button>
 						)}
 					</div>
 
 					<details className="schema-details mcp-auth-details">
-						<summary>Authorization header</summary>
-						<Field label="Bearer token">
+						<summary>{tr('copy.authorizationHeader')}</summary>
+						<Field label={tr('copy.bearerToken')}>
 							<input
 								value={bearerToken}
 								type="text"
@@ -264,16 +266,16 @@ export function McpPlaygroundPage() {
 								name="agw-mcp-playground-bearer-token"
 								spellCheck={false}
 								onChange={event => setBearerToken(event.target.value)}
-								placeholder="Optional token"
+								placeholder={tr('copy.optionalToken')}
 							/>
 						</Field>
 					</details>
 
-					<FieldGroup label="Tool">
+					<FieldGroup label={tr('copy.tool')}>
 						<Dropdown
 							ariaLabel="Tool"
 							value={toolName}
-							placeholder={initialized ? 'No tools returned' : 'Initialize first'}
+							placeholder={initialized ? tr('copy.noToolsReturned') : tr('copy.initializeFirst')}
 							searchable
 							options={tools.map(tool => ({
 								value: tool.name,
@@ -290,14 +292,14 @@ export function McpPlaygroundPage() {
 					) : null}
 					{selectedTool?.inputSchema ? (
 						<details className="schema-details">
-							<summary>Input schema</summary>
+							<summary>{tr('copy.inputSchema')}</summary>
 							<JsonBlock value={selectedTool.inputSchema} />
 						</details>
 					) : null}
 
 					{!selectedTool ? (
 						<div className="empty-inline">
-							Initialize the session and select a tool to configure arguments.
+							{tr('copy.initializeTheSessionAndSelectAToolToConfigureArguments')}
 						</div>
 					) : selectedTool.inputSchema && schemaHasSimpleProperties(selectedTool.inputSchema) ? (
 						<ToolArgumentsForm
@@ -307,7 +309,7 @@ export function McpPlaygroundPage() {
 							onSubmit={callTool}
 						/>
 					) : (
-						<FieldGroup label="Arguments JSON">
+						<FieldGroup label={tr('copy.argumentsJson')}>
 							<MiniMonacoEditor
 								language="json"
 								value={argumentsJson}
@@ -324,20 +326,20 @@ export function McpPlaygroundPage() {
 							onClick={callTool}
 						>
 							<Play size={16} />
-							Call tool
+							{tr('copy.callTool')}
 						</button>
 					</div>
 				</Panel>
 				<Panel className="playground-response-panel">
 					<div className="section-heading">
-						<h3>Result</h3>
+						<h3>{tr('copy.result')}</h3>
 					</div>
 					{result ? (
 						<McpResultView response={result} />
 					) : (
 						<div className="empty-state">
-							<h3>No response yet</h3>
-							<p>Initialize or send a tool request to inspect MCP behavior.</p>
+							<h3>{tr('copy.noResponseYet')}</h3>
+							<p>{tr('copy.initializeOrSendAToolRequestToInspectMcpBehavior')}</p>
 						</div>
 					)}
 				</Panel>
@@ -351,7 +353,7 @@ function parseArguments(value: string) {
 	if (!trimmed) return {};
 	const parsed = JSON.parse(trimmed) as unknown;
 	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-		throw new Error('Arguments must be a JSON object.');
+		throw new Error(tr('copy.argumentsMustBeAJsonObject'));
 	}
 	return parsed;
 }
@@ -367,7 +369,7 @@ function ToolArgumentsForm(props: {
 	const required = new Set(schema.required ?? []);
 	const entries = Object.entries(properties);
 	if (entries.length === 0) {
-		return <div className="empty-inline">This tool does not declare arguments.</div>;
+		return <div className="empty-inline">{tr('copy.thisToolDoesNotDeclareArguments')}</div>;
 	}
 	return (
 		<div className="tool-arguments-form">
@@ -564,12 +566,15 @@ function McpResultView(props: { response: McpResponse }) {
 
 			{error ? (
 				<div className="mcp-result-card">
-					<strong>Error</strong>
+					<strong>{tr('copy.error')}</strong>
 					<JsonBlock value={error} />
 				</div>
 			) : tools.length > 0 ? (
 				<div className="mcp-result-card">
-					<strong>{tools.length} tools discovered</strong>
+					<strong>
+						{tools.length}
+						{tr('copy.toolsDiscovered')}
+					</strong>
 					<div className="mcp-tool-list">
 						{tools.map(tool => (
 							<div className="mcp-tool-row" key={tool.name}>
@@ -583,26 +588,26 @@ function McpResultView(props: { response: McpResponse }) {
 				</div>
 			) : content.length > 0 || structuredContent !== undefined ? (
 				<div className="mcp-result-card">
-					<strong>Tool output</strong>
+					<strong>{tr('copy.toolOutput')}</strong>
 					{content.map((item, index) => (
 						<ContentBlock block={item} key={index} />
 					))}
 					{structuredContent !== undefined ? (
 						<details className="schema-details" open>
-							<summary>Structured content</summary>
+							<summary>{tr('copy.structuredContent')}</summary>
 							<JsonBlock value={structuredContent} />
 						</details>
 					) : null}
 				</div>
 			) : (
 				<div className="mcp-result-card">
-					<strong>Response</strong>
+					<strong>{tr('copy.response_nrnldq')}</strong>
 					<JsonBlock value={result ?? props.response.body} />
 				</div>
 			)}
 
 			<details className="schema-details">
-				<summary>Raw JSON</summary>
+				<summary>{tr('copy.rawJson')}</summary>
 				<JsonBlock value={props.response} />
 			</details>
 		</div>
@@ -626,14 +631,14 @@ function ContentBlock(props: { block: unknown }) {
 			<img
 				className="mcp-image-output"
 				src={`data:${mimeType};base64,${block.data}`}
-				alt="MCP tool output"
+				alt={tr('copy.mcpToolOutput')}
 			/>
 		);
 	}
 	if (block.type === 'resource') {
 		return (
 			<details className="schema-details" open>
-				<summary>Resource</summary>
+				<summary>{tr('copy.resource')}</summary>
 				<JsonBlock value={props.block} />
 			</details>
 		);

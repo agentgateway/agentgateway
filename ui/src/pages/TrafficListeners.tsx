@@ -20,6 +20,7 @@ import {
 import { useStickyQueryParam } from '@/drawerRouteState';
 import type { LocalTLSServerConfig } from '@/gateway-config';
 import { useConfigDumpMode, useRawGatewayConfig, useUpdateConfig } from '@/hooks';
+import { tr } from '@/i18n';
 import {
 	ReadonlyModeBanner,
 	TrafficDumpListenersView
@@ -37,11 +38,11 @@ export function TrafficListenersPage() {
 		return (
 			<div className="page-stack">
 				<PageHeader
-					title="Traffic Listeners"
-					description="Configure bind ports and listeners for generic HTTP and TCP traffic."
+					title={tr('copy.trafficListeners')}
+					description={tr('copy.configureBindPortsAndListenersForGenericHttpAndTcpTraffic')}
 				/>
 				<Panel>
-					<StatusBanner state="loading" title="Detecting traffic configuration mode" />
+					<StatusBanner state="loading" title={tr('copy.detectingTrafficConfigurationMode')} />
 				</Panel>
 			</div>
 		);
@@ -50,8 +51,8 @@ export function TrafficListenersPage() {
 		return (
 			<div className="page-stack">
 				<PageHeader
-					title="Traffic Listeners"
-					description="Read-only listener inventory from the active gateway dump."
+					title={tr('copy.trafficListeners')}
+					description={tr('copy.readOnlyListenerInventoryFromTheActiveGatewayDump')}
 				/>
 				<ReadonlyModeBanner />
 				<TrafficDumpListenersView dump={mode.data.dump} />
@@ -123,13 +124,13 @@ function TrafficListenersEditorPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Traffic Listeners"
-				description="Configure bind ports and listeners for generic HTTP and TCP traffic."
+				title={tr('copy.trafficListeners')}
+				description={tr('copy.configureBindPortsAndListenersForGenericHttpAndTcpTraffic')}
 				actions={
 					<div className="button-row">
 						<button className="button" type="button" onClick={() => openBindEditor(null)}>
 							<Plus size={16} />
-							Add bind
+							{tr('copy.addBind')}
 						</button>
 						<button
 							className="button primary"
@@ -138,42 +139,39 @@ function TrafficListenersEditorPage() {
 							onClick={() => openListenerEditor(0, null)}
 						>
 							<Plus size={16} />
-							Add listener
+							{tr('copy.addListener')}
 						</button>
 					</div>
 				}
 			/>
 
 			{update.isError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{update.error.message}
 				</StatusBanner>
 			) : null}
-			{update.isSuccess ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+			{update.isSuccess ? <StatusBanner state="ok" title={tr('copy.configurationSaved')} /> : null}
 			{stats.invalidListeners ? (
-				<StatusBanner
-					state="warn"
-					title={`${stats.invalidListeners} listener${stats.invalidListeners === 1 ? '' : 's'} mix HTTP and TCP routes`}
-				>
-					Edit those listeners through raw YAML or split the routes across separate listeners.
+				<StatusBanner state="warn" title={tr('copy.someListenersMixHttpAndTcpRoutes')}>
+					{tr('copy.editThoseListenersThroughRawYamlOrSplitTheRoutesAcrossSeparateListeners')}
 				</StatusBanner>
 			) : null}
 
 			<Panel>
 				{config.isLoading ? (
-					<StatusBanner state="loading" title="Loading traffic listeners" />
+					<StatusBanner state="loading" title={tr('copy.loadingTrafficListeners')} />
 				) : config.isError ? (
-					<StatusBanner state="bad" title="Configuration API unavailable">
+					<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 						{config.error.message}
 					</StatusBanner>
 				) : !config.data?.binds?.length ? (
 					<EmptyState
-						title="No legacy binds configured"
-						description="Use traffic gateways for new HTTP routing configuration."
+						title={tr('copy.noLegacyBindsConfigured')}
+						description={tr('copy.useTrafficGatewaysForNewHttpRoutingConfiguration')}
 						action={
 							<Link className="button primary" to="/traffic/gateways">
 								<Network size={16} />
-								Manage gateways
+								{tr('copy.manageGateways')}
 							</Link>
 						}
 					/>
@@ -189,45 +187,50 @@ function TrafficListenersEditorPage() {
 								<section className="traffic-bind" key={`${bind.port}-${bindIndex}`}>
 									<div className="traffic-bind-header">
 										<div>
-											<h3>Port {bind.port}</h3>
+											<h3>
+												{tr('copy.port')}
+												{bind.port}
+											</h3>
 											<p>
-												{bindListeners.length} listeners · {listenerRouteCount(bind)} routes ·{' '}
-												{backendCount} backends
+												{bindListeners.length}
+												{tr('copy.listeners_1fzojr3')} {listenerRouteCount(bind)}
+												{tr('copy.routes_4p3286')}
+												{backendCount} {tr('copy.backends')}
 											</p>
 										</div>
 										<div className="button-row">
 											<span className="badge">{bind.tunnelProtocol ?? 'direct'}</span>
-											<Tooltip content="Add listener">
+											<Tooltip content={tr('copy.addListener')}>
 												<button
 													className="icon-button"
 													type="button"
-													aria-label="Add listener"
+													aria-label={tr('copy.addListener')}
 													onClick={() => openListenerEditor(bindIndex, null)}
 												>
 													<Plus size={16} />
 												</button>
 											</Tooltip>
-											<Tooltip content="Edit bind">
+											<Tooltip content={tr('copy.editBind')}>
 												<button
 													className="icon-button"
 													type="button"
-													aria-label="Edit bind"
+													aria-label={tr('copy.editBind')}
 													onClick={() => openBindEditor(bind, bindIndex)}
 												>
 													<Pencil size={16} />
 												</button>
 											</Tooltip>
-											<Tooltip content="Delete bind">
+											<Tooltip content={tr('copy.deleteBind')}>
 												<button
 													className="icon-button danger"
 													type="button"
-													aria-label="Delete bind"
+													aria-label={tr('copy.deleteBind')}
 													disabled={update.isPending}
 													onClick={() =>
 														setDeleting({
 															kind: 'bind',
 															bindIndex,
-															label: `Port ${bind.port}`,
+															label: tr('copy.portValue', [bind.port]),
 															listenerCount: bind.listeners.length
 														})
 													}
@@ -242,11 +245,11 @@ function TrafficListenersEditorPage() {
 											<table>
 												<thead>
 													<tr>
-														<th>Name</th>
-														<th>Hostname</th>
-														<th>Protocol</th>
-														<th>Routes</th>
-														<th>Backends</th>
+														<th>{tr('copy.name')}</th>
+														<th>{tr('copy.hostname')}</th>
+														<th>{tr('copy.protocol')}</th>
+														<th>{tr('copy.routes_14u6307')}</th>
+														<th>{tr('copy.backends_i9thuc')}</th>
 														<th />
 													</tr>
 												</thead>
@@ -265,10 +268,10 @@ function TrafficListenersEditorPage() {
 															</td>
 															<td>{listenerBackendCount(listener)}</td>
 															<td className="row-actions">
-																<Tooltip content="Add route">
+																<Tooltip content={tr('copy.addRoute')}>
 																	<Link
 																		className="icon-button"
-																		aria-label="Add route"
+																		aria-label={tr('copy.addRoute')}
 																		to="/traffic/routes"
 																		search={{
 																			listener: `${bindIndex}:${listenerIndex}`
@@ -277,11 +280,11 @@ function TrafficListenersEditorPage() {
 																		<RouteIcon size={16} />
 																	</Link>
 																</Tooltip>
-																<Tooltip content="Edit listener">
+																<Tooltip content={tr('copy.editListener')}>
 																	<button
 																		className="icon-button"
 																		type="button"
-																		aria-label="Edit listener"
+																		aria-label={tr('copy.editListener')}
 																		onClick={() =>
 																			openListenerEditor(bindIndex, listener, listenerIndex)
 																		}
@@ -289,11 +292,11 @@ function TrafficListenersEditorPage() {
 																		<Pencil size={16} />
 																	</button>
 																</Tooltip>
-																<Tooltip content="Delete listener">
+																<Tooltip content={tr('copy.deleteListener')}>
 																	<button
 																		className="icon-button danger"
 																		type="button"
-																		aria-label="Delete listener"
+																		aria-label={tr('copy.deleteListener')}
 																		disabled={update.isPending}
 																		onClick={() =>
 																			setDeleting({
@@ -315,8 +318,8 @@ function TrafficListenersEditorPage() {
 										</div>
 									) : (
 										<EmptyState
-											title="No listeners on this bind"
-											description="Add a listener to start matching traffic on this port."
+											title={tr('copy.noListenersOnThisBind')}
+											description={tr('copy.addAListenerToStartMatchingTrafficOnThisPort')}
 										/>
 									)}
 								</section>
@@ -372,9 +375,9 @@ function TrafficListenersEditorPage() {
 			) : null}
 			{deleting ? (
 				<ConfirmDialog
-					title={`Delete ${deleting.kind}?`}
+					title={tr('copy.deleteValue_pkbukw', [deleting.label])}
 					destructive
-					confirmLabel={`Delete ${deleting.kind}`}
+					confirmLabel={tr('copy.delete')}
 					confirmDisabled={update.isPending}
 					onCancel={() => setDeleting(null)}
 					onConfirm={() =>
@@ -397,10 +400,9 @@ function TrafficListenersEditorPage() {
 					}
 				>
 					<p>
-						Delete <strong>{deleting.label}</strong>?
 						{deleting.kind === 'bind' && deleting.listenerCount
-							? ` This also removes ${deleting.listenerCount} listener${deleting.listenerCount === 1 ? '' : 's'} and their routes.`
-							: ' Traffic using it will no longer be served.'}
+							? tr('copy.trafficBindDeleteWithListeners', { count: deleting.listenerCount })
+							: tr('copy.trafficDeleteWarning', [deleting.label])}
 					</p>
 				</ConfirmDialog>
 			) : null}
@@ -426,7 +428,7 @@ function BindEditor(props: {
 	function save() {
 		const parsed = Number(port);
 		if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-			setError('Port must be between 1 and 65535.');
+			setError(tr('copy.portMustBeBetween1And65535'));
 			return;
 		}
 		props.onSave({ ...preview, port: parsed });
@@ -434,7 +436,7 @@ function BindEditor(props: {
 
 	return (
 		<Drawer
-			title="Bind port"
+			title={tr('copy.bindPort')}
 			onClose={props.onCancel}
 			dirty={port !== String(props.bind.port)}
 			saving={props.saving}
@@ -449,7 +451,7 @@ function BindEditor(props: {
 					beforeDiff={() => {
 						const parsed = Number(port);
 						if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-							setError('Port must be between 1 and 65535.');
+							setError(tr('copy.portMustBeBetween1And65535'));
 							return false;
 						}
 						return true;
@@ -467,12 +469,12 @@ function BindEditor(props: {
 		>
 			{error ? <StatusBanner state="bad" title={error} /> : null}
 			<div className="form-grid">
-				<Field label="Port" tooltip={props.help.field<TrafficBind>('LocalBind', 'port')}>
+				<Field label={tr('copy.port')} tooltip={props.help.field<TrafficBind>('LocalBind', 'port')}>
 					<input value={port} onChange={event => setPort(event.target.value)} />
 				</Field>
 			</div>
 			<details open>
-				<summary>Resulting YAML</summary>
+				<summary>{tr('copy.resultingYaml')}</summary>
 				<YamlBlock value={preview} />
 			</details>
 		</Drawer>
@@ -541,19 +543,22 @@ function ListenerEditor(props: {
 		>
 			<div className="form-grid">
 				{typeof props.editing.listenerIndex !== 'number' ? (
-					<FieldGroup label="Bind" tooltip="Bind port this listener is attached to.">
+					<FieldGroup label={tr('copy.bind')} tooltip={tr('copy.bindPortThisListenerIsAttachedTo')}>
 						<Dropdown
 							ariaLabel="Bind"
 							value={bindIndex}
 							options={props.binds.map((bind, index) => ({
 								value: String(index),
-								label: `Port ${bind.port}`
+								label: tr('copy.portValue', [bind.port])
 							}))}
 							onChange={setBindIndex}
 						/>
 					</FieldGroup>
 				) : null}
-				<Field label="Name" tooltip={props.help.field<TrafficListener>('LocalListener', 'name')}>
+				<Field
+					label={tr('copy.name')}
+					tooltip={props.help.field<TrafficListener>('LocalListener', 'name')}
+				>
 					<input
 						value={listener.name ?? ''}
 						onChange={event => setListener({ ...listener, name: event.target.value })}
@@ -561,7 +566,7 @@ function ListenerEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Hostname"
+					label={tr('copy.hostname')}
 					tooltip={props.help.field<TrafficListener>(
 						'LocalListener',
 						'hostname',
@@ -575,7 +580,7 @@ function ListenerEditor(props: {
 					/>
 				</Field>
 				<FieldGroup
-					label="Protocol"
+					label={tr('copy.protocol')}
 					tooltip={props.help.field<TrafficListener>('LocalListener', 'protocol')}
 				>
 					<EnumSelector
@@ -591,7 +596,7 @@ function ListenerEditor(props: {
 				<summary>TLS</summary>
 				<div className="form-grid">
 					<Field
-						label="Certificate"
+						label={tr('copy.certificate')}
 						tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'cert')}
 					>
 						<input
@@ -601,7 +606,7 @@ function ListenerEditor(props: {
 						/>
 					</Field>
 					<Field
-						label="Key"
+						label={tr('copy.key')}
 						tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'key')}
 					>
 						<input
@@ -613,13 +618,13 @@ function ListenerEditor(props: {
 				</div>
 			</details>
 			<TrafficPolicySection
-				title="Listener policies"
+				title={tr('copy.listenerPolicies')}
 				schemaRoot="LocalGatewayPolicy"
 				policies={listener.policies as Record<string, unknown> | null | undefined}
 				onChange={policies => setListener({ ...listener, policies })}
 			/>
 			<details open>
-				<summary>Resulting YAML</summary>
+				<summary>{tr('copy.resultingYaml')}</summary>
 				<YamlBlock value={cleanListener(preview)} />
 			</details>
 		</Drawer>

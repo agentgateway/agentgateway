@@ -17,6 +17,7 @@ import {
 	useTrafficConfigData,
 	useUpdateConfig
 } from '@/hooks';
+import { tr } from '@/i18n';
 import type { GatewayConfig } from '@/types';
 
 type SurfaceKind = 'llm' | 'mcp' | 'traffic';
@@ -25,6 +26,7 @@ const surfaceConfig: Record<
 	SurfaceKind,
 	{
 		title: string;
+		name: string;
 		description: string;
 		icon: typeof Bot;
 		enabled: (config: GatewayConfig | undefined) => boolean;
@@ -33,32 +35,62 @@ const surfaceConfig: Record<
 	}
 > = {
 	llm: {
-		title: 'Enable LLM',
-		description:
-			'Create the LLM configuration section so models, providers, keys, guardrails, logs, and playground tools can be configured.',
+		get title() {
+			return tr('copy.enableLlm');
+		},
+		get name() {
+			return tr('copy.models');
+		},
+		get description() {
+			return tr(
+				'copy.createTheLlmConfigurationSectionSoModelsProvidersKeysGuardrailsLogsAndPlayground_197f4qj'
+			);
+		},
 		icon: Bot,
 		enabled: config => Boolean(config?.llm),
 		destination: '/llm/models',
-		destinationLabel: 'Continue to models'
+		get destinationLabel() {
+			return tr('copy.continueToValue', [tr('copy.models')]);
+		}
 	},
 	mcp: {
-		title: 'Enable MCP',
-		description:
-			'Create the MCP configuration section so servers and MCP playground tools can be configured.',
+		get title() {
+			return tr('copy.enableMcp');
+		},
+		get name() {
+			return tr('copy.servers');
+		},
+		get description() {
+			return tr(
+				'copy.createTheMcpConfigurationSectionSoServersAndMcpPlaygroundToolsCanBeConfigured'
+			);
+		},
 		icon: Server,
 		enabled: config => Boolean(config?.mcp),
 		destination: '/mcp/servers',
-		destinationLabel: 'Continue to servers'
+		get destinationLabel() {
+			return tr('copy.continueToValue', [tr('copy.servers')]);
+		}
 	},
 	traffic: {
-		title: 'Enable Traffic',
-		description:
-			'Create the traffic configuration section so HTTP gateways, routes, backends, and policies can be configured.',
+		get title() {
+			return tr('copy.enableTraffic');
+		},
+		get name() {
+			return tr('copy.gateways');
+		},
+		get description() {
+			return tr(
+				'copy.createTheTrafficConfigurationSectionSoHttpGatewaysRoutesBackendsAndPoliciesCanBeConfigured'
+			);
+		},
 		icon: Network,
 		enabled: config =>
 			Boolean(config && ('gateways' in config || 'routes' in config || 'binds' in config)),
 		destination: '/traffic/gateways',
-		destinationLabel: 'Continue to gateways'
+		get destinationLabel() {
+			return tr('copy.continueToValue', [tr('copy.gateways')]);
+		}
 	}
 };
 
@@ -138,7 +170,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	if (!loading && !configError && enabled) {
 		return (
 			<div className="page-stack">
-				<StatusBanner state="loading" title={`Opening ${surface.destinationLabel.toLowerCase()}`} />
+				<StatusBanner state="loading" title={tr('copy.openingValue', [surface.destinationLabel])} />
 			</div>
 		);
 	}
@@ -147,14 +179,16 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 		<div className="page-stack">
 			<PageHeader title={surface.title} description={surface.description} />
 
-			{loading ? <StatusBanner state="loading" title="Loading gateway configuration" /> : null}
+			{loading ? (
+				<StatusBanner state="loading" title={tr('copy.loadingGatewayConfiguration')} />
+			) : null}
 			{configError ? (
-				<StatusBanner state="bad" title="Configuration API unavailable">
+				<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 					{configError.message}
 				</StatusBanner>
 			) : null}
 			{update.isError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{update.error.message}
 				</StatusBanner>
 			) : null}
@@ -165,21 +199,17 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 						<Icon size={18} />
 					</span>
 					<div>
-						<h3>
-							{enabled ? `${surface.title.replace('Enable ', '')} is enabled` : surface.title}
-						</h3>
+						<h3>{enabled ? tr('copy.valueEnabled', [surface.name]) : surface.title}</h3>
 						<p>
-							{enabled
-								? 'The top-level configuration section already exists.'
-								: surface.description}
+							{enabled ? tr('copy.topLevelConfigurationSectionAlreadyExists') : surface.description}
 						</p>
 					</div>
 				</div>
 
 				{!enabled && !useGateways && (props.surface === 'llm' || props.surface === 'mcp') ? (
 					<details className="schema-details">
-						<summary>Advanced</summary>
-						<Field label="Port">
+						<summary>{tr('copy.advanced')}</summary>
+						<Field label={tr('copy.port')}>
 							<input
 								value={port}
 								inputMode="numeric"
@@ -202,11 +232,11 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 							disabled={loading || update.isPending}
 							onClick={() => void enable()}
 						>
-							Enable
+							{tr('copy.enable')}
 						</button>
 					)}
 					<Link className="button" to="/">
-						Back to home
+						{tr('copy.backToHome')}
 					</Link>
 				</div>
 			</Panel>

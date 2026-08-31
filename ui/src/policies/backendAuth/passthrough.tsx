@@ -1,3 +1,4 @@
+import { tr } from '@/i18n';
 import {
 	type AuthorizationLocationDraft,
 	authorizationLocationFrom,
@@ -36,8 +37,8 @@ export function PassthroughFields(props: {
 		<CredentialLocationSetting
 			value={props.value.location}
 			help={props.help}
-			defaultDescription="Default: Authorization: Bearer token"
-			description="Override where the validated credential is sent."
+			defaultDescription={tr('copy.defaultAuthorizationBearerToken')}
+			description={tr('copy.overrideWhereTheValidatedCredentialIsSent')}
 			allowExpression={false}
 			onChange={location => props.onChange({ ...props.value, location })}
 		/>

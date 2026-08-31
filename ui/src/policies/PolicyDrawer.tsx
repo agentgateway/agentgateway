@@ -5,6 +5,7 @@ import { ConfigDiffSaveActions, ConfigSaveButton } from '@/components/ConfigDiff
 import { ConfirmDialog, Drawer, StatusBanner, Tooltip } from '@/components/Primitives';
 import type { BackendAuth } from '@/gateway-config';
 import { takeHybridFileWriteOverride } from '@/hooks';
+import { tr } from '@/i18n';
 import { AuthorizationPolicyEditor } from '@/policies/AuthorizationPolicyEditor';
 import { BackendAuthPolicyEditor } from '@/policies/backendAuth';
 import { CorsPolicyEditor } from '@/policies/CorsPolicyEditor';
@@ -97,14 +98,14 @@ export function PolicyDrawer(props: {
 							onClick={() => setConfirmDelete(true)}
 						>
 							<Trash2 size={16} />
-							Delete policy
+							{tr('copy.deletePolicy')}
 						</ConfigSaveButton>
 					) : (
-						<Tooltip content="Policy is not enabled">
+						<Tooltip content={tr('copy.policyIsNotEnabled')}>
 							<button
 								className="icon-button danger"
 								type="button"
-								aria-label="Delete policy"
+								aria-label={tr('copy.deletePolicy')}
 								disabled
 							>
 								<Trash2 size={17} />
@@ -116,7 +117,7 @@ export function PolicyDrawer(props: {
 					<ConfigDiffSaveActions
 						config={props.config}
 						diffTitle={`${props.title} policy config diff`}
-						saveLabel="Save policy"
+						saveLabel={tr('copy.savePolicy')}
 						saving={props.saving}
 						diffDisabled={enabled && !dirty}
 						resourceDiff={saveResourceDiff}
@@ -145,16 +146,16 @@ export function PolicyDrawer(props: {
 					}}
 				/>
 				{props.saveError ? (
-					<StatusBanner state="bad" title="Save failed">
+					<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 						{props.saveError}
 					</StatusBanner>
 				) : null}
 			</Drawer>
 			{confirmDelete ? (
 				<ConfirmDialog
-					title="Delete policy?"
+					title={tr('copy.deletePolicyQuestion')}
 					destructive
-					confirmLabel="Delete policy"
+					confirmLabel={tr('copy.deletePolicy')}
 					confirmDisabled={props.saving}
 					onCancel={() => {
 						takeHybridFileWriteOverride();
@@ -165,9 +166,7 @@ export function PolicyDrawer(props: {
 						props.onDisable();
 					}}
 				>
-					<p>
-						Delete the <strong>{props.title}</strong> policy from this configuration?
-					</p>
+					<p>{tr('copy.deletePolicyFromThisConfiguration', props.title)}</p>
 				</ConfirmDialog>
 			) : null}
 		</>

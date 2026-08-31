@@ -11,6 +11,7 @@ import {
 	providerReferenceName,
 	visibleProviderNames
 } from '@/config';
+import { tr } from '@/i18n';
 import { CustomFormats } from '@/pages/models/CustomFormats';
 import type { SchemaHelp } from '@/schemaHelp';
 import type {
@@ -53,7 +54,7 @@ export function ProviderConfigEditor(props: {
 				value: `provider:${item.name}`,
 				label: (
 					<>
-						{item.name} <small className="muted">configured</small>
+						{item.name} <small className="muted">{tr('copy.configured')}</small>
 					</>
 				),
 				icon: <ProviderIcon provider={itemProvider} />,
@@ -106,7 +107,7 @@ export function ProviderConfigEditor(props: {
 	return (
 		<>
 			<FieldGroup
-				label="Provider"
+				label={tr('copy.provider')}
 				tooltip={props.help.field<LlmModel>('LocalLLMModels', 'provider')}
 			>
 				<Dropdown
@@ -114,7 +115,7 @@ export function ProviderConfigEditor(props: {
 					value={selectedProviderValue}
 					searchable
 					options={options}
-					placeholder="Select provider"
+					placeholder={tr('copy.selectProvider')}
 					allowEmpty
 					onChange={setProviderChoice}
 				/>
@@ -135,7 +136,7 @@ export function ProviderConfigEditor(props: {
 						/>
 					) : (
 						<Field
-							label="Provider API key"
+							label={tr('copy.providerApiKey')}
 							tooltip={props.help.field<LlmParams>('LocalLLMParams', 'apiKey')}
 							className={props.apiKeyError ? 'invalid' : undefined}
 							hint={props.apiKeyError ?? undefined}
@@ -150,7 +151,7 @@ export function ProviderConfigEditor(props: {
 					{provider === 'vertex' ? (
 						<div className="form-grid">
 							<Field
-								label="Vertex project"
+								label={tr('copy.vertexProject')}
 								tooltip={props.help.field<LlmParams>(
 									'LocalLLMParams',
 									'vertexProject',
@@ -163,13 +164,13 @@ export function ProviderConfigEditor(props: {
 								/>
 							</Field>
 							<Field
-								label="Vertex region"
+								label={tr('copy.vertexRegion')}
 								tooltip={props.help.field<LlmParams>(
 									'LocalLLMParams',
 									'vertexRegion',
 									'Google Cloud region used for Vertex AI requests.'
 								)}
-								hint="Optional. If unset, Vertex uses global."
+								hint={tr('copy.optionalIfUnsetVertexUsesGlobal')}
 							>
 								<CloudRegionCombobox
 									cloud="google"
@@ -183,7 +184,7 @@ export function ProviderConfigEditor(props: {
 					) : null}
 					{provider === 'bedrock' ? (
 						<Field
-							label="AWS region"
+							label={tr('copy.awsRegion')}
 							tooltip={props.help.field<LlmParams>(
 								'LocalLLMParams',
 								'awsRegion',
@@ -201,13 +202,13 @@ export function ProviderConfigEditor(props: {
 					) : null}
 					{provider === 'ollama' ? (
 						<Field
-							label="Base URL"
+							label={tr('copy.baseUrl')}
 							tooltip={props.help.field<LlmParams>(
 								'LocalLLMParams',
 								'baseUrl',
 								'Override when Ollama is hosted somewhere other than the local default.'
 							)}
-							hint="Optional. Defaults to http://localhost:11434/v1."
+							hint={tr('copy.optionalDefaultsToHttpLocalhost11434V1')}
 						>
 							<input
 								value={props.params?.baseUrl ?? ''}
@@ -219,7 +220,7 @@ export function ProviderConfigEditor(props: {
 					{provider === 'azure' ? (
 						<div className="form-grid">
 							<Field
-								label="Azure resource name"
+								label={tr('copy.azureResourceName')}
 								tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureResourceName')}
 							>
 								<input
@@ -232,9 +233,9 @@ export function ProviderConfigEditor(props: {
 								/>
 							</Field>
 							<Field
-								label="Azure API version"
+								label={tr('copy.azureApiVersion')}
 								tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureApiVersion')}
-								hint="Optional. Leave unset to use the gateway default."
+								hint={tr('copy.optionalLeaveUnsetToUseTheGatewayDefault')}
 							>
 								<input
 									value={props.params?.azureApiVersion ?? ''}
@@ -242,7 +243,7 @@ export function ProviderConfigEditor(props: {
 								/>
 							</Field>
 							<FieldGroup
-								label="Azure resource type"
+								label={tr('copy.azureResourceType')}
 								tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureResourceType')}
 							>
 								<EnumSelector
@@ -250,7 +251,7 @@ export function ProviderConfigEditor(props: {
 									value={azureResourceType}
 									options={[
 										{ value: 'openAI', label: 'OpenAI' },
-										{ value: 'foundry', label: 'Foundry' }
+										{ value: 'foundry', label: tr('copy.foundry') }
 									]}
 									schema={props.help.node([
 										'$defs',
@@ -263,7 +264,7 @@ export function ProviderConfigEditor(props: {
 							</FieldGroup>
 							{azureResourceType === 'foundry' ? (
 								<Field
-									label="Azure project name"
+									label={tr('copy.azureProjectName')}
 									tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureProjectName')}
 								>
 									<input
@@ -318,15 +319,19 @@ function CustomProviderSettings(props: {
 					<ProviderIcon provider="custom" />
 				</span>
 				<div>
-					<h4>Custom provider</h4>
+					<h4>{tr('copy.customProvider')}</h4>
 					<p>
-						Use this when the upstream exposes one or more LLM-compatible HTTP APIs at your own
-						endpoint.
+						{tr(
+							'copy.useThisWhenTheUpstreamExposesOneOrMoreLlmCompatibleHttpApisAtYourOwnEndpoint'
+						)}
 					</p>
 				</div>
 			</div>
 			<div className="policy-form-section-body">
-				<Field label="Base URL" tooltip={props.help.field<LlmParams>('LocalLLMParams', 'baseUrl')}>
+				<Field
+					label={tr('copy.baseUrl')}
+					tooltip={props.help.field<LlmParams>('LocalLLMParams', 'baseUrl')}
+				>
 					<input
 						value={props.params?.baseUrl ?? ''}
 						onChange={event =>
@@ -339,7 +344,7 @@ function CustomProviderSettings(props: {
 					/>
 				</Field>
 				<div className="section-heading compact">
-					<h3>Route formats</h3>
+					<h3>{tr('copy.routeFormats')}</h3>
 					<p>
 						{props.help.field<CustomProvider>(
 							'CustomProvider',
@@ -424,13 +429,13 @@ function AwsCredentials(props: {
 
 	return (
 		<FieldGroup
-			label="AWS credentials"
-			tooltip="Use ambient AWS credentials or static access keys for Bedrock signing."
+			label={tr('copy.awsCredentials')}
+			tooltip={tr('copy.useAmbientAwsCredentialsOrStaticAccessKeysForBedrockSigning')}
 		>
 			<div className="credential-row">
 				<div className="segmented-control compact">
 					<button className={mode === 'ambient' ? 'active' : ''} type="button" onClick={setAmbient}>
-						Ambient
+						{tr('copy.ambient')}
 					</button>
 					<button
 						className={mode === 'static' ? 'active' : ''}
@@ -440,7 +445,7 @@ function AwsCredentials(props: {
 							saveStatic({});
 						}}
 					>
-						Static
+						{tr('copy.static')}
 					</button>
 				</div>
 				{mode === 'static' ? (
@@ -448,7 +453,7 @@ function AwsCredentials(props: {
 						<input
 							value={accessKeyId}
 							onChange={event => saveStatic({ accessKeyId: event.target.value })}
-							placeholder="AWS access key ID"
+							placeholder={tr('copy.awsAccessKeyId')}
 						/>
 						<div className="api-key-value-wrap">
 							<input
@@ -456,7 +461,7 @@ function AwsCredentials(props: {
 								type="text"
 								className={showSecret ? undefined : 'masked-secret-input'}
 								onChange={event => saveStatic({ secretAccessKey: event.target.value })}
-								placeholder="AWS secret access key"
+								placeholder={tr('copy.awsSecretAccessKey')}
 								autoComplete="off"
 								autoCorrect="off"
 								autoCapitalize="none"
@@ -473,7 +478,7 @@ function AwsCredentials(props: {
 						<input
 							value={sessionToken}
 							onChange={event => saveStatic({ sessionToken: event.target.value || null })}
-							placeholder="Session token (optional)"
+							placeholder={tr('copy.sessionTokenOptional')}
 						/>
 					</div>
 				) : null}
@@ -505,8 +510,8 @@ function GcpCredentials(props: {
 
 	return (
 		<FieldGroup
-			label="Google credentials"
-			tooltip="Use Application Default Credentials or a service account JSON file for Vertex."
+			label={tr('copy.googleCredentials')}
+			tooltip={tr('copy.useApplicationDefaultCredentialsOrAServiceAccountJsonFileForVertex')}
 		>
 			<div className="credential-row">
 				<div className="segmented-control compact">
@@ -518,7 +523,7 @@ function GcpCredentials(props: {
 							props.onChange?.(null);
 						}}
 					>
-						ADC
+						{tr('copy.adc')}
 					</button>
 					<button
 						className={mode === 'file' ? 'active' : ''}
@@ -528,7 +533,7 @@ function GcpCredentials(props: {
 							setFile(file);
 						}}
 					>
-						File
+						{tr('copy.file')}
 					</button>
 				</div>
 				{mode === 'file' ? (
@@ -587,34 +592,34 @@ function AzureCredentials(props: {
 
 	return (
 		<FieldGroup
-			label="Azure credentials"
-			tooltip="Use Azure default credentials, managed identity, or an Azure API key."
+			label={tr('copy.azureCredentials')}
+			tooltip={tr('copy.useAzureDefaultCredentialsManagedIdentityOrAnAzureApiKey')}
 		>
 			<div className="credential-row">
 				<div className="segmented-control compact">
 					<button className={mode === 'default' ? 'active' : ''} type="button" onClick={setDefault}>
-						Default
+						{tr('copy.default')}
 					</button>
 					<button
 						className={mode === 'managedIdentity' ? 'active' : ''}
 						type="button"
 						onClick={() => setManaged()}
 					>
-						Managed
+						{tr('copy.managed')}
 					</button>
 					<button
 						className={mode === 'apiKey' ? 'active' : ''}
 						type="button"
 						onClick={setApiKeyMode}
 					>
-						API key
+						{tr('copy.apiKey')}
 					</button>
 				</div>
 				{mode === 'managedIdentity' ? (
 					<input
 						value={clientId}
 						onChange={event => setManaged(event.target.value)}
-						placeholder="Client ID (optional)"
+						placeholder={tr('copy.clientIdOptional')}
 					/>
 				) : mode === 'apiKey' ? (
 					<ApiKeyInput value={props.apiKey} onChange={props.onApiKeyChange} />
@@ -657,32 +662,32 @@ function ApiKeyInput(props: {
 					type="button"
 					onClick={() => setNextMode('unset')}
 				>
-					Unset
+					{tr('copy.unset')}
 				</button>
 				<button
 					className={mode === 'env' ? 'active' : ''}
 					type="button"
 					onClick={() => setNextMode('env')}
 				>
-					Env var
+					{tr('copy.envVar')}
 				</button>
 				<button
 					className={mode === 'key' ? 'active' : ''}
 					type="button"
 					onClick={() => setNextMode('key')}
 				>
-					API key
+					{tr('copy.apiKey')}
 				</button>
 				<button
 					className={mode === 'file' ? 'active' : ''}
 					type="button"
 					onClick={() => setNextMode('file')}
 				>
-					File
+					{tr('copy.file')}
 				</button>
 			</div>
 			{mode === 'unset' ? (
-				<span className="api-key-unset-copy">No provider credential configured.</span>
+				<span className="api-key-unset-copy">{tr('copy.noProviderCredentialConfigured')}</span>
 			) : (
 				<div className="api-key-value-wrap">
 					<input

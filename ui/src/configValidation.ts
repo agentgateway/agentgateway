@@ -2,6 +2,7 @@ import type { ErrorObject } from 'ajv';
 import Ajv2020 from 'ajv/dist/2020';
 
 import configSchema from '@/generated/schema.json';
+import { tr } from '@/i18n';
 import type { GatewayConfig } from '@/types';
 
 let validatorPromise: Promise<ReturnType<Ajv2020['compile']>> | null = null;
@@ -14,7 +15,7 @@ export async function validateGatewayConfig(config: GatewayConfig) {
 		const path = error.instancePath || '/';
 		return `${path}: ${error.message ?? 'invalid value'}`;
 	});
-	throw new Error(`Configuration validation failed: ${messages.join('; ')}`);
+	throw new Error(tr('copy.configurationValidationFailedValue', [messages.join('; ')]));
 }
 
 export async function getGatewayConfigValidationErrors(

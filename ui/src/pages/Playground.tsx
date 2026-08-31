@@ -37,6 +37,7 @@ import {
 	useStoredStringState,
 	useUpsertPolicyResource
 } from '@/hooks';
+import { currentLanguage, tr } from '@/i18n';
 import { extractMcpTools, initializeMcpSession, type McpTool, nextRpcId } from '@/mcp';
 import {
 	isWildcardModelName,
@@ -316,9 +317,9 @@ export function PlaygroundPage() {
 		setLoading(true);
 		setError(null);
 		setRunSteps([
-			{ label: 'Preparing request', state: 'active' },
-			{ label: 'Sending chat completion', state: 'pending' },
-			{ label: 'Waiting for model response', state: 'pending' }
+			{ label: tr('copy.preparingRequest'), state: 'active' },
+			{ label: tr('copy.sendingChatCompletion'), state: 'pending' },
+			{ label: tr('copy.waitingForModelResponse'), state: 'pending' }
 		]);
 		try {
 			const requestModel = playgroundRequestModel(
@@ -331,16 +332,16 @@ export function PlaygroundPage() {
 			let activeMcpSessionId = mcpSessionId;
 			if (mcpEnabled && mcpTools.length === 0) {
 				setRunSteps([
-					{ label: 'Preparing request', state: 'done' },
-					{ label: 'Initializing MCP tools', state: 'active' },
-					{ label: 'Sending chat completion', state: 'pending' },
-					{ label: 'Waiting for model response', state: 'pending' }
+					{ label: tr('copy.preparingRequest'), state: 'done' },
+					{ label: tr('copy.initializingMcpTools'), state: 'active' },
+					{ label: tr('copy.sendingChatCompletion'), state: 'pending' },
+					{ label: tr('copy.waitingForModelResponse'), state: 'pending' }
 				]);
 				const loaded = await loadMcpTools(selectedKeyValue);
 				availableMcpTools = loaded.tools;
 				activeMcpSessionId = loaded.sessionId;
 				if (availableMcpTools.length === 0) {
-					throw new Error('No MCP tools are available from the MCP gateway.');
+					throw new Error(tr('copy.noMcpToolsAreAvailableFromTheMcpGateway'));
 				}
 			}
 			const tools =
@@ -348,10 +349,10 @@ export function PlaygroundPage() {
 					? availableMcpTools.map(toolToOpenAiFunction)
 					: undefined;
 			setRunSteps([
-				{ label: 'Preparing request', state: 'done' },
-				...(mcpEnabled ? [{ label: 'Initializing MCP tools', state: 'done' as const }] : []),
-				{ label: 'Sending chat completion', state: 'active' },
-				{ label: 'Waiting for model response', state: 'pending' }
+				{ label: tr('copy.preparingRequest'), state: 'done' },
+				...(mcpEnabled ? [{ label: tr('copy.initializingMcpTools'), state: 'done' as const }] : []),
+				{ label: tr('copy.sendingChatCompletion'), state: 'active' },
+				{ label: tr('copy.waitingForModelResponse'), state: 'pending' }
 			]);
 			const started = performance.now();
 			const response = await sendChatCompletion({
@@ -363,10 +364,10 @@ export function PlaygroundPage() {
 			});
 			const firstLatencyMs = Math.round(performance.now() - started);
 			setRunSteps([
-				{ label: 'Preparing request', state: 'done' },
-				...(mcpEnabled ? [{ label: 'Initializing MCP tools', state: 'done' as const }] : []),
-				{ label: 'Sending chat completion', state: 'done' },
-				{ label: 'Waiting for model response', state: 'done' }
+				{ label: tr('copy.preparingRequest'), state: 'done' },
+				...(mcpEnabled ? [{ label: tr('copy.initializingMcpTools'), state: 'done' as const }] : []),
+				{ label: tr('copy.sendingChatCompletion'), state: 'done' },
+				{ label: tr('copy.waitingForModelResponse'), state: 'done' }
 			]);
 			const toolCalls = extractToolCalls(response);
 			if (mcpEnabled && toolCalls.length > 0) {
@@ -385,15 +386,18 @@ export function PlaygroundPage() {
 				setMessages(current => [...current, userChatMessage, assistantMessage]);
 				setPrompt('');
 				setRunSteps([
-					{ label: 'Preparing request', state: 'done' },
-					{ label: 'Initializing MCP tools', state: 'done' },
-					{ label: 'Sending chat completion', state: 'done' },
+					{ label: tr('copy.preparingRequest'), state: 'done' },
+					{ label: tr('copy.initializingMcpTools'), state: 'done' },
+					{ label: tr('copy.sendingChatCompletion'), state: 'done' },
 					{
-						label: `Calling ${toolCalls.length} MCP ${toolCalls.length === 1 ? 'tool' : 'tools'}`,
+						label: tr('copy.callingValueMcpValue', [
+							toolCalls.length,
+							toolCalls.length === 1 ? 'tool' : 'tools'
+						]),
 						state: 'active'
 					},
-					{ label: 'Sending tool results', state: 'pending' },
-					{ label: 'Waiting for final response', state: 'pending' }
+					{ label: tr('copy.sendingToolResults'), state: 'pending' },
+					{ label: tr('copy.waitingForFinalResponse'), state: 'pending' }
 				]);
 				const executions = await executeToolCalls(
 					toolCalls,
@@ -414,15 +418,18 @@ export function PlaygroundPage() {
 				setMessages(current => [...current, ...toolMessages]);
 				const followUpMessages = [...outboundMessages, assistantMessage, ...toolMessages];
 				setRunSteps([
-					{ label: 'Preparing request', state: 'done' },
-					{ label: 'Initializing MCP tools', state: 'done' },
-					{ label: 'Sending chat completion', state: 'done' },
+					{ label: tr('copy.preparingRequest'), state: 'done' },
+					{ label: tr('copy.initializingMcpTools'), state: 'done' },
+					{ label: tr('copy.sendingChatCompletion'), state: 'done' },
 					{
-						label: `Calling ${toolCalls.length} MCP ${toolCalls.length === 1 ? 'tool' : 'tools'}`,
+						label: tr('copy.callingValueMcpValue', [
+							toolCalls.length,
+							toolCalls.length === 1 ? 'tool' : 'tools'
+						]),
 						state: 'done'
 					},
-					{ label: 'Sending tool results', state: 'active' },
-					{ label: 'Waiting for final response', state: 'pending' }
+					{ label: tr('copy.sendingToolResults'), state: 'active' },
+					{ label: tr('copy.waitingForFinalResponse'), state: 'pending' }
 				]);
 				const finalStarted = performance.now();
 				const finalResponse = await sendChatCompletion({
@@ -434,15 +441,18 @@ export function PlaygroundPage() {
 				});
 				const finalLatencyMs = Math.round(performance.now() - finalStarted);
 				setRunSteps([
-					{ label: 'Preparing request', state: 'done' },
-					{ label: 'Initializing MCP tools', state: 'done' },
-					{ label: 'Sending chat completion', state: 'done' },
+					{ label: tr('copy.preparingRequest'), state: 'done' },
+					{ label: tr('copy.initializingMcpTools'), state: 'done' },
+					{ label: tr('copy.sendingChatCompletion'), state: 'done' },
 					{
-						label: `Calling ${toolCalls.length} MCP ${toolCalls.length === 1 ? 'tool' : 'tools'}`,
+						label: tr('copy.callingValueMcpValue', [
+							toolCalls.length,
+							toolCalls.length === 1 ? 'tool' : 'tools'
+						]),
 						state: 'done'
 					},
-					{ label: 'Sending tool results', state: 'done' },
-					{ label: 'Waiting for final response', state: 'done' }
+					{ label: tr('copy.sendingToolResults'), state: 'done' },
+					{ label: tr('copy.waitingForFinalResponse'), state: 'done' }
 				]);
 				setMessages(current => [
 					...current,
@@ -489,88 +499,88 @@ export function PlaygroundPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="LLM Playground"
-				description="Send a real chat completion request through the configured gateway for setup debugging."
+				title={tr('copy.llmPlayground')}
+				description={tr(
+					'copy.sendARealChatCompletionRequestThroughTheConfiguredGatewayForSetupDebugging'
+				)}
 			/>
 			{configDataLoading ? (
-				<StatusBanner state="loading" title="Loading LLM configuration" />
+				<StatusBanner state="loading" title={tr('copy.loadingLlmConfiguration')} />
 			) : configDataError ? (
-				<StatusBanner state="bad" title="Configuration API unavailable">
+				<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 					{configDataError.message}
 				</StatusBanner>
 			) : null}
 			{needsCors ? (
 				<StatusBanner
 					state="warn"
-					title="Browser access is not allowed"
+					title={tr('copy.browserAccessIsNotAllowed')}
 					action={
 						hybrid && fileCorsOwned ? (
 							<Link className="button" to="/llm/policies" hash="cors">
-								Configure CORS
+								{tr('copy.configureCors')}
 							</Link>
 						) : (
 							<button className="button" type="button" disabled={corsSaving} onClick={applyLlmCors}>
-								Apply CORS
+								{tr('copy.applyCors')}
 							</button>
 						)
 					}
 				>
-					Add {currentOrigin()} to the LLM CORS policy so this playground can call the gateway from
-					the browser.
+					{tr('copy.playgroundLlmCorsInstruction', [currentOrigin()])}
 				</StatusBanner>
 			) : null}
 			{needsMcpCors ? (
 				<StatusBanner
 					state="warn"
-					title="MCP browser access is not allowed"
+					title={tr('copy.mcpBrowserAccessIsNotAllowed')}
 					action={
 						hybrid && fileMcpCorsOwned ? (
 							<Link className="button" to="/mcp/policies" hash="cors">
-								Configure CORS
+								{tr('copy.configureCors')}
 							</Link>
 						) : (
 							<button className="button" type="button" disabled={corsSaving} onClick={applyMcpCors}>
-								Apply MCP CORS
+								{tr('copy.applyMcpCors')}
 							</button>
 						)
 					}
 				>
-					Add {currentOrigin()} to the MCP CORS policy so the playground can list and call MCP tools
-					from the browser.
+					{tr('copy.playgroundMcpCorsInstruction', [currentOrigin()])}
 				</StatusBanner>
 			) : null}
 			{!configDataLoading && !configDataError && modelOptions.length === 0 ? (
-				<StatusBanner state="warn" title="No configured models">
-					Create a model before testing chat traffic.
+				<StatusBanner state="warn" title={tr('copy.noConfiguredModels')}>
+					{tr('copy.createAModelBeforeTestingChatTraffic')}
 				</StatusBanner>
 			) : null}
 			{claudeSubscriptionWarning(selectedModelConfig, providers) ? (
-				<StatusBanner state="warn" title="Claude subscription key detected">
+				<StatusBanner state="warn" title={tr('copy.claudeSubscriptionKeyDetected')}>
 					{claudeSubscriptionWarning(selectedModelConfig, providers)}
 				</StatusBanner>
 			) : null}
 			{error ? (
-				<StatusBanner state="bad" title="Playground request failed">
+				<StatusBanner state="bad" title={tr('copy.playgroundRequestFailed')}>
 					{error}
 				</StatusBanner>
 			) : null}
 			{corsSaveError ? (
-				<StatusBanner state="bad" title="CORS update failed">
+				<StatusBanner state="bad" title={tr('copy.corsUpdateFailed')}>
 					{corsSaveError}
 				</StatusBanner>
 			) : null}
 			<section className="playground-shell">
 				<Panel className="playground-config-panel">
 					<div className="section-heading">
-						<h3>Configuration</h3>
+						<h3>{tr('copy.configuration')}</h3>
 					</div>
 					<div className="playground-setup-bar">
 						<div className="playground-control-row">
-							<FieldGroup label="Model">
+							<FieldGroup label={tr('copy.model')}>
 								<Dropdown
 									ariaLabel="Model"
 									value={selectedModel}
-									placeholder="No models"
+									placeholder={tr('copy.noModels')}
 									searchable
 									options={modelOptions.map(item => ({
 										value: item.name,
@@ -584,8 +594,8 @@ export function PlaygroundPage() {
 							</FieldGroup>
 							{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 								<Field
-									label="Specific model"
-									hint="Model uses a wildcard; specify the specific model."
+									label={tr('copy.specificModel')}
+									hint={tr('copy.modelUsesAWildcardSpecifyTheSpecificModel')}
 								>
 									<div className="target-resolved-composite">
 										{wildcardPrefix ? (
@@ -604,7 +614,7 @@ export function PlaygroundPage() {
 							)}
 						</div>
 						<div className="playground-control-row">
-							<FieldGroup label="Virtual API key">
+							<FieldGroup label={tr('copy.virtualApiKey')}>
 								<Dropdown
 									ariaLabel="Virtual API key"
 									value={
@@ -620,7 +630,7 @@ export function PlaygroundPage() {
 										})),
 										{
 											value: '__raw__',
-											label: 'Raw value',
+											label: tr('copy.rawValue'),
 											icon: <TextCursorInput size={16} />
 										}
 									]}
@@ -635,7 +645,7 @@ export function PlaygroundPage() {
 								/>
 							</FieldGroup>
 							{apiKeyMode === 'raw' || rawVirtualKeys.length === 0 ? (
-								<Field label="Raw API key">
+								<Field label={tr('copy.rawApiKey')}>
 									<input
 										value={apiKey}
 										type="text"
@@ -649,7 +659,7 @@ export function PlaygroundPage() {
 										name="agw-playground-raw-api-key"
 										spellCheck={false}
 										onChange={event => setApiKey(event.target.value)}
-										placeholder="Optional Bearer token"
+										placeholder={tr('copy.optionalBearerToken')}
 									/>
 								</Field>
 							) : (
@@ -666,10 +676,11 @@ export function PlaygroundPage() {
 									/>
 									<span>
 										<strong>
-											Include MCP tools ({mcpServerCount}{' '}
-											{mcpServerCount === 1 ? 'server' : 'servers'})
+											{tr('copy.includeMcpToolsValueServers', {
+												count: mcpServerCount
+											})}
 										</strong>
-										<small>Let the model call tools exposed by the MCP gateway.</small>
+										<small>{tr('copy.letTheModelCallToolsExposedByTheMcpGateway')}</small>
 									</span>
 								</label>
 							</div>
@@ -681,11 +692,13 @@ export function PlaygroundPage() {
 						onToggle={event => setSystemOpen(event.currentTarget.open)}
 					>
 						<summary>
-							<span>System prompt</span>
-							<small>{system.trim() ? truncateOneLine(system, 96) : 'No system prompt'}</small>
+							<span>{tr('copy.systemPrompt')}</span>
+							<small>
+								{system.trim() ? truncateOneLine(system, 96) : tr('copy.noSystemPrompt')}
+							</small>
 							<ChevronDown size={16} />
 						</summary>
-						<Field label="System prompt">
+						<Field label={tr('copy.systemPrompt')}>
 							<textarea rows={4} value={system} onChange={event => setSystem(event.target.value)} />
 						</Field>
 					</details>
@@ -694,7 +707,7 @@ export function PlaygroundPage() {
 					{runSteps.length ? <RunTimeline steps={runSteps} /> : null}
 					<div className="mini-chat">
 						{messages.length === 0 && !loading ? (
-							<div className="chat-empty">No messages yet.</div>
+							<div className="chat-empty">{tr('copy.noMessagesYet')}</div>
 						) : (
 							messages.map((message, index) => (
 								<ChatMessageView message={message} key={`${message.role}-${index}`} />
@@ -707,12 +720,12 @@ export function PlaygroundPage() {
 								</div>
 								<div className="chat-bubble">
 									<Loader2 className="spin" size={15} />
-									Sending
+									{tr('copy.sending')}
 								</div>
 							</div>
 						) : null}
 					</div>
-					<Field label="User message">
+					<Field label={tr('copy.userMessage')}>
 						<textarea
 							rows={6}
 							value={prompt}
@@ -723,7 +736,7 @@ export function PlaygroundPage() {
 									if (sendBlockers.length === 0) void send();
 								}
 							}}
-							placeholder="Ask a test question..."
+							placeholder={tr('copy.askATestQuestion')}
 						/>
 					</Field>
 					<div className="button-row">
@@ -734,7 +747,7 @@ export function PlaygroundPage() {
 							onClick={send}
 						>
 							<Send size={16} />
-							Send
+							{tr('copy.send')}
 						</button>
 						<button
 							className="button"
@@ -746,7 +759,7 @@ export function PlaygroundPage() {
 								setPrompt('');
 							}}
 						>
-							Clear
+							{tr('copy.clear')}
 						</button>
 					</div>
 					{sendBlockers.length ? (
@@ -823,7 +836,7 @@ function ChatMessageView(props: { message: ChatMessage }) {
 				)}
 				{message.meta ? <MessageMetaChips meta={message.meta} /> : null}
 				<details className="message-inspector">
-					<summary>Inspect</summary>
+					<summary>{tr('copy.inspect')}</summary>
 					<JsonBlock value={inspectValue} />
 				</details>
 			</div>
@@ -849,7 +862,7 @@ function MessageMetaChips(props: { meta: MessageMeta }) {
 		props.meta.latencyMs !== undefined
 			? {
 					key: 'latency',
-					label: `${formatLatency(props.meta.latencyMs)}`,
+					label: tr('copy.value', [formatLatency(props.meta.latencyMs)]),
 					icon: <Clock3 size={13} />
 				}
 			: null,
@@ -886,7 +899,7 @@ function MessageMetaChips(props: { meta: MessageMeta }) {
 
 function RunTimeline(props: { steps: RunStep[] }) {
 	return (
-		<div className="playground-run-timeline" aria-label="Request progress">
+		<div className="playground-run-timeline" aria-label={tr('copy.requestProgress')}>
 			{props.steps.map((step, index) => (
 				<div className={`run-step ${step.state}`} key={`${index}-${step.label}`}>
 					<span className="run-step-dot">
@@ -905,7 +918,7 @@ function ToolCallSummary(props: { message: ChatMessage }) {
 			{props.message.content.trim() ? <p>{props.message.content}</p> : null}
 			{props.message.tool_calls?.map(call => (
 				<div className="tool-call-row" key={call.id}>
-					<span className="tool-pill">Tool call</span>
+					<span className="tool-pill">{tr('copy.toolCall')}</span>
 					<strong>{call.function?.name || 'unknown'}</strong>
 					<small>{summarizeValue(parseToolArguments(call.function?.arguments))}</small>
 				</div>
@@ -918,7 +931,7 @@ function ToolResultSummary(props: { message: ChatMessage }) {
 	return (
 		<div className="tool-call-summary">
 			<div className="tool-call-row">
-				<span className="tool-pill">Tool result</span>
+				<span className="tool-pill">{tr('copy.toolResult')}</span>
 				<strong>{props.message.name || 'unknown'}</strong>
 				<small>{summarizeToolResult(props.message.content)}</small>
 			</div>
@@ -1063,9 +1076,9 @@ function sendReadinessBlockers(args: {
 	virtualKeysCount: number;
 }) {
 	const blockers: string[] = [];
-	if (args.loading) blockers.push('Request in progress');
-	if (args.modelOptionsCount === 0) blockers.push('Configure a model first');
-	if (!args.displayRequestModel) blockers.push('Select a concrete model');
+	if (args.loading) blockers.push(tr('copy.requestInProgress'));
+	if (args.modelOptionsCount === 0) blockers.push(tr('copy.configureAModelFirst'));
+	if (!args.displayRequestModel) blockers.push(tr('copy.selectAConcreteModel'));
 	return blockers;
 }
 
@@ -1170,7 +1183,7 @@ function formatLatency(value: number) {
 }
 
 function formatNumber(value: number) {
-	return new Intl.NumberFormat().format(value);
+	return new Intl.NumberFormat(currentLanguage()).format(value);
 }
 
 function formatTokenMeta(meta: MessageMeta) {
@@ -1181,7 +1194,7 @@ function formatTokenMeta(meta: MessageMeta) {
 }
 
 function formatCost(value: number) {
-	return new Intl.NumberFormat(undefined, {
+	return new Intl.NumberFormat(currentLanguage(), {
 		style: 'currency',
 		currency: 'USD',
 		minimumFractionDigits: 2,

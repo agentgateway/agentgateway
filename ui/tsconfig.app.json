@@ -12,6 +12,7 @@
 		"noFallthroughCasesInSwitch": true,
 		"module": "ESNext",
 		"moduleResolution": "Bundler",
+		"types": ["node"],
 		"paths": {
 			"@/*": ["./src/*"]
 		},

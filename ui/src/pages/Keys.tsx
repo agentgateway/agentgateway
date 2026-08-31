@@ -43,6 +43,7 @@ import {
 	useUpsertConfigResource,
 	useUpsertPolicyResource
 } from '@/hooks';
+import { tr } from '@/i18n';
 import {
 	authorizationLocationFrom,
 	authorizationLocationToValue,
@@ -54,8 +55,8 @@ import { AdvancedSettingRow, CollapsiblePolicySection } from '@/policies/PolicyL
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey, VirtualApiKeyBudget } from '@/types';
 
-const fileOwnedPolicyMessage =
-	'This API key policy is file-owned and cannot be modified in hybrid mode.';
+const fileOwnedPolicyMessage = () =>
+	tr('copy.thisApiKeyPolicyIsFileOwnedAndCannotBeModifiedInHybridMode');
 const managedMetadataPrefix = 'agentgateway.dev/';
 const apiKeyIdMetadata = 'agentgateway.dev/id';
 
@@ -162,8 +163,8 @@ export function KeysPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Virtual API Keys"
-				description="Provision incoming credentials and metadata for callers."
+				title={tr('copy.virtualApiKeys')}
+				description={tr('copy.provisionIncomingCredentialsAndMetadataForCallers')}
 				actions={
 					<div className="button-row">
 						{policy ? (
@@ -175,7 +176,7 @@ export function KeysPage() {
 									onClick={() => setKeyDrawer('settings')}
 								>
 									<SlidersHorizontal size={16} />
-									Settings
+									{tr('copy.settings')}
 								</button>
 								<button
 									className="button primary"
@@ -184,7 +185,7 @@ export function KeysPage() {
 									onClick={openNewKey}
 								>
 									<Plus size={16} />
-									New key
+									{tr('copy.newKey')}
 								</button>
 							</>
 						) : (
@@ -195,7 +196,7 @@ export function KeysPage() {
 								onClick={() => setKeyDrawer('settings')}
 							>
 								<KeyRound size={16} />
-								Enable API key auth
+								{tr('copy.enableApiKeyAuth')}
 							</button>
 						)}
 					</div>
@@ -203,27 +204,27 @@ export function KeysPage() {
 			/>
 
 			{saveError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{saveError}
 				</StatusBanner>
 			) : null}
 			{policy?.mode && policy.mode !== 'strict' ? (
-				<StatusBanner state="warn" title={`Policy mode is ${modeLabel(policy.mode)}`}>
-					Use strict mode when keys should be mandatory.
+				<StatusBanner state="warn" title={tr('copy.policyModeIsValue', [policy.mode])}>
+					{tr('copy.useStrictModeWhenKeysShouldBeMandatory')}
 				</StatusBanner>
 			) : null}
 
 			<Panel>
 				{isLoading ? (
-					<StatusBanner state="loading" title="Loading keys" />
+					<StatusBanner state="loading" title={tr('copy.loadingKeys')} />
 				) : error ? (
-					<StatusBanner state="bad" title="Configuration API unavailable">
+					<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 						{error.message}
 					</StatusBanner>
 				) : !policy ? (
 					<EmptyState
-						title="API key authentication is disabled"
-						description="Enable API key authentication before provisioning virtual keys."
+						title={tr('copy.apiKeyAuthenticationIsDisabled')}
+						description={tr('copy.enableApiKeyAuthenticationBeforeProvisioningVirtualKeys')}
 						action={
 							<button
 								className="button primary"
@@ -232,18 +233,22 @@ export function KeysPage() {
 								onClick={() => setKeyDrawer('settings')}
 							>
 								<KeyRound size={16} />
-								Enable API key auth
+								{tr('copy.enableApiKeyAuth')}
 							</button>
 						}
 					/>
 				) : keys.length === 0 ? (
 					<EmptyState
-						title="No virtual API keys"
-						description="Create a key so callers can authenticate without exposing provider credentials."
+						title={tr('copy.noVirtualApiKeys')}
+						description={tr(
+							'copy.createAKeySoCallersCanAuthenticateWithoutExposingProviderCredentials'
+						)}
 						action={
 							<div className="button-row">
 								<Tooltip
-									content={policyReadOnly ? fileOwnedPolicyMessage : 'Disable API key policy'}
+									content={
+										policyReadOnly ? fileOwnedPolicyMessage() : tr('copy.disableApiKeyPolicy')
+									}
 								>
 									<button
 										className="button danger"
@@ -252,7 +257,7 @@ export function KeysPage() {
 										onClick={() => setDisablePolicyOpen(true)}
 									>
 										<X size={16} />
-										Disable API Key Policy
+										{tr('copy.disableApiKeyPolicy_ckgvai')}
 									</button>
 								</Tooltip>
 								<button
@@ -262,7 +267,7 @@ export function KeysPage() {
 									onClick={openNewKey}
 								>
 									<Plus size={16} />
-									New key
+									{tr('copy.newKey')}
 								</button>
 							</div>
 						}
@@ -272,11 +277,11 @@ export function KeysPage() {
 						<table className="keys-table">
 							<thead>
 								<tr>
-									<th>Name</th>
-									<th>Key</th>
-									<th>Models</th>
-									<th>Metadata</th>
-									<th>Budgets</th>
+									<th>{tr('copy.name')}</th>
+									<th>{tr('copy.key')}</th>
+									<th>{tr('copy.models')}</th>
+									<th>{tr('copy.metadata')}</th>
+									<th>{tr('copy.budgets')}</th>
 									<th />
 								</tr>
 							</thead>
@@ -284,7 +289,7 @@ export function KeysPage() {
 								{keys.map((item, index) => (
 									<tr key={keyValue(item)}>
 										<td className="strong key-name-cell">
-											{keyName(item) || <span className="muted">Unnamed key</span>}
+											{keyName(item) || <span className="muted">{tr('copy.unnamedKey')}</span>}
 										</td>
 										<td className="key-cell">
 											<VirtualKeyValue value={keyValue(item)} />
@@ -304,33 +309,33 @@ export function KeysPage() {
 										</td>
 										<td className="key-action-cell">
 											<div className="key-actions">
-												<Tooltip content="Edit key">
+												<Tooltip content={tr('copy.editKey')}>
 													<button
 														className="table-action"
 														type="button"
-														aria-label="Edit key"
+														aria-label={tr('copy.editKey')}
 														onClick={() => openEditKey(item, index)}
 													>
 														<Pencil size={14} />
-														Edit
+														{tr('copy.edit')}
 													</button>
 												</Tooltip>
 												<Tooltip
 													content={
 														hybrid && !databaseKeyId(item)
-															? 'File-owned keys cannot be deleted here'
-															: 'Delete key'
+															? tr('copy.fileOwnedKeysCannotBeDeletedHere')
+															: tr('copy.deleteKey')
 													}
 												>
 													<button
 														className="table-action danger"
 														type="button"
-														aria-label="Delete key"
+														aria-label={tr('copy.deleteKey')}
 														disabled={saving || (hybrid && !databaseKeyId(item))}
 														onClick={() => setDeleteKey(item)}
 													>
 														<Trash2 size={14} />
-														Delete
+														{tr('copy.delete')}
 													</button>
 												</Tooltip>
 											</div>
@@ -362,32 +367,31 @@ export function KeysPage() {
 			) : null}
 			{deleteKey ? (
 				<ConfirmDialog
-					title="Delete virtual API key?"
+					title={tr('copy.deleteVirtualApiKey')}
 					destructive
-					confirmLabel="Delete key"
+					confirmLabel={tr('copy.deleteKey')}
 					confirmDisabled={saving}
 					onCancel={() => setDeleteKey(null)}
 					onConfirm={() => {
 						removeKey(deleteKey);
 					}}
 				>
-					<p>
-						Delete <strong>{virtualKeyDeleteLabel(deleteKey)}</strong>? This cannot be undone.
-					</p>
+					<p>{tr('copy.deleteNamedResourceQuestion', [virtualKeyDeleteLabel(deleteKey)])}</p>
 				</ConfirmDialog>
 			) : null}
 			{disablePolicyOpen ? (
 				<ConfirmDialog
-					title="Disable API key policy?"
+					title={tr('copy.disableApiKeyPolicy_9229n3')}
 					destructive
-					confirmLabel="Disable API Key Policy"
+					confirmLabel={tr('copy.disableApiKeyPolicy')}
 					confirmDisabled={saving}
 					onCancel={() => setDisablePolicyOpen(false)}
 					onConfirm={disablePolicy}
 				>
 					<p>
-						Disable virtual API key validation? Requests will no longer be validated against virtual
-						API keys.
+						{tr(
+							'copy.disableVirtualApiKeyValidationRequestsWillNoLongerBeValidatedAgainstVirtualApiKeys'
+						)}
 					</p>
 				</ConfirmDialog>
 			) : null}
@@ -434,7 +438,10 @@ function AdvancedSettingsDrawer(props: {
 	onSave: (policy: Partial<LlmApiKeyPolicy>) => void;
 }) {
 	return (
-		<Drawer title={props.policy ? 'Settings' : 'Enable API key auth'} onClose={props.onClose}>
+		<Drawer
+			title={props.policy ? tr('copy.settings') : tr('copy.enableApiKeyAuth')}
+			onClose={props.onClose}
+		>
 			<PolicyControls
 				policy={props.policy}
 				databaseBacked={props.databaseBacked}
@@ -447,7 +454,7 @@ function AdvancedSettingsDrawer(props: {
 				onSave={props.onSave}
 			/>
 			{props.saveError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{props.saveError}
 				</StatusBanner>
 			) : null}
@@ -475,7 +482,7 @@ function PolicyControls(props: {
 	return (
 		<div className="policy-controls api-key-policy-controls">
 			<FieldGroup
-				label="Validation mode"
+				label={tr('copy.validationMode')}
 				tooltip={props.help.field<LlmApiKeyPolicy>(
 					'LocalAPIKeys',
 					'mode',
@@ -483,12 +490,12 @@ function PolicyControls(props: {
 				)}
 			>
 				<EnumSelector
-					ariaLabel="Validation mode"
+					ariaLabel={tr('copy.validationMode')}
 					value={mode}
 					options={[
-						{ value: 'strict', label: 'Strict' },
-						{ value: 'optional', label: 'Optional' },
-						{ value: 'permissive', label: 'Permissive' }
+						{ value: 'strict', label: tr('copy.strict') },
+						{ value: 'optional', label: tr('copy.optional_1yfbac9') },
+						{ value: 'permissive', label: tr('copy.permissive') }
 					]}
 					onChange={value => setMode(value as 'strict' | 'optional' | 'permissive')}
 				/>
@@ -501,13 +508,13 @@ function PolicyControls(props: {
 						'LocalAPIKeys',
 						'location',
 						'By default, callers send Authorization: Bearer key.'
-					) ?? 'By default, callers send Authorization: Bearer key.'
+					) ?? tr('copy.byDefaultCallersSendAuthorizationBearerKey')
 				}
 				description={
 					props.help.definition(
 						'AuthorizationLocation',
 						'Customize where virtual API keys are read from the request.'
-					) ?? 'Customize where virtual API keys are read from the request.'
+					) ?? tr('copy.customizeWhereVirtualApiKeysAreReadFromTheRequest')
 				}
 				onChange={setLocation}
 			/>
@@ -515,17 +522,21 @@ function PolicyControls(props: {
 				<AdvancedSettingRow
 					className="api-key-location-row"
 					icon={<X size={17} />}
-					title="Disable API key policy"
-					description="Remove the API key policy entirely. Requests will not be validated against virtual API keys."
+					title={tr('copy.disableApiKeyPolicy')}
+					description={tr(
+						'copy.removeTheApiKeyPolicyEntirelyRequestsWillNotBeValidatedAgainstVirtualApiKeys'
+					)}
 					action={
-						<Tooltip content={props.readOnly ? fileOwnedPolicyMessage : 'Disable API key policy'}>
+						<Tooltip
+							content={props.readOnly ? fileOwnedPolicyMessage() : tr('copy.disableApiKeyPolicy')}
+						>
 							<button
 								className="button danger compact-action"
 								type="button"
 								disabled={props.saving || props.readOnly}
 								onClick={props.onDisable}
 							>
-								Disable
+								{tr('copy.disable')}
 							</button>
 						</Tooltip>
 					}
@@ -541,11 +552,13 @@ function PolicyControls(props: {
 							})
 						: undefined
 				}
-				diffTitle={props.policy ? 'API key policy config diff' : 'Enable API key authentication'}
-				saveLabel={props.policy ? 'Save policy' : 'Enable API key auth'}
+				diffTitle={
+					props.policy ? tr('copy.apiKeyPolicyConfigDiff') : tr('copy.enableApiKeyAuthentication')
+				}
+				saveLabel={props.policy ? tr('copy.savePolicy') : tr('copy.enableApiKeyAuth')}
 				saving={props.saving}
 				saveDisabled={props.readOnly}
-				hybridFileWriteMessage={fileOwnedPolicyMessage}
+				hybridFileWriteMessage={fileOwnedPolicyMessage()}
 				onSave={() => props.onSave(patch)}
 				applyDiff={next => {
 					Object.assign(getApiKeyPolicy(next), patch);
@@ -613,9 +626,9 @@ function KeyEditor(props: {
 		modelAccess !== 'restricted'
 			? null
 			: allowedModels.length === 0
-				? 'Add at least one model pattern or select Deny all.'
+				? tr('copy.addAtLeastOneModelPatternOrSelectDenyAll')
 				: allowedModels.includes('*') && allowedModels.length > 1
-					? "'*' cannot be combined with other model patterns."
+					? tr('copy.cannotBeCombinedWithOtherModelPatterns')
 					: allowedModels.find(pattern => {
 								const firstWildcard = pattern.indexOf('*');
 								return (
@@ -625,9 +638,9 @@ function KeyEditor(props: {
 									firstWildcard !== pattern.length - 1
 								);
 							})
-						? 'Wildcards are only supported at the beginning or end of a pattern.'
+						? tr('copy.wildcardsAreOnlySupportedAtTheBeginningOrEndOfAPattern')
 						: allowedModels.some(pattern => pattern !== '*' && pattern.split('*').length > 2)
-							? 'A model pattern can contain at most one wildcard.'
+							? tr('copy.aModelPatternCanContainAtMostOneWildcard')
 							: null;
 	const budgetNames = budgets.map(budget => budget.name.trim()).filter(Boolean);
 	const invalidBudgets =
@@ -642,7 +655,7 @@ function KeyEditor(props: {
 	const modelSuggestions = [
 		...(props.config?.llm?.models ?? []).map(model => model.name),
 		...(props.config?.llm?.virtualModels ?? []).map(model => model.name)
-	].filter((name): name is string => typeof name === 'string');
+	].filter((value): value is string => typeof value === 'string');
 
 	function virtualKey() {
 		const metadata = {
@@ -678,7 +691,7 @@ function KeyEditor(props: {
 
 	return (
 		<Drawer
-			title={props.previousKey ? 'Edit virtual key' : 'Create virtual key'}
+			title={props.previousKey ? tr('copy.editVirtualKey') : tr('copy.createVirtualKey')}
 			onClose={props.onCancel}
 			dirty={draft !== initialDraft}
 			saving={props.saving}
@@ -694,9 +707,11 @@ function KeyEditor(props: {
 							: undefined
 					}
 					diffTitle={
-						props.databaseBacked ? 'Virtual API key resource diff' : 'Virtual API key config diff'
+						props.databaseBacked
+							? tr('copy.virtualApiKeyResourceDiff')
+							: tr('copy.virtualApiKeyConfigDiff')
 					}
-					saveLabel="Save key"
+					saveLabel={tr('copy.saveKey')}
 					saving={props.saving}
 					saveDisabled={keyMode === 'custom' && !key.trim()}
 					onCancel={requestClose}
@@ -711,42 +726,43 @@ function KeyEditor(props: {
 				/>
 			)}
 		>
-			<Field label="Name">
+			<Field label={tr('copy.name')}>
 				<input
 					value={name}
 					onChange={event => setName(event.target.value)}
-					placeholder="Platform team"
+					placeholder={tr('copy.platformTeam')}
 				/>
 			</Field>
 			{submitted && nameRequired ? (
-				<StatusBanner state="bad" title="Name is required">
-					Add a metadata name before saving this virtual API key.
+				<StatusBanner state="bad" title={tr('copy.nameIsRequired')}>
+					{tr('copy.addAMetadataNameBeforeSavingThisVirtualApiKey')}
 				</StatusBanner>
 			) : null}
 			{duplicateName ? (
-				<StatusBanner state="warn" title="Name already exists">
-					Another virtual key already uses this name. The key will still be created with a unique
-					metadata id.
+				<StatusBanner state="warn" title={tr('copy.nameAlreadyExists')}>
+					{tr(
+						'copy.anotherVirtualKeyAlreadyUsesThisNameTheKeyWillStillBeCreatedWithAUniqueMetadataId'
+					)}
 				</StatusBanner>
 			) : null}
 			{isNew ? (
 				<FieldGroup
-					label="Key value"
+					label={tr('copy.keyValue')}
 					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}
 				>
 					<Dropdown
-						ariaLabel="Key value"
+						ariaLabel={tr('copy.keyValue')}
 						value={keyMode}
 						options={[
-							{ value: 'auto', label: 'agw_sk_***** (auto generate)' },
-							{ value: 'custom', label: 'Use custom key' }
+							{ value: 'auto', label: tr('copy.agwSkAutoGenerate') },
+							{ value: 'custom', label: tr('copy.useCustomKey') }
 						]}
 						onChange={value => setKeyMode(value as 'auto' | 'custom')}
 					/>
 				</FieldGroup>
 			) : (
 				<FieldGroup
-					label="Key value"
+					label={tr('copy.keyValue')}
 					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}
 				>
 					<div className="key-editor-value-row">
@@ -756,13 +772,16 @@ function KeyEditor(props: {
 							type="button"
 							onClick={() => setReplaceKey(current => !current)}
 						>
-							{replaceKey ? 'Keep existing' : 'Replace key'}
+							{replaceKey ? tr('copy.keepExisting') : tr('copy.replaceKey')}
 						</button>
 					</div>
 				</FieldGroup>
 			)}
 			{(isNew && keyMode === 'custom') || (!isNew && replaceKey) ? (
-				<Field label="Key value" tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}>
+				<Field
+					label={tr('copy.keyValue')}
+					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}
+				>
 					<input
 						value={key}
 						type="text"
@@ -782,94 +801,103 @@ function KeyEditor(props: {
 			) : null}
 			<CollapsiblePolicySection
 				icon={<CircleDollarSign size={17} />}
-				title="Budgets"
-				description="Cap how much this key can spend or consume during each rolling window."
+				title={tr('copy.budgets')}
+				description={tr('copy.capHowMuchThisKeyCanSpendOrConsumeDuringEachRollingWindow')}
 				summary={
 					submitted && invalidBudgets ? (
-						<span className="badge bad">Invalid</span>
+						<span className="badge bad">{tr('copy.invalid')}</span>
 					) : budgets.length ? (
-						`${budgets.length} ${budgets.length === 1 ? 'budget' : 'budgets'}`
+						tr(budgets.length === 1 ? 'copy.valueBudgets_one' : 'copy.valueBudgets_other', {
+							count: budgets.length
+						})
 					) : (
-						'None'
+						tr('copy.none')
 					)
 				}
 			>
 				<BudgetEditor budgets={budgets} apiKeyName={keyName(props.initial)} onChange={setBudgets} />
 				{submitted && invalidBudgets ? (
-					<StatusBanner state="bad" title="Invalid budgets">
-						Budget names must be present and unique, rolling windows are required, and amounts must
-						be non-negative whole numbers.
+					<StatusBanner state="bad" title={tr('copy.invalidBudgets')}>
+						{tr(
+							'copy.budgetNamesMustBePresentAndUniqueRollingWindowsAreRequiredAndAmountsMustBeNonNegative'
+						)}
 					</StatusBanner>
 				) : null}
 			</CollapsiblePolicySection>
 			<CollapsiblePolicySection
 				icon={<Bot size={17} />}
-				title="Model access"
-				description="Limit which requested model names this key can use."
+				title={tr('copy.modelAccess')}
+				description={tr('copy.limitWhichRequestedModelNamesThisKeyCanUse')}
 				summary={
 					submitted && modelError ? (
-						<span className="badge bad">Invalid</span>
+						<span className="badge bad">{tr('copy.invalid')}</span>
 					) : modelAccess === 'unrestricted' ? (
-						'Unrestricted'
+						tr('copy.unrestricted')
 					) : modelAccess === 'deny' ? (
-						<span className="badge bad">Deny all</span>
+						<span className="badge bad">{tr('copy.denyAll')}</span>
 					) : (
-						`${allowedModels.length} ${allowedModels.length === 1 ? 'pattern' : 'patterns'}`
+						tr(allowedModels.length === 1 ? 'copy.valuePatterns_one' : 'copy.valuePatterns_other', {
+							count: allowedModels.length
+						})
 					)
 				}
 			>
 				<FieldGroup
-					label="Access mode"
+					label={tr('copy.accessMode')}
 					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'allowedModels')}
 					hint={
 						modelAccess === 'unrestricted'
-							? 'This key can request any model.'
+							? tr('copy.thisKeyCanRequestAnyModel')
 							: modelAccess === 'restricted'
-								? 'Requests may only use models matching the patterns below.'
-								: 'This key cannot request any model.'
+								? tr('copy.requestsMayOnlyUseModelsMatchingPatternsBelow')
+								: tr('copy.thisKeyCannotRequestAnyModel')
 					}
 				>
 					<SegmentedControl
-						ariaLabel="Model access"
+						ariaLabel={tr('copy.modelAccess')}
 						value={modelAccess}
 						options={[
-							{ value: 'unrestricted', label: 'Unrestricted' },
-							{ value: 'restricted', label: 'Selected models' },
-							{ value: 'deny', label: 'Deny all' }
+							{ value: 'unrestricted', label: tr('copy.unrestricted') },
+							{ value: 'restricted', label: tr('copy.selectedModels') },
+							{ value: 'deny', label: tr('copy.denyAll') }
 						]}
-						onChange={setModelAccess}
+						onChange={value => setModelAccess(value as 'unrestricted' | 'restricted' | 'deny')}
 					/>
 				</FieldGroup>
 				{modelAccess === 'restricted' ? (
 					<ListEditor
-						label="Allowed model patterns"
+						label={tr('copy.allowedModelPatterns')}
 						tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'allowedModels')}
 						values={allowedModels}
 						onChange={setAllowedModels}
-						placeholder="gpt-5.5 or openai/*"
-						emptyText="No model patterns configured."
+						placeholder={tr('copy.modelPatternPlaceholder')}
+						emptyText={tr('copy.noModelPatternsConfigured')}
 						suggestions={modelSuggestions}
 					/>
 				) : null}
 				{submitted && modelError ? (
-					<StatusBanner state="bad" title="Invalid model access">
+					<StatusBanner state="bad" title={tr('copy.invalidModelAccess')}>
 						{modelError}
 					</StatusBanner>
 				) : null}
 			</CollapsiblePolicySection>
 			<CollapsiblePolicySection
 				icon={<Tags size={17} />}
-				title="Metadata"
-				description="Attach custom metadata to requests authenticated with this key."
+				title={tr('copy.metadata')}
+				description={tr('copy.attachCustomMetadataToRequestsAuthenticatedWithThisKey')}
 				summary={
 					Object.keys(metadataValues).length
-						? `${Object.keys(metadataValues).length} ${
-								Object.keys(metadataValues).length === 1 ? 'entry' : 'entries'
-							}`
-						: 'None'
+						? tr(
+								Object.keys(metadataValues).length === 1
+									? 'copy.valueEntries_one'
+									: 'copy.valueEntries_other',
+								{ count: Object.keys(metadataValues).length }
+							)
+						: tr('copy.none')
 				}
 			>
 				<KeyValueEditor
+					label={tr('copy.metadata')}
 					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'metadata')}
 					values={metadataValues}
 					quickKeys={['user', 'group']}
@@ -879,7 +907,7 @@ function KeyEditor(props: {
 				/>
 			</CollapsiblePolicySection>
 			{props.saveError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{props.saveError}
 				</StatusBanner>
 			) : null}
@@ -924,7 +952,7 @@ function BudgetEditor(props: {
 	return (
 		<div className="api-key-budget-editor">
 			{props.budgets.length === 0 ? (
-				<div className="empty-inline">No budgets configured. Usage is unlimited.</div>
+				<div className="empty-inline">{tr('copy.noBudgetsConfiguredUsageIsUnlimited')}</div>
 			) : (
 				<div className="api-key-budget-list">
 					{props.budgets.map((budget, index) => {
@@ -936,8 +964,10 @@ function BudgetEditor(props: {
 							<article className="api-key-budget-card" key={index}>
 								<header className="api-key-budget-card-header">
 									<div className="api-key-budget-card-title">
-										<strong>{budget.name.trim() || 'Untitled budget'}</strong>
-										{live?.usage.exceeded ? <span className="badge bad">Exceeded</span> : null}
+										<strong>{budget.name.trim() || tr('copy.untitledBudget')}</strong>
+										{live?.usage.exceeded ? (
+											<span className="badge bad">{tr('copy.exceeded')}</span>
+										) : null}
 									</div>
 									<div className="button-row compact">
 										<button
@@ -946,31 +976,37 @@ function BudgetEditor(props: {
 											onClick={() => setEditingIndex(editing ? null : index)}
 										>
 											{editing ? <Check size={14} /> : <Pencil size={14} />}
-											{editing ? 'Done' : 'Edit'}
+											{tr(editing ? 'copy.done' : 'copy.edit')}
 										</button>
 										<button
 											className="table-action danger"
 											type="button"
-											aria-label={`Remove budget ${index + 1}`}
+											aria-label={tr('copy.removeBudgetValue', [index + 1])}
 											onClick={() => removeBudget(index)}
 										>
 											<Trash2 size={14} />
-											Remove
+											{tr('copy.remove')}
 										</button>
 									</div>
 								</header>
 								{editing ? (
 									<div className="api-key-budget-form">
-										<Field label="Name" hint="Stable identifier used for accounting.">
+										<Field
+											label={tr('copy.name')}
+											hint={tr('copy.stableIdentifierUsedForAccounting')}
+										>
 											<input
 												value={budget.name}
 												onChange={event =>
-													updateBudget(index, { ...budget, name: event.target.value })
+													updateBudget(index, {
+														...budget,
+														name: event.target.value
+													})
 												}
-												placeholder="monthly-spend"
+												placeholder={tr('copy.monthlySpend')}
 											/>
 										</Field>
-										<Field label="Rolling window" hint="Examples: 24h, 7d, or 30d.">
+										<Field label={tr('copy.rollingWindow')} hint={tr('copy.examples24h7dOr30d')}>
 											<input
 												value={budget.window.rolling ?? ''}
 												onChange={event =>
@@ -982,47 +1018,67 @@ function BudgetEditor(props: {
 												placeholder="30d"
 											/>
 										</Field>
-										<Field label="Limit amount">
+										<Field label={tr('copy.limitAmount')}>
 											<input
 												type="number"
 												min="0"
 												step={budget.limit.unit === 'USD' ? 'any' : '1'}
-												aria-label={`Budget ${index + 1} amount`}
+												aria-label={tr('copy.budgetValueAmount', [index + 1])}
 												value={Number.isFinite(budget.limit.amount) ? budget.limit.amount : ''}
 												onChange={event =>
 													updateBudget(index, {
 														...budget,
-														limit: { ...budget.limit, amount: event.target.valueAsNumber }
+														limit: {
+															...budget.limit,
+															amount: event.target.valueAsNumber
+														}
 													})
 												}
 											/>
 										</Field>
-										<FieldGroup label="Limit unit">
+										<FieldGroup label={tr('copy.limitUnit')}>
 											<SegmentedControl
-												ariaLabel={`Budget ${index + 1} unit`}
+												ariaLabel={tr('copy.budgetValueUnit', [index + 1])}
 												value={budget.limit.unit}
 												options={[
 													{ value: 'USD', label: 'USD' },
-													{ value: 'Tokens', label: 'Tokens' }
+													{ value: 'Tokens', label: tr('copy.tokens') }
 												]}
 												onChange={unit =>
 													updateBudget(index, {
 														...budget,
-														limit: { ...budget.limit, unit }
+														limit: {
+															...budget.limit,
+															unit: unit as 'USD' | 'Tokens'
+														}
 													})
 												}
 											/>
 										</FieldGroup>
-										<FieldGroup label="When limit is reached" className="api-key-budget-form-wide">
+										<FieldGroup
+											label={tr('copy.whenLimitIsReached')}
+											className="api-key-budget-form-wide"
+										>
 											<SegmentedControl
-												ariaLabel={`Budget ${index + 1} enforcement`}
+												ariaLabel={tr('copy.budgetValueEnforcement', [index + 1])}
 												value={budget.onBudgetExceeded}
 												options={[
-													{ value: 'Block', label: 'Block requests', description: 'Return 429' },
-													{ value: 'Audit', label: 'Audit only', description: 'Continue serving' }
+													{
+														value: 'Block',
+														label: tr('copy.blockRequests'),
+														description: tr('copy.return429')
+													},
+													{
+														value: 'Audit',
+														label: tr('copy.auditOnly'),
+														description: tr('copy.continueServing')
+													}
 												]}
 												onChange={onBudgetExceeded =>
-													updateBudget(index, { ...budget, onBudgetExceeded })
+													updateBudget(index, {
+														...budget,
+														onBudgetExceeded: onBudgetExceeded as 'Audit' | 'Block'
+													})
 												}
 											/>
 										</FieldGroup>
@@ -1043,7 +1099,7 @@ function BudgetEditor(props: {
 			<div className="button-row">
 				<button className="button small" type="button" onClick={addBudget}>
 					<Plus size={15} />
-					Add budget
+					{tr('copy.addBudget')}
 				</button>
 			</div>
 		</div>
@@ -1058,25 +1114,30 @@ function BudgetUsage(props: {
 }) {
 	const { budget, live } = props;
 	if (props.loading) {
-		return <div className="api-key-budget-usage muted">Loading usage…</div>;
+		return <div className="api-key-budget-usage muted">{tr('copy.loadingUsage')}</div>;
 	}
 	if (props.unavailable) {
-		return <div className="api-key-budget-usage muted">Live usage is unavailable.</div>;
+		return <div className="api-key-budget-usage muted">{tr('copy.liveUsageUnavailable')}</div>;
 	}
 	const { used, fraction, level } = budgetProgress(budget, live);
 	return (
 		<div className="api-key-budget-usage">
 			<div className="api-key-budget-usage-row">
 				<span>
-					<strong>{budgetAmountLabel(used, budget.limit.unit)}</strong> of{' '}
-					{budgetAmountLabel(budget.limit.amount, budget.limit.unit)} used
+					{tr('copy.valueOfValueUsed', [
+						budgetAmountLabel(used, budget.limit.unit),
+						budgetAmountLabel(budget.limit.amount, budget.limit.unit)
+					])}
 				</span>
 				<span>
 					{live
-						? `${Math.round(fraction * 100)}% · resets ${formatRelativeTime(
-								new Date(live.window.end).toISOString()
-							)}`
-						: `No usage recorded yet · ${budget.window.rolling || 'unset'} rolling window`}
+						? tr('copy.valueResetsValue', [
+								Math.round(fraction * 100),
+								formatRelativeTime(new Date(live.window.end).toISOString())
+							])
+						: tr('copy.noUsageRecordedYetValueRollingWindow', [
+								budget.window.rolling || tr('copy.unset')
+							])}
 				</span>
 			</div>
 			<div className="api-key-budget-meter">
@@ -1092,14 +1153,19 @@ function budgetProgress(budget: VirtualApiKeyBudget, live?: BudgetStatus) {
 		Number.isFinite(budget.limit.amount) && budget.limit.amount > 0 ? budget.limit.amount : 0;
 	const fraction = limit > 0 ? Math.min(used / limit, 1) : 0;
 	const exceeded = Boolean(live?.usage.exceeded) || (limit > 0 && used >= limit);
-	return { used, fraction, level: exceeded ? 'bad' : fraction >= 0.8 ? 'warn' : '' };
+	return {
+		used,
+		fraction,
+		level: exceeded ? 'bad' : fraction >= 0.8 ? 'warn' : ''
+	};
 }
 
 function budgetAmountLabel(amount: number, unit: VirtualApiKeyBudget['limit']['unit']) {
-	if (!Number.isFinite(amount)) return unit === 'USD' ? '$0' : '0 tokens';
-	return unit === 'USD'
-		? `$${amount.toLocaleString(undefined, { maximumFractionDigits: 9 })}`
-		: `${formatNumber(amount)} tokens`;
+	const value = Number.isFinite(amount) ? amount : 0;
+	if (unit === 'USD') {
+		return tr('copy.usdAmount', [value.toLocaleString(undefined, { maximumFractionDigits: 9 })]);
+	}
+	return tr('copy.tokenAmount', [formatNumber(value)]);
 }
 
 function newVirtualKey(): VirtualApiKey {
@@ -1114,15 +1180,6 @@ function randomKey(length: number) {
 	const bytes = new Uint8Array(length);
 	crypto.getRandomValues(bytes);
 	return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('');
-}
-
-function modeLabel(mode: string) {
-	const labels: Record<string, string> = {
-		strict: 'Strict',
-		optional: 'Optional',
-		permissive: 'Permissive'
-	};
-	return labels[mode] ?? mode;
 }
 
 function keyName(key: VirtualApiKey) {
@@ -1147,7 +1204,7 @@ function normalizeKeyName(name: string) {
 
 function keyId(key: VirtualApiKey) {
 	const metadata = metadataObject(key.metadata);
-	const id = metadata[apiKeyIdMetadata];
+	const id = metadata[apiKeyIdMetadata] ?? metadata.id;
 	return typeof id === 'string' && id.trim() ? id.trim() : '';
 }
 
@@ -1214,22 +1271,22 @@ function VirtualKeyValue(props: { value: string }) {
 		<div className="virtual-key-value">
 			<code>{shown ? props.value : maskKey(props.value)}</code>
 			<div className="virtual-key-value-actions">
-				<Tooltip content={shown ? 'Hide full key' : 'Show full key'}>
+				<Tooltip content={tr(shown ? 'copy.hideFullKey' : 'copy.showFullKey')}>
 					<button
 						className="table-action"
 						type="button"
-						aria-label={shown ? 'Hide full key' : 'Show full key'}
+						aria-label={tr(shown ? 'copy.hideFullKey' : 'copy.showFullKey')}
 						onClick={() => setShown(current => !current)}
 					>
 						{shown ? <EyeOff size={14} /> : <Eye size={14} />}
-						{shown ? 'Hide' : 'Show'}
+						{tr(shown ? 'copy.hide' : 'copy.show')}
 					</button>
 				</Tooltip>
-				<Tooltip content={copied ? 'Copied' : 'Copy key'}>
+				<Tooltip content={tr(copied ? 'common.copied' : 'copy.copyKey')}>
 					<button
 						className={copied ? 'table-action copied' : 'table-action'}
 						type="button"
-						aria-label="Copy key"
+						aria-label={tr('copy.copyKey')}
 						onClick={() => {
 							void copyVirtualKey(props.value).then(success => {
 								if (success) {
@@ -1240,7 +1297,7 @@ function VirtualKeyValue(props: { value: string }) {
 						}}
 					>
 						{copied ? <Check size={14} /> : <Copy size={14} />}
-						Copy
+						{tr('copy.copy')}
 					</button>
 				</Tooltip>
 			</div>
@@ -1249,12 +1306,26 @@ function VirtualKeyValue(props: { value: string }) {
 }
 
 function AllowedModelsSummary(props: { value?: string[] | null }) {
-	if (props.value == null) return <span className="muted">unrestricted</span>;
-	if (props.value.length === 0) return <span className="badge bad">deny all</span>;
-	if (props.value.length === 1) {
-		return <span className="badge">{props.value[0] === '*' ? 'all models' : props.value[0]}</span>;
+	if (props.value == null) {
+		return <span className="muted">{tr('copy.unrestrictedLowercase')}</span>;
 	}
-	return <span className="badge">{props.value.length} patterns</span>;
+	if (props.value.length === 0) {
+		return <span className="badge bad">{tr('copy.denyAllLowercase')}</span>;
+	}
+	if (props.value.length === 1) {
+		return (
+			<span className="badge">
+				{props.value[0] === '*' ? tr('copy.allModels') : props.value[0]}
+			</span>
+		);
+	}
+	return (
+		<span className="badge">
+			{tr(props.value.length === 1 ? 'copy.valuePatterns_one' : 'copy.valuePatterns_other', {
+				count: props.value.length
+			})}
+		</span>
+	);
 }
 
 function BudgetSummary(props: {
@@ -1263,7 +1334,7 @@ function BudgetSummary(props: {
 	status?: BudgetStatusResponse;
 }) {
 	const budgets = props.value ?? [];
-	if (!budgets.length) return <span className="muted">—</span>;
+	if (!budgets.length) return <span className="muted">{tr('copy.none')}</span>;
 	return (
 		<div className="key-budget-summary">
 			{budgets.map((budget, index) => {
@@ -1274,10 +1345,11 @@ function BudgetSummary(props: {
 				return (
 					<Tooltip
 						key={`${budget.name}:${index}`}
-						content={`${budgetAmountLabel(used, budget.limit.unit)} of ${budgetAmountLabel(
-							budget.limit.amount,
-							budget.limit.unit
-						)} per ${budget.window.rolling}`}
+						content={tr('copy.valueOfValuePerValue', [
+							budgetAmountLabel(used, budget.limit.unit),
+							budgetAmountLabel(budget.limit.amount, budget.limit.unit),
+							budget.window.rolling || tr('copy.unset')
+						])}
 					>
 						<div className="key-budget-summary-row">
 							<span className="key-budget-summary-name">{budget.name}</span>
@@ -1296,7 +1368,7 @@ function BudgetSummary(props: {
 function MetadataSummary(props: { value: unknown }) {
 	const metadata = withoutManagedMetadata(metadataObject(props.value));
 	const entries = Object.entries(metadata);
-	if (!entries.length) return <span className="muted">—</span>;
+	if (!entries.length) return <span className="muted">{tr('copy.none')}</span>;
 	return (
 		<div className="metadata-summary">
 			{entries.slice(0, 3).map(([key, value]) => (
@@ -1323,7 +1395,7 @@ function withoutManagedMetadata(value: Record<string, unknown>) {
 
 function withoutServerMetadata(value: Record<string, unknown>) {
 	return Object.fromEntries(
-		Object.entries(value).filter(([key]) => !key.startsWith(managedMetadataPrefix))
+		Object.entries(value).filter(([key]) => !key.startsWith(managedMetadataPrefix) && key !== 'id')
 	);
 }
 

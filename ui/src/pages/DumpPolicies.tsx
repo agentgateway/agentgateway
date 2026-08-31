@@ -11,6 +11,7 @@ import {
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import { useConfigDumpMode } from '@/hooks';
+import { tr } from '@/i18n';
 import { ReadonlyModeBanner } from '@/pages/traffic/TrafficConfigDumpPanel';
 
 type TargetedPolicy = {
@@ -32,38 +33,37 @@ export function DumpPoliciesPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Policies"
-				description="Read-only top-level policies from the active gateway dump."
+				title={tr('copy.policies_raqot3')}
+				description={tr('copy.readOnlyTopLevelPoliciesFromTheActiveGatewayDump')}
 			/>
 			<ReadonlyModeBanner />
 
 			<Panel>
 				{mode.isLoading ? (
-					<StatusBanner state="loading" title="Loading runtime policies" />
+					<StatusBanner state="loading" title={tr('copy.loadingRuntimePolicies')} />
 				) : mode.error ? (
-					<StatusBanner state="bad" title="Config dump unavailable">
+					<StatusBanner state="bad" title={tr('copy.configDumpUnavailable')}>
 						{mode.error.message}
 					</StatusBanner>
 				) : !dumpMode ? (
-					<StatusBanner state="warn" title="Readonly policies unavailable">
-						Top-level runtime policies are only available when the gateway is running from XDS
-						config.
+					<StatusBanner state="warn" title={tr('copy.readonlyPoliciesUnavailable')}>
+						{tr('copy.topLevelRuntimePoliciesAreOnlyAvailableWhenTheGatewayIsRunningFromXdsConfig')}
 					</StatusBanner>
 				) : !policies.length ? (
 					<EmptyState
-						title="No top-level policies"
-						description="No top-level policies are present in the active gateway dump."
+						title={tr('copy.noTopLevelPolicies')}
+						description={tr('copy.noTopLevelPoliciesArePresentInTheActiveGatewayDump')}
 					/>
 				) : (
 					<div className="table-wrap">
 						<table className="dump-policies-table">
 							<thead>
 								<tr>
-									<th>Name</th>
-									<th>Target</th>
-									<th>Type</th>
-									<th>Inheritance</th>
-									<th aria-label="Actions" />
+									<th>{tr('copy.name')}</th>
+									<th>{tr('copy.target')}</th>
+									<th>{tr('copy.type')}</th>
+									<th>{tr('copy.inheritance')}</th>
+									<th aria-label={tr('copy.actions')} />
 								</tr>
 							</thead>
 							<tbody>
@@ -81,11 +81,11 @@ export function DumpPoliciesPage() {
 										</td>
 										<td>{policyInheritanceLabel(policy.inheritance)}</td>
 										<td className="row-actions">
-											<Tooltip content="View policy">
+											<Tooltip content={tr('copy.viewPolicy')}>
 												<button
 													className="icon-button"
 													type="button"
-													aria-label={`View ${policyName(policy)}`}
+													aria-label={tr('copy.viewValue', [policyName(policy)])}
 													onClick={() => setSelectedKey(policy.key)}
 												>
 													<Eye size={16} />
@@ -112,15 +112,15 @@ export function DumpPoliciesPage() {
 				>
 					<div className="drawer-summary-list">
 						<div>
-							<span>Target</span>
+							<span>{tr('copy.target')}</span>
 							<strong>{policyTargetLabel(selectedPolicy.target)}</strong>
 						</div>
 						<div>
-							<span>Type</span>
+							<span>{tr('copy.type')}</span>
 							<strong>{policyTypeLabel(selectedPolicy.policy)}</strong>
 						</div>
 					</div>
-					<FieldLabel>Policy YAML</FieldLabel>
+					<FieldLabel>{tr('copy.policyYaml')}</FieldLabel>
 					<YamlBlock value={selectedPolicy} />
 				</Drawer>
 			) : null}

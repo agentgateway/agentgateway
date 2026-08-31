@@ -5,6 +5,7 @@ import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
 import type { LocalOidcConfig } from '@/gateway-config';
+import { tr } from '@/i18n';
 import { ListEditor } from '@/policies/ListEditor';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, isRecord } from '@/policies/policyUtils';
@@ -42,21 +43,49 @@ const providerModes: Array<{
 }> = [
 	{
 		value: 'discovery',
-		label: 'Discovery',
-		description: 'Use the issuer metadata endpoint unless an override is provided.'
+		get label() {
+			return tr('copy.discovery');
+		},
+		get description() {
+			return tr('copy.useTheIssuerMetadataEndpointUnlessAnOverrideIsProvided');
+		}
 	},
 	{
 		value: 'explicit',
-		label: 'Explicit endpoints',
-		description: 'Manually provide authorization, token, and signing-key metadata.'
+		get label() {
+			return tr('copy.explicitEndpoints');
+		},
+		get description() {
+			return tr('copy.manuallyProvideAuthorizationTokenAndSigningKeyMetadata');
+		}
 	}
 ];
 
 const sourceModes: Array<{ value: SourceMode; label: string }> = [
-	{ value: 'none', label: 'None' },
-	{ value: 'url', label: 'Remote URL' },
-	{ value: 'file', label: 'Local file' },
-	{ value: 'inline', label: 'Inline JSON' }
+	{
+		value: 'none',
+		get label() {
+			return tr('copy.none_deku7v');
+		}
+	},
+	{
+		value: 'url',
+		get label() {
+			return tr('copy.remoteUrl');
+		}
+	},
+	{
+		value: 'file',
+		get label() {
+			return tr('copy.localFile');
+		}
+	},
+	{
+		value: 'inline',
+		get label() {
+			return tr('copy.inlineJson');
+		}
+	}
 ];
 
 const tokenEndpointAuthOptions: Array<{
@@ -66,12 +95,16 @@ const tokenEndpointAuthOptions: Array<{
 }> = [
 	{
 		value: 'clientSecretBasic',
-		label: 'Client secret basic',
+		get label() {
+			return tr('copy.clientSecretBasic');
+		},
 		searchText: 'clientSecretBasic basic'
 	},
 	{
 		value: 'clientSecretPost',
-		label: 'Client secret post',
+		get label() {
+			return tr('copy.clientSecretPost');
+		},
 		searchText: 'clientSecretPost post'
 	}
 ];
@@ -79,7 +112,9 @@ const tokenEndpointAuthOptions: Array<{
 const issuerSuggestions = [
 	{ label: 'Google', value: 'https://accounts.google.com' },
 	{
-		label: 'Microsoft Entra',
+		get label() {
+			return tr('copy.microsoftEntra');
+		},
 		value: 'https://login.microsoftonline.com/{tenant}/v2.0'
 	},
 	{ label: 'Okta', value: 'https://{yourOktaDomain}/oauth2/default' },
@@ -141,7 +176,7 @@ export function OidcPolicyEditor(props: {
 		const validationErrors = validateOidcPolicy();
 		setFieldErrors(validationErrors);
 		if (Object.keys(validationErrors).length) {
-			setError('Fix the highlighted fields before saving.');
+			setError(tr('copy.fixTheHighlightedFieldsBeforeSaving'));
 			return;
 		}
 		props.onSave(buildOidcPolicy());
@@ -177,11 +212,11 @@ export function OidcPolicyEditor(props: {
 		>
 			<PolicySection
 				icon={<Fingerprint size={17} />}
-				title="Provider"
-				description="Configure where browser login starts and how returned ID tokens are validated."
+				title={tr('copy.provider')}
+				description={tr('copy.configureWhereBrowserLoginStartsAndHowReturnedIdTokensAreValidated')}
 			>
 				<Field
-					label="Issuer"
+					label={tr('copy.issuer')}
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'issuer')}
 					className={fieldErrors.issuer ? 'invalid' : undefined}
 					hint={fieldErrors.issuer}
@@ -213,7 +248,7 @@ export function OidcPolicyEditor(props: {
 				</Field>
 
 				<FieldGroup
-					label="Provider metadata"
+					label={tr('copy.providerMetadata')}
 					tooltip={props.help.field<LocalOidcConfig>(
 						'LocalOidcConfig',
 						'authorizationEndpoint',
@@ -240,7 +275,7 @@ export function OidcPolicyEditor(props: {
 
 				{providerMode === 'discovery' ? (
 					<SourceEditor
-						label="Discovery override"
+						label={tr('copy.discoveryOverride')}
 						tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'discovery')}
 						value={discovery}
 						fieldError={fieldErrors.discovery}
@@ -253,7 +288,7 @@ export function OidcPolicyEditor(props: {
 				) : (
 					<>
 						<Field
-							label="Authorization endpoint"
+							label={tr('copy.authorizationEndpoint')}
 							tooltip={props.help.field<LocalOidcConfig>(
 								'LocalOidcConfig',
 								'authorizationEndpoint'
@@ -272,7 +307,7 @@ export function OidcPolicyEditor(props: {
 							/>
 						</Field>
 						<Field
-							label="Token endpoint"
+							label={tr('copy.tokenEndpoint')}
 							tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'tokenEndpoint')}
 							className={fieldErrors.tokenEndpoint ? 'invalid' : undefined}
 							hint={fieldErrors.tokenEndpoint}
@@ -288,7 +323,7 @@ export function OidcPolicyEditor(props: {
 							/>
 						</Field>
 						<FieldGroup
-							label="Token endpoint auth"
+							label={tr('copy.tokenEndpointAuth')}
 							tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'tokenEndpointAuth')}
 						>
 							<EnumSelector
@@ -314,11 +349,13 @@ export function OidcPolicyEditor(props: {
 
 			<PolicySection
 				icon={<KeyRound size={17} />}
-				title="Client"
-				description="Identify the OAuth2 client used by the gateway during the authorization code flow."
+				title={tr('copy.client')}
+				description={tr(
+					'copy.identifyTheOauth2ClientUsedByTheGatewayDuringTheAuthorizationCodeFlow'
+				)}
 			>
 				<Field
-					label="Client ID"
+					label={tr('copy.clientId')}
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'clientId')}
 					className={fieldErrors.clientId ? 'invalid' : undefined}
 					hint={fieldErrors.clientId}
@@ -334,7 +371,7 @@ export function OidcPolicyEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Client secret"
+					label={tr('copy.clientSecret')}
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'clientSecret')}
 					className={fieldErrors.clientSecret ? 'invalid' : undefined}
 					hint={fieldErrors.clientSecret}
@@ -356,11 +393,11 @@ export function OidcPolicyEditor(props: {
 							setClientSecret(event.target.value);
 							clearFieldError('clientSecret');
 						}}
-						placeholder="OAuth2 client secret"
+						placeholder={tr('copy.oauth2ClientSecret')}
 					/>
 				</Field>
 				<Field
-					label="Redirect URI"
+					label={tr('copy.redirectUri')}
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'redirectURI')}
 					className={fieldErrors.redirectURI ? 'invalid' : undefined}
 					hint={fieldErrors.redirectURI}
@@ -379,15 +416,15 @@ export function OidcPolicyEditor(props: {
 
 			<PolicySection
 				icon={<Globe2 size={17} />}
-				title="Scopes"
-				description="Request extra OAuth2 scopes. The gateway always includes openid."
+				title={tr('copy.scopes')}
+				description={tr('copy.requestExtraOauth2ScopesTheGatewayAlwaysIncludesOpenid')}
 			>
 				<ListEditor
-					label="Additional scopes"
+					label={tr('copy.additionalScopes')}
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'scopes')}
 					values={scopes}
 					placeholder="profile"
-					emptyText="No additional scopes configured."
+					emptyText={tr('copy.noAdditionalScopesConfigured')}
 					suggestions={['profile', 'email', 'offline_access']}
 					onChange={setScopes}
 				/>
@@ -396,7 +433,7 @@ export function OidcPolicyEditor(props: {
 			<ResultingYaml value={preview} />
 
 			{error ? (
-				<StatusBanner state="bad" title="Invalid OIDC policy">
+				<StatusBanner state="bad" title={tr('copy.invalidOidcPolicy')}>
 					{error}
 				</StatusBanner>
 			) : null}
@@ -457,7 +494,7 @@ function SourceEditor(props: {
 					}
 				/>
 				{activeMode === 'none' ? (
-					<div className="empty-inline">{props.optionalText ?? 'No source configured.'}</div>
+					<div className="empty-inline">{props.optionalText ?? tr('copy.noSourceConfigured')}</div>
 				) : activeMode === 'inline' ? (
 					<MiniMonacoEditor
 						language="json"

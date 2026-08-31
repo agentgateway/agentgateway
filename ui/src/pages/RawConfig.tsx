@@ -23,6 +23,7 @@ import {
 	useRuntimeInfo,
 	useUpdateConfig
 } from '@/hooks';
+import { currentLanguage, tr } from '@/i18n';
 import { parseYamlText, toYamlText } from '@/policies/policyUtils';
 import type { GatewayConfig } from '@/types';
 
@@ -43,7 +44,7 @@ export function RawConfigPage() {
 	if (mode.isLoading) {
 		return (
 			<div className="page-stack">
-				<StatusBanner state="loading" title="Detecting configuration mode" />
+				<StatusBanner state="loading" title={tr('copy.detectingConfigurationMode')} />
 			</div>
 		);
 	}
@@ -88,24 +89,24 @@ function RawConfigEditorPage() {
 		try {
 			const parsed = parseYamlText(text);
 			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-				throw new Error('Configuration must be a YAML object.');
+				throw new Error(tr('copy.configurationMustBeAYamlObject'));
 			}
 			await validateGatewayConfig(parsed as GatewayConfig);
 			await update.mutateAsync(() => parsed as GatewayConfig);
 			setSavedText(text);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Invalid configuration YAML.');
+			setError(err instanceof Error ? err.message : tr('copy.invalidConfigurationYaml'));
 		}
 	}
 
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Raw Configuration"
+				title={tr('copy.rawConfiguration')}
 				description={
 					view === 'file'
-						? 'Edit the full gateway YAML.'
-						: 'Inspect configuration resources stored in the database.'
+						? tr('copy.editTheFullGatewayYaml')
+						: tr('copy.inspectConfigurationResourcesStoredInTheDatabase')
 				}
 				actions={
 					view === 'file' ? (
@@ -117,7 +118,7 @@ function RawConfigEditorPage() {
 								onClick={() => void copyConfig(text)}
 							>
 								<Clipboard size={16} />
-								Copy
+								{tr('copy.copy')}
 							</button>
 							<button
 								className="button"
@@ -126,7 +127,7 @@ function RawConfigEditorPage() {
 								onClick={() => downloadConfig(text)}
 							>
 								<Download size={16} />
-								Download
+								{tr('copy.download')}
 							</button>
 							<button
 								className="button"
@@ -135,7 +136,7 @@ function RawConfigEditorPage() {
 								onClick={() => updateText(initialText)}
 							>
 								<RotateCcw size={16} />
-								Reset
+								{tr('copy.reset')}
 							</button>
 							<button
 								className="button"
@@ -144,11 +145,11 @@ function RawConfigEditorPage() {
 								onClick={() => setDiffOpen(true)}
 							>
 								<FileText size={16} />
-								View diff
+								{tr('copy.viewDiff')}
 							</button>
 							<ConfigSaveButton disabled={!dirty || update.isPending} onClick={() => void save()}>
 								<Save size={16} />
-								Save
+								{tr('copy.save')}
 							</ConfigSaveButton>
 						</div>
 					) : null
@@ -164,7 +165,7 @@ function RawConfigEditorPage() {
 						aria-selected={view === 'file'}
 						onClick={() => setView('file')}
 					>
-						File
+						{tr('copy.file')}
 					</button>
 					<button
 						className={view === 'database' ? 'active' : ''}
@@ -173,30 +174,32 @@ function RawConfigEditorPage() {
 						aria-selected={view === 'database'}
 						onClick={() => setView('database')}
 					>
-						Database
+						{tr('copy.database')}
 					</button>
 				</div>
 			) : null}
 
 			{view === 'file' && config.isError ? (
-				<StatusBanner state="bad" title="Configuration API unavailable">
+				<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 					{config.error.message}
 				</StatusBanner>
 			) : null}
 			{view === 'file' && error ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{error}
 				</StatusBanner>
 			) : null}
 			{view === 'file' && showSaved ? (
-				<StatusBanner state="ok" title="Configuration saved" />
+				<StatusBanner state="ok" title={tr('copy.configurationSaved')} />
 			) : null}
 
 			{view === 'file' ? (
 				<Panel>
 					<Suspense
 						fallback={
-							<div className="editor-wrap raw-config-editor loading-panel">Loading editor...</div>
+							<div className="editor-wrap raw-config-editor loading-panel">
+								{tr('copy.loadingEditor')}
+							</div>
 						}
 					>
 						<LazyRawConfigEditor
@@ -216,7 +219,7 @@ function RawConfigEditorPage() {
 			)}
 			{view === 'file' && diffOpen ? (
 				<ConfigDiffDrawer
-					title="Raw configuration diff"
+					title={tr('copy.rawConfigurationDiff')}
 					original={initialText}
 					modified={text}
 					saving={update.isPending}
@@ -246,28 +249,28 @@ function DatabaseResourcesPanel(props: {
 		<>
 			<Panel>
 				{deleteResource.isError ? (
-					<StatusBanner state="bad" title="Delete failed">
+					<StatusBanner state="bad" title={tr('copy.deleteFailed')}>
 						{deleteResource.error.message}
 					</StatusBanner>
 				) : null}
 				{props.loading ? (
-					<StatusBanner state="loading" title="Loading database resources" />
+					<StatusBanner state="loading" title={tr('copy.loadingDatabaseResources')} />
 				) : props.error ? (
-					<StatusBanner state="bad" title="Configuration database unavailable">
+					<StatusBanner state="bad" title={tr('copy.configurationDatabaseUnavailable')}>
 						{props.error}
 					</StatusBanner>
 				) : props.resources.length === 0 ? (
-					<StatusBanner state="info" title="No database resources" />
+					<StatusBanner state="info" title={tr('copy.noDatabaseResources')} />
 				) : (
 					<div className="table-wrap">
 						<table className="data-table raw-config-resource-table">
 							<thead>
 								<tr>
-									<th>Kind</th>
+									<th>{tr('copy.kind')}</th>
 									<th>ID</th>
-									<th>Revision</th>
-									<th>Updated</th>
-									<th>Value</th>
+									<th>{tr('copy.revision')}</th>
+									<th>{tr('copy.updated')}</th>
+									<th>{tr('schema.value')}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -285,7 +288,12 @@ function DatabaseResourcesPanel(props: {
 												</td>
 												<td>{resource.revision ?? '—'}</td>
 												<td>
-													{resource.updatedAt ? new Date(resource.updatedAt).toLocaleString() : '—'}
+													{resource.updatedAt
+														? new Intl.DateTimeFormat(currentLanguage(), {
+																dateStyle: 'medium',
+																timeStyle: 'medium'
+															}).format(new Date(resource.updatedAt))
+														: '—'}
 												</td>
 												<td>
 													<div className="button-row compact">
@@ -295,14 +303,14 @@ function DatabaseResourcesPanel(props: {
 															aria-expanded={open}
 															onClick={() => setExpanded(open ? null : key)}
 														>
-															{open ? 'Hide JSON' : 'View JSON'}
+															{open ? tr('copy.hideJson') : tr('copy.viewJson')}
 														</button>
 														{dangerousActionsVisible ? (
-															<Tooltip content="Delete database resource">
+															<Tooltip content={tr('copy.deleteDatabaseResource')}>
 																<button
 																	className="icon-button danger"
 																	type="button"
-																	aria-label="Delete database resource"
+																	aria-label={tr('copy.deleteDatabaseResource')}
 																	onClick={() => setDeleting(resource)}
 																>
 																	<Trash2 size={15} />
@@ -329,9 +337,9 @@ function DatabaseResourcesPanel(props: {
 			</Panel>
 			{deleting ? (
 				<ConfirmDialog
-					title="Delete database resource?"
+					title={tr('copy.deleteDatabaseResourceQuestion')}
 					destructive
-					confirmLabel="Delete resource"
+					confirmLabel={tr('copy.deleteResource')}
 					confirmDisabled={deleteResource.isPending || !dangerousActionsVisible}
 					onCancel={() => setDeleting(null)}
 					onConfirm={() => {
@@ -348,10 +356,7 @@ function DatabaseResourcesPanel(props: {
 						);
 					}}
 				>
-					<p>
-						Delete <strong>{deleting.kind}</strong>/<strong>{deleting.id}</strong>? This cannot be
-						undone.
-					</p>
+					<p>{tr('copy.deleteDatabaseResourceValue', [deleting.kind, deleting.id])}</p>
 				</ConfirmDialog>
 			) : null}
 		</>

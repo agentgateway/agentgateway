@@ -6,6 +6,7 @@ import type {
 	LocalHealthPolicy,
 	PromptCachingConfig
 } from '@/gateway-config';
+import { tr } from '@/i18n';
 import { ListEditor } from '@/policies/ListEditor';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
 import type { SchemaHelp } from '@/schemaHelp';
@@ -30,9 +31,9 @@ export function HealthPolicyEditor(props: {
 	return (
 		<div className="policy-editor-stack compact">
 			<FieldGroup
-				label="Unhealthy expression"
+				label={tr('copy.unhealthyExpression')}
 				tooltip={props.help.field<LocalHealthPolicy>('LocalHealthPolicy', 'unhealthyExpression')}
-				hint="Leave empty to use default 5xx and connection failure handling."
+				hint={tr('copy.leaveEmptyToUseDefault5xxAndConnectionFailureHandling')}
 			>
 				<MiniMonacoEditor
 					language="cel"
@@ -43,7 +44,7 @@ export function HealthPolicyEditor(props: {
 			</FieldGroup>
 			<div className="form-grid">
 				<Field
-					label="Eviction duration"
+					label={tr('copy.evictionDuration')}
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'duration')}
 				>
 					<input
@@ -53,7 +54,7 @@ export function HealthPolicyEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Consecutive failures"
+					label={tr('copy.consecutiveFailures')}
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'consecutiveFailures')}
 				>
 					<input
@@ -69,7 +70,7 @@ export function HealthPolicyEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Health threshold"
+					label={tr('copy.healthThreshold')}
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'healthThreshold')}
 				>
 					<input
@@ -84,7 +85,7 @@ export function HealthPolicyEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Restore health"
+					label={tr('copy.restoreHealth')}
 					tooltip={props.help.field<LocalEviction>('LocalEviction', 'restoreHealth')}
 				>
 					<input
@@ -123,15 +124,17 @@ export function YamlMappingEditor(props: {
 }
 
 export function HeaderModifierEditor(props: {
+	headerType: 'request' | 'response';
 	value: LlmModel['requestHeaders'] | LlmModel['responseHeaders'] | null | undefined;
 	help: SchemaHelp;
 	onChange: (value: LlmModel['requestHeaders'] | null) => void;
 }) {
 	const value = props.value ?? {};
+	const isResponse = props.headerType === 'response';
 	return (
 		<div className="policy-editor-stack compact">
 			<KeyValueEditor
-				label="Add headers"
+				label={tr(isResponse ? 'copy.addResponseHeaders' : 'copy.addHeaders')}
 				tooltip={props.help.field<HeaderModifier>('HeaderModifier', 'add')}
 				values={value.add ?? {}}
 				keyPlaceholder="x-header"
@@ -139,7 +142,7 @@ export function HeaderModifierEditor(props: {
 				onChange={add => props.onChange({ ...value, add })}
 			/>
 			<KeyValueEditor
-				label="Set headers"
+				label={tr(isResponse ? 'copy.setResponseHeaders' : 'copy.setHeaders')}
 				tooltip={props.help.field<HeaderModifier>('HeaderModifier', 'set')}
 				values={value.set ?? {}}
 				keyPlaceholder="x-header"
@@ -147,7 +150,7 @@ export function HeaderModifierEditor(props: {
 				onChange={set => props.onChange({ ...value, set })}
 			/>
 			<ListEditor
-				label="Remove headers"
+				label={tr(isResponse ? 'copy.removeResponseHeaders' : 'copy.removeHeaders')}
 				tooltip={props.help.field<HeaderModifier>('HeaderModifier', 'remove')}
 				values={value.remove ?? []}
 				placeholder="x-header"
@@ -178,7 +181,7 @@ export function PromptCachingEditor(props: {
 						onChange={event => patch({ cacheSystem: event.target.checked || undefined })}
 					/>
 					<span>
-						<strong>System prompt</strong>
+						<strong>{tr('copy.systemPrompt')}</strong>
 						<small>
 							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheSystem')}
 						</small>
@@ -191,7 +194,7 @@ export function PromptCachingEditor(props: {
 						onChange={event => patch({ cacheMessages: event.target.checked || undefined })}
 					/>
 					<span>
-						<strong>Messages</strong>
+						<strong>{tr('copy.messages')}</strong>
 						<small>
 							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheMessages')}
 						</small>
@@ -204,7 +207,7 @@ export function PromptCachingEditor(props: {
 						onChange={event => patch({ cacheTools: event.target.checked || undefined })}
 					/>
 					<span>
-						<strong>Tools</strong>
+						<strong>{tr('copy.tools')}</strong>
 						<small>
 							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheTools')}
 						</small>
@@ -213,7 +216,7 @@ export function PromptCachingEditor(props: {
 			</div>
 			<div className="form-grid">
 				<Field
-					label="Minimum tokens"
+					label={tr('copy.minimumTokens')}
 					tooltip={props.help.field<PromptCachingConfig>('PromptCachingConfig', 'minTokens')}
 				>
 					<input
@@ -224,7 +227,7 @@ export function PromptCachingEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Message offset"
+					label={tr('copy.messageOffset')}
 					tooltip={props.help.field<PromptCachingConfig>(
 						'PromptCachingConfig',
 						'cacheMessageOffset'
@@ -247,13 +250,15 @@ export function PromptCachingEditor(props: {
 }
 
 export function healthSummary(health: LlmModel['health'] | null | undefined) {
-	if (!health) return 'No health policy configured';
+	if (!health) return tr('copy.noHealthPolicyConfigured');
 	const parts = [
-		health.unhealthyExpression ? 'custom expression' : null,
-		health.eviction?.duration ? `evict ${health.eviction.duration}` : null,
-		health.eviction?.consecutiveFailures ? `${health.eviction.consecutiveFailures} failures` : null
+		health.unhealthyExpression ? tr('copy.customExpression') : null,
+		health.eviction?.duration ? tr('copy.evictValue', [health.eviction.duration]) : null,
+		health.eviction?.consecutiveFailures
+			? tr('copy.failuresValue', [health.eviction.consecutiveFailures])
+			: null
 	].filter(Boolean);
-	return parts.join(', ') || 'Default unhealthy detection configured';
+	return parts.join(', ') || tr('copy.defaultUnhealthyDetectionConfigured');
 }
 
 export function headerModifierSummary(
@@ -264,18 +269,31 @@ export function headerModifierSummary(
 		Object.keys(value?.add ?? {}).length +
 		Object.keys(value?.set ?? {}).length +
 		(value?.remove?.length ?? 0);
-	if (count === 0) return `No ${label} header changes configured`;
-	return `${count} ${count === 1 ? 'header change' : 'header changes'} configured`;
+	if (count === 0) {
+		return tr(
+			label === 'request'
+				? 'copy.noRequestHeaderChangesConfigured'
+				: 'copy.noResponseHeaderChangesConfigured'
+		);
+	}
+	return tr(
+		label === 'request'
+			? 'copy.requestHeaderChangesConfigured'
+			: 'copy.responseHeaderChangesConfigured',
+		{ count }
+	);
 }
 
 export function promptCachingSummary(value: LlmModel['promptCaching'] | null | undefined) {
-	if (!value) return 'No prompt caching configured';
+	if (!value) return tr('copy.noPromptCachingConfigured');
 	const scopes = [
-		value.cacheSystem ? 'system' : null,
-		value.cacheMessages ? 'messages' : null,
-		value.cacheTools ? 'tools' : null
+		value.cacheSystem ? tr('copy.system') : null,
+		value.cacheMessages ? tr('copy.messages') : null,
+		value.cacheTools ? tr('copy.tools') : null
 	].filter(Boolean);
-	return scopes.length ? `Cache ${scopes.join(', ')}` : 'Prompt caching configured';
+	return scopes.length
+		? tr('copy.cacheValue', [scopes.join(', ')])
+		: tr('copy.promptCachingConfigured');
 }
 
 function optionalNumber(value: string) {

@@ -16,6 +16,7 @@ import {
 import { getRuntimeInfo } from '@/api/runtimeApi';
 import { cloneConfig, configWarnings } from '@/config';
 import { validateGatewayConfig } from '@/configValidation';
+import { tr } from '@/i18n';
 import type { GatewayConfig, LlmApiKeyPolicy, LlmConfig } from '@/types';
 
 let hybridFileWriteOverride = false;
@@ -203,7 +204,7 @@ async function requireWritableRuntime(queryClient: ReturnType<typeof useQueryCli
 		queryClient.getQueryData<Awaited<ReturnType<typeof getRuntimeInfo>>>(['runtime']) ??
 		(await getRuntimeInfo());
 	if (runtime.ui.configStoreMode == 'readOnly') {
-		throw new Error('The UI is configured as read-only.');
+		throw new Error(tr('copy.theUiIsConfiguredAsReadOnly'));
 	}
 	return runtime;
 }
@@ -225,7 +226,9 @@ export function useUpdateConfig() {
 			const overrideHybridFileWrite = takeHybridFileWriteOverride();
 			if (runtime.ui.configStoreMode === 'hybrid' && !overrideHybridFileWrite) {
 				throw new Error(
-					'File configuration is read-only in hybrid mode. Copy the diff and update the configuration file directly.'
+					tr(
+						'copy.fileConfigurationIsReadOnlyInHybridModeCopyThisDiffAndUpdateTheConfigurationFileDirectly'
+					)
 				);
 			}
 			const current = queryClient.getQueryData<GatewayConfig>(['config']) ?? (await getConfig());

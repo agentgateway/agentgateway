@@ -31,6 +31,7 @@ import {
 	useUpdateConfig,
 	useUpsertConfigResource
 } from '@/hooks';
+import { tr } from '@/i18n';
 import { TrafficPolicySection } from '@/pages/traffic/TrafficPolicySection';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
 import type {
@@ -153,55 +154,54 @@ export function TrafficGatewaysPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Traffic Gateways"
-				description="Configure named gateway listeners that LLM, MCP, UI, and routes can attach to."
+				title={tr('copy.trafficGateways')}
+				description={tr('copy.configureNamedGatewayListenersThatLlmMcpUiAndRoutesCanAttachTo')}
 				actions={
 					<button className="button primary" type="button" onClick={() => setDrawer('new')}>
 						<Plus size={16} />
-						Add gateway
+						{tr('copy.addGateway')}
 					</button>
 				}
 			/>
 
 			{saveError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{saveError}
 				</StatusBanner>
 			) : null}
-			{saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+			{saved ? <StatusBanner state="ok" title={tr('copy.configurationSaved')} /> : null}
 			{showLegacyBindsWarning ? (
 				<StatusBanner
 					state="warn"
-					title="Detected legacy binds config"
+					title={tr('copy.detectedLegacyBindsConfig')}
 					action={
 						migration ? (
 							<button className="button" type="button" onClick={() => setMigrationOpen(true)}>
 								<GitBranch size={16} />
-								Review migration
+								{tr('copy.reviewMigration')}
 							</button>
 						) : null
 					}
 				>
-					This configuration uses legacy <code>binds</code> and has no <code>gateways</code>.
-					Consider moving listener ownership to <code>gateways</code>.
+					{tr('copy.legacyBindsWarning', ['binds', 'gateways', 'gateways'])}
 				</StatusBanner>
 			) : null}
 
 			<Panel>
 				{config.isLoading ? (
-					<StatusBanner state="loading" title="Loading gateways" />
+					<StatusBanner state="loading" title={tr('copy.loadingGateways')} />
 				) : config.isError ? (
-					<StatusBanner state="bad" title="Configuration API unavailable">
+					<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 						{config.error?.message}
 					</StatusBanner>
 				) : gateways.length === 0 ? (
 					<EmptyState
-						title="No gateways configured"
-						description="Add a named gateway before attaching LLM, MCP, UI, or routes."
+						title={tr('copy.noGatewaysConfigured')}
+						description={tr('copy.addANamedGatewayBeforeAttachingLlmMcpUiOrRoutes')}
 						action={
 							<button className="button primary" type="button" onClick={() => setDrawer('new')}>
 								<Network size={16} />
-								Add gateway
+								{tr('copy.addGateway')}
 							</button>
 						}
 					/>
@@ -213,24 +213,26 @@ export function TrafficGatewaysPage() {
 									<div>
 										<h3>{name}</h3>
 										<p>
-											Port {gatewayPortLabel(gateway)}
+											{tr('copy.port')} {gatewayPortLabel(gateway)}
 											{gateway.listeners?.length
-												? `, ${gateway.listeners.length} named listeners`
+												? `, ${tr('copy.valueListeners', {
+														count: gateway.listeners.length
+													})}`
 												: ''}
-											, {gatewayPolicyCount(gateway)} policies
+											, {gatewayPolicyCount(gateway)} {tr('copy.policies')}
 										</p>
 									</div>
 									<div className="button-row">
 										<span className="badge">{gatewayProtocolLabel(gateway)}</span>
 										<span className={gatewayHasTls(gateway) ? 'badge ok' : 'badge'}>
-											{gatewayHasTls(gateway) ? 'TLS' : 'Plain'}
+											{gatewayHasTls(gateway) ? 'TLS' : tr('copy.none')}
 										</span>
 										{gateway.listeners?.length ? (
-											<Tooltip content="Add listener">
+											<Tooltip content={tr('copy.addListener')}>
 												<button
 													className="icon-button"
 													type="button"
-													aria-label="Add listener"
+													aria-label={tr('copy.addListener')}
 													disabled={traffic.hybrid && !databaseGateway(name)}
 													onClick={() => setDrawer(`listener:new:${name}`)}
 												>
@@ -241,14 +243,14 @@ export function TrafficGatewaysPage() {
 										<Tooltip
 											content={
 												traffic.hybrid && !databaseGateway(name)
-													? 'File-owned gateways must be edited in raw configuration'
-													: 'Edit gateway'
+													? tr('copy.fileOwnedGatewaysMustBeEditedInRawConfiguration')
+													: tr('copy.editGateway')
 											}
 										>
 											<button
 												className="icon-button"
 												type="button"
-												aria-label="Edit gateway"
+												aria-label={tr('copy.editGateway')}
 												disabled={traffic.hybrid && !databaseGateway(name)}
 												onClick={() => setDrawer(name)}
 											>
@@ -258,14 +260,14 @@ export function TrafficGatewaysPage() {
 										<Tooltip
 											content={
 												traffic.hybrid && !databaseGateway(name)
-													? 'File-owned gateways cannot be deleted here'
-													: 'Delete gateway'
+													? tr('copy.fileOwnedGatewaysCannotBeDeletedHere')
+													: tr('copy.deleteGateway')
 											}
 										>
 											<button
 												className="icon-button danger"
 												type="button"
-												aria-label="Delete gateway"
+												aria-label={tr('copy.deleteGateway')}
 												disabled={traffic.hybrid && !databaseGateway(name)}
 												onClick={() => deleteGateway(name)}
 											>
@@ -279,11 +281,11 @@ export function TrafficGatewaysPage() {
 										<table>
 											<thead>
 												<tr>
-													<th>Name</th>
-													<th>Hostname</th>
-													<th>Protocol</th>
+													<th>{tr('copy.name')}</th>
+													<th>{tr('copy.hostname')}</th>
+													<th>{tr('copy.protocol')}</th>
 													<th>TLS</th>
-													<th>Policies</th>
+													<th>{tr('copy.policies_raqot3')}</th>
 													<th />
 												</tr>
 											</thead>
@@ -297,7 +299,7 @@ export function TrafficGatewaysPage() {
 														<td>{gatewayProtocolLabel(listener)}</td>
 														<td>
 															<span className={listener.tls ? 'badge ok' : 'badge'}>
-																{listener.tls ? 'TLS' : 'Plain'}
+																{listener.tls ? 'TLS' : tr('copy.none')}
 															</span>
 														</td>
 														<td>{gatewayListenerPolicyCount(listener)}</td>
@@ -305,14 +307,14 @@ export function TrafficGatewaysPage() {
 															<Tooltip
 																content={
 																	traffic.hybrid && !databaseGateway(name)
-																		? 'File-owned listeners must be edited in raw configuration'
-																		: 'Edit listener'
+																		? tr('copy.fileOwnedListenersMustBeEditedInRawConfiguration')
+																		: tr('copy.editListener')
 																}
 															>
 																<button
 																	className="icon-button"
 																	type="button"
-																	aria-label="Edit listener"
+																	aria-label={tr('copy.editListener')}
 																	disabled={traffic.hybrid && !databaseGateway(name)}
 																	onClick={() =>
 																		setDrawer(`listener:edit:${name}:${listenerIndex}`)
@@ -324,14 +326,14 @@ export function TrafficGatewaysPage() {
 															<Tooltip
 																content={
 																	traffic.hybrid && !databaseGateway(name)
-																		? 'File-owned listeners cannot be deleted here'
-																		: 'Delete listener'
+																		? tr('copy.fileOwnedListenersCannotBeDeletedHere')
+																		: tr('copy.deleteListener')
 																}
 															>
 																<button
 																	className="icon-button danger"
 																	type="button"
-																	aria-label="Delete listener"
+																	aria-label={tr('copy.deleteListener')}
 																	disabled={traffic.hybrid && !databaseGateway(name)}
 																	onClick={() =>
 																		saveGatewayListeners(name, gateway => {
@@ -411,7 +413,7 @@ export function TrafficGatewaysPage() {
 
 			{migrationOpen && config.data && migration ? (
 				<ConfigDiffDrawer
-					title="Migrate binds to gateways"
+					title={tr('copy.migrateBindsToGateways')}
 					{...configDiffText(config.data, migration.config)}
 					saving={update.isPending}
 					onClose={() => setMigrationOpen(false)}
@@ -477,7 +479,7 @@ function GatewayEditor(props: {
 
 	return (
 		<Drawer
-			title={props.initial.previousName ? 'Edit gateway' : 'Add gateway'}
+			title={props.initial.previousName ? tr('copy.editGateway') : tr('copy.addGateway')}
 			onClose={props.onCancel}
 			footer={
 				<ConfigDiffSaveActions
@@ -493,8 +495,8 @@ function GatewayEditor(props: {
 								}
 							: undefined
 					}
-					diffTitle="Gateway config diff"
-					saveLabel="Save gateway"
+					diffTitle={tr('copy.gatewayConfigDiff')}
+					saveLabel={tr('copy.saveGateway')}
 					saving={props.saving}
 					saveDisabled={!name.trim() || invalidDefaultName || duplicateName}
 					onCancel={props.onCancel}
@@ -516,7 +518,10 @@ function GatewayEditor(props: {
 			}
 		>
 			<div className="form-grid gateway-identity-grid">
-				<Field label="Name" tooltip="Features and routes reference this gateway by name.">
+				<Field
+					label={tr('copy.name')}
+					tooltip={tr('copy.featuresAndRoutesReferenceThisGatewayByName')}
+				>
 					<input
 						value={name}
 						disabled={defaultGateway}
@@ -524,7 +529,10 @@ function GatewayEditor(props: {
 						placeholder="public"
 					/>
 				</Field>
-				<Field label="Port" tooltip={props.help.field<TrafficGateway>('LocalGateway', 'port')}>
+				<Field
+					label={tr('copy.port')}
+					tooltip={props.help.field<TrafficGateway>('LocalGateway', 'port')}
+				>
 					<input
 						value={gateway.port?.toString() ?? ''}
 						onChange={event =>
@@ -555,29 +563,31 @@ function GatewayEditor(props: {
 						}}
 					/>
 					<span>
-						<strong>Default gateway</strong>
+						<strong>{tr('copy.defaultGateway')}</strong>
 						<small>
 							{anotherDefaultGateway
-								? 'Another gateway is already the default gateway.'
-								: 'Use this gateway for enabled traffic without an explicit gateway selection.'}
+								? tr('copy.anotherGatewayIsAlreadyTheDefaultGateway')
+								: tr('copy.useThisGatewayForEnabledTrafficWithoutAnExplicitGatewaySelection')}
 						</small>
 					</span>
 				</label>
 
 				{invalidDefaultName ? (
-					<StatusBanner state="bad" title="Default name is reserved">
-						Select Default gateway to use the name <code>default</code>.
+					<StatusBanner state="bad" title={tr('copy.defaultNameIsReserved')}>
+						{tr('copy.selectDefaultGatewayToUseTheNameValue', 'default')}
 					</StatusBanner>
 				) : duplicateName ? (
-					<StatusBanner state="bad" title="Gateway name already exists">
-						Choose a unique gateway name.
+					<StatusBanner state="bad" title={tr('copy.gatewayNameAlreadyExists')}>
+						{tr('copy.chooseAUniqueGatewayName')}
 					</StatusBanner>
 				) : null}
 
 				{defaultGateway && props.initial.previousName !== 'default' ? (
-					<StatusBanner state="warn" title="Default gateway">
-						This will make the gateway the default gateway. This will impact{' '}
-						{defaultTraffic.length ? defaultTraffic.join(', ') : 'no enabled'} traffic.
+					<StatusBanner state="warn" title={tr('copy.defaultGateway')}>
+						{tr(
+							'copy.thisWillMakeTheGatewayTheDefaultGatewayAndImpactValueTraffic',
+							defaultTraffic.length ? defaultTraffic.join(', ') : tr('copy.noEnabledTraffic')
+						)}
 					</StatusBanner>
 				) : null}
 			</div>
@@ -585,11 +595,11 @@ function GatewayEditor(props: {
 			{!multipleListeners ? (
 				<div className="form-grid">
 					<Field
-						label="Protocol"
+						label={tr('copy.protocol')}
 						tooltip={props.help.field<TrafficGateway>('LocalGateway', 'protocol')}
 					>
 						<Dropdown
-							ariaLabel="Protocol"
+							ariaLabel={tr('copy.protocol')}
 							value={protocol}
 							options={gatewayProtocolOptions}
 							onChange={value => {
@@ -633,11 +643,11 @@ function GatewayEditor(props: {
 						}}
 					/>
 					<span>
-						<strong>Multiple listeners</strong>
+						<strong>{tr('copy.multipleListeners')}</strong>
 						<small>
 							{!multipleListeners && !canEnableMultipleListeners
-								? 'Unavailable while gateway TLS or policies are configured.'
-								: 'Use named listeners for per-hostname TLS and policies.'}
+								? tr('copy.unavailableWhileGatewayTlsOrPoliciesAreConfigured')
+								: tr('copy.useNamedListenersForPerHostnameTlsAndPolicies')}
 						</small>
 					</span>
 				</label>
@@ -657,7 +667,7 @@ function GatewayEditor(props: {
 
 			{!multipleListeners ? (
 				<TrafficPolicySection
-					title="Gateway policies"
+					title={tr('copy.gatewayPolicies')}
 					schemaRoot="LocalGatewayPolicy"
 					policies={gatewayPolicies(gateway)}
 					onChange={policies => setGateway({ ...withoutGatewayPolicies(gateway), ...policies })}
@@ -665,7 +675,7 @@ function GatewayEditor(props: {
 			) : null}
 
 			<details open>
-				<summary>Resulting YAML</summary>
+				<summary>{tr('copy.resultingYaml')}</summary>
 				<YamlBlock value={{ [name.trim() || 'gateway']: preview }} />
 			</details>
 		</Drawer>
@@ -706,7 +716,7 @@ function GatewayTLSFields(props: {
 			<summary>TLS</summary>
 			<div className="form-grid">
 				<Field
-					label="Certificate"
+					label={tr('copy.certificate')}
 					tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'cert')}
 				>
 					<input
@@ -716,7 +726,7 @@ function GatewayTLSFields(props: {
 					/>
 				</Field>
 				<Field
-					label="Key"
+					label={tr('copy.key')}
 					tooltip={props.help.field<LocalTLSServerConfig>('LocalTLSServerConfig', 'key')}
 				>
 					<input
@@ -765,7 +775,11 @@ function GatewayListenerEditor(props: {
 
 	return (
 		<Drawer
-			title={typeof props.editing.listenerIndex === 'number' ? 'Edit listener' : 'Add listener'}
+			title={
+				typeof props.editing.listenerIndex === 'number'
+					? tr('copy.editListener')
+					: tr('copy.addListener')
+			}
 			onClose={props.onCancel}
 			footer={
 				<ConfigDiffSaveActions
@@ -784,8 +798,8 @@ function GatewayListenerEditor(props: {
 								}
 							: undefined
 					}
-					diffTitle="Gateway listener config diff"
-					saveLabel="Save listener"
+					diffTitle={tr('copy.gatewayListenerConfigDiff')}
+					saveLabel={tr('copy.saveListener')}
 					saving={props.saving}
 					onCancel={props.onCancel}
 					onSave={() =>
@@ -806,7 +820,7 @@ function GatewayListenerEditor(props: {
 		>
 			<div className="form-grid">
 				<Field
-					label="Name"
+					label={tr('copy.name')}
 					tooltip={props.help.field<TrafficGatewayListener>('LocalGatewayListener', 'name')}
 				>
 					<input
@@ -816,11 +830,11 @@ function GatewayListenerEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Protocol"
+					label={tr('copy.protocol')}
 					tooltip={props.help.field<TrafficGatewayListener>('LocalGatewayListener', 'protocol')}
 				>
 					<Dropdown
-						ariaLabel="Protocol"
+						ariaLabel={tr('copy.protocol')}
 						value={protocol}
 						options={gatewayProtocolOptions}
 						onChange={value => {
@@ -838,7 +852,7 @@ function GatewayListenerEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Hostname"
+					label={tr('copy.hostname')}
 					tooltip={props.help.field<TrafficGatewayListener>(
 						'LocalGatewayListener',
 						'hostname',
@@ -862,7 +876,7 @@ function GatewayListenerEditor(props: {
 				/>
 			) : null}
 			<TrafficPolicySection
-				title="Listener policies"
+				title={tr('copy.listenerPolicies')}
 				schemaRoot="LocalGatewayPolicy"
 				policies={gatewayListenerPolicies(listener)}
 				onChange={policies =>
@@ -873,7 +887,7 @@ function GatewayListenerEditor(props: {
 				}
 			/>
 			<details open>
-				<summary>Resulting YAML</summary>
+				<summary>{tr('copy.resultingYaml')}</summary>
 				<YamlBlock value={preview} />
 			</details>
 		</Drawer>
@@ -1187,7 +1201,7 @@ function uniqueGatewayName(gateways: NonNullable<GatewayConfig['gateways']>, bas
 }
 
 function gatewayPortLabel(gateway: TrafficGateway) {
-	return gateway.port?.toString() ?? 'Unset';
+	return gateway.port?.toString() ?? tr('copy.unset');
 }
 
 function gatewayHasTls(gateway: TrafficGateway) {

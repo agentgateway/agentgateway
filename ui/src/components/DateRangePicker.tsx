@@ -1,7 +1,10 @@
+import type { TFunction } from 'i18next';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { FieldGroup, useDismissiblePopover } from '@/components/Primitives';
+import i18n, { currentLanguage } from '@/i18n';
 import type { TimeRange } from '@/types';
 
 export type PresetRange = '1h' | '12h' | '24h' | '7d' | '14d' | '30d';
@@ -11,21 +14,38 @@ export type LogTimeRange =
 
 export const RANGE_PRESETS: Array<{
 	value: PresetRange;
-	label: string;
+	labelKey: string;
 	ms: number;
 }> = [
-	{ value: '1h', label: 'Last 1 hour', ms: 60 * 60 * 1000 },
-	{ value: '12h', label: 'Last 12 hours', ms: 12 * 60 * 60 * 1000 },
-	{ value: '24h', label: 'Last 24 hours', ms: 24 * 60 * 60 * 1000 },
-	{ value: '7d', label: 'Last 7 days', ms: 7 * 24 * 60 * 60 * 1000 },
-	{ value: '14d', label: 'Last 14 days', ms: 14 * 24 * 60 * 60 * 1000 },
-	{ value: '30d', label: 'Last 30 days', ms: 30 * 24 * 60 * 60 * 1000 }
+	{ value: '1h', labelKey: 'dateRange.last1Hour', ms: 60 * 60 * 1000 },
+	{
+		value: '12h',
+		labelKey: 'dateRange.last12Hours',
+		ms: 12 * 60 * 60 * 1000
+	},
+	{
+		value: '24h',
+		labelKey: 'dateRange.last24Hours',
+		ms: 24 * 60 * 60 * 1000
+	},
+	{ value: '7d', labelKey: 'dateRange.last7Days', ms: 7 * 24 * 60 * 60 * 1000 },
+	{
+		value: '14d',
+		labelKey: 'dateRange.last14Days',
+		ms: 14 * 24 * 60 * 60 * 1000
+	},
+	{
+		value: '30d',
+		labelKey: 'dateRange.last30Days',
+		ms: 30 * 24 * 60 * 60 * 1000
+	}
 ];
 
 export function DateRangePicker(props: {
 	value: LogTimeRange;
 	onChange: (value: LogTimeRange) => void;
 }) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const [draft, setDraft] = useState<LogTimeRange>(props.value);
 	const ref = useDismissiblePopover<HTMLDivElement>(open, () => setOpen(false));
@@ -44,12 +64,12 @@ export function DateRangePicker(props: {
 				aria-expanded={open}
 			>
 				<CalendarDays size={16} />
-				{logTimeRangeLabel(props.value)}
+				{logTimeRangeLabel(props.value, t)}
 				<ChevronDown size={15} />
 			</button>
 			{open ? (
 				<div className="date-range-popover">
-					<div className="date-range-presets" aria-label="Quick ranges">
+					<div className="date-range-presets" aria-label={t('dateRange.quickRanges')}>
 						{RANGE_PRESETS.map(preset => (
 							<button
 								className={draft.mode === 'preset' && draft.preset === preset.value ? 'active' : ''}
@@ -57,13 +77,13 @@ export function DateRangePicker(props: {
 								key={preset.value}
 								onClick={() => setDraft({ mode: 'preset', preset: preset.value })}
 							>
-								{preset.label}
+								{t(preset.labelKey)}
 							</button>
 						))}
 					</div>
 					<div className="date-range-custom">
 						<div className="date-range-field-grid">
-							<FieldGroup label="From">
+							<FieldGroup label={t('dateRange.from')}>
 								<input
 									type="datetime-local"
 									value={absoluteDraft.fromLocal}
@@ -76,7 +96,7 @@ export function DateRangePicker(props: {
 									}
 								/>
 							</FieldGroup>
-							<FieldGroup label="To">
+							<FieldGroup label={t('dateRange.to')}>
 								<input
 									type="datetime-local"
 									value={absoluteDraft.toLocal}
@@ -90,14 +110,18 @@ export function DateRangePicker(props: {
 								/>
 							</FieldGroup>
 						</div>
-						<FieldGroup label="Interval">
-							<input value={formatBucketDuration(bucketSecondsForRange(draft))} disabled readOnly />
+						<FieldGroup label={t('dateRange.interval')}>
+							<input
+								value={formatBucketDuration(bucketSecondsForRange(draft), t)}
+								disabled
+								readOnly
+							/>
 						</FieldGroup>
 						<div className="date-range-footer">
 							<span>{timezoneLabel()}</span>
 							<div className="button-row compact">
 								<button className="button secondary" type="button" onClick={() => setOpen(false)}>
-									Cancel
+									{t('dateRange.cancel')}
 								</button>
 								<button
 									className="button primary"
@@ -108,7 +132,7 @@ export function DateRangePicker(props: {
 										setOpen(false);
 									}}
 								>
-									Apply
+									{t('dateRange.apply')}
 								</button>
 							</div>
 						</div>
@@ -141,9 +165,12 @@ export function logTimeRangeToApi(value: LogTimeRange): TimeRange {
 	};
 }
 
-export function logTimeRangeLabel(value: LogTimeRange) {
+export function logTimeRangeLabel(value: LogTimeRange, t: TFunction = i18n.t.bind(i18n)) {
 	if (value.mode === 'preset') {
-		return RANGE_PRESETS.find(item => item.value === value.preset)?.label ?? 'Last 24 hours';
+		return rangePresetLabel(
+			RANGE_PRESETS.find(item => item.value === value.preset) ?? defaultPreset(),
+			t
+		);
 	}
 	return `${formatShortDateTime(new Date(value.fromLocal))} - ${formatShortDateTime(new Date(value.toLocal))}`;
 }
@@ -167,23 +194,22 @@ export function bucketSecondsForRange(value: LogTimeRange) {
 	return 24 * 60 * 60;
 }
 
-export function formatBucketDuration(seconds: number) {
-	if (!Number.isFinite(seconds) || seconds <= 0) return 'Auto';
-	if (seconds < 60)
-		return `${Math.round(seconds)} ${Math.round(seconds) === 1 ? 'second' : 'seconds'}`;
+export function formatBucketDuration(seconds: number, t: TFunction = i18n.t.bind(i18n)) {
+	if (!Number.isFinite(seconds) || seconds <= 0) return t('common.auto');
+	if (seconds < 60) return t('dateRange.second', { count: Math.round(seconds) });
 	const minutes = seconds / 60;
 	if (minutes < 60) {
 		const rounded = Math.round(minutes);
-		return `${rounded} ${rounded === 1 ? 'minute' : 'minutes'}`;
+		return t('dateRange.minute', { count: rounded });
 	}
 	const hours = minutes / 60;
 	if (hours < 24) {
 		const rounded = Math.round(hours);
-		return `${rounded} ${rounded === 1 ? 'hour' : 'hours'}`;
+		return t('dateRange.hour', { count: rounded });
 	}
 	const days = hours / 24;
 	const rounded = Math.round(days);
-	return `${rounded} ${rounded === 1 ? 'day' : 'days'}`;
+	return t('dateRange.day', { count: rounded });
 }
 
 function isValidLogTimeRange(value: LogTimeRange) {
@@ -242,13 +268,17 @@ export function toDateTimeLocal(date: Date) {
 }
 
 function formatShortDateTime(date: Date) {
-	if (!Number.isFinite(date.getTime())) return 'Invalid date';
-	return new Intl.DateTimeFormat(undefined, {
+	if (!Number.isFinite(date.getTime())) return i18n.t('dateRange.invalidDate');
+	return new Intl.DateTimeFormat(currentLanguage(), {
 		month: 'short',
 		day: 'numeric',
 		hour: 'numeric',
 		minute: '2-digit'
 	}).format(date);
+}
+
+function rangePresetLabel(preset: (typeof RANGE_PRESETS)[number], t: TFunction) {
+	return t(preset.labelKey);
 }
 
 function timezoneLabel() {

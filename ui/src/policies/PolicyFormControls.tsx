@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import { Field, FieldGroup } from '@/components/Primitives';
+import { tr } from '@/i18n';
 import type { TargetDraft } from '@/policies/types';
 
 export type TargetMode = 'host' | 'service' | 'backend';
@@ -20,9 +21,9 @@ export function hasUnsupportedTarget(value: unknown) {
 
 export function unsupportedTargetLabel(value: unknown) {
 	const mode = targetMode(value);
-	if (mode === 'service') return 'Kubernetes service';
-	if (mode === 'backend') return 'backend reference';
-	return 'target';
+	if (mode === 'service') return tr('copy.kubernetesService');
+	if (mode === 'backend') return tr('copy.backendReference');
+	return tr('copy.target');
 }
 
 export function TargetEditor(props: {
@@ -39,12 +40,12 @@ export function TargetEditor(props: {
 					<Plus size={17} />
 				</span>
 				<div>
-					<h4>Target</h4>
-					<p>External service the gateway calls for this policy.</p>
+					<h4>{tr('copy.target')}</h4>
+					<p>{tr('copy.externalServiceTheGatewayCallsForThisPolicy')}</p>
 				</div>
 			</div>
 			<div className="policy-form-section-body">
-				<Field label="Host" tooltip={props.tooltip}>
+				<Field label={tr('copy.host')} tooltip={props.tooltip}>
 					<input
 						value={host}
 						onChange={event => props.onChange({ host: event.target.value })}
@@ -96,16 +97,19 @@ export function KeyValueEditor(props: {
 									props.onChange(next);
 								}}
 							>
-								Remove
+								{tr('copy.remove')}
 							</button>
 						</div>
 					))}
 				</div>
 			) : (
-				<div className="empty-inline">No values configured.</div>
+				<div className="empty-inline">{tr('copy.noValuesConfigured')}</div>
 			)}
 			{props.quickKeys?.length ? (
-				<div className="kv-quick-row" aria-label={`${props.label ?? 'Metadata'} quick keys`}>
+				<div
+					className="kv-quick-row"
+					aria-label={tr('copy.valueQuickKeys', [props.label ?? tr('copy.metadata')])}
+				>
 					{props.quickKeys.map(key => (
 						<button
 							className="choice-pill compact"
@@ -144,7 +148,7 @@ export function KeyValueEditor(props: {
 					}
 				/>
 				<button className="button" type="button" onClick={add}>
-					Add
+					{tr('copy.add')}
 				</button>
 			</div>
 		</div>

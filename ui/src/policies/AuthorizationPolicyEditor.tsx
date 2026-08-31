@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import { EmptyState, StatusBanner } from '@/components/Primitives';
+import { tr } from '@/i18n';
 import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { AuthorizationDraft } from '@/policies/types';
 
@@ -19,12 +20,32 @@ type AuthzRule = {
 const defaultNewRule = 'request.path.startsWith("/v1/")';
 const celPlaygroundExpressionKey = 'agw.cel.pendingExpression';
 const effectOptions: Array<EnumSelectorOption<RuleEffect>> = [
-	{ value: 'allow', label: 'Allow', description: 'Permit matching requests.' },
-	{ value: 'deny', label: 'Deny', description: 'Reject matching requests.' },
+	{
+		value: 'allow',
+		get label() {
+			return tr('copy.allow');
+		},
+		get description() {
+			return tr('copy.permitMatchingRequests');
+		}
+	},
+	{
+		value: 'deny',
+		get label() {
+			return tr('copy.deny');
+		},
+		get description() {
+			return tr('copy.rejectMatchingRequests');
+		}
+	},
 	{
 		value: 'require',
-		label: 'Require',
-		description: 'Require this expression to be true.'
+		get label() {
+			return tr('copy.require');
+		},
+		get description() {
+			return tr('copy.requireThisExpressionToBeTrue');
+		}
 	}
 ];
 
@@ -116,22 +137,22 @@ export function AuthorizationPolicyEditor(props: {
 					<strong>
 						{rules.length} {rules.length === 1 ? 'rule' : 'rules'}
 					</strong>
-					<small>Each CEL expression is saved under allow, deny, or require.</small>
+					<small>{tr('copy.eachCelExpressionIsSavedUnderAllowDenyOrRequire')}</small>
 				</div>
 				<button className="button" type="button" onClick={addRule}>
 					<Plus size={16} />
-					Add rule
+					{tr('copy.addRule')}
 				</button>
 			</div>
 
 			{rules.length === 0 ? (
 				<EmptyState
-					title="No authorization rules"
-					description="Add a CEL expression to start authorizing requests."
+					title={tr('copy.noAuthorizationRules')}
+					description={tr('copy.addACelExpressionToStartAuthorizingRequests')}
 					action={
 						<button className="button primary" type="button" onClick={addRule}>
 							<Plus size={16} />
-							Add rule
+							{tr('copy.addRule')}
 						</button>
 					}
 				/>
@@ -147,7 +168,7 @@ export function AuthorizationPolicyEditor(props: {
 								<div className="authz-rule-header">
 									<div>
 										<div className="authz-rule-title">
-											<strong>Rule {index + 1}</strong>
+											<strong>{tr('copy.ruleNumber', [index + 1])}</strong>
 											<span className={`badge authz-effect ${rule.effect}`}>{rule.effect}</span>
 										</div>
 										{!editing ? <code>{rule.expression.trim() || 'Empty rule'}</code> : null}
@@ -177,7 +198,7 @@ export function AuthorizationPolicyEditor(props: {
 											}
 										>
 											<Braces size={14} />
-											Playground
+											{tr('copy.playground')}
 										</Link>
 										<button
 											className="table-action danger"
@@ -185,7 +206,7 @@ export function AuthorizationPolicyEditor(props: {
 											onClick={() => removeRule(index)}
 										>
 											<Trash2 size={14} />
-											Delete
+											{tr('copy.delete')}
 										</button>
 									</div>
 								</div>
@@ -217,14 +238,14 @@ export function AuthorizationPolicyEditor(props: {
 
 			<ResultingYaml value={preview} />
 			{summaryError ? (
-				<StatusBanner state="bad" title="Invalid authorization policy">
+				<StatusBanner state="bad" title={tr('copy.invalidAuthorizationPolicy')}>
 					{summaryError}
 				</StatusBanner>
 			) : null}
 			{!props.formId ? (
 				<button className="button primary" type="submit" disabled={props.saving}>
 					<Save size={16} />
-					Apply authorization
+					{tr('copy.applyAuthorization')}
 				</button>
 			) : null}
 		</form>

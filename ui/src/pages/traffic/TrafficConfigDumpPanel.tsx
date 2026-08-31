@@ -11,6 +11,7 @@ import {
 } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import type { DumpBind, DumpListener, Route, TCPRoute } from '@/gateway-admin';
+import { tr } from '@/i18n';
 import type { AdminConfigDump } from '@/types';
 
 type BackendWithPolicies = {
@@ -54,10 +55,11 @@ export type DumpRouteRow = {
 export function ReadonlyModeBanner() {
 	return (
 		<div className="readonly-mode-banner">
-			<strong>Readonly mode</strong>
+			<strong>{tr('copy.readonlyMode')}</strong>
 			<span>
-				Configuration is managed by XDS. This view reflects the active runtime dump; editing is
-				disabled.
+				{tr(
+					'copy.configurationIsManagedByXdsThisViewReflectsTheActiveRuntimeDumpEditingIsDisabled'
+				)}
 			</span>
 		</div>
 	);
@@ -73,33 +75,33 @@ export function TrafficDumpOverview(props: {
 		<Panel className="traffic-dump-panel">
 			<div className="traffic-dump-header">
 				<div>
-					<h3>Runtime traffic</h3>
-					<p>Active runtime resources from the gateway dump.</p>
+					<h3>{tr('copy.runtimeTraffic')}</h3>
+					<p>{tr('copy.activeRuntimeResourcesFromTheGatewayDump')}</p>
 				</div>
 			</div>
 			{props.isLoading ? (
-				<StatusBanner state="loading" title="Loading runtime traffic configuration" />
+				<StatusBanner state="loading" title={tr('copy.loadingRuntimeTrafficConfiguration')} />
 			) : props.error ? (
-				<StatusBanner state="bad" title="Config dump unavailable">
+				<StatusBanner state="bad" title={tr('copy.configDumpUnavailable')}>
 					{props.error.message}
 				</StatusBanner>
 			) : inventory && hasTrafficInventory(inventory) ? (
 				<div className="traffic-dump-link-list">
 					<Link to="/traffic/listeners">
-						<span>Listeners</span>
+						<span>{tr('copy.listeners')}</span>
 						<strong>{inventory.listeners.length}</strong>
 					</Link>
 					<Link to="/traffic/routes">
-						<span>Routes</span>
+						<span>{tr('copy.routes_14u6307')}</span>
 						<strong>{inventory.routes.length}</strong>
 					</Link>
 					<Link to="/traffic/policies">
-						<span>Policies</span>
+						<span>{tr('copy.policies_raqot3')}</span>
 						<strong>{inventory.policies.length}</strong>
 					</Link>
 				</div>
 			) : (
-				<StatusBanner state="warn" title="No runtime traffic configuration" />
+				<StatusBanner state="warn" title={tr('copy.noRuntimeTrafficConfiguration')} />
 			)}
 		</Panel>
 	);
@@ -116,15 +118,15 @@ export function TrafficDumpListenersView(props: {
 	return (
 		<Panel>
 			{props.isLoading ? (
-				<StatusBanner state="loading" title="Loading traffic listeners" />
+				<StatusBanner state="loading" title={tr('copy.loadingTrafficListeners')} />
 			) : props.error ? (
-				<StatusBanner state="bad" title="Config dump unavailable">
+				<StatusBanner state="bad" title={tr('copy.configDumpUnavailable')}>
 					{props.error.message}
 				</StatusBanner>
 			) : !rows.length ? (
 				<EmptyState
-					title="No runtime listeners"
-					description="No listeners are present in the active gateway dump."
+					title={tr('copy.noRuntimeListeners')}
+					description={tr('copy.noListenersArePresentInTheActiveGatewayDump')}
 				/>
 			) : (
 				<div className="traffic-bind-list">
@@ -137,15 +139,15 @@ export function TrafficDumpListenersView(props: {
 									<div>
 										<h3>{bindDisplayName(bind.address)}</h3>
 										<p>
-											{bindRows.length} listeners · {listenerRouteCount(bind)} routes
+											{tr('copy.listenersAndRoutes', [bindRows.length, listenerRouteCount(bind)])}
 										</p>
 									</div>
 									<div className="button-row">
-										<span className="badge">{bind.tunnelProtocol ?? 'direct'}</span>
+										<span className="badge">{bind.tunnelProtocol ?? tr('copy.direct')}</span>
 										<span className="badge">{bindProtocolLabel(bind.protocol)}</span>
 										{conflictCount ? (
 											<span className="badge bad">
-												{conflictCount} listeners involved in port conflicts
+												{tr('copy.valueListenersInvolvedInPortConflicts', conflictCount)}
 											</span>
 										) : null}
 									</div>
@@ -157,8 +159,8 @@ export function TrafficDumpListenersView(props: {
 									/>
 								) : (
 									<EmptyState
-										title="No listeners on this bind"
-										description="No listeners are attached to this bind in the runtime dump."
+										title={tr('copy.noListenersOnThisBind')}
+										description={tr('copy.noListenersAreAttachedToThisBindInTheRuntimeDump')}
 									/>
 								)}
 							</section>
@@ -184,28 +186,28 @@ export function TrafficDumpRoutesView(props: {
 	return (
 		<Panel>
 			{props.isLoading ? (
-				<StatusBanner state="loading" title="Loading traffic routes" />
+				<StatusBanner state="loading" title={tr('copy.loadingTrafficRoutes')} />
 			) : props.error ? (
-				<StatusBanner state="bad" title="Config dump unavailable">
+				<StatusBanner state="bad" title={tr('copy.configDumpUnavailable')}>
 					{props.error.message}
 				</StatusBanner>
 			) : !inventory?.routes.length ? (
 				<EmptyState
-					title="No runtime routes"
-					description="No routes are present in the active gateway dump."
+					title={tr('copy.noRuntimeRoutes')}
+					description={tr('copy.noRoutesArePresentInTheActiveGatewayDump')}
 				/>
 			) : (
 				<div className="table-wrap">
 					<table>
 						<thead>
 							<tr>
-								<th>Name</th>
-								<th>Type</th>
-								<th>Listener</th>
-								<th>Match</th>
-								<th>Backends</th>
-								<th>Policies</th>
-								<th aria-label="Actions" />
+								<th>{tr('copy.name')}</th>
+								<th>{tr('copy.type')}</th>
+								<th>{tr('copy.listener')}</th>
+								<th>{tr('copy.match')}</th>
+								<th>{tr('copy.backends_i9thuc')}</th>
+								<th>{tr('copy.policies_raqot3')}</th>
+								<th aria-label={tr('copy.actions')} />
 							</tr>
 						</thead>
 						<tbody>
@@ -224,11 +226,11 @@ export function TrafficDumpRoutesView(props: {
 										<td>{backendListSummary(backends)}</td>
 										<td>{policies.length + backendPolicies.length}</td>
 										<td className="row-actions">
-											<Tooltip content="View route">
+											<Tooltip content={tr('copy.viewRoute')}>
 												<button
 													className="icon-button"
 													type="button"
-													aria-label={`View ${routeDisplayName(row.route)}`}
+													aria-label={tr('copy.viewValue', [routeDisplayName(row.route)])}
 													onClick={() => setSelectedRouteKey(row.route.key)}
 												>
 													<Eye size={16} />
@@ -263,13 +265,13 @@ function RuntimeListenerTable(props: {
 			<table>
 				<thead>
 					<tr>
-						<th>Name</th>
-						<th>Port conflict</th>
-						<th>Hostname</th>
-						<th>Protocol</th>
-						<th>Routes</th>
-						<th>Backends</th>
-						<th aria-label="Actions" />
+						<th>{tr('copy.name')}</th>
+						<th>{tr('copy.portConflict')}</th>
+						<th>{tr('copy.hostname')}</th>
+						<th>{tr('copy.protocol')}</th>
+						<th>{tr('copy.routes_14u6307')}</th>
+						<th>{tr('copy.backends_i9thuc')}</th>
+						<th aria-label={tr('copy.actions')} />
 					</tr>
 				</thead>
 				<tbody>
@@ -281,7 +283,7 @@ function RuntimeListenerTable(props: {
 									<small>{listenerSourceDisplayName(listener)}</small>
 								</div>
 							</td>
-							<td>{conflicted ? <span className="badge bad">Conflict</span> : '—'}</td>
+							<td>{conflicted ? <span className="badge bad">{tr('copy.conflict')}</span> : '—'}</td>
 							<td>{listenerHostname(listener)}</td>
 							<td>
 								<span className="badge">{listenerProtocolLabel(listener.protocol)}</span>
@@ -289,11 +291,11 @@ function RuntimeListenerTable(props: {
 							<td>{listenerRouteObjectCount(listener)}</td>
 							<td>{listenerBackendCount(listener)}</td>
 							<td className="row-actions">
-								<Tooltip content="View listener">
+								<Tooltip content={tr('copy.viewListener')}>
 									<button
 										className="icon-button"
 										type="button"
-										aria-label={`View ${qualifiedListenerDisplayName(listener)}`}
+										aria-label={tr('copy.viewValue', [listenerDisplayName(listener)])}
 										onClick={() => props.onSelect(listener)}
 									>
 										<Eye size={16} />
@@ -316,28 +318,28 @@ function ListenerDumpDrawer(props: { row: DumpListenerRow; onClose: () => void }
 		<Drawer title={qualifiedListenerDisplayName(listener)} onClose={props.onClose}>
 			<div className="drawer-summary-list">
 				<div>
-					<span>Bind</span>
+					<span>{tr('copy.bind')}</span>
 					<strong>{bindDisplayName(props.row.bind.address)}</strong>
 				</div>
 				<div>
-					<span>Hostname</span>
+					<span>{tr('copy.hostname')}</span>
 					<strong>{listenerHostname(listener)}</strong>
 				</div>
 				<div>
-					<span>Protocol</span>
+					<span>{tr('copy.protocol')}</span>
 					<strong>{listenerProtocolLabel(listener.protocol)}</strong>
 				</div>
 				<div>
-					<span>Routes</span>
+					<span>{tr('copy.routes_14u6307')}</span>
 					<strong>{routeCount}</strong>
 				</div>
 				<div>
-					<span>Backends</span>
+					<span>{tr('copy.backends_i9thuc')}</span>
 					<strong>{backendCount}</strong>
 				</div>
 			</div>
 			<div className="drawer-yaml-section">
-				<label className="field-label">Listener YAML</label>
+				<label className="field-label">{tr('copy.listenerYaml')}</label>
 				<YamlBlock value={listenerDumpForDisplay(listener)} />
 			</div>
 		</Drawer>
@@ -358,35 +360,35 @@ function RouteDumpDrawer(props: {
 		<Drawer title={routeDisplayName(props.row.route)} onClose={props.onClose}>
 			<div className="drawer-summary-list">
 				<div>
-					<span>Type</span>
+					<span>{tr('copy.type')}</span>
 					<strong>{props.row.type}</strong>
 				</div>
 				<div>
-					<span>Listener</span>
+					<span>{tr('copy.listener')}</span>
 					<strong>
 						{props.row.listener ? listenerDisplayName(props.row.listener) : props.row.source}
 					</strong>
 				</div>
 				<div>
-					<span>Match</span>
+					<span>{tr('copy.match')}</span>
 					<strong>{routeMatchSummary(props.row)}</strong>
 				</div>
 				<div>
-					<span>Backends</span>
+					<span>{tr('copy.backends_i9thuc')}</span>
 					<strong>{backends.length}</strong>
 				</div>
 				<div>
-					<span>Policies</span>
+					<span>{tr('copy.policies_raqot3')}</span>
 					<strong>{policies.length + backendPolicies.length}</strong>
 				</div>
 			</div>
 			<div className="drawer-yaml-section">
-				<label className="field-label">Route YAML</label>
+				<label className="field-label">{tr('copy.routeYaml')}</label>
 				<YamlBlock value={props.row.route} />
 			</div>
 			{resolvedBackends.length ? (
 				<div className="drawer-yaml-section">
-					<label className="field-label">Backend YAML</label>
+					<label className="field-label">{tr('copy.backendYaml')}</label>
 					<YamlBlock
 						value={resolvedBackends.length === 1 ? resolvedBackends[0] : resolvedBackends}
 					/>
@@ -421,30 +423,6 @@ export function buildTrafficInventory(dump: AdminConfigDump) {
 		policies: (dump.policies ?? []).filter(isTargetedPolicy),
 		backends: (dump.backends ?? []).filter(isBackendWithPolicies)
 	};
-}
-
-function buildRuntimeListenerRows(bind: DumpBind): RuntimeDumpListenerRow[] {
-	// XDS dumps currently contain protocol-specific binds. If they start
-	// exposing `auto` binds, HTTP/TLS multiplexing must be handled here too.
-	const listeners = Object.values(bind.listeners ?? {});
-	return listeners.map(listener => ({
-		bind,
-		listener,
-		conflicted: listeners.some(
-			peer => peer !== listener && runtimeListenersConflict(listener, peer)
-		)
-	}));
-}
-
-function runtimeListenersConflict(left: DumpListener, right: DumpListener) {
-	const leftFamily = listenerProtocolFamily(left);
-	const rightFamily = listenerProtocolFamily(right);
-	if (leftFamily !== rightFamily) return true;
-
-	// HTTP and TLS-family traffic can be selected by hostname, while opaque
-	// protocols such as TCP require the bind to contain exactly one listener.
-	if (leftFamily !== 'http' && leftFamily !== 'tls') return true;
-	return listenerHostname(left) === listenerHostname(right);
 }
 
 function isTargetedPolicy(value: unknown): value is TargetedPolicy {
@@ -492,7 +470,7 @@ export function hasTrafficInventory(inventory: ReturnType<typeof buildTrafficInv
 
 function listenerProtocolLabel(protocol: DumpListener['protocol']) {
 	if (typeof protocol === 'string') return protocol;
-	return Object.keys(protocol)[0] ?? 'unknown';
+	return Object.keys(protocol)[0] ?? tr('copy.unknown');
 }
 
 function listenerProtocolFamily(listener: DumpListener) {
@@ -502,12 +480,12 @@ function listenerProtocolFamily(listener: DumpListener) {
 
 function bindProtocolLabel(protocol: DumpBind['protocol']) {
 	if (typeof protocol === 'string') return protocol;
-	return Object.keys(protocol)[0] ?? 'unknown';
+	return Object.keys(protocol)[0] ?? tr('copy.unknown');
 }
 
 function bindDisplayName(address: string) {
 	const port = bindPort(address);
-	return port ? `Port ${port}` : address;
+	return port ? tr('copy.portValue', [port]) : address;
 }
 
 function bindPort(address: string) {
@@ -527,21 +505,43 @@ function listenerDisplayName(listener: DumpListener) {
 }
 
 function qualifiedListenerDisplayName(listener: DumpListener) {
-	return `${listenerSourceDisplayName(listener)} listener ${listenerDisplayName(listener)}`;
+	return tr('copy.valueListenerValue', [
+		listenerSourceDisplayName(listener),
+		listenerDisplayName(listener)
+	]);
 }
 
 function listenerSourceDisplayName(listener: DumpListener) {
 	return listener.listenerSet
-		? `ListenerSet ${listener.listenerSet.namespace}/${listener.listenerSet.name}`
-		: `Gateway ${listener.gatewayNamespace}/${listener.gatewayName}`;
+		? tr('copy.listenerSetValueValue', [listener.listenerSet.namespace, listener.listenerSet.name])
+		: tr('copy.gatewayValueValue', [listener.gatewayNamespace, listener.gatewayName]);
 }
 
 function listenerHostname(listener: DumpListener) {
 	return listener.hostname || '*';
 }
 
+function buildRuntimeListenerRows(bind: DumpBind): RuntimeDumpListenerRow[] {
+	const listeners = Object.values(bind.listeners ?? {});
+	return listeners.map(listener => ({
+		bind,
+		listener,
+		conflicted: listeners.some(
+			peer => peer !== listener && runtimeListenersConflict(listener, peer)
+		)
+	}));
+}
+
+function runtimeListenersConflict(left: DumpListener, right: DumpListener) {
+	const leftFamily = listenerProtocolFamily(left);
+	const rightFamily = listenerProtocolFamily(right);
+	if (leftFamily !== rightFamily) return true;
+	if (leftFamily !== 'http' && leftFamily !== 'tls') return true;
+	return listenerHostname(left) === listenerHostname(right);
+}
+
 function routeListenerCell(row: DumpRouteRow) {
-	if (!row.listener) return row.source;
+	if (!row.listener) return routeSourceLabel(row.source);
 	return (
 		<Link className="table-link" to="/traffic/listeners" search={{ listener: row.listener.key }}>
 			{listenerDisplayName(row.listener)}
@@ -675,13 +675,13 @@ function normalizeBackendName(value: string) {
 }
 
 function backendListSummary(backends: unknown[]) {
-	if (!backends.length) return 'none';
+	if (!backends.length) return tr('copy.none');
 	const labels = backends.map(routeBackendLabel);
 	return labels.slice(0, 2).join(', ') + (labels.length > 2 ? ` +${labels.length - 2}` : '');
 }
 
 function routeBackendLabel(value: unknown) {
-	if (!value || typeof value !== 'object') return 'unknown';
+	if (!value || typeof value !== 'object') return tr('copy.unknown');
 	const backend = value as Record<string, unknown>;
 	if ('backend' in backend) return backendKind(backend.backend);
 	if ('service' in backend) {
@@ -692,10 +692,10 @@ function routeBackendLabel(value: unknown) {
 		const namespace = service?.name?.namespace;
 		const hostname = service?.name?.hostname;
 		const port = service?.port;
-		return `${namespace ? `${namespace}/` : ''}${hostname ?? 'service'}${port ? `:${port}` : ''}`;
+		return `${namespace ? `${namespace}/` : ''}${hostname ?? tr('copy.service')}${port ? `:${port}` : ''}`;
 	}
-	if ('routeGroup' in backend) return `route group: ${String(backend.routeGroup)}`;
-	if ('invalid' in backend) return 'invalid';
+	if ('routeGroup' in backend) return tr('copy.routeGroupValue', [String(backend.routeGroup)]);
+	if ('invalid' in backend) return tr('copy.invalid');
 	return backendKind(value);
 }
 
@@ -708,7 +708,13 @@ function hostnamesSummary(hostnames: string[] | undefined) {
 
 function backendKind(value: unknown) {
 	if (typeof value === 'string') return value;
-	if (!value || typeof value !== 'object') return 'unknown';
+	if (!value || typeof value !== 'object') return tr('copy.unknown');
 	const key = Object.keys(value as Record<string, unknown>)[0];
-	return key ?? 'unknown';
+	return key ?? tr('copy.unknown');
+}
+
+function routeSourceLabel(source: DumpRouteRow['source']) {
+	if (source === 'listener') return tr('copy.listener');
+	if (source === 'route group') return tr('copy.routeGroup');
+	return tr('copy.mesh');
 }
