@@ -129,14 +129,14 @@
 |`destination.port`|integer|The port of the downstream request destination at agentgateway.|
 |`destination.hostname`|string|The requested destination hostname, when known. For TLS connections this is the sniffed SNI.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
-|`mcp.methodName`|string||
-|`mcp.sessionId`|string||
+|`mcp.methodName`|string|Available only in post-request CEL; absent during MCP authorization.|
+|`mcp.sessionId`|string|Available only in post-request CEL; absent during MCP authorization.|
 |`mcp.tool`|object||
 |`mcp.tool.target`|string|The target handling the tool call after multiplexing resolution.|
 |`mcp.tool.name`|string|The resolved tool name sent to the upstream target.|
-|`mcp.tool.arguments`|object|The JSON arguments passed to the tool call.|
-|`mcp.tool.result`|any|The terminal tool result payload, if available.|
-|`mcp.tool.error`|any|The terminal JSON-RPC error payload, if available.|
+|`mcp.tool.arguments`|object|The JSON arguments passed to the tool call. Available only in post-request CEL.|
+|`mcp.tool.result`|any|The terminal tool result payload, if available. Available only in post-request CEL.|
+|`mcp.tool.error`|any|The terminal JSON-RPC error payload, if available. Available only in post-request CEL.|
 |`mcp.prompt`|object||
 |`mcp.prompt.target`|string|The target of the resource|
 |`mcp.prompt.name`|string|The name of the resource|

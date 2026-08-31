@@ -260,6 +260,34 @@ pub(crate) fn permissive_cel_expression_arc(
 	))
 }
 
+const MCP_POST_REQUEST_FIELDS: &[(&[&str], &str)] = &[
+	(&["mcp", "methodName"], "mcp.methodName"),
+	(&["mcp", "sessionId"], "mcp.sessionId"),
+	(&["mcp", "tool", "arguments"], "mcp.tool.arguments"),
+	(&["mcp", "tool", "result"], "mcp.tool.result"),
+	(&["mcp", "tool", "error"], "mcp.tool.error"),
+];
+
+fn mcp_authorization_cel_expression(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
+	original_expression: &str,
+) -> Arc<cel::Expression> {
+	let context = context.as_ref();
+	let expression = permissive_cel_expression_arc(diagnostics, context, original_expression);
+	let fields = MCP_POST_REQUEST_FIELDS
+		.iter()
+		.filter_map(|(path, name)| expression.references_property(path).then_some(*name))
+		.collect::<Vec<_>>();
+	if !fields.is_empty() {
+		diagnostics.add_warning(format!(
+			"{context} expression references post-request-only MCP fields [{}]; these fields are unavailable during request-time authorization, so references to their values cannot enforce the intended condition",
+			fields.join(", ")
+		));
+	}
+	expression
+}
+
 fn regex_or_warn_invalid(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
@@ -516,7 +544,7 @@ fn mcp_authorization_from_proto(
 	let mut allow_exprs = Vec::new();
 	// We do NOT want to NACK invalid CEL expressions. Instead, we ensure they always evaluate to errors.
 	for allow_rule in &rbac.allow {
-		allow_exprs.push(permissive_cel_expression_arc(
+		allow_exprs.push(mcp_authorization_cel_expression(
 			diagnostics,
 			"backend.mcpAuthorization.allow",
 			allow_rule,
@@ -525,7 +553,7 @@ fn mcp_authorization_from_proto(
 
 	let mut deny_exprs = Vec::new();
 	for deny_rule in &rbac.deny {
-		deny_exprs.push(permissive_cel_expression_arc(
+		deny_exprs.push(mcp_authorization_cel_expression(
 			diagnostics,
 			"backend.mcpAuthorization.deny",
 			deny_rule,
@@ -534,7 +562,7 @@ fn mcp_authorization_from_proto(
 
 	let mut require_exprs = Vec::new();
 	for require_rule in &rbac.require {
-		require_exprs.push(permissive_cel_expression_arc(
+		require_exprs.push(mcp_authorization_cel_expression(
 			diagnostics,
 			"backend.mcpAuthorization.require",
 			require_rule,
@@ -4278,6 +4306,53 @@ mod tests {
 				BackendReference::Invalid
 			));
 		}
+	}
+
+	#[test]
+	fn mcp_authorization_warns_on_post_request_fields() {
+		let expressions = [
+			(
+				r#"mcp.tool.name == "echo" && mcp.tool.arguments.value == "secret""#,
+				"mcp.tool.arguments",
+			),
+			(
+				r#"has(mcp.methodName) && has(mcp.sessionId) && has(mcp.tool.result) && has(mcp.tool.error)"#,
+				"mcp.methodName, mcp.sessionId, mcp.tool.result, mcp.tool.error",
+			),
+		];
+
+		for (expression, fields) in expressions {
+			let mut diagnostics = Diagnostics::default();
+			mcp_authorization_from_proto(
+				&proto::agent::backend_policy_spec::McpAuthorization {
+					allow: vec![expression.to_string()],
+					..Default::default()
+				},
+				&mut diagnostics,
+			);
+			let warnings = diagnostics.into_warnings();
+			assert_eq!(warnings.len(), 1, "expression: {expression}");
+			assert!(warnings[0].contains(fields), "warning: {}", warnings[0]);
+			assert!(
+				!warnings[0].contains(expression),
+				"warning: {}",
+				warnings[0]
+			);
+			assert!(!warnings[0].contains("secret"), "warning: {}", warnings[0]);
+		}
+	}
+
+	#[test]
+	fn mcp_authorization_does_not_warn_on_request_identity_fields() {
+		let mut diagnostics = Diagnostics::default();
+		mcp_authorization_from_proto(
+			&proto::agent::backend_policy_spec::McpAuthorization {
+				allow: vec![r#"mcp.tool.target == "server" && mcp.tool.name == "echo""#.to_string()],
+				..Default::default()
+			},
+			&mut diagnostics,
+		);
+		assert!(diagnostics.into_warnings().is_empty());
 	}
 
 	fn jwt_sign_from_proto_for_test(

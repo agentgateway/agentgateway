@@ -606,6 +606,19 @@ fn test_properties() {
 }
 
 #[test]
+fn expression_references_property_prefix() {
+	let expression = Expression::new_strict(
+		r#"mcp.tool.name == "echo" && has(mcp.tool.arguments.a) && !has(mcp.tool.result)"#,
+	)
+	.unwrap();
+
+	assert!(expression.references_property(&["mcp", "tool", "name"]));
+	assert!(expression.references_property(&["mcp", "tool", "arguments"]));
+	assert!(expression.references_property(&["mcp", "tool", "result"]));
+	assert!(!expression.references_property(&["mcp", "tool", "error"]));
+}
+
+#[test]
 fn map() {
 	let expr = r#"request.headers.map(v, v)"#;
 	let v = eval(expr).unwrap();

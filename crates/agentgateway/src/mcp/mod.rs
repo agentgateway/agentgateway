@@ -407,13 +407,13 @@ pub struct MCPTool {
 	pub target: String,
 	/// The resolved tool name sent to the upstream target.
 	pub name: String,
-	/// The JSON arguments passed to the tool call.
+	/// The JSON arguments passed to the tool call. Available only in post-request CEL.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub arguments: Option<serde_json::Map<String, serde_json::Value>>,
-	/// The terminal tool result payload, if available.
+	/// The terminal tool result payload, if available. Available only in post-request CEL.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub result: Option<serde_json::Value>,
-	/// The terminal JSON-RPC error payload, if available.
+	/// The terminal JSON-RPC error payload, if available. Available only in post-request CEL.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub error: Option<serde_json::Value>,
 }
@@ -454,8 +454,10 @@ impl MCPTask {
 #[dynamic(rename_all = "camelCase")]
 pub struct MCPInfo {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	/// Available only in post-request CEL; absent during MCP authorization.
 	pub method_name: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	/// Available only in post-request CEL; absent during MCP authorization.
 	pub session_id: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub tool: Option<MCPTool>,
