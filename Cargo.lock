@@ -278,7 +278,7 @@ dependencies = [
  "ipnet",
  "itertools 0.15.0",
  "jemalloc_pprof",
- "jsonwebtoken 11.0.0",
+ "jsonwebtoken",
  "lazy_static",
  "libc",
  "mediatype 0.23.0",
@@ -3045,7 +3045,7 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "http 1.5.0",
- "jsonwebtoken 10.4.0",
+ "jsonwebtoken",
  "p256",
  "reqwest 0.13.4",
  "rustc_version",
@@ -4009,21 +4009,6 @@ name = "jsonwebtoken"
 version = "10.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eba32bfb4ffdeaca3e34431072faf01745c9b26d25504aa7a6cf5684334fc4fc"
-dependencies = [
- "base64 0.22.1",
- "getrandom 0.2.17",
- "js-sys",
- "serde",
- "serde_json",
- "signature",
- "zeroize",
-]
-
-[[package]]
-name = "jsonwebtoken"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "881733cbc631fc9e472e24447ce32a64bedf2da498d6d8570b08edc87de71f65"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
@@ -7429,7 +7414,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",
