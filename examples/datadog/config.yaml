@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=../../schema/local.json
+config:
+  tracing:
+    # Endpoint and HTTP protocol come from the OTEL_EXPORTER_OTLP_TRACES_* env vars.
+    randomSampling: true
+    fields:
+      add:
+        env: '"datadog-dev"'
+      # Prompt/response bodies are intentionally omitted.
+  modelCatalog:
+    - inline:
+        providers:
+          openai:
+            models:
+              datadog-test:
+                # Synthetic USD per million tokens; not real provider prices.
+                rates:
+                  input: "1"
+                  output: "2"
+                  cacheRead: "0.5"
+llm:
+  port: 3000
+  models:
+    - name: '*'
+      provider: openAI
+      params:
+        baseUrl: http://mock:8080/v1
+        apiKey: synthetic-test-key

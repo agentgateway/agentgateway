@@ -1,0 +1,41 @@
+name: agentgateway-datadog
+services:
+  mock:
+    image: python:3.13.7-slim
+    command: [python, /example/mock.py]
+    volumes:
+      - ./mock.py:/example/mock.py:ro
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.146.0
+    command: [--config=/etc/otelcol/config.yaml]
+    environment:
+      OTLP_EXPORT_ENDPOINT: http://mock:8080
+    volumes:
+      - ./collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      mock:
+        condition: service_healthy
+  gateway:
+    image: ghcr.io/agentgateway/agentgateway:v1.5.0
+    command: [-f, /example/config.yaml]
+    environment:
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf
+    volumes:
+      - ./config.yaml:/example/config.yaml:ro
+      - ./config-content.yaml:/example/config-content.yaml:ro
+    ports:
+      - "127.0.0.1:13000:3000"
+      - "127.0.0.1:18520:15020"
+    depends_on:
+      mock:
+        condition: service_healthy
+      collector:
+        condition: service_started

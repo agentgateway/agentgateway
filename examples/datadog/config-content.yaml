@@ -1,0 +1,27 @@
+# Synthetic content capture ONLY. Do not use with private prompts without redaction.
+config:
+  tracing:
+    randomSampling: true
+    fields:
+      add:
+        env: '"datadog-dev"'
+        gen_ai.input.messages: llm.prompt
+        gen_ai.output.messages: llm.completion.map(c, {"role":"assistant", "content":c})
+  modelCatalog:
+  - inline:
+      providers:
+        openai:
+          models:
+            datadog-test:
+              rates:
+                input: '1'
+                output: '2'
+                cacheRead: '0.5'
+llm:
+  port: 3000
+  models:
+  - name: '*'
+    provider: openAI
+    params:
+      baseUrl: http://mock:8080/v1
+      apiKey: synthetic-test-key
