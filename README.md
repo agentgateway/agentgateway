@@ -78,6 +78,7 @@
 Depending on your deployment environment, check out the following docs:
 
 - [agentgateway.dev/docs](https://agentgateway.dev/docs/standalone/latest): For deployments without the full Kubernetes controller, driven by flat yaml config.
+- [Optional TOA upstream gate](architecture/toa-optional-upstream-gate.md): offline delivery-evidence verify before promoting an upstream MCP backend (not on every `tools/call`).
 - [agentgateway.dev/docs/kubernetes/latest](https://agentgateway.dev/docs/kubernetes/latest): For Kubernetes-based deployments using the built-in Kubernetes controller and Gateway API support.
 
 Agentgateway has a built-in UI for you to explore agentgateway connecting agent-to-agent or agent-to-tool:

@@ -8,6 +8,7 @@ are named `<type>-<name>`, where `type` is one of `mcp`, `llm`, or `traffic`.
 * [mcp-basic](mcp-basic/README.md): the simplest way to get started with agentgateway, exposing a single MCP server over Stdio.
 * [mcp-multiplex](mcp-multiplex/README.md): multiplex multiple MCP targets on a single listener.
 * [mcp-authorization](mcp-authorization/README.md): apply JWT authentication and MCP authorization policies to incoming requests.
+* [mcp-toa-verify](mcp-toa-verify/README.md): optional offline Tool Outcome Attestation (`toa-verify`) before promoting an upstream MCP backend.
 * [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
 * [mcp-tls](mcp-tls/README.md): terminate TLS connections.
 * [mcp-openapi](mcp-openapi/README.md): serve an OpenAPI specification as MCP tools.

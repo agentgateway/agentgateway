@@ -1,0 +1,25 @@
+# Example only. Copy into your repo as needed.
+# Policy / smoke checks for an upstream MCP target, then optional TOA verify.
+name: Upstream MCP and optional TOA
+
+on:
+  pull_request:
+    paths:
+      - "examples/mcp-*/**"
+      - "toa.json"
+  workflow_dispatch:
+
+jobs:
+  upstream-toa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Your existing agentgateway config lint / MCP smoke tests go here.
+      # For local auth examples see ../mcp-authorization and ../mcp-basic.
+
+      - name: Verify tool delivery attestation
+        if: hashFiles('toa.json') != ''
+        run: |
+          pip install "git+https://github.com/Carmel-Labs-Inc/toa.git@345f24607919b5bdf143719b9ea062543cdfe88e#subdirectory=python"
+          toa-verify toa.json --require-layer functional=pass

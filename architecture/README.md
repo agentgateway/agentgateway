@@ -5,3 +5,4 @@ This folder contains developer-facing documentation on the project architecture.
 Recommended reading order:
 1. [Configuration](configuration.md)
 1. [CEL](cel.md)
+1. [Optional TOA upstream gate](toa-optional-upstream-gate.md)
