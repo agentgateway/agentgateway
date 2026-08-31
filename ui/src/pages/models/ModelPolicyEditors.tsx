@@ -1,352 +1,297 @@
-import { tr } from "../../i18n";
-import { MiniMonacoEditor } from "../../components/MiniMonacoEditor";
-import { Field, FieldGroup } from "../../components/Primitives";
-import { ListEditor } from "../../policies/ListEditor";
-import { KeyValueEditor } from "../../policies/PolicyFormControls";
-import type { SchemaHelp } from "../../schemaHelp";
-import type { LlmModel } from "../../types";
+import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
+import { Field, FieldGroup } from '@/components/Primitives';
 import type {
-  HeaderModifier,
-  LocalEviction,
-  LocalHealthPolicy,
-  PromptCachingConfig,
-} from "../../gateway-config";
+	HeaderModifier,
+	LocalEviction,
+	LocalHealthPolicy,
+	PromptCachingConfig
+} from '@/gateway-config';
+import { tr } from '@/i18n';
+import { ListEditor } from '@/policies/ListEditor';
+import { KeyValueEditor } from '@/policies/PolicyFormControls';
+import type { SchemaHelp } from '@/schemaHelp';
+import type { LlmModel } from '@/types';
 
 export function HealthPolicyEditor(props: {
-  health: LlmModel["health"] | null | undefined;
-  help: SchemaHelp;
-  onChange: (value: LlmModel["health"] | null) => void;
+	health: LlmModel['health'] | null | undefined;
+	help: SchemaHelp;
+	onChange: (value: LlmModel['health'] | null) => void;
 }) {
-  const health = props.health ?? {};
-  const eviction = health.eviction ?? {};
+	const health = props.health ?? {};
+	const eviction = health.eviction ?? {};
 
-  function patchHealth(value: Partial<NonNullable<LlmModel["health"]>>) {
-    props.onChange({ ...health, ...value });
-  }
+	function patchHealth(value: Partial<NonNullable<LlmModel['health']>>) {
+		props.onChange({ ...health, ...value });
+	}
 
-  function patchEviction(
-    value: Partial<NonNullable<NonNullable<LlmModel["health"]>["eviction"]>>,
-  ) {
-    patchHealth({ eviction: { ...eviction, ...value } });
-  }
+	function patchEviction(value: Partial<NonNullable<NonNullable<LlmModel['health']>['eviction']>>) {
+		patchHealth({ eviction: { ...eviction, ...value } });
+	}
 
-  return (
-    <div className="policy-editor-stack compact">
-      <FieldGroup
-        label={tr("copy.unhealthyExpression")}
-        tooltip={props.help.field<LocalHealthPolicy>(
-          "LocalHealthPolicy",
-          "unhealthyExpression",
-        )}
-        hint={tr("copy.leaveEmptyToUseDefault5xxAndConnectionFailureHandling")}
-      >
-        <MiniMonacoEditor
-          language="cel"
-          value={health.unhealthyExpression ?? ""}
-          onChange={(value) =>
-            patchHealth({ unhealthyExpression: value || null })
-          }
-          placeholder="response.code >= 500"
-        />
-      </FieldGroup>
-      <div className="form-grid">
-        <Field
-          label={tr("copy.evictionDuration")}
-          tooltip={props.help.field<LocalEviction>("LocalEviction", "duration")}
-        >
-          <input
-            value={eviction.duration ?? ""}
-            onChange={(event) =>
-              patchEviction({ duration: event.target.value || null })
-            }
-            placeholder="30s"
-          />
-        </Field>
-        <Field
-          label={tr("copy.consecutiveFailures")}
-          tooltip={props.help.field<LocalEviction>(
-            "LocalEviction",
-            "consecutiveFailures",
-          )}
-        >
-          <input
-            type="number"
-            min="1"
-            value={eviction.consecutiveFailures ?? ""}
-            onChange={(event) =>
-              patchEviction({
-                consecutiveFailures: optionalNumber(event.target.value),
-              })
-            }
-            placeholder="3"
-          />
-        </Field>
-        <Field
-          label={tr("copy.healthThreshold")}
-          tooltip={props.help.field<LocalEviction>(
-            "LocalEviction",
-            "healthThreshold",
-          )}
-        >
-          <input
-            type="number"
-            value={eviction.healthThreshold ?? ""}
-            onChange={(event) =>
-              patchEviction({
-                healthThreshold: optionalNumber(event.target.value),
-              })
-            }
-            placeholder="0.5"
-          />
-        </Field>
-        <Field
-          label={tr("copy.restoreHealth")}
-          tooltip={props.help.field<LocalEviction>(
-            "LocalEviction",
-            "restoreHealth",
-          )}
-        >
-          <input
-            type="number"
-            value={eviction.restoreHealth ?? ""}
-            onChange={(event) =>
-              patchEviction({
-                restoreHealth: optionalNumber(event.target.value),
-              })
-            }
-            placeholder="1"
-          />
-        </Field>
-      </div>
-    </div>
-  );
+	return (
+		<div className="policy-editor-stack compact">
+			<FieldGroup
+				label={tr('copy.unhealthyExpression')}
+				tooltip={props.help.field<LocalHealthPolicy>('LocalHealthPolicy', 'unhealthyExpression')}
+				hint={tr('copy.leaveEmptyToUseDefault5xxAndConnectionFailureHandling')}
+			>
+				<MiniMonacoEditor
+					language="cel"
+					value={health.unhealthyExpression ?? ''}
+					onChange={value => patchHealth({ unhealthyExpression: value || null })}
+					placeholder="response.code >= 500"
+				/>
+			</FieldGroup>
+			<div className="form-grid">
+				<Field
+					label={tr('copy.evictionDuration')}
+					tooltip={props.help.field<LocalEviction>('LocalEviction', 'duration')}
+				>
+					<input
+						value={eviction.duration ?? ''}
+						onChange={event => patchEviction({ duration: event.target.value || null })}
+						placeholder="30s"
+					/>
+				</Field>
+				<Field
+					label={tr('copy.consecutiveFailures')}
+					tooltip={props.help.field<LocalEviction>('LocalEviction', 'consecutiveFailures')}
+				>
+					<input
+						type="number"
+						min="1"
+						value={eviction.consecutiveFailures ?? ''}
+						onChange={event =>
+							patchEviction({
+								consecutiveFailures: optionalNumber(event.target.value)
+							})
+						}
+						placeholder="3"
+					/>
+				</Field>
+				<Field
+					label={tr('copy.healthThreshold')}
+					tooltip={props.help.field<LocalEviction>('LocalEviction', 'healthThreshold')}
+				>
+					<input
+						type="number"
+						value={eviction.healthThreshold ?? ''}
+						onChange={event =>
+							patchEviction({
+								healthThreshold: optionalNumber(event.target.value)
+							})
+						}
+						placeholder="0.5"
+					/>
+				</Field>
+				<Field
+					label={tr('copy.restoreHealth')}
+					tooltip={props.help.field<LocalEviction>('LocalEviction', 'restoreHealth')}
+				>
+					<input
+						type="number"
+						value={eviction.restoreHealth ?? ''}
+						onChange={event =>
+							patchEviction({
+								restoreHealth: optionalNumber(event.target.value)
+							})
+						}
+						placeholder="1"
+					/>
+				</Field>
+			</div>
+		</div>
+	);
 }
 
 export function YamlMappingEditor(props: {
-  label: string;
-  tooltip?: string;
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
+	label: string;
+	tooltip?: string;
+	value: string;
+	placeholder: string;
+	onChange: (value: string) => void;
 }) {
-  return (
-    <FieldGroup label={props.label} tooltip={props.tooltip}>
-      <MiniMonacoEditor
-        language="yaml"
-        value={props.value}
-        onChange={props.onChange}
-        placeholder={props.placeholder}
-      />
-    </FieldGroup>
-  );
+	return (
+		<FieldGroup label={props.label} tooltip={props.tooltip}>
+			<MiniMonacoEditor
+				language="yaml"
+				value={props.value}
+				onChange={props.onChange}
+				placeholder={props.placeholder}
+			/>
+		</FieldGroup>
+	);
 }
 
 export function HeaderModifierEditor(props: {
-  headerType: "request" | "response";
-  value:
-    | LlmModel["requestHeaders"]
-    | LlmModel["responseHeaders"]
-    | null
-    | undefined;
-  help: SchemaHelp;
-  onChange: (value: LlmModel["requestHeaders"] | null) => void;
+	headerType: 'request' | 'response';
+	value: LlmModel['requestHeaders'] | LlmModel['responseHeaders'] | null | undefined;
+	help: SchemaHelp;
+	onChange: (value: LlmModel['requestHeaders'] | null) => void;
 }) {
-  const value = props.value ?? {};
-  const isResponse = props.headerType === "response";
-  return (
-    <div className="policy-editor-stack compact">
-      <KeyValueEditor
-        label={tr(isResponse ? "copy.addResponseHeaders" : "copy.addHeaders")}
-        tooltip={props.help.field<HeaderModifier>("HeaderModifier", "add")}
-        values={value.add ?? {}}
-        keyPlaceholder="x-header"
-        valuePlaceholder="value"
-        onChange={(add) => props.onChange({ ...value, add })}
-      />
-      <KeyValueEditor
-        label={tr(isResponse ? "copy.setResponseHeaders" : "copy.setHeaders")}
-        tooltip={props.help.field<HeaderModifier>("HeaderModifier", "set")}
-        values={value.set ?? {}}
-        keyPlaceholder="x-header"
-        valuePlaceholder="value"
-        onChange={(set) => props.onChange({ ...value, set })}
-      />
-      <ListEditor
-        label={tr(
-          isResponse ? "copy.removeResponseHeaders" : "copy.removeHeaders",
-        )}
-        tooltip={props.help.field<HeaderModifier>("HeaderModifier", "remove")}
-        values={value.remove ?? []}
-        placeholder="x-header"
-        onChange={(remove) => props.onChange({ ...value, remove })}
-      />
-    </div>
-  );
+	const value = props.value ?? {};
+	const isResponse = props.headerType === 'response';
+	return (
+		<div className="policy-editor-stack compact">
+			<KeyValueEditor
+				label={tr(isResponse ? 'copy.addResponseHeaders' : 'copy.addHeaders')}
+				tooltip={props.help.field<HeaderModifier>('HeaderModifier', 'add')}
+				values={value.add ?? {}}
+				keyPlaceholder="x-header"
+				valuePlaceholder="value"
+				onChange={add => props.onChange({ ...value, add })}
+			/>
+			<KeyValueEditor
+				label={tr(isResponse ? 'copy.setResponseHeaders' : 'copy.setHeaders')}
+				tooltip={props.help.field<HeaderModifier>('HeaderModifier', 'set')}
+				values={value.set ?? {}}
+				keyPlaceholder="x-header"
+				valuePlaceholder="value"
+				onChange={set => props.onChange({ ...value, set })}
+			/>
+			<ListEditor
+				label={tr(isResponse ? 'copy.removeResponseHeaders' : 'copy.removeHeaders')}
+				tooltip={props.help.field<HeaderModifier>('HeaderModifier', 'remove')}
+				values={value.remove ?? []}
+				placeholder="x-header"
+				onChange={remove => props.onChange({ ...value, remove })}
+			/>
+		</div>
+	);
 }
 
 export function PromptCachingEditor(props: {
-  value: LlmModel["promptCaching"] | null | undefined;
-  help: SchemaHelp;
-  onChange: (value: LlmModel["promptCaching"] | null) => void;
+	value: LlmModel['promptCaching'] | null | undefined;
+	help: SchemaHelp;
+	onChange: (value: LlmModel['promptCaching'] | null) => void;
 }) {
-  const value = props.value ?? {};
+	const value = props.value ?? {};
 
-  function patch(next: Partial<NonNullable<LlmModel["promptCaching"]>>) {
-    props.onChange({ ...value, ...next });
-  }
+	function patch(next: Partial<NonNullable<LlmModel['promptCaching']>>) {
+		props.onChange({ ...value, ...next });
+	}
 
-  return (
-    <div className="policy-editor-stack compact">
-      <div className="form-grid">
-        <label className="config-option-row">
-          <input
-            type="checkbox"
-            checked={Boolean(value.cacheSystem)}
-            onChange={(event) =>
-              patch({ cacheSystem: event.target.checked || undefined })
-            }
-          />
-          <span>
-            <strong>{tr("copy.systemPrompt")}</strong>
-            <small>
-              {props.help.field<PromptCachingConfig>(
-                "PromptCachingConfig",
-                "cacheSystem",
-              )}
-            </small>
-          </span>
-        </label>
-        <label className="config-option-row">
-          <input
-            type="checkbox"
-            checked={Boolean(value.cacheMessages)}
-            onChange={(event) =>
-              patch({ cacheMessages: event.target.checked || undefined })
-            }
-          />
-          <span>
-            <strong>{tr("copy.messages")}</strong>
-            <small>
-              {props.help.field<PromptCachingConfig>(
-                "PromptCachingConfig",
-                "cacheMessages",
-              )}
-            </small>
-          </span>
-        </label>
-        <label className="config-option-row">
-          <input
-            type="checkbox"
-            checked={Boolean(value.cacheTools)}
-            onChange={(event) =>
-              patch({ cacheTools: event.target.checked || undefined })
-            }
-          />
-          <span>
-            <strong>{tr("copy.tools")}</strong>
-            <small>
-              {props.help.field<PromptCachingConfig>(
-                "PromptCachingConfig",
-                "cacheTools",
-              )}
-            </small>
-          </span>
-        </label>
-      </div>
-      <div className="form-grid">
-        <Field
-          label={tr("copy.minimumTokens")}
-          tooltip={props.help.field<PromptCachingConfig>(
-            "PromptCachingConfig",
-            "minTokens",
-          )}
-        >
-          <input
-            type="number"
-            value={value.minTokens ?? ""}
-            onChange={(event) =>
-              patch({ minTokens: optionalNumber(event.target.value) })
-            }
-            placeholder="1024"
-          />
-        </Field>
-        <Field
-          label={tr("copy.messageOffset")}
-          tooltip={props.help.field<PromptCachingConfig>(
-            "PromptCachingConfig",
-            "cacheMessageOffset",
-          )}
-        >
-          <input
-            type="number"
-            value={value.cacheMessageOffset ?? ""}
-            onChange={(event) =>
-              patch({
-                cacheMessageOffset:
-                  optionalNumber(event.target.value) ?? undefined,
-              })
-            }
-            placeholder="0"
-          />
-        </Field>
-      </div>
-    </div>
-  );
+	return (
+		<div className="policy-editor-stack compact">
+			<div className="form-grid">
+				<label className="config-option-row">
+					<input
+						type="checkbox"
+						checked={Boolean(value.cacheSystem)}
+						onChange={event => patch({ cacheSystem: event.target.checked || undefined })}
+					/>
+					<span>
+						<strong>{tr('copy.systemPrompt')}</strong>
+						<small>
+							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheSystem')}
+						</small>
+					</span>
+				</label>
+				<label className="config-option-row">
+					<input
+						type="checkbox"
+						checked={Boolean(value.cacheMessages)}
+						onChange={event => patch({ cacheMessages: event.target.checked || undefined })}
+					/>
+					<span>
+						<strong>{tr('copy.messages')}</strong>
+						<small>
+							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheMessages')}
+						</small>
+					</span>
+				</label>
+				<label className="config-option-row">
+					<input
+						type="checkbox"
+						checked={Boolean(value.cacheTools)}
+						onChange={event => patch({ cacheTools: event.target.checked || undefined })}
+					/>
+					<span>
+						<strong>{tr('copy.tools')}</strong>
+						<small>
+							{props.help.field<PromptCachingConfig>('PromptCachingConfig', 'cacheTools')}
+						</small>
+					</span>
+				</label>
+			</div>
+			<div className="form-grid">
+				<Field
+					label={tr('copy.minimumTokens')}
+					tooltip={props.help.field<PromptCachingConfig>('PromptCachingConfig', 'minTokens')}
+				>
+					<input
+						type="number"
+						value={value.minTokens ?? ''}
+						onChange={event => patch({ minTokens: optionalNumber(event.target.value) })}
+						placeholder="1024"
+					/>
+				</Field>
+				<Field
+					label={tr('copy.messageOffset')}
+					tooltip={props.help.field<PromptCachingConfig>(
+						'PromptCachingConfig',
+						'cacheMessageOffset'
+					)}
+				>
+					<input
+						type="number"
+						value={value.cacheMessageOffset ?? ''}
+						onChange={event =>
+							patch({
+								cacheMessageOffset: optionalNumber(event.target.value) ?? undefined
+							})
+						}
+						placeholder="0"
+					/>
+				</Field>
+			</div>
+		</div>
+	);
 }
 
-export function healthSummary(health: LlmModel["health"] | null | undefined) {
-  if (!health) return "No health policy configured";
-  const parts = [
-    health.unhealthyExpression ? "custom expression" : null,
-    health.eviction?.duration ? `evict ${health.eviction.duration}` : null,
-    health.eviction?.consecutiveFailures
-      ? `${health.eviction.consecutiveFailures} failures`
-      : null,
-  ].filter(Boolean);
-  return parts.join(", ") || "Default unhealthy detection configured";
+export function healthSummary(health: LlmModel['health'] | null | undefined) {
+	if (!health) return 'No health policy configured';
+	const parts = [
+		health.unhealthyExpression ? 'custom expression' : null,
+		health.eviction?.duration ? `evict ${health.eviction.duration}` : null,
+		health.eviction?.consecutiveFailures ? `${health.eviction.consecutiveFailures} failures` : null
+	].filter(Boolean);
+	return parts.join(', ') || 'Default unhealthy detection configured';
 }
 
 export function headerModifierSummary(
-  value:
-    | LlmModel["requestHeaders"]
-    | LlmModel["responseHeaders"]
-    | null
-    | undefined,
-  label: "request" | "response",
+	value: LlmModel['requestHeaders'] | LlmModel['responseHeaders'] | null | undefined,
+	label: 'request' | 'response'
 ) {
-  const count =
-    Object.keys(value?.add ?? {}).length +
-    Object.keys(value?.set ?? {}).length +
-    (value?.remove?.length ?? 0);
-  if (count === 0) {
-    return tr(
-      label === "request"
-        ? "copy.noRequestHeaderChangesConfigured"
-        : "copy.noResponseHeaderChangesConfigured",
-    );
-  }
-  return tr(
-    label === "request"
-      ? "copy.requestHeaderChangesConfigured"
-      : "copy.responseHeaderChangesConfigured",
-    { count },
-  );
+	const count =
+		Object.keys(value?.add ?? {}).length +
+		Object.keys(value?.set ?? {}).length +
+		(value?.remove?.length ?? 0);
+	if (count === 0) {
+		return tr(
+			label === 'request'
+				? 'copy.noRequestHeaderChangesConfigured'
+				: 'copy.noResponseHeaderChangesConfigured'
+		);
+	}
+	return tr(
+		label === 'request'
+			? 'copy.requestHeaderChangesConfigured'
+			: 'copy.responseHeaderChangesConfigured',
+		{ count }
+	);
 }
 
-export function promptCachingSummary(
-  value: LlmModel["promptCaching"] | null | undefined,
-) {
-  if (!value) return "No prompt caching configured";
-  const scopes = [
-    value.cacheSystem ? "system" : null,
-    value.cacheMessages ? "messages" : null,
-    value.cacheTools ? "tools" : null,
-  ].filter(Boolean);
-  return scopes.length
-    ? `Cache ${scopes.join(", ")}`
-    : "Prompt caching configured";
+export function promptCachingSummary(value: LlmModel['promptCaching'] | null | undefined) {
+	if (!value) return 'No prompt caching configured';
+	const scopes = [
+		value.cacheSystem ? 'system' : null,
+		value.cacheMessages ? 'messages' : null,
+		value.cacheTools ? 'tools' : null
+	].filter(Boolean);
+	return scopes.length ? `Cache ${scopes.join(', ')}` : 'Prompt caching configured';
 }
 
 function optionalNumber(value: string) {
-  return value === "" ? null : Number(value);
+	return value === '' ? null : Number(value);
 }

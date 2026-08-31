@@ -1,2170 +1,1926 @@
-import { tr } from "../i18n";
-import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link } from '@tanstack/react-router';
 import {
-  Activity,
-  FileText,
-  GitBranch,
-  Pencil,
-  Play,
-  Plus,
-  ShieldCheck,
-  SlidersHorizontal,
-  Trash2,
-} from "lucide-react";
-import {
-  invalidProviderApiKey,
-  isDatabaseConfigResource,
-  makeEmptyModel,
-  makeEmptyVirtualModel,
-  modelIdentity,
-  modelWarnings,
-  providerDisplayName,
-  providerLabel,
-  providerReferenceName,
-  upsertModel,
-  upsertVirtualModel,
-} from "../config";
-import {
-  useDeleteConfigResource,
-  useLlmConfigData,
-  useUpsertConfigResource,
-} from "../hooks";
-import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
-import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
-import { CatalogModelSelector } from "../components/CatalogModelSelector";
-import {
-  ConfirmDialog,
-  Drawer,
-  Dropdown,
-  EmptyState,
-  Field,
-  FieldGroup,
-  PageHeader,
-  Panel,
-  StatusBanner,
-  Tooltip,
-  YamlBlock,
-} from "../components/Primitives";
-import { ProviderIcon } from "../components/ProviderIcon";
-import { KeyValueEditor } from "../policies/PolicyFormControls";
-import { AuthorizationPolicyEditor } from "../policies/AuthorizationPolicyEditor";
-import { CollapsiblePolicySection } from "../policies/PolicyLayout";
-import { ResultingYaml } from "../policies/ResultingYaml";
-import { cleanEmpty, parseYamlText, toYamlText } from "../policies/policyUtils";
-import type { AuthorizationDraft } from "../policies/types";
-import { randomUuid } from "../randomUuid";
-import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import {
-  concreteModelName,
-  isWildcardModelName,
-  resolvedProviderLabel,
-  selectedConfiguredModelName,
-  wildcardModelPrefix,
-  wildcardResolvedSuffix,
-} from "../modelResolution";
-import {
-  ModelMatchesEditor,
-  normalizeMatches,
-} from "./models/ModelMatchesEditor";
-import {
-  HeaderModifierEditor,
-  HealthPolicyEditor,
-  PromptCachingEditor,
-  YamlMappingEditor,
-  healthSummary,
-  headerModifierSummary,
-  promptCachingSummary,
-} from "./models/ModelPolicyEditors";
-import { ProviderConfigEditor } from "./models/ProviderConfigEditor";
-import {
-  clearModelSearch,
-  modelFromProviderReference,
-  modelHashFromUrl,
-  providerFromUrl,
-  setModelHash,
-  type ModelHash,
-} from "./models/modelRouteState";
-import {
-  defaultVirtualTargetModel,
-  failoverTargetGroups,
-  isIncompleteWildcardTarget,
-  modelTargetOptions,
-  virtualModelStrategy,
-  virtualModelSummary,
-} from "./models/virtualModelUtils";
-import type {
-  LlmModel,
-  LlmProvider,
-  LlmVirtualModel,
-  GatewayConfig,
-  ProviderName,
-} from "../types";
-import type {
-  LocalLLMConditionalRouting,
-  LocalLLMConditionalTarget,
-  LocalLLMFailoverRouting,
-  LocalLLMParams,
-  LocalLLMWeightedRouting,
-} from "../gateway-config";
+	Activity,
+	FileText,
+	GitBranch,
+	Pencil,
+	Play,
+	Plus,
+	ShieldCheck,
+	SlidersHorizontal,
+	Trash2
+} from 'lucide-react';
+import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-type VirtualRoutingStrategy = "weighted" | "failover" | "conditional";
+import { CatalogModelSelector } from '@/components/CatalogModelSelector';
+import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
+import {
+	ConfirmDialog,
+	Drawer,
+	Dropdown,
+	EmptyState,
+	Field,
+	FieldGroup,
+	PageHeader,
+	Panel,
+	StatusBanner,
+	Tooltip,
+	YamlBlock
+} from '@/components/Primitives';
+import { ProviderIcon } from '@/components/ProviderIcon';
+import {
+	invalidProviderApiKey,
+	isDatabaseConfigResource,
+	makeEmptyModel,
+	makeEmptyVirtualModel,
+	modelIdentity,
+	modelWarnings,
+	providerDisplayName,
+	providerLabel,
+	providerReferenceName,
+	upsertModel,
+	upsertVirtualModel
+} from '@/config';
+import type {
+	LocalLLMConditionalRouting,
+	LocalLLMConditionalTarget,
+	LocalLLMFailoverRouting,
+	LocalLLMParams,
+	LocalLLMWeightedRouting
+} from '@/gateway-config';
+import { useDeleteConfigResource, useLlmConfigData, useUpsertConfigResource } from '@/hooks';
+import { tr } from '@/i18n';
+import {
+	concreteModelName,
+	isWildcardModelName,
+	resolvedProviderLabel,
+	selectedConfiguredModelName,
+	wildcardModelPrefix,
+	wildcardResolvedSuffix
+} from '@/modelResolution';
+import { ModelMatchesEditor, normalizeMatches } from '@/pages/models/ModelMatchesEditor';
+import {
+	HeaderModifierEditor,
+	HealthPolicyEditor,
+	headerModifierSummary,
+	healthSummary,
+	PromptCachingEditor,
+	promptCachingSummary,
+	YamlMappingEditor
+} from '@/pages/models/ModelPolicyEditors';
+import {
+	clearModelSearch,
+	type ModelHash,
+	modelFromProviderReference,
+	modelHashFromUrl,
+	providerFromUrl,
+	setModelHash
+} from '@/pages/models/modelRouteState';
+import { ProviderConfigEditor } from '@/pages/models/ProviderConfigEditor';
+import {
+	defaultVirtualTargetModel,
+	failoverTargetGroups,
+	isIncompleteWildcardTarget,
+	modelTargetOptions,
+	virtualModelStrategy,
+	virtualModelSummary
+} from '@/pages/models/virtualModelUtils';
+import { AuthorizationPolicyEditor } from '@/policies/AuthorizationPolicyEditor';
+import { KeyValueEditor } from '@/policies/PolicyFormControls';
+import { CollapsiblePolicySection } from '@/policies/PolicyLayout';
+import { cleanEmpty, parseYamlText, toYamlText } from '@/policies/policyUtils';
+import { ResultingYaml } from '@/policies/ResultingYaml';
+import type { AuthorizationDraft } from '@/policies/types';
+import { randomUuid } from '@/randomUuid';
+import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
+import type { GatewayConfig, LlmModel, LlmProvider, LlmVirtualModel, ProviderName } from '@/types';
+
+type VirtualRoutingStrategy = 'weighted' | 'failover' | 'conditional';
 type ConditionalVirtualTarget = NonNullable<
-  LlmVirtualModel["routing"]["conditional"]
->["targets"][number];
+	LlmVirtualModel['routing']['conditional']
+>['targets'][number];
 
 export function ModelsPage() {
-  const {
-    config,
-    hybrid,
-    resources,
-    models,
-    virtualModels,
-    providers,
-    isLoading,
-    error,
-  } = useLlmConfigData();
-  const upsertResource = useUpsertConfigResource();
-  const deleteResource = useDeleteConfigResource();
-  const help = useSchemaHelp();
-  const [editing, setEditing] = useState<{
-    previousId?: string;
-    model: LlmModel;
-  } | null>(() => {
-    const provider = providerFromUrl();
-    return provider ? { model: modelFromProviderReference(provider) } : null;
-  });
-  const [editingVirtual, setEditingVirtual] = useState<{
-    previousName?: string;
-    model: LlmVirtualModel;
-  } | null>(null);
-  const [deleting, setDeleting] = useState<{
-    kind: "model" | "virtual model";
-    id: string;
-    name: string;
-  } | null>(null);
-  const [modelHash, setModelHashState] = useState<ModelHash | null>(() =>
-    modelHashFromUrl(),
-  );
-  const hashEditModel =
-    modelHash?.kind === "edit"
-      ? (models.find((model) => modelIdentity(model) === modelHash.modelId) ??
-        models.find((model) => model.name === modelHash.modelId) ??
-        null)
-      : null;
-  const activeEditing =
-    editing ??
-    (modelHash?.kind === "add" && modelHash.type === "model"
-      ? { model: makeEmptyModel() }
-      : null) ??
-    (hashEditModel
-      ? {
-          previousId: modelIdentity(hashEditModel),
-          model: structuredClone(hashEditModel),
-        }
-      : null);
-  const activeVirtualEditing =
-    editingVirtual ??
-    (modelHash?.kind === "add" && modelHash.type === "virtual"
-      ? { model: makeEmptyVirtualModel() }
-      : null);
-  const editingDatabaseModel = Boolean(
-    hybrid &&
-      activeEditing &&
-      (!activeEditing.previousId ||
-        isDatabaseConfigResource(
-          resources,
-          "llm.model",
-          activeEditing.previousId,
-        )),
-  );
-  const editingDatabaseVirtualModel = Boolean(
-    hybrid &&
-      activeVirtualEditing &&
-      (!activeVirtualEditing.previousName ||
-        isDatabaseConfigResource(
-          resources,
-          "llm.virtualModel",
-          activeVirtualEditing.previousName,
-        )),
-  );
-  const modelRows = useMemo(
-    () => [
-      ...models.map((model) => ({ kind: "model" as const, model })),
-      ...virtualModels.map((model) => ({ kind: "virtual" as const, model })),
-    ],
-    [models, virtualModels],
-  );
+	const { config, hybrid, resources, models, virtualModels, providers, isLoading, error } =
+		useLlmConfigData();
+	const upsertResource = useUpsertConfigResource();
+	const deleteResource = useDeleteConfigResource();
+	const help = useSchemaHelp();
+	const [editing, setEditing] = useState<{
+		previousId?: string;
+		model: LlmModel;
+	} | null>(() => {
+		const provider = providerFromUrl();
+		return provider ? { model: modelFromProviderReference(provider) } : null;
+	});
+	const [editingVirtual, setEditingVirtual] = useState<{
+		previousName?: string;
+		model: LlmVirtualModel;
+	} | null>(null);
+	const [deleting, setDeleting] = useState<{
+		kind: 'model' | 'virtual model';
+		id: string;
+		name: string;
+	} | null>(null);
+	const [modelHash, setModelHashState] = useState<ModelHash | null>(() => modelHashFromUrl());
+	const hashEditModel =
+		modelHash?.kind === 'edit'
+			? (models.find(model => modelIdentity(model) === modelHash.modelId) ??
+				models.find(model => model.name === modelHash.modelId) ??
+				null)
+			: null;
+	const activeEditing =
+		editing ??
+		(modelHash?.kind === 'add' && modelHash.type === 'model'
+			? { model: makeEmptyModel() }
+			: null) ??
+		(hashEditModel
+			? {
+					previousId: modelIdentity(hashEditModel),
+					model: structuredClone(hashEditModel)
+				}
+			: null);
+	const activeVirtualEditing =
+		editingVirtual ??
+		(modelHash?.kind === 'add' && modelHash.type === 'virtual'
+			? { model: makeEmptyVirtualModel() }
+			: null);
+	const editingDatabaseModel = Boolean(
+		hybrid &&
+			activeEditing &&
+			(!activeEditing.previousId ||
+				isDatabaseConfigResource(resources, 'llm.model', activeEditing.previousId))
+	);
+	const editingDatabaseVirtualModel = Boolean(
+		hybrid &&
+			activeVirtualEditing &&
+			(!activeVirtualEditing.previousName ||
+				isDatabaseConfigResource(resources, 'llm.virtualModel', activeVirtualEditing.previousName))
+	);
+	const modelRows = useMemo(
+		() => [
+			...models.map(model => ({ kind: 'model' as const, model })),
+			...virtualModels.map(model => ({ kind: 'virtual' as const, model }))
+		],
+		[models, virtualModels]
+	);
 
-  useEffect(() => {
-    function syncSelectedFromUrl() {
-      upsertResource.reset();
-      deleteResource.reset();
-      setEditing(null);
-      setEditingVirtual(null);
-      setModelHashState(modelHashFromUrl());
-    }
-    window.addEventListener("hashchange", syncSelectedFromUrl);
-    window.addEventListener("popstate", syncSelectedFromUrl);
-    return () => {
-      window.removeEventListener("hashchange", syncSelectedFromUrl);
-      window.removeEventListener("popstate", syncSelectedFromUrl);
-    };
-  }, [deleteResource, upsertResource]);
+	useEffect(() => {
+		function syncSelectedFromUrl() {
+			upsertResource.reset();
+			deleteResource.reset();
+			setEditing(null);
+			setEditingVirtual(null);
+			setModelHashState(modelHashFromUrl());
+		}
+		window.addEventListener('hashchange', syncSelectedFromUrl);
+		window.addEventListener('popstate', syncSelectedFromUrl);
+		return () => {
+			window.removeEventListener('hashchange', syncSelectedFromUrl);
+			window.removeEventListener('popstate', syncSelectedFromUrl);
+		};
+	}, [deleteResource, upsertResource]);
 
-  const saving = upsertResource.isPending || deleteResource.isPending;
-  const saveError =
-    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
-  const saved = upsertResource.isSuccess || deleteResource.isSuccess;
+	const saving = upsertResource.isPending || deleteResource.isPending;
+	const saveError = upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+	const saved = upsertResource.isSuccess || deleteResource.isSuccess;
 
-  function openModelEditor(model: LlmModel) {
-    resetSaves();
-    setEditing(null);
-    setModelHashState({ kind: "edit", modelId: modelIdentity(model) });
-    setModelHash({ kind: "edit", modelId: modelIdentity(model) }, "push");
-  }
+	function openModelEditor(model: LlmModel) {
+		resetSaves();
+		setEditing(null);
+		setModelHashState({ kind: 'edit', modelId: modelIdentity(model) });
+		setModelHash({ kind: 'edit', modelId: modelIdentity(model) }, 'push');
+	}
 
-  function openNewModel() {
-    resetSaves();
-    clearModelSearch();
-    setModelHashState(null);
-    setEditing(null);
-    setModelHashState({ kind: "add", type: "model" });
-    setModelHash({ kind: "add", type: "model" }, "push");
-  }
+	function openNewModel() {
+		resetSaves();
+		clearModelSearch();
+		setModelHashState(null);
+		setEditing(null);
+		setModelHashState({ kind: 'add', type: 'model' });
+		setModelHash({ kind: 'add', type: 'model' }, 'push');
+	}
 
-  function openNewVirtualModel() {
-    resetSaves();
-    clearModelSearch();
-    setEditingVirtual(null);
-    setModelHashState({ kind: "add", type: "virtual" });
-    setModelHash({ kind: "add", type: "virtual" }, "push");
-  }
+	function openNewVirtualModel() {
+		resetSaves();
+		clearModelSearch();
+		setEditingVirtual(null);
+		setModelHashState({ kind: 'add', type: 'virtual' });
+		setModelHash({ kind: 'add', type: 'virtual' }, 'push');
+	}
 
-  function closeModelEditor() {
-    resetSaves();
-    setEditing(null);
-    clearModelSearch();
-    if (
-      modelHash?.kind === "edit" ||
-      (modelHash?.kind === "add" && modelHash.type === "model")
-    ) {
-      setModelHashState(null);
-      setModelHash(null, "replace");
-    }
-  }
+	function closeModelEditor() {
+		resetSaves();
+		setEditing(null);
+		clearModelSearch();
+		if (modelHash?.kind === 'edit' || (modelHash?.kind === 'add' && modelHash.type === 'model')) {
+			setModelHashState(null);
+			setModelHash(null, 'replace');
+		}
+	}
 
-  function closeVirtualModelEditor() {
-    resetSaves();
-    setEditingVirtual(null);
-    if (modelHash?.kind === "add" && modelHash.type === "virtual") {
-      setModelHashState(null);
-      setModelHash(null, "replace");
-    }
-  }
+	function closeVirtualModelEditor() {
+		resetSaves();
+		setEditingVirtual(null);
+		if (modelHash?.kind === 'add' && modelHash.type === 'virtual') {
+			setModelHashState(null);
+			setModelHash(null, 'replace');
+		}
+	}
 
-  function resetSaves() {
-    upsertResource.reset();
-    deleteResource.reset();
-  }
+	function resetSaves() {
+		upsertResource.reset();
+		deleteResource.reset();
+	}
 
-  function saveModel(model: LlmModel, previousId?: string) {
-    if (hybrid) model.id ??= randomUuid();
-    upsertResource.mutate(
-      { kind: "llm.model", value: model, previousId },
-      { onSuccess: closeModelEditor },
-    );
-  }
+	function saveModel(model: LlmModel, previousId?: string) {
+		if (hybrid) model.id ??= randomUuid();
+		upsertResource.mutate(
+			{ kind: 'llm.model', value: model, previousId },
+			{ onSuccess: closeModelEditor }
+		);
+	}
 
-  function deleteModel(id: string) {
-    deleteResource.mutate(
-      { kind: "llm.model", id },
-      {
-        onSuccess: () => setDeleting(null),
-      },
-    );
-  }
+	function deleteModel(id: string) {
+		deleteResource.mutate(
+			{ kind: 'llm.model', id },
+			{
+				onSuccess: () => setDeleting(null)
+			}
+		);
+	}
 
-  function saveVirtualModel(model: LlmVirtualModel, previousName?: string) {
-    upsertResource.mutate(
-      { kind: "llm.virtualModel", value: model, previousId: previousName },
-      { onSuccess: closeVirtualModelEditor },
-    );
-  }
+	function saveVirtualModel(model: LlmVirtualModel, previousName?: string) {
+		upsertResource.mutate(
+			{ kind: 'llm.virtualModel', value: model, previousId: previousName },
+			{ onSuccess: closeVirtualModelEditor }
+		);
+	}
 
-  function deleteVirtualModel(name: string) {
-    deleteResource.mutate(
-      { kind: "llm.virtualModel", id: name },
-      {
-        onSuccess: () => setDeleting(null),
-      },
-    );
-  }
+	function deleteVirtualModel(name: string) {
+		deleteResource.mutate(
+			{ kind: 'llm.virtualModel', id: name },
+			{
+				onSuccess: () => setDeleting(null)
+			}
+		);
+	}
 
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title={tr("copy.llmModels")}
-        description={tr(
-          "copy.onboardProviderBackedModelsAndConfigureModelSpecificBehavior",
-        )}
-        actions={
-          <div className="button-row">
-            <button
-              className="button"
-              type="button"
-              onClick={openNewVirtualModel}
-            >
-              <GitBranch size={16} />
-              {tr("copy.addVirtualModel")}
-            </button>
-            <button
-              className="button primary"
-              type="button"
-              onClick={openNewModel}
-            >
-              <Plus size={16} />
-              {tr("copy.addModel")}
-            </button>
-          </div>
-        }
-      />
+	return (
+		<div className="page-stack">
+			<PageHeader
+				title={tr('copy.llmModels')}
+				description={tr('copy.onboardProviderBackedModelsAndConfigureModelSpecificBehavior')}
+				actions={
+					<div className="button-row">
+						<button className="button" type="button" onClick={openNewVirtualModel}>
+							<GitBranch size={16} />
+							{tr('copy.addVirtualModel')}
+						</button>
+						<button className="button primary" type="button" onClick={openNewModel}>
+							<Plus size={16} />
+							{tr('copy.addModel')}
+						</button>
+					</div>
+				}
+			/>
 
-      {saveError ? (
-        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
-          {saveError}
-        </StatusBanner>
-      ) : null}
-      {saved ? (
-        <StatusBanner state="ok" title={tr("copy.configurationSaved")} />
-      ) : null}
+			{saveError ? (
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
+					{saveError}
+				</StatusBanner>
+			) : null}
+			{saved ? <StatusBanner state="ok" title={tr('copy.configurationSaved')} /> : null}
 
-      <Panel>
-        {isLoading ? (
-          <StatusBanner state="loading" title={tr("copy.loadingModels")} />
-        ) : error ? (
-          <StatusBanner
-            state="bad"
-            title={tr("copy.configurationApiUnavailable")}
-          >
-            {error.message}
-          </StatusBanner>
-        ) : modelRows.length === 0 ? (
-          <EmptyState
-            title={tr("copy.noModelsConfigured")}
-            description={tr(
-              "copy.createTheFirstModelToMakeLlmTrafficAvailableThroughTheGateway",
-            )}
-            action={
-              <div className="button-row">
-                <button
-                  className="button primary"
-                  type="button"
-                  onClick={openNewModel}
-                >
-                  <Plus size={16} />
-                  {tr("copy.addModel")}
-                </button>
-                <button
-                  className="button"
-                  type="button"
-                  onClick={openNewVirtualModel}
-                >
-                  <GitBranch size={16} />
-                  {tr("copy.addVirtualModel")}
-                </button>
-              </div>
-            }
-          />
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{tr("copy.name")}</th>
-                  {hybrid ? <th>{tr("copy.source")}</th> : null}
-                  <th>{tr("copy.provider")}</th>
-                  <th>{tr("copy.outgoingModel")}</th>
-                  <th>{tr("copy.policyState")}</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {modelRows.map((row) => {
-                  if (row.kind === "virtual") {
-                    const model = row.model;
-                    const databaseBacked = isDatabaseConfigResource(
-                      resources,
-                      "llm.virtualModel",
-                      model.name,
-                    );
-                    return (
-                      <tr key={`virtual:${model.name}`}>
-                        <td className="strong">{model.name}</td>
-                        {hybrid ? (
-                          <td>
-                            <span className="badge">
-                              {databaseBacked
-                                ? tr("copy.database")
-                                : tr("copy.file")}
-                            </span>
-                          </td>
-                        ) : null}
-                        <td>
-                          <span className="badge">
-                            <GitBranch size={14} />
-                            {tr("copy.virtual")}
-                          </span>
-                        </td>
-                        <td>{virtualModelSummary(model)}</td>
-                        <td>
-                          <span className="badge ok">
-                            {virtualModelStrategy(model)}
-                          </span>
-                        </td>
-                        <td className="row-actions">
-                          <Tooltip content={tr("copy.openInPlayground")}>
-                            <Link
-                              className="icon-button"
-                              aria-label={tr("copy.openInPlayground")}
-                              to="/llm/playground"
-                              search={{ model: model.name }}
-                            >
-                              <Play size={16} />
-                            </Link>
-                          </Tooltip>
-                          <Tooltip content={tr("copy.editModel")}>
-                            <button
-                              className="icon-button"
-                              aria-label={tr("copy.editModel")}
-                              type="button"
-                              onClick={() =>
-                                setEditingVirtual({
-                                  previousName: model.name,
-                                  model: structuredClone(model),
-                                })
-                              }
-                            >
-                              <Pencil size={16} />
-                            </button>
-                          </Tooltip>
-                          <Tooltip
-                            content={
-                              hybrid && !databaseBacked
-                                ? tr("copy.fileOwnedModelsCannotBeDeletedHere")
-                                : tr("copy.deleteModel")
-                            }
-                          >
-                            <button
-                              className="icon-button danger"
-                              aria-label={tr("copy.deleteModel")}
-                              type="button"
-                              disabled={saving || (hybrid && !databaseBacked)}
-                              onClick={() =>
-                                setDeleting({
-                                  kind: "virtual model",
-                                  id: model.name,
-                                  name: model.name,
-                                })
-                              }
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </Tooltip>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  const model = row.model;
-                  const warnings = modelWarnings(model);
-                  const databaseBacked = isDatabaseConfigResource(
-                    resources,
-                    "llm.model",
-                    modelIdentity(model),
-                  );
-                  return (
-                    <tr key={`model:${modelIdentity(model)}`}>
-                      <td className="strong">{model.name}</td>
-                      {hybrid ? (
-                        <td>
-                          <span className="badge">
-                            {databaseBacked
-                              ? tr("copy.database")
-                              : tr("copy.file")}
-                          </span>
-                        </td>
-                      ) : null}
-                      <td>
-                        <ModelProviderBadge
-                          model={model}
-                          providers={providers}
-                        />
-                      </td>
-                      <td>{model.params?.model || tr("copy.incomingModel")}</td>
-                      <td>
-                        <ModelPolicyState
-                          model={model}
-                          warnings={warnings.length}
-                        />
-                      </td>
-                      <td className="row-actions">
-                        <Tooltip content={tr("copy.openInPlayground")}>
-                          <Link
-                            className="icon-button"
-                            aria-label={tr("copy.openInPlayground")}
-                            to="/llm/playground"
-                            search={{ model: model.name }}
-                          >
-                            <Play size={16} />
-                          </Link>
-                        </Tooltip>
-                        <Tooltip content={tr("copy.editModel")}>
-                          <button
-                            className="icon-button"
-                            aria-label={tr("copy.editModel")}
-                            type="button"
-                            onClick={() => openModelEditor(model)}
-                          >
-                            <Pencil size={16} />
-                          </button>
-                        </Tooltip>
-                        <Tooltip
-                          content={
-                            hybrid && !databaseBacked
-                              ? tr("copy.fileOwnedModelsCannotBeDeletedHere")
-                              : tr("copy.deleteModel")
-                          }
-                        >
-                          <button
-                            className="icon-button danger"
-                            aria-label={tr("copy.deleteModel")}
-                            type="button"
-                            disabled={saving || (hybrid && !databaseBacked)}
-                            onClick={() =>
-                              setDeleting({
-                                kind: "model",
-                                id: modelIdentity(model),
-                                name: model.name,
-                              })
-                            }
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </Tooltip>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+			<Panel>
+				{isLoading ? (
+					<StatusBanner state="loading" title={tr('copy.loadingModels')} />
+				) : error ? (
+					<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
+						{error.message}
+					</StatusBanner>
+				) : modelRows.length === 0 ? (
+					<EmptyState
+						title={tr('copy.noModelsConfigured')}
+						description={tr('copy.createTheFirstModelToMakeLlmTrafficAvailableThroughTheGateway')}
+						action={
+							<div className="button-row">
+								<button className="button primary" type="button" onClick={openNewModel}>
+									<Plus size={16} />
+									{tr('copy.addModel')}
+								</button>
+								<button className="button" type="button" onClick={openNewVirtualModel}>
+									<GitBranch size={16} />
+									{tr('copy.addVirtualModel')}
+								</button>
+							</div>
+						}
+					/>
+				) : (
+					<div className="table-wrap">
+						<table>
+							<thead>
+								<tr>
+									<th>{tr('copy.name')}</th>
+									{hybrid ? <th>{tr('copy.source')}</th> : null}
+									<th>{tr('copy.provider')}</th>
+									<th>{tr('copy.outgoingModel')}</th>
+									<th>{tr('copy.policyState')}</th>
+									<th />
+								</tr>
+							</thead>
+							<tbody>
+								{modelRows.map(row => {
+									if (row.kind === 'virtual') {
+										const model = row.model;
+										const databaseBacked = isDatabaseConfigResource(
+											resources,
+											'llm.virtualModel',
+											model.name
+										);
+										return (
+											<tr key={`virtual:${model.name}`}>
+												<td className="strong">{model.name}</td>
+												{hybrid ? (
+													<td>
+														<span className="badge">
+															{databaseBacked ? tr('copy.database') : tr('copy.file')}
+														</span>
+													</td>
+												) : null}
+												<td>
+													<span className="badge">
+														<GitBranch size={14} />
+														{tr('copy.virtual')}
+													</span>
+												</td>
+												<td>{virtualModelSummary(model)}</td>
+												<td>
+													<span className="badge ok">{virtualModelStrategy(model)}</span>
+												</td>
+												<td className="row-actions">
+													<Tooltip content={tr('copy.openInPlayground')}>
+														<Link
+															className="icon-button"
+															aria-label={tr('copy.openInPlayground')}
+															to="/llm/playground"
+															search={{ model: model.name }}
+														>
+															<Play size={16} />
+														</Link>
+													</Tooltip>
+													<Tooltip content={tr('copy.editModel')}>
+														<button
+															className="icon-button"
+															aria-label={tr('copy.editModel')}
+															type="button"
+															onClick={() =>
+																setEditingVirtual({
+																	previousName: model.name,
+																	model: structuredClone(model)
+																})
+															}
+														>
+															<Pencil size={16} />
+														</button>
+													</Tooltip>
+													<Tooltip
+														content={
+															hybrid && !databaseBacked
+																? tr('copy.fileOwnedModelsCannotBeDeletedHere')
+																: tr('copy.deleteModel')
+														}
+													>
+														<button
+															className="icon-button danger"
+															aria-label={tr('copy.deleteModel')}
+															type="button"
+															disabled={saving || (hybrid && !databaseBacked)}
+															onClick={() =>
+																setDeleting({
+																	kind: 'virtual model',
+																	id: model.name,
+																	name: model.name
+																})
+															}
+														>
+															<Trash2 size={16} />
+														</button>
+													</Tooltip>
+												</td>
+											</tr>
+										);
+									}
+									const model = row.model;
+									const warnings = modelWarnings(model);
+									const databaseBacked = isDatabaseConfigResource(
+										resources,
+										'llm.model',
+										modelIdentity(model)
+									);
+									return (
+										<tr key={`model:${modelIdentity(model)}`}>
+											<td className="strong">{model.name}</td>
+											{hybrid ? (
+												<td>
+													<span className="badge">
+														{databaseBacked ? tr('copy.database') : tr('copy.file')}
+													</span>
+												</td>
+											) : null}
+											<td>
+												<ModelProviderBadge model={model} providers={providers} />
+											</td>
+											<td>{model.params?.model || tr('copy.incomingModel')}</td>
+											<td>
+												<ModelPolicyState model={model} warnings={warnings.length} />
+											</td>
+											<td className="row-actions">
+												<Tooltip content={tr('copy.openInPlayground')}>
+													<Link
+														className="icon-button"
+														aria-label={tr('copy.openInPlayground')}
+														to="/llm/playground"
+														search={{ model: model.name }}
+													>
+														<Play size={16} />
+													</Link>
+												</Tooltip>
+												<Tooltip content={tr('copy.editModel')}>
+													<button
+														className="icon-button"
+														aria-label={tr('copy.editModel')}
+														type="button"
+														onClick={() => openModelEditor(model)}
+													>
+														<Pencil size={16} />
+													</button>
+												</Tooltip>
+												<Tooltip
+													content={
+														hybrid && !databaseBacked
+															? tr('copy.fileOwnedModelsCannotBeDeletedHere')
+															: tr('copy.deleteModel')
+													}
+												>
+													<button
+														className="icon-button danger"
+														aria-label={tr('copy.deleteModel')}
+														type="button"
+														disabled={saving || (hybrid && !databaseBacked)}
+														onClick={() =>
+															setDeleting({
+																kind: 'model',
+																id: modelIdentity(model),
+																name: model.name
+															})
+														}
+													>
+														<Trash2 size={16} />
+													</button>
+												</Tooltip>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</Panel>
 
-      {activeEditing ? (
-        <ModelEditor
-          key={activeEditing.previousId ?? "new"}
-          previousId={activeEditing.previousId}
-          initial={activeEditing.model}
-          config={config.data}
-          databaseBacked={editingDatabaseModel}
-          providers={providers}
-          help={help}
-          saving={saving}
-          saveError={saveError}
-          onCancel={closeModelEditor}
-          onSave={saveModel}
-        />
-      ) : null}
-      {activeVirtualEditing ? (
-        <VirtualModelEditor
-          key={activeVirtualEditing.previousName ?? "new"}
-          previousName={activeVirtualEditing.previousName}
-          initial={activeVirtualEditing.model}
-          config={config.data}
-          databaseBacked={editingDatabaseVirtualModel}
-          baseModels={models}
-          providers={providers}
-          help={help}
-          saving={saving}
-          saveError={saveError}
-          onCancel={closeVirtualModelEditor}
-          onSave={saveVirtualModel}
-        />
-      ) : null}
-      {deleting ? (
-        <ConfirmDialog
-          title={tr("copy.deleteValue_pkbukw")}
-          destructive
-          confirmLabel={tr("copy.deleteValue", deleting.kind)}
-          confirmDisabled={saving}
-          onCancel={() => setDeleting(null)}
-          onConfirm={() =>
-            deleting.kind === "virtual model"
-              ? deleteVirtualModel(deleting.id)
-              : deleteModel(deleting.id)
-          }
-        >
-          <p>{tr("copy.deleteNamedResourceQuestion", [deleting.name])}</p>
-        </ConfirmDialog>
-      ) : null}
-    </div>
-  );
+			{activeEditing ? (
+				<ModelEditor
+					key={activeEditing.previousId ?? 'new'}
+					previousId={activeEditing.previousId}
+					initial={activeEditing.model}
+					config={config.data}
+					databaseBacked={editingDatabaseModel}
+					providers={providers}
+					help={help}
+					saving={saving}
+					saveError={saveError}
+					onCancel={closeModelEditor}
+					onSave={saveModel}
+				/>
+			) : null}
+			{activeVirtualEditing ? (
+				<VirtualModelEditor
+					key={activeVirtualEditing.previousName ?? 'new'}
+					previousName={activeVirtualEditing.previousName}
+					initial={activeVirtualEditing.model}
+					config={config.data}
+					databaseBacked={editingDatabaseVirtualModel}
+					baseModels={models}
+					providers={providers}
+					help={help}
+					saving={saving}
+					saveError={saveError}
+					onCancel={closeVirtualModelEditor}
+					onSave={saveVirtualModel}
+				/>
+			) : null}
+			{deleting ? (
+				<ConfirmDialog
+					title={tr('copy.deleteValue_pkbukw')}
+					destructive
+					confirmLabel={tr('copy.deleteValue', deleting.kind)}
+					confirmDisabled={saving}
+					onCancel={() => setDeleting(null)}
+					onConfirm={() =>
+						deleting.kind === 'virtual model'
+							? deleteVirtualModel(deleting.id)
+							: deleteModel(deleting.id)
+					}
+				>
+					<p>{tr('copy.deleteNamedResourceQuestion', [deleting.name])}</p>
+				</ConfirmDialog>
+			) : null}
+		</div>
+	);
 }
 
 function ModelEditor(props: {
-  initial: LlmModel;
-  config?: GatewayConfig;
-  databaseBacked: boolean;
-  providers: LlmProvider[];
-  previousId?: string;
-  help: SchemaHelp;
-  saving: boolean;
-  saveError?: string | null;
-  onCancel: () => void;
-  onSave: (model: LlmModel, previousId?: string) => void;
+	initial: LlmModel;
+	config?: GatewayConfig;
+	databaseBacked: boolean;
+	providers: LlmProvider[];
+	previousId?: string;
+	help: SchemaHelp;
+	saving: boolean;
+	saveError?: string | null;
+	onCancel: () => void;
+	onSave: (model: LlmModel, previousId?: string) => void;
 }) {
-  const [model, setModel] = useState<LlmModel>(() => {
-    if (props.initial.name || !props.initial.provider) return props.initial;
-    return {
-      ...props.initial,
-      name: defaultIncomingModelMatch(props.initial.provider),
-    };
-  });
-  const [autoModelMatch, setAutoModelMatch] = useState(
-    () => !props.initial.name,
-  );
-  const [upstreamMode, setUpstreamMode] = useState<UpstreamModelMode>(() =>
-    initialUpstreamMode(props.initial),
-  );
-  const [explicitModel, setExplicitModel] = useState(
-    props.initial.params?.model ?? "",
-  );
-  const [customModelExpression, setCustomModelExpression] = useState(
-    () => props.initial.transformation?.model ?? "llmRequest.model",
-  );
-  const [transformation, setTransformation] = useState<Record<string, string>>(
-    () => expressionMap(props.initial.transformation),
-  );
-  const [finalTransformation, setFinalTransformation] = useState<
-    Record<string, string>
-  >(() => expressionMap(props.initial.finalTransformation));
-  const [health, setHealth] = useState<LlmModel["health"]>(
-    () => props.initial.health ?? null,
-  );
-  const [defaultsText, setDefaultsText] = useState(() =>
-    optionalMappingYamlText(props.initial.defaults),
-  );
-  const [overridesText, setOverridesText] = useState(() =>
-    optionalMappingYamlText(props.initial.overrides),
-  );
-  const [requestHeaders, setRequestHeaders] = useState<
-    LlmModel["requestHeaders"]
-  >(() => props.initial.requestHeaders ?? null);
-  const [responseHeaders, setResponseHeaders] = useState<
-    LlmModel["responseHeaders"]
-  >(() => props.initial.responseHeaders ?? null);
-  const [promptCaching, setPromptCaching] = useState<LlmModel["promptCaching"]>(
-    () => props.initial.promptCaching ?? null,
-  );
-  const [authorization, setAuthorization] = useState<AuthorizationDraft | null>(
-    () => (props.initial.authorization as AuthorizationDraft | null) ?? null,
-  );
-  const [policyError, setPolicyError] = useState<string | null>(null);
-  const [saveAttempted, setSaveAttempted] = useState(false);
-  const draft = JSON.stringify({
-    model,
-    autoModelMatch,
-    upstreamMode,
-    explicitModel,
-    customModelExpression,
-    transformation,
-    finalTransformation,
-    health,
-    defaultsText,
-    overridesText,
-    requestHeaders,
-    responseHeaders,
-    promptCaching,
-    authorization,
-  });
-  const [initialDraft] = useState(() => draft);
-  const warnings = modelWarnings(model);
-  const invalidApiKey = invalidProviderApiKey(model.params?.apiKey);
-  const providerApiKeyError =
-    saveAttempted && invalidApiKey ? "Enter a value, or choose Unset." : null;
-  const policyPatch = buildModelPolicyPatch({
-    transformation,
-    finalTransformation,
-    health,
-    defaultsText,
-    overridesText,
-    requestHeaders,
-    responseHeaders,
-    promptCaching,
-    authorization,
-  });
-  const preview = cleanEmpty(
-    applyUpstreamMode(
-      {
-        ...model,
-        ...policyPatch.value,
-        matches: normalizeMatches(model.matches),
-      },
-      upstreamMode,
-      explicitModel,
-      customModelExpression,
-    ),
-  ) as LlmModel | undefined;
-  const providerSelected = Boolean(model.provider);
+	const [model, setModel] = useState<LlmModel>(() => {
+		if (props.initial.name || !props.initial.provider) return props.initial;
+		return {
+			...props.initial,
+			name: defaultIncomingModelMatch(props.initial.provider)
+		};
+	});
+	const [autoModelMatch, setAutoModelMatch] = useState(() => !props.initial.name);
+	const [upstreamMode, setUpstreamMode] = useState<UpstreamModelMode>(() =>
+		initialUpstreamMode(props.initial)
+	);
+	const [explicitModel, setExplicitModel] = useState(props.initial.params?.model ?? '');
+	const [customModelExpression, setCustomModelExpression] = useState(
+		() => props.initial.transformation?.model ?? 'llmRequest.model'
+	);
+	const [transformation, setTransformation] = useState<Record<string, string>>(() =>
+		expressionMap(props.initial.transformation)
+	);
+	const [finalTransformation, setFinalTransformation] = useState<Record<string, string>>(() =>
+		expressionMap(props.initial.finalTransformation)
+	);
+	const [health, setHealth] = useState<LlmModel['health']>(() => props.initial.health ?? null);
+	const [defaultsText, setDefaultsText] = useState(() =>
+		optionalMappingYamlText(props.initial.defaults)
+	);
+	const [overridesText, setOverridesText] = useState(() =>
+		optionalMappingYamlText(props.initial.overrides)
+	);
+	const [requestHeaders, setRequestHeaders] = useState<LlmModel['requestHeaders']>(
+		() => props.initial.requestHeaders ?? null
+	);
+	const [responseHeaders, setResponseHeaders] = useState<LlmModel['responseHeaders']>(
+		() => props.initial.responseHeaders ?? null
+	);
+	const [promptCaching, setPromptCaching] = useState<LlmModel['promptCaching']>(
+		() => props.initial.promptCaching ?? null
+	);
+	const [authorization, setAuthorization] = useState<AuthorizationDraft | null>(
+		() => (props.initial.authorization as AuthorizationDraft | null) ?? null
+	);
+	const [policyError, setPolicyError] = useState<string | null>(null);
+	const [saveAttempted, setSaveAttempted] = useState(false);
+	const draft = JSON.stringify({
+		model,
+		autoModelMatch,
+		upstreamMode,
+		explicitModel,
+		customModelExpression,
+		transformation,
+		finalTransformation,
+		health,
+		defaultsText,
+		overridesText,
+		requestHeaders,
+		responseHeaders,
+		promptCaching,
+		authorization
+	});
+	const [initialDraft] = useState(() => draft);
+	const warnings = modelWarnings(model);
+	const invalidApiKey = invalidProviderApiKey(model.params?.apiKey);
+	const providerApiKeyError =
+		saveAttempted && invalidApiKey ? 'Enter a value, or choose Unset.' : null;
+	const policyPatch = buildModelPolicyPatch({
+		transformation,
+		finalTransformation,
+		health,
+		defaultsText,
+		overridesText,
+		requestHeaders,
+		responseHeaders,
+		promptCaching,
+		authorization
+	});
+	const preview = cleanEmpty(
+		applyUpstreamMode(
+			{
+				...model,
+				...policyPatch.value,
+				matches: normalizeMatches(model.matches)
+			},
+			upstreamMode,
+			explicitModel,
+			customModelExpression
+		)
+	) as LlmModel | undefined;
+	const providerSelected = Boolean(model.provider);
 
-  function save() {
-    setSaveAttempted(true);
-    if (!preview?.provider) return;
-    if (invalidApiKey) return;
-    if (policyPatch.error) {
-      setPolicyError(policyPatch.error);
-      return;
-    }
-    setPolicyError(null);
-    props.onSave(preview ?? model, props.previousId);
-  }
+	function save() {
+		setSaveAttempted(true);
+		if (!preview?.provider) return;
+		if (invalidApiKey) return;
+		if (policyPatch.error) {
+			setPolicyError(policyPatch.error);
+			return;
+		}
+		setPolicyError(null);
+		props.onSave(preview ?? model, props.previousId);
+	}
 
-  function validateBeforeDiff() {
-    setSaveAttempted(true);
-    if (!preview?.provider) return false;
-    if (invalidApiKey) return false;
-    if (policyPatch.error) {
-      setPolicyError(policyPatch.error);
-      return false;
-    }
-    setPolicyError(null);
-    return true;
-  }
+	function validateBeforeDiff() {
+		setSaveAttempted(true);
+		if (!preview?.provider) return false;
+		if (invalidApiKey) return false;
+		if (policyPatch.error) {
+			setPolicyError(policyPatch.error);
+			return false;
+		}
+		setPolicyError(null);
+		return true;
+	}
 
-  return (
-    <Drawer
-      title={props.previousId ? tr("copy.editModel") : tr("copy.addModel")}
-      onClose={props.onCancel}
-      dirty={draft !== initialDraft}
-      saving={props.saving}
-      footer={(requestClose) => (
-        <ConfigDiffSaveActions
-          config={props.config}
-          resourceDiff={
-            props.databaseBacked
-              ? {
-                  original: props.previousId
-                    ? modelConfigForDisplay(props.initial)
-                    : {},
-                  modified: modelConfigForDisplay(preview),
-                }
-              : undefined
-          }
-          diffTitle={
-            props.databaseBacked
-              ? tr("copy.modelResourceDiff")
-              : tr("copy.modelConfigDiff")
-          }
-          saveLabel={tr("copy.saveModel")}
-          saving={props.saving}
-          saveDisabled={!model.name.trim() || !preview?.provider}
-          onCancel={requestClose}
-          onSave={save}
-          beforeDiff={validateBeforeDiff}
-          applyDiff={(next) =>
-            upsertModel(next, preview ?? model, props.previousId)
-          }
-        />
-      )}
-    >
-      <details className="schema-details model-help-details">
-        <summary>{tr("copy.help")}</summary>
-        <div className="model-help-copy">
-          <p>
-            {tr(
-              "copy.agentgatewayRoutesRequestsByMatchingAnIncomingModelNameAndThenSendingItToTheConf_w5k7w1",
-            )}
-          </p>
-          <p>{tr("copy.someExamples")}</p>
-          <ul>
-            <li>{tr("copy.modelMatchSendTo", ["fast", "gpt-mini"])}</li>
-            <li>{tr("copy.modelMatchForwardAsIs", ["*"])}</li>
-            <li>{tr("copy.modelMatchStripPrefix", ["openai/*", "openai/"])}</li>
-          </ul>
-        </div>
-      </details>
+	return (
+		<Drawer
+			title={props.previousId ? tr('copy.editModel') : tr('copy.addModel')}
+			onClose={props.onCancel}
+			dirty={draft !== initialDraft}
+			saving={props.saving}
+			footer={requestClose => (
+				<ConfigDiffSaveActions
+					config={props.config}
+					resourceDiff={
+						props.databaseBacked
+							? {
+									original: props.previousId ? modelConfigForDisplay(props.initial) : {},
+									modified: modelConfigForDisplay(preview)
+								}
+							: undefined
+					}
+					diffTitle={
+						props.databaseBacked ? tr('copy.modelResourceDiff') : tr('copy.modelConfigDiff')
+					}
+					saveLabel={tr('copy.saveModel')}
+					saving={props.saving}
+					saveDisabled={!model.name.trim() || !preview?.provider}
+					onCancel={requestClose}
+					onSave={save}
+					beforeDiff={validateBeforeDiff}
+					applyDiff={next => upsertModel(next, preview ?? model, props.previousId)}
+				/>
+			)}
+		>
+			<details className="schema-details model-help-details">
+				<summary>{tr('copy.help')}</summary>
+				<div className="model-help-copy">
+					<p>
+						{tr(
+							'copy.agentgatewayRoutesRequestsByMatchingAnIncomingModelNameAndThenSendingItToTheConf_w5k7w1'
+						)}
+					</p>
+					<p>{tr('copy.someExamples')}</p>
+					<ul>
+						<li>{tr('copy.modelMatchSendTo', ['fast', 'gpt-mini'])}</li>
+						<li>{tr('copy.modelMatchForwardAsIs', ['*'])}</li>
+						<li>{tr('copy.modelMatchStripPrefix', ['openai/*', 'openai/'])}</li>
+					</ul>
+				</div>
+			</details>
 
-      <div className="form-grid">
-        <Field
-          label={tr("copy.incomingModelMatch")}
-          tooltip={props.help.field<LlmModel>(
-            "LocalLLMModels",
-            "name",
-            "The model name matched from incoming requests. Use an exact name like gpt-4.1-mini or a wildcard like openai/*.",
-          )}
-        >
-          <input
-            value={model.name}
-            onChange={(event) => {
-              const name = event.target.value;
-              setAutoModelMatch(
-                !name.trim() ||
-                  name === defaultIncomingModelMatch(model.provider),
-              );
-              setModel({ ...model, name });
-            }}
-            placeholder={
-              model.provider
-                ? defaultIncomingModelMatch(model.provider)
-                : "openai/*"
-            }
-          />
-        </Field>
-      </div>
+			<div className="form-grid">
+				<Field
+					label={tr('copy.incomingModelMatch')}
+					tooltip={props.help.field<LlmModel>(
+						'LocalLLMModels',
+						'name',
+						'The model name matched from incoming requests. Use an exact name like gpt-4.1-mini or a wildcard like openai/*.'
+					)}
+				>
+					<input
+						value={model.name}
+						onChange={event => {
+							const name = event.target.value;
+							setAutoModelMatch(!name.trim() || name === defaultIncomingModelMatch(model.provider));
+							setModel({ ...model, name });
+						}}
+						placeholder={model.provider ? defaultIncomingModelMatch(model.provider) : 'openai/*'}
+					/>
+				</Field>
+			</div>
 
-      <ProviderConfigEditor
-        provider={model.provider}
-        params={model.params}
-        auth={model.auth}
-        providers={props.providers}
-        help={props.help}
-        apiKeyError={providerApiKeyError}
-        onProviderChange={(provider, params) =>
-          setModel((current) => {
-            const currentDefault = defaultIncomingModelMatch(current.provider);
-            const nextDefault = defaultIncomingModelMatch(provider);
-            const shouldUseDefault =
-              autoModelMatch ||
-              !current.name.trim() ||
-              current.name === currentDefault;
-            if (shouldUseDefault) setAutoModelMatch(true);
-            if (
-              !props.previousId &&
-              shouldUseDefault &&
-              stripPrefixCandidate(nextDefault)
-            )
-              setUpstreamMode("strip");
-            return {
-              ...current,
-              provider,
-              params,
-              name: shouldUseDefault ? nextDefault : current.name,
-            };
-          })
-        }
-        onParamsChange={(params) =>
-          setModel((current) => ({ ...current, params }))
-        }
-        onAuthChange={(auth) => setModel((current) => ({ ...current, auth }))}
-      />
+			<ProviderConfigEditor
+				provider={model.provider}
+				params={model.params}
+				auth={model.auth}
+				providers={props.providers}
+				help={props.help}
+				apiKeyError={providerApiKeyError}
+				onProviderChange={(provider, params) =>
+					setModel(current => {
+						const currentDefault = defaultIncomingModelMatch(current.provider);
+						const nextDefault = defaultIncomingModelMatch(provider);
+						const shouldUseDefault =
+							autoModelMatch || !current.name.trim() || current.name === currentDefault;
+						if (shouldUseDefault) setAutoModelMatch(true);
+						if (!props.previousId && shouldUseDefault && stripPrefixCandidate(nextDefault))
+							setUpstreamMode('strip');
+						return {
+							...current,
+							provider,
+							params,
+							name: shouldUseDefault ? nextDefault : current.name
+						};
+					})
+				}
+				onParamsChange={params => setModel(current => ({ ...current, params }))}
+				onAuthChange={auth => setModel(current => ({ ...current, auth }))}
+			/>
 
-      {providerSelected ? (
-        <>
-          <UpstreamModelFields
-            mode={upstreamMode}
-            explicitModel={explicitModel}
-            customModelExpression={customModelExpression}
-            gatewayModelName={model.name}
-            provider={
-              model.provider
-                ? resolvedProviderLabel(model.provider, props.providers)
-                : null
-            }
-            help={props.help}
-            setMode={setUpstreamMode}
-            setExplicitModel={setExplicitModel}
-            setCustomModelExpression={setCustomModelExpression}
-          />
+			{providerSelected ? (
+				<>
+					<UpstreamModelFields
+						mode={upstreamMode}
+						explicitModel={explicitModel}
+						customModelExpression={customModelExpression}
+						gatewayModelName={model.name}
+						provider={
+							model.provider ? resolvedProviderLabel(model.provider, props.providers) : null
+						}
+						help={props.help}
+						setMode={setUpstreamMode}
+						setExplicitModel={setExplicitModel}
+						setCustomModelExpression={setCustomModelExpression}
+					/>
 
-          <CollapsiblePolicySection
-            icon={<SlidersHorizontal size={17} />}
-            title={tr("copy.advanced")}
-            description={tr("copy.matchConditionsAndModelSpecificPolicies")}
-          >
-            <div className="policy-editor-stack">
-              <ModelMatchesEditor
-                matches={model.matches ?? []}
-                onChange={(matches) =>
-                  setModel((current) => ({ ...current, matches }))
-                }
-              />
+					<CollapsiblePolicySection
+						icon={<SlidersHorizontal size={17} />}
+						title={tr('copy.advanced')}
+						description={tr('copy.matchConditionsAndModelSpecificPolicies')}
+					>
+						<div className="policy-editor-stack">
+							<ModelMatchesEditor
+								matches={model.matches ?? []}
+								onChange={matches => setModel(current => ({ ...current, matches }))}
+							/>
 
-              <ModelPoliciesInline
-                model={props.initial}
-                help={props.help}
-                transformation={transformation}
-                finalTransformation={finalTransformation}
-                health={health}
-                defaultsText={defaultsText}
-                overridesText={overridesText}
-                requestHeaders={requestHeaders}
-                responseHeaders={responseHeaders}
-                promptCaching={promptCaching}
-                authorization={authorization}
-                setTransformation={setTransformation}
-                setFinalTransformation={setFinalTransformation}
-                setHealth={setHealth}
-                setDefaultsText={setDefaultsText}
-                setOverridesText={setOverridesText}
-                setRequestHeaders={setRequestHeaders}
-                setResponseHeaders={setResponseHeaders}
-                setPromptCaching={setPromptCaching}
-                setAuthorization={setAuthorization}
-              />
-            </div>
-          </CollapsiblePolicySection>
-        </>
-      ) : null}
+							<ModelPoliciesInline
+								model={props.initial}
+								help={props.help}
+								transformation={transformation}
+								finalTransformation={finalTransformation}
+								health={health}
+								defaultsText={defaultsText}
+								overridesText={overridesText}
+								requestHeaders={requestHeaders}
+								responseHeaders={responseHeaders}
+								promptCaching={promptCaching}
+								authorization={authorization}
+								setTransformation={setTransformation}
+								setFinalTransformation={setFinalTransformation}
+								setHealth={setHealth}
+								setDefaultsText={setDefaultsText}
+								setOverridesText={setOverridesText}
+								setRequestHeaders={setRequestHeaders}
+								setResponseHeaders={setResponseHeaders}
+								setPromptCaching={setPromptCaching}
+								setAuthorization={setAuthorization}
+							/>
+						</div>
+					</CollapsiblePolicySection>
+				</>
+			) : null}
 
-      {providerSelected && warnings.length ? (
-        <div className="model-warning-block">
-          <StatusBanner state="warn" title={tr("copy.modelWarnings")}>
-            <ul>
-              {warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          </StatusBanner>
-        </div>
-      ) : null}
-      {policyError ? (
-        <StatusBanner state="bad" title={tr("copy.invalidModelPolicies")}>
-          {policyError}
-        </StatusBanner>
-      ) : null}
-      {props.saveError ? (
-        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
-          {props.saveError}
-        </StatusBanner>
-      ) : null}
+			{providerSelected && warnings.length ? (
+				<div className="model-warning-block">
+					<StatusBanner state="warn" title={tr('copy.modelWarnings')}>
+						<ul>
+							{warnings.map(warning => (
+								<li key={warning}>{warning}</li>
+							))}
+						</ul>
+					</StatusBanner>
+				</div>
+			) : null}
+			{policyError ? (
+				<StatusBanner state="bad" title={tr('copy.invalidModelPolicies')}>
+					{policyError}
+				</StatusBanner>
+			) : null}
+			{props.saveError ? (
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
+					{props.saveError}
+				</StatusBanner>
+			) : null}
 
-      {providerSelected ? (
-        <details>
-          <summary>{tr("copy.generatedModelConfig")}</summary>
-          <YamlBlock value={modelConfigForDisplay(preview)} />
-        </details>
-      ) : null}
-    </Drawer>
-  );
+			{providerSelected ? (
+				<details>
+					<summary>{tr('copy.generatedModelConfig')}</summary>
+					<YamlBlock value={modelConfigForDisplay(preview)} />
+				</details>
+			) : null}
+		</Drawer>
+	);
 }
 
-type UpstreamModelMode = "incoming" | "explicit" | "strip" | "custom";
+type UpstreamModelMode = 'incoming' | 'explicit' | 'strip' | 'custom';
 
 function UpstreamModelFields(props: {
-  mode: UpstreamModelMode;
-  explicitModel: string;
-  customModelExpression: string;
-  gatewayModelName: string;
-  provider?: string | null;
-  help: SchemaHelp;
-  setMode: (mode: UpstreamModelMode) => void;
-  setExplicitModel: (model: string) => void;
-  setCustomModelExpression: (expression: string) => void;
+	mode: UpstreamModelMode;
+	explicitModel: string;
+	customModelExpression: string;
+	gatewayModelName: string;
+	provider?: string | null;
+	help: SchemaHelp;
+	setMode: (mode: UpstreamModelMode) => void;
+	setExplicitModel: (model: string) => void;
+	setCustomModelExpression: (expression: string) => void;
 }) {
-  const prefix = stripPrefixCandidate(props.gatewayModelName);
-  const mode = prefix || props.mode !== "strip" ? props.mode : "incoming";
-  const stripLabel = prefix
-    ? tr("copy.stripValue", `${prefix.slice(0, -1)}/`)
-    : tr("copy.stripPrefix");
-  return (
-    <>
-      <FieldGroup
-        label={tr("copy.outgoingModel")}
-        tooltip={props.help.field<LocalLLMParams>("LocalLLMParams", "model")}
-      >
-        <div className="segmented-control upstream-model-control">
-          <button
-            className={mode === "incoming" ? "active" : ""}
-            type="button"
-            onClick={() => props.setMode("incoming")}
-          >
-            {tr("copy.incomingModel")}
-          </button>
-          <button
-            className={mode === "explicit" ? "active" : ""}
-            type="button"
-            onClick={() => props.setMode("explicit")}
-          >
-            {tr("copy.explicit")}
-          </button>
-          {prefix ? (
-            <button
-              className={mode === "strip" ? "active" : ""}
-              type="button"
-              onClick={() => props.setMode("strip")}
-            >
-              {stripLabel}
-            </button>
-          ) : null}
-          <button
-            className={mode === "custom" ? "active" : ""}
-            type="button"
-            onClick={() => props.setMode("custom")}
-          >
-            {tr("copy.custom")}
-          </button>
-        </div>
-      </FieldGroup>
+	const prefix = stripPrefixCandidate(props.gatewayModelName);
+	const mode = prefix || props.mode !== 'strip' ? props.mode : 'incoming';
+	const stripLabel = prefix
+		? tr('copy.stripValue', `${prefix.slice(0, -1)}/`)
+		: tr('copy.stripPrefix');
+	return (
+		<>
+			<FieldGroup
+				label={tr('copy.outgoingModel')}
+				tooltip={props.help.field<LocalLLMParams>('LocalLLMParams', 'model')}
+			>
+				<div className="segmented-control upstream-model-control">
+					<button
+						className={mode === 'incoming' ? 'active' : ''}
+						type="button"
+						onClick={() => props.setMode('incoming')}
+					>
+						{tr('copy.incomingModel')}
+					</button>
+					<button
+						className={mode === 'explicit' ? 'active' : ''}
+						type="button"
+						onClick={() => props.setMode('explicit')}
+					>
+						{tr('copy.explicit')}
+					</button>
+					{prefix ? (
+						<button
+							className={mode === 'strip' ? 'active' : ''}
+							type="button"
+							onClick={() => props.setMode('strip')}
+						>
+							{stripLabel}
+						</button>
+					) : null}
+					<button
+						className={mode === 'custom' ? 'active' : ''}
+						type="button"
+						onClick={() => props.setMode('custom')}
+					>
+						{tr('copy.custom')}
+					</button>
+				</div>
+			</FieldGroup>
 
-      {mode === "explicit" ? (
-        <Field
-          label={tr("copy.explicitOutgoingModel")}
-          tooltip={props.help.field<LocalLLMParams>("LocalLLMParams", "model")}
-        >
-          <CatalogModelSelector
-            ariaLabel={tr("copy.explicitOutgoingModel")}
-            value={props.explicitModel}
-            provider={props.provider}
-            onChange={props.setExplicitModel}
-            placeholder="gpt-4.1-mini"
-          />
-        </Field>
-      ) : null}
-      {mode === "custom" ? (
-        <FieldGroup
-          label={tr("copy.modelCelExpression")}
-          tooltip={props.help.field<LlmModel>(
-            "LocalLLMModels",
-            "transformation",
-          )}
-        >
-          <MiniMonacoEditor
-            language="cel"
-            value={props.customModelExpression}
-            onChange={props.setCustomModelExpression}
-            placeholder={tr("copy.llmRequestModelStripPrefixAnthropic")}
-          />
-        </FieldGroup>
-      ) : null}
-    </>
-  );
+			{mode === 'explicit' ? (
+				<Field
+					label={tr('copy.explicitOutgoingModel')}
+					tooltip={props.help.field<LocalLLMParams>('LocalLLMParams', 'model')}
+				>
+					<CatalogModelSelector
+						ariaLabel={tr('copy.explicitOutgoingModel')}
+						value={props.explicitModel}
+						provider={props.provider}
+						onChange={props.setExplicitModel}
+						placeholder="gpt-4.1-mini"
+					/>
+				</Field>
+			) : null}
+			{mode === 'custom' ? (
+				<FieldGroup
+					label={tr('copy.modelCelExpression')}
+					tooltip={props.help.field<LlmModel>('LocalLLMModels', 'transformation')}
+				>
+					<MiniMonacoEditor
+						language="cel"
+						value={props.customModelExpression}
+						onChange={props.setCustomModelExpression}
+						placeholder={tr('copy.llmRequestModelStripPrefixAnthropic')}
+					/>
+				</FieldGroup>
+			) : null}
+		</>
+	);
 }
 
 function ModelPoliciesInline(props: {
-  model: LlmModel;
-  help: SchemaHelp;
-  transformation: Record<string, string>;
-  finalTransformation: Record<string, string>;
-  health: LlmModel["health"];
-  defaultsText: string;
-  overridesText: string;
-  requestHeaders: LlmModel["requestHeaders"];
-  responseHeaders: LlmModel["responseHeaders"];
-  promptCaching: LlmModel["promptCaching"];
-  authorization: AuthorizationDraft | null;
-  setTransformation: (value: Record<string, string>) => void;
-  setFinalTransformation: (value: Record<string, string>) => void;
-  setHealth: (value: LlmModel["health"] | null) => void;
-  setDefaultsText: (value: string) => void;
-  setOverridesText: (value: string) => void;
-  setRequestHeaders: (value: LlmModel["requestHeaders"] | null) => void;
-  setResponseHeaders: (value: LlmModel["responseHeaders"] | null) => void;
-  setPromptCaching: (value: LlmModel["promptCaching"] | null) => void;
-  setAuthorization: (value: AuthorizationDraft | null) => void;
+	model: LlmModel;
+	help: SchemaHelp;
+	transformation: Record<string, string>;
+	finalTransformation: Record<string, string>;
+	health: LlmModel['health'];
+	defaultsText: string;
+	overridesText: string;
+	requestHeaders: LlmModel['requestHeaders'];
+	responseHeaders: LlmModel['responseHeaders'];
+	promptCaching: LlmModel['promptCaching'];
+	authorization: AuthorizationDraft | null;
+	setTransformation: (value: Record<string, string>) => void;
+	setFinalTransformation: (value: Record<string, string>) => void;
+	setHealth: (value: LlmModel['health'] | null) => void;
+	setDefaultsText: (value: string) => void;
+	setOverridesText: (value: string) => void;
+	setRequestHeaders: (value: LlmModel['requestHeaders'] | null) => void;
+	setResponseHeaders: (value: LlmModel['responseHeaders'] | null) => void;
+	setPromptCaching: (value: LlmModel['promptCaching'] | null) => void;
+	setAuthorization: (value: AuthorizationDraft | null) => void;
 }) {
-  const patch = buildModelPolicyPatch(props);
-  const transformationEnabled =
-    Object.keys(expressionMap(props.model.transformation)).length > 0;
-  const finalTransformationEnabled =
-    Object.keys(expressionMap(props.model.finalTransformation)).length > 0;
-  const defaultsEnabled = Boolean(
-    props.model.defaults && Object.keys(props.model.defaults).length,
-  );
-  const overridesEnabled = Boolean(
-    props.model.overrides && Object.keys(props.model.overrides).length,
-  );
-  return (
-    <CollapsiblePolicySection
-      icon={<SlidersHorizontal size={17} />}
-      title={tr("copy.modelPolicies")}
-      description={modelPolicySummary({ ...props.model, ...patch.value })}
-    >
-      <div className="policy-editor-stack">
-        <CollapsiblePolicySection
-          icon={<SlidersHorizontal size={17} />}
-          title={tr("copy.transformation")}
-          description={
-            Object.keys(props.transformation).length
-              ? tr(
-                  "copy.valueFieldsConfigured",
-                  Object.keys(props.transformation).length,
-                )
-              : tr("copy.noFieldsConfigured")
-          }
-          defaultOpen={transformationEnabled}
-        >
-          <KeyValueEditor
-            label={tr("copy.llmRequestFields")}
-            tooltip={props.help.field<LlmModel>(
-              "LocalLLMModels",
-              "transformation",
-            )}
-            values={props.transformation}
-            keyPlaceholder="field name"
-            valuePlaceholder="CEL expression"
-            valueKind="cel"
-            onChange={props.setTransformation}
-          />
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<SlidersHorizontal size={17} />}
-          title={tr("copy.finalTransformation")}
-          description={
-            Object.keys(props.finalTransformation).length
-              ? tr(
-                  "copy.valueFieldsConfigured",
-                  Object.keys(props.finalTransformation).length,
-                )
-              : tr("copy.noFieldsConfigured")
-          }
-          defaultOpen={finalTransformationEnabled}
-        >
-          <KeyValueEditor
-            label={tr("copy.providerRequestFields")}
-            tooltip={props.help.field<LlmModel>(
-              "LocalLLMModels",
-              "finalTransformation",
-            )}
-            values={props.finalTransformation}
-            keyPlaceholder="field name"
-            valuePlaceholder="CEL expression"
-            valueKind="cel"
-            onChange={props.setFinalTransformation}
-          />
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<FileText size={17} />}
-          title={tr("copy.defaultRequestValues")}
-          description={
-            props.defaultsText.trim()
-              ? tr("copy.defaultsConfigured")
-              : tr("copy.noDefaultsConfigured")
-          }
-          defaultOpen={defaultsEnabled}
-        >
-          <YamlMappingEditor
-            label={tr("copy.defaultsYaml")}
-            tooltip={props.help.field<LlmModel>("LocalLLMModels", "defaults")}
-            value={props.defaultsText}
-            onChange={props.setDefaultsText}
-            placeholder={tr("copy.temperature02")}
-          />
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<FileText size={17} />}
-          title={tr("copy.overrideRequestValues")}
-          description={
-            props.overridesText.trim()
-              ? tr("copy.overridesConfigured")
-              : tr("copy.noOverridesConfigured")
-          }
-          defaultOpen={overridesEnabled}
-        >
-          <YamlMappingEditor
-            label={tr("copy.overridesYaml")}
-            tooltip={props.help.field<LlmModel>("LocalLLMModels", "overrides")}
-            value={props.overridesText}
-            onChange={props.setOverridesText}
-            placeholder={tr("copy.streamFalse")}
-          />
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<SlidersHorizontal size={17} />}
-          title={tr("copy.requestHeaders")}
-          description={headerModifierSummary(props.requestHeaders, "request")}
-          defaultOpen={Boolean(props.model.requestHeaders)}
-        >
-          <HeaderModifierEditor
-            headerType="request"
-            value={props.requestHeaders}
-            help={props.help}
-            onChange={props.setRequestHeaders}
-          />
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<SlidersHorizontal size={17} />}
-          title={tr("copy.responseHeaders")}
-          description={headerModifierSummary(props.responseHeaders, "response")}
-          defaultOpen={Boolean(props.model.responseHeaders)}
-        >
-          <HeaderModifierEditor
-            headerType="response"
-            value={props.responseHeaders}
-            help={props.help}
-            onChange={props.setResponseHeaders}
-          />
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<Activity size={17} />}
-          title={tr("copy.health")}
-          description={healthSummary(props.health)}
-          defaultOpen={Boolean(props.model.health)}
-        >
-          <HealthPolicyEditor
-            health={props.health}
-            help={props.help}
-            onChange={props.setHealth}
-          />
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<ShieldCheck size={17} />}
-          title={tr("copy.authorization")}
-          description={authorizationSummary(props.authorization)}
-          defaultOpen={Boolean(props.model.authorization)}
-        >
-          <div className="policy-editor-stack compact">
-            <AuthorizationPolicyEditor
-              key={JSON.stringify(props.authorization ?? null)}
-              authorization={props.authorization}
-              saving={false}
-              onSave={props.setAuthorization}
-            />
-            {props.authorization ? (
-              <button
-                className="button"
-                type="button"
-                onClick={() => props.setAuthorization(null)}
-              >
-                {tr("copy.clearAuthorization")}
-              </button>
-            ) : null}
-          </div>
-        </CollapsiblePolicySection>
-        <CollapsiblePolicySection
-          icon={<SlidersHorizontal size={17} />}
-          title={tr("copy.promptCaching")}
-          description={promptCachingSummary(props.promptCaching)}
-          defaultOpen={Boolean(props.model.promptCaching)}
-        >
-          <PromptCachingEditor
-            value={props.promptCaching}
-            help={props.help}
-            onChange={props.setPromptCaching}
-          />
-        </CollapsiblePolicySection>
-        <ResultingYaml value={patch.value} />
-      </div>
-    </CollapsiblePolicySection>
-  );
+	const patch = buildModelPolicyPatch(props);
+	const transformationEnabled = Object.keys(expressionMap(props.model.transformation)).length > 0;
+	const finalTransformationEnabled =
+		Object.keys(expressionMap(props.model.finalTransformation)).length > 0;
+	const defaultsEnabled = Boolean(props.model.defaults && Object.keys(props.model.defaults).length);
+	const overridesEnabled = Boolean(
+		props.model.overrides && Object.keys(props.model.overrides).length
+	);
+	return (
+		<CollapsiblePolicySection
+			icon={<SlidersHorizontal size={17} />}
+			title={tr('copy.modelPolicies')}
+			description={modelPolicySummary({ ...props.model, ...patch.value })}
+		>
+			<div className="policy-editor-stack">
+				<CollapsiblePolicySection
+					icon={<SlidersHorizontal size={17} />}
+					title={tr('copy.transformation')}
+					description={
+						Object.keys(props.transformation).length
+							? tr('copy.valueFieldsConfigured', Object.keys(props.transformation).length)
+							: tr('copy.noFieldsConfigured')
+					}
+					defaultOpen={transformationEnabled}
+				>
+					<KeyValueEditor
+						label={tr('copy.llmRequestFields')}
+						tooltip={props.help.field<LlmModel>('LocalLLMModels', 'transformation')}
+						values={props.transformation}
+						keyPlaceholder="field name"
+						valuePlaceholder="CEL expression"
+						valueKind="cel"
+						onChange={props.setTransformation}
+					/>
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<SlidersHorizontal size={17} />}
+					title={tr('copy.finalTransformation')}
+					description={
+						Object.keys(props.finalTransformation).length
+							? tr('copy.valueFieldsConfigured', Object.keys(props.finalTransformation).length)
+							: tr('copy.noFieldsConfigured')
+					}
+					defaultOpen={finalTransformationEnabled}
+				>
+					<KeyValueEditor
+						label={tr('copy.providerRequestFields')}
+						tooltip={props.help.field<LlmModel>('LocalLLMModels', 'finalTransformation')}
+						values={props.finalTransformation}
+						keyPlaceholder="field name"
+						valuePlaceholder="CEL expression"
+						valueKind="cel"
+						onChange={props.setFinalTransformation}
+					/>
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<FileText size={17} />}
+					title={tr('copy.defaultRequestValues')}
+					description={
+						props.defaultsText.trim()
+							? tr('copy.defaultsConfigured')
+							: tr('copy.noDefaultsConfigured')
+					}
+					defaultOpen={defaultsEnabled}
+				>
+					<YamlMappingEditor
+						label={tr('copy.defaultsYaml')}
+						tooltip={props.help.field<LlmModel>('LocalLLMModels', 'defaults')}
+						value={props.defaultsText}
+						onChange={props.setDefaultsText}
+						placeholder={tr('copy.temperature02')}
+					/>
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<FileText size={17} />}
+					title={tr('copy.overrideRequestValues')}
+					description={
+						props.overridesText.trim()
+							? tr('copy.overridesConfigured')
+							: tr('copy.noOverridesConfigured')
+					}
+					defaultOpen={overridesEnabled}
+				>
+					<YamlMappingEditor
+						label={tr('copy.overridesYaml')}
+						tooltip={props.help.field<LlmModel>('LocalLLMModels', 'overrides')}
+						value={props.overridesText}
+						onChange={props.setOverridesText}
+						placeholder={tr('copy.streamFalse')}
+					/>
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<SlidersHorizontal size={17} />}
+					title={tr('copy.requestHeaders')}
+					description={headerModifierSummary(props.requestHeaders, 'request')}
+					defaultOpen={Boolean(props.model.requestHeaders)}
+				>
+					<HeaderModifierEditor
+						headerType="request"
+						value={props.requestHeaders}
+						help={props.help}
+						onChange={props.setRequestHeaders}
+					/>
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<SlidersHorizontal size={17} />}
+					title={tr('copy.responseHeaders')}
+					description={headerModifierSummary(props.responseHeaders, 'response')}
+					defaultOpen={Boolean(props.model.responseHeaders)}
+				>
+					<HeaderModifierEditor
+						headerType="response"
+						value={props.responseHeaders}
+						help={props.help}
+						onChange={props.setResponseHeaders}
+					/>
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<Activity size={17} />}
+					title={tr('copy.health')}
+					description={healthSummary(props.health)}
+					defaultOpen={Boolean(props.model.health)}
+				>
+					<HealthPolicyEditor health={props.health} help={props.help} onChange={props.setHealth} />
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<ShieldCheck size={17} />}
+					title={tr('copy.authorization')}
+					description={authorizationSummary(props.authorization)}
+					defaultOpen={Boolean(props.model.authorization)}
+				>
+					<div className="policy-editor-stack compact">
+						<AuthorizationPolicyEditor
+							key={JSON.stringify(props.authorization ?? null)}
+							authorization={props.authorization}
+							saving={false}
+							onSave={props.setAuthorization}
+						/>
+						{props.authorization ? (
+							<button className="button" type="button" onClick={() => props.setAuthorization(null)}>
+								{tr('copy.clearAuthorization')}
+							</button>
+						) : null}
+					</div>
+				</CollapsiblePolicySection>
+				<CollapsiblePolicySection
+					icon={<SlidersHorizontal size={17} />}
+					title={tr('copy.promptCaching')}
+					description={promptCachingSummary(props.promptCaching)}
+					defaultOpen={Boolean(props.model.promptCaching)}
+				>
+					<PromptCachingEditor
+						value={props.promptCaching}
+						help={props.help}
+						onChange={props.setPromptCaching}
+					/>
+				</CollapsiblePolicySection>
+				<ResultingYaml value={patch.value} />
+			</div>
+		</CollapsiblePolicySection>
+	);
 }
 
 function buildModelPolicyPatch(args: {
-  transformation: Record<string, string>;
-  finalTransformation: Record<string, string>;
-  health: LlmModel["health"];
-  defaultsText: string;
-  overridesText: string;
-  requestHeaders: LlmModel["requestHeaders"];
-  responseHeaders: LlmModel["responseHeaders"];
-  promptCaching: LlmModel["promptCaching"];
-  authorization: AuthorizationDraft | null;
+	transformation: Record<string, string>;
+	finalTransformation: Record<string, string>;
+	health: LlmModel['health'];
+	defaultsText: string;
+	overridesText: string;
+	requestHeaders: LlmModel['requestHeaders'];
+	responseHeaders: LlmModel['responseHeaders'];
+	promptCaching: LlmModel['promptCaching'];
+	authorization: AuthorizationDraft | null;
 }) {
-  try {
-    const defaults = parseOptionalYamlMapping(args.defaultsText);
-    const overrides = parseOptionalYamlMapping(args.overridesText);
-    const transformation = cleanEmpty(args.transformation) as
-      | LlmModel["transformation"]
-      | undefined;
-    const finalTransformation = cleanEmpty(args.finalTransformation) as
-      | LlmModel["finalTransformation"]
-      | undefined;
-    const health = cleanEmpty(args.health) as LlmModel["health"] | undefined;
-    const requestHeaders = cleanEmpty(args.requestHeaders) as
-      | LlmModel["requestHeaders"]
-      | undefined;
-    const responseHeaders = cleanEmpty(args.responseHeaders) as
-      | LlmModel["responseHeaders"]
-      | undefined;
-    const promptCaching = cleanEmpty(args.promptCaching) as
-      | LlmModel["promptCaching"]
-      | undefined;
-    const authorization = cleanEmpty(args.authorization) as
-      | LlmModel["authorization"]
-      | undefined;
-    return {
-      value: {
-        defaults,
-        overrides,
-        transformation:
-          transformation && Object.keys(transformation).length
-            ? transformation
-            : null,
-        finalTransformation:
-          finalTransformation && Object.keys(finalTransformation).length
-            ? finalTransformation
-            : null,
-        requestHeaders:
-          requestHeaders && Object.keys(requestHeaders).length
-            ? requestHeaders
-            : null,
-        responseHeaders:
-          responseHeaders && Object.keys(responseHeaders).length
-            ? responseHeaders
-            : null,
-        health: health && Object.keys(health).length ? health : null,
-        promptCaching:
-          promptCaching && Object.keys(promptCaching).length
-            ? promptCaching
-            : null,
-        authorization:
-          authorization && Object.keys(authorization).length
-            ? authorization
-            : null,
-      } satisfies Partial<LlmModel>,
-      error: null,
-    };
-  } catch (error) {
-    return {
-      value: {},
-      error:
-        error instanceof Error
-          ? error.message
-          : tr("copy.invalidPolicyConfiguration"),
-    };
-  }
+	try {
+		const defaults = parseOptionalYamlMapping(args.defaultsText);
+		const overrides = parseOptionalYamlMapping(args.overridesText);
+		const transformation = cleanEmpty(args.transformation) as
+			| LlmModel['transformation']
+			| undefined;
+		const finalTransformation = cleanEmpty(args.finalTransformation) as
+			| LlmModel['finalTransformation']
+			| undefined;
+		const health = cleanEmpty(args.health) as LlmModel['health'] | undefined;
+		const requestHeaders = cleanEmpty(args.requestHeaders) as
+			| LlmModel['requestHeaders']
+			| undefined;
+		const responseHeaders = cleanEmpty(args.responseHeaders) as
+			| LlmModel['responseHeaders']
+			| undefined;
+		const promptCaching = cleanEmpty(args.promptCaching) as LlmModel['promptCaching'] | undefined;
+		const authorization = cleanEmpty(args.authorization) as LlmModel['authorization'] | undefined;
+		return {
+			value: {
+				defaults,
+				overrides,
+				transformation:
+					transformation && Object.keys(transformation).length ? transformation : null,
+				finalTransformation:
+					finalTransformation && Object.keys(finalTransformation).length
+						? finalTransformation
+						: null,
+				requestHeaders:
+					requestHeaders && Object.keys(requestHeaders).length ? requestHeaders : null,
+				responseHeaders:
+					responseHeaders && Object.keys(responseHeaders).length ? responseHeaders : null,
+				health: health && Object.keys(health).length ? health : null,
+				promptCaching: promptCaching && Object.keys(promptCaching).length ? promptCaching : null,
+				authorization: authorization && Object.keys(authorization).length ? authorization : null
+			} satisfies Partial<LlmModel>,
+			error: null
+		};
+	} catch (error) {
+		return {
+			value: {},
+			error: error instanceof Error ? error.message : tr('copy.invalidPolicyConfiguration')
+		};
+	}
 }
 
 function modelPolicySummary(model: Partial<LlmModel>) {
-  const policies = [
-    model.defaults && Object.keys(model.defaults).length ? "defaults" : null,
-    model.overrides && Object.keys(model.overrides).length ? "overrides" : null,
-    model.transformation && Object.keys(model.transformation).length
-      ? "transformation"
-      : null,
-    model.finalTransformation && Object.keys(model.finalTransformation).length
-      ? "final transformation"
-      : null,
-    model.requestHeaders ? "request headers" : null,
-    model.responseHeaders ? "response headers" : null,
-    model.health ? "health" : null,
-    model.authorization ? "authorization" : null,
-    model.promptCaching ? "prompt caching" : null,
-  ].filter(Boolean);
-  return policies.length
-    ? `${policies.length} configured`
-    : tr("copy.noModelPoliciesConfigured");
+	const policies = [
+		model.defaults && Object.keys(model.defaults).length ? 'defaults' : null,
+		model.overrides && Object.keys(model.overrides).length ? 'overrides' : null,
+		model.transformation && Object.keys(model.transformation).length ? 'transformation' : null,
+		model.finalTransformation && Object.keys(model.finalTransformation).length
+			? 'final transformation'
+			: null,
+		model.requestHeaders ? 'request headers' : null,
+		model.responseHeaders ? 'response headers' : null,
+		model.health ? 'health' : null,
+		model.authorization ? 'authorization' : null,
+		model.promptCaching ? 'prompt caching' : null
+	].filter(Boolean);
+	return policies.length ? `${policies.length} configured` : tr('copy.noModelPoliciesConfigured');
 }
 
 function VirtualModelEditor(props: {
-  initial: LlmVirtualModel;
-  config?: GatewayConfig;
-  databaseBacked: boolean;
-  previousName?: string;
-  baseModels: LlmModel[];
-  providers: LlmProvider[];
-  help: SchemaHelp;
-  saving: boolean;
-  saveError?: string | null;
-  onCancel: () => void;
-  onSave: (model: LlmVirtualModel, previousName?: string) => void;
+	initial: LlmVirtualModel;
+	config?: GatewayConfig;
+	databaseBacked: boolean;
+	previousName?: string;
+	baseModels: LlmModel[];
+	providers: LlmProvider[];
+	help: SchemaHelp;
+	saving: boolean;
+	saveError?: string | null;
+	onCancel: () => void;
+	onSave: (model: LlmVirtualModel, previousName?: string) => void;
 }) {
-  const [model, setModel] = useState<LlmVirtualModel>(props.initial);
-  const strategy = model.routing.conditional
-    ? "conditional"
-    : model.routing.failover
-      ? "failover"
-      : "weighted";
-  const weightedTargets = model.routing.weighted?.targets ?? [];
-  const failoverTargets = model.routing.failover?.targets ?? [];
-  const conditionalTargets = model.routing.conditional?.targets ?? [];
-  const targetOptions = modelTargetOptions(props.baseModels, props.providers);
-  const preview = cleanEmpty(model) as LlmVirtualModel | undefined;
-  const activeTargets =
-    strategy === "weighted"
-      ? weightedTargets
-      : strategy === "failover"
-        ? failoverTargets
-        : conditionalTargets;
-  const hasInvalidTarget = activeTargets.some(
-    (target) =>
-      !target.model.trim() ||
-      isIncompleteWildcardTarget(target.model, props.baseModels),
-  );
-  const hasInvalidConditionalFallback =
-    strategy === "conditional" &&
-    conditionalTargets.some(
-      (target, index) =>
-        !target.when?.trim() && index !== conditionalTargets.length - 1,
-    );
-  const failoverGroups = failoverTargetGroups(failoverTargets);
-  const defaultTarget = defaultVirtualTargetModel(props.baseModels);
-  const saveDisabled =
-    props.saving ||
-    !model.name.trim() ||
-    activeTargets.length === 0 ||
-    hasInvalidTarget ||
-    hasInvalidConditionalFallback;
-  const [initialDraft] = useState(() => JSON.stringify(model));
+	const [model, setModel] = useState<LlmVirtualModel>(props.initial);
+	const strategy = model.routing.conditional
+		? 'conditional'
+		: model.routing.failover
+			? 'failover'
+			: 'weighted';
+	const weightedTargets = model.routing.weighted?.targets ?? [];
+	const failoverTargets = model.routing.failover?.targets ?? [];
+	const conditionalTargets = model.routing.conditional?.targets ?? [];
+	const targetOptions = modelTargetOptions(props.baseModels, props.providers);
+	const preview = cleanEmpty(model) as LlmVirtualModel | undefined;
+	const activeTargets =
+		strategy === 'weighted'
+			? weightedTargets
+			: strategy === 'failover'
+				? failoverTargets
+				: conditionalTargets;
+	const hasInvalidTarget = activeTargets.some(
+		target => !target.model.trim() || isIncompleteWildcardTarget(target.model, props.baseModels)
+	);
+	const hasInvalidConditionalFallback =
+		strategy === 'conditional' &&
+		conditionalTargets.some(
+			(target, index) => !target.when?.trim() && index !== conditionalTargets.length - 1
+		);
+	const failoverGroups = failoverTargetGroups(failoverTargets);
+	const defaultTarget = defaultVirtualTargetModel(props.baseModels);
+	const saveDisabled =
+		props.saving ||
+		!model.name.trim() ||
+		activeTargets.length === 0 ||
+		hasInvalidTarget ||
+		hasInvalidConditionalFallback;
+	const [initialDraft] = useState(() => JSON.stringify(model));
 
-  function setStrategy(next: VirtualRoutingStrategy) {
-    if (next === "weighted") {
-      setModel((current) => ({
-        ...current,
-        routing: {
-          weighted: {
-            targets: current.routing.weighted?.targets?.length
-              ? current.routing.weighted.targets
-              : [{ model: defaultTarget, weight: 1 }],
-          },
-        },
-      }));
-      return;
-    }
-    if (next === "conditional") {
-      setModel((current) => ({
-        ...current,
-        routing: {
-          conditional: {
-            targets: current.routing.conditional?.targets?.length
-              ? current.routing.conditional.targets
-              : [
-                  {
-                    when: 'json(request.body).route == "default"',
-                    model: defaultTarget,
-                  },
-                  { model: defaultTarget },
-                ],
-          },
-        },
-      }));
-      return;
-    }
-    setModel((current) => ({
-      ...current,
-      routing: {
-        failover: {
-          targets: current.routing.failover?.targets?.length
-            ? current.routing.failover.targets
-            : [{ model: defaultTarget, priority: 0 }],
-        },
-      },
-    }));
-  }
+	function setStrategy(next: VirtualRoutingStrategy) {
+		if (next === 'weighted') {
+			setModel(current => ({
+				...current,
+				routing: {
+					weighted: {
+						targets: current.routing.weighted?.targets?.length
+							? current.routing.weighted.targets
+							: [{ model: defaultTarget, weight: 1 }]
+					}
+				}
+			}));
+			return;
+		}
+		if (next === 'conditional') {
+			setModel(current => ({
+				...current,
+				routing: {
+					conditional: {
+						targets: current.routing.conditional?.targets?.length
+							? current.routing.conditional.targets
+							: [
+									{
+										when: 'json(request.body).route == "default"',
+										model: defaultTarget
+									},
+									{ model: defaultTarget }
+								]
+					}
+				}
+			}));
+			return;
+		}
+		setModel(current => ({
+			...current,
+			routing: {
+				failover: {
+					targets: current.routing.failover?.targets?.length
+						? current.routing.failover.targets
+						: [{ model: defaultTarget, priority: 0 }]
+				}
+			}
+		}));
+	}
 
-  function updateWeighted(
-    index: number,
-    patch: Partial<
-      NonNullable<LlmVirtualModel["routing"]["weighted"]>["targets"][number]
-    >,
-  ) {
-    setModel((current) => {
-      const targets = [...(current.routing.weighted?.targets ?? [])];
-      targets[index] = { ...targets[index], ...patch };
-      return { ...current, routing: { weighted: { targets } } };
-    });
-  }
+	function updateWeighted(
+		index: number,
+		patch: Partial<NonNullable<LlmVirtualModel['routing']['weighted']>['targets'][number]>
+	) {
+		setModel(current => {
+			const targets = [...(current.routing.weighted?.targets ?? [])];
+			targets[index] = { ...targets[index], ...patch };
+			return { ...current, routing: { weighted: { targets } } };
+		});
+	}
 
-  function updateFailoverGroups(
-    groups: Array<
-      Array<
-        NonNullable<LlmVirtualModel["routing"]["failover"]>["targets"][number]
-      >
-    >,
-  ) {
-    setModel((current) => ({
-      ...current,
-      routing: {
-        failover: {
-          targets: groups.flatMap((group, priority) =>
-            group.map((target) => ({ ...target, priority })),
-          ),
-        },
-      },
-    }));
-  }
+	function updateFailoverGroups(
+		groups: Array<Array<NonNullable<LlmVirtualModel['routing']['failover']>['targets'][number]>>
+	) {
+		setModel(current => ({
+			...current,
+			routing: {
+				failover: {
+					targets: groups.flatMap((group, priority) =>
+						group.map(target => ({ ...target, priority }))
+					)
+				}
+			}
+		}));
+	}
 
-  function updateConditional(
-    index: number,
-    patch: Partial<ConditionalVirtualTarget>,
-  ) {
-    setModel((current) => {
-      const targets = [...(current.routing.conditional?.targets ?? [])];
-      targets[index] = cleanEmpty({
-        ...targets[index],
-        ...patch,
-      }) as ConditionalVirtualTarget;
-      return { ...current, routing: { conditional: { targets } } };
-    });
-  }
+	function updateConditional(index: number, patch: Partial<ConditionalVirtualTarget>) {
+		setModel(current => {
+			const targets = [...(current.routing.conditional?.targets ?? [])];
+			targets[index] = cleanEmpty({
+				...targets[index],
+				...patch
+			}) as ConditionalVirtualTarget;
+			return { ...current, routing: { conditional: { targets } } };
+		});
+	}
 
-  return (
-    <Drawer
-      title={
-        props.previousName
-          ? tr("copy.editVirtualModel")
-          : tr("copy.addVirtualModel")
-      }
-      onClose={props.onCancel}
-      dirty={JSON.stringify(model) !== initialDraft}
-      saving={props.saving}
-      footer={(requestClose) => (
-        <ConfigDiffSaveActions
-          config={props.config}
-          resourceDiff={
-            props.databaseBacked
-              ? {
-                  original: props.previousName ? props.initial : {},
-                  modified: preview ?? {},
-                }
-              : undefined
-          }
-          diffTitle={
-            props.databaseBacked
-              ? tr("copy.virtualModelResourceDiff")
-              : tr("copy.virtualModelConfigDiff")
-          }
-          saveLabel={tr("copy.saveVirtualModel")}
-          saving={props.saving}
-          saveDisabled={saveDisabled}
-          onCancel={requestClose}
-          onSave={() => props.onSave(preview ?? model, props.previousName)}
-          applyDiff={(next) =>
-            upsertVirtualModel(next, preview ?? model, props.previousName)
-          }
-        />
-      )}
-    >
-      <Field
-        label={tr("copy.virtualModelName")}
-        tooltip={props.help.field<LlmVirtualModel>(
-          "LocalLLMVirtualModel",
-          "name",
-        )}
-      >
-        <input
-          value={model.name}
-          onChange={(event) => setModel({ ...model, name: event.target.value })}
-          placeholder="resilient"
-        />
-      </Field>
+	return (
+		<Drawer
+			title={props.previousName ? tr('copy.editVirtualModel') : tr('copy.addVirtualModel')}
+			onClose={props.onCancel}
+			dirty={JSON.stringify(model) !== initialDraft}
+			saving={props.saving}
+			footer={requestClose => (
+				<ConfigDiffSaveActions
+					config={props.config}
+					resourceDiff={
+						props.databaseBacked
+							? {
+									original: props.previousName ? props.initial : {},
+									modified: preview ?? {}
+								}
+							: undefined
+					}
+					diffTitle={
+						props.databaseBacked
+							? tr('copy.virtualModelResourceDiff')
+							: tr('copy.virtualModelConfigDiff')
+					}
+					saveLabel={tr('copy.saveVirtualModel')}
+					saving={props.saving}
+					saveDisabled={saveDisabled}
+					onCancel={requestClose}
+					onSave={() => props.onSave(preview ?? model, props.previousName)}
+					applyDiff={next => upsertVirtualModel(next, preview ?? model, props.previousName)}
+				/>
+			)}
+		>
+			<Field
+				label={tr('copy.virtualModelName')}
+				tooltip={props.help.field<LlmVirtualModel>('LocalLLMVirtualModel', 'name')}
+			>
+				<input
+					value={model.name}
+					onChange={event => setModel({ ...model, name: event.target.value })}
+					placeholder="resilient"
+				/>
+			</Field>
 
-      <FieldGroup
-        label={tr("copy.routingStrategy")}
-        tooltip={props.help.field<LlmVirtualModel>(
-          "LocalLLMVirtualModel",
-          "routing",
-        )}
-      >
-        <div className="segmented-control">
-          <button
-            className={strategy === "weighted" ? "active" : ""}
-            type="button"
-            onClick={() => setStrategy("weighted")}
-          >
-            {tr("copy.weighted")}
-          </button>
-          <button
-            className={strategy === "failover" ? "active" : ""}
-            type="button"
-            onClick={() => setStrategy("failover")}
-          >
-            {tr("copy.failover")}
-          </button>
-          <button
-            className={strategy === "conditional" ? "active" : ""}
-            type="button"
-            onClick={() => setStrategy("conditional")}
-          >
-            {tr("copy.conditional")}
-          </button>
-        </div>
-      </FieldGroup>
+			<FieldGroup
+				label={tr('copy.routingStrategy')}
+				tooltip={props.help.field<LlmVirtualModel>('LocalLLMVirtualModel', 'routing')}
+			>
+				<div className="segmented-control">
+					<button
+						className={strategy === 'weighted' ? 'active' : ''}
+						type="button"
+						onClick={() => setStrategy('weighted')}
+					>
+						{tr('copy.weighted')}
+					</button>
+					<button
+						className={strategy === 'failover' ? 'active' : ''}
+						type="button"
+						onClick={() => setStrategy('failover')}
+					>
+						{tr('copy.failover')}
+					</button>
+					<button
+						className={strategy === 'conditional' ? 'active' : ''}
+						type="button"
+						onClick={() => setStrategy('conditional')}
+					>
+						{tr('copy.conditional')}
+					</button>
+				</div>
+			</FieldGroup>
 
-      {strategy === "weighted" ? (
-        <FieldGroup
-          label={tr("copy.weightedTargets")}
-          tooltip={props.help.field<LocalLLMWeightedRouting>(
-            "LocalLLMWeightedRouting",
-            "targets",
-          )}
-        >
-          <div className="target-list">
-            {weightedTargets.map((target, index) => (
-              <div className="target-row weighted" key={index}>
-                <VirtualTargetSelector
-                  label={tr("copy.model")}
-                  targetModel={target.model}
-                  baseModels={props.baseModels}
-                  options={targetOptions}
-                  providers={props.providers}
-                  onChange={(value) => updateWeighted(index, { model: value })}
-                />
-                <label className="target-field">
-                  <span className="target-label">{tr("copy.weight")}</span>
-                  <input
-                    aria-label={tr("copy.weight")}
-                    value={target.weight ?? 1}
-                    onChange={(event) =>
-                      updateWeighted(index, {
-                        weight: Number(event.target.value) || 1,
-                      })
-                    }
-                    type="number"
-                    min={1}
-                  />
-                </label>
-                <button
-                  className="icon-button danger"
-                  type="button"
-                  aria-label={tr("copy.removeTarget")}
-                  onClick={() =>
-                    setModel((current) => ({
-                      ...current,
-                      routing: {
-                        weighted: {
-                          targets: (
-                            current.routing.weighted?.targets ?? []
-                          ).filter((_, itemIndex) => itemIndex !== index),
-                        },
-                      },
-                    }))
-                  }
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            className="button"
-            type="button"
-            onClick={() =>
-              setModel((current) => ({
-                ...current,
-                routing: {
-                  weighted: {
-                    targets: [
-                      ...(current.routing.weighted?.targets ?? []),
-                      { model: defaultTarget, weight: 1 },
-                    ],
-                  },
-                },
-              }))
-            }
-          >
-            <Plus size={16} />
-            {tr("copy.addTarget")}
-          </button>
-        </FieldGroup>
-      ) : strategy === "failover" ? (
-        <FieldGroup
-          label={tr("copy.failoverTargets")}
-          tooltip={props.help.field<LocalLLMFailoverRouting>(
-            "LocalLLMFailoverRouting",
-            "targets",
-          )}
-        >
-          <div className="failover-group-list">
-            {failoverGroups.map((group, groupIndex) => (
-              <section className="match-card" key={groupIndex}>
-                <div className="match-card-header">
-                  <strong>
-                    {groupIndex === 0
-                      ? tr("copy.firstAttempt")
-                      : tr("copy.fallbackGroupValue", groupIndex + 1)}
-                  </strong>
-                  <Tooltip content={tr("copy.removeGroup")}>
-                    <button
-                      className="icon-button danger"
-                      type="button"
-                      aria-label={tr("copy.removeFailoverGroupValue")}
-                      onClick={() =>
-                        updateFailoverGroups(
-                          failoverGroups.filter(
-                            (_, itemIndex) => itemIndex !== groupIndex,
-                          ),
-                        )
-                      }
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </Tooltip>
-                </div>
-                <div className="match-card-body">
-                  <div className="target-list">
-                    {group.map((target, targetIndex) => (
-                      <div className="target-row failover" key={targetIndex}>
-                        <VirtualTargetSelector
-                          label={tr("copy.model")}
-                          targetModel={target.model}
-                          baseModels={props.baseModels}
-                          options={targetOptions}
-                          providers={props.providers}
-                          onChange={(value) =>
-                            updateFailoverGroups(
-                              failoverGroups.map((item, itemIndex) =>
-                                itemIndex === groupIndex
-                                  ? item.map((groupTarget, groupTargetIndex) =>
-                                      groupTargetIndex === targetIndex
-                                        ? { ...groupTarget, model: value }
-                                        : groupTarget,
-                                    )
-                                  : item,
-                              ),
-                            )
-                          }
-                        />
-                        <button
-                          className="icon-button danger"
-                          type="button"
-                          aria-label={tr("copy.removeTarget")}
-                          onClick={() =>
-                            updateFailoverGroups(
-                              failoverGroups
-                                .map((item, itemIndex) =>
-                                  itemIndex === groupIndex
-                                    ? item.filter(
-                                        (_, groupTargetIndex) =>
-                                          groupTargetIndex !== targetIndex,
-                                      )
-                                    : item,
-                                )
-                                .filter((item) => item.length > 0),
-                            )
-                          }
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    className="button small"
-                    type="button"
-                    onClick={() =>
-                      updateFailoverGroups(
-                        failoverGroups.map((item, itemIndex) =>
-                          itemIndex === groupIndex
-                            ? [
-                                ...item,
-                                { model: defaultTarget, priority: groupIndex },
-                              ]
-                            : item,
-                        ),
-                      )
-                    }
-                  >
-                    <Plus size={16} />
-                    {tr("copy.addTarget")}
-                  </button>
-                </div>
-              </section>
-            ))}
-          </div>
-          <button
-            className="button"
-            type="button"
-            onClick={() =>
-              updateFailoverGroups([
-                ...failoverGroups,
-                [{ model: defaultTarget, priority: failoverGroups.length }],
-              ])
-            }
-          >
-            <Plus size={16} />
-            {tr("copy.addFallbackGroup")}
-          </button>
-        </FieldGroup>
-      ) : (
-        <FieldGroup
-          label={tr("copy.conditionalTargets")}
-          tooltip={props.help.field<LocalLLMConditionalRouting>(
-            "LocalLLMConditionalRouting",
-            "targets",
-          )}
-        >
-          <div className="target-list">
-            {conditionalTargets.map((target, index) => {
-              const isFallback = !target.when?.trim();
-              return (
-                <div className="conditional-target-card" key={index}>
-                  <div className="match-card-header">
-                    <strong>
-                      {isFallback
-                        ? tr("copy.fallback")
-                        : tr("copy.ruleValue", index + 1)}
-                    </strong>
-                    <Tooltip content={tr("copy.removeRule")}>
-                      <button
-                        className="icon-button danger"
-                        type="button"
-                        aria-label={tr("copy.removeConditionalTarget")}
-                        onClick={() =>
-                          setModel((current) => ({
-                            ...current,
-                            routing: {
-                              conditional: {
-                                targets: (
-                                  current.routing.conditional?.targets ?? []
-                                ).filter((_, itemIndex) => itemIndex !== index),
-                              },
-                            },
-                          }))
-                        }
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </Tooltip>
-                  </div>
-                  <div className="conditional-target-body">
-                    <FieldGroup
-                      label={tr("copy.condition")}
-                      tooltip={props.help.field<LocalLLMConditionalTarget>(
-                        "LocalLLMConditionalTarget",
-                        "when",
-                      )}
-                    >
-                      <MiniMonacoEditor
-                        language="cel"
-                        value={target.when ?? ""}
-                        onChange={(value) =>
-                          updateConditional(index, {
-                            when: value.trim() ? value : undefined,
-                          })
-                        }
-                        placeholder={
-                          index === conditionalTargets.length - 1
-                            ? tr("copy.blankFinalConditionMeansFallback")
-                            : 'json(request.body).route == "code"'
-                        }
-                      />
-                    </FieldGroup>
-                    <VirtualTargetSelector
-                      label={tr("copy.targetModel")}
-                      targetModel={target.model}
-                      baseModels={props.baseModels}
-                      options={targetOptions}
-                      providers={props.providers}
-                      onChange={(value) =>
-                        updateConditional(index, { model: value })
-                      }
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {hasInvalidConditionalFallback ? (
-            <StatusBanner
-              state="warn"
-              title={tr("copy.onlyTheFinalConditionalTargetCanOmitACondition")}
-            />
-          ) : null}
-          <div className="button-row">
-            <button
-              className="button"
-              type="button"
-              onClick={() =>
-                setModel((current) => ({
-                  ...current,
-                  routing: {
-                    conditional: {
-                      targets: [
-                        ...(current.routing.conditional?.targets ?? []),
-                        {
-                          when: 'json(request.body).route == "code"',
-                          model: defaultTarget,
-                        },
-                      ],
-                    },
-                  },
-                }))
-              }
-            >
-              <Plus size={16} />
-              {tr("copy.addRule")}
-            </button>
-            <button
-              className="button"
-              type="button"
-              onClick={() =>
-                setModel((current) => ({
-                  ...current,
-                  routing: {
-                    conditional: {
-                      targets: [
-                        ...(current.routing.conditional?.targets ?? []).filter(
-                          (target) => target.when?.trim(),
-                        ),
-                        { model: defaultTarget },
-                      ],
-                    },
-                  },
-                }))
-              }
-            >
-              <Plus size={16} />
-              {tr("copy.addFallback")}
-            </button>
-          </div>
-        </FieldGroup>
-      )}
+			{strategy === 'weighted' ? (
+				<FieldGroup
+					label={tr('copy.weightedTargets')}
+					tooltip={props.help.field<LocalLLMWeightedRouting>('LocalLLMWeightedRouting', 'targets')}
+				>
+					<div className="target-list">
+						{weightedTargets.map((target, index) => (
+							<div className="target-row weighted" key={index}>
+								<VirtualTargetSelector
+									label={tr('copy.model')}
+									targetModel={target.model}
+									baseModels={props.baseModels}
+									options={targetOptions}
+									providers={props.providers}
+									onChange={value => updateWeighted(index, { model: value })}
+								/>
+								<label className="target-field">
+									<span className="target-label">{tr('copy.weight')}</span>
+									<input
+										aria-label={tr('copy.weight')}
+										value={target.weight ?? 1}
+										onChange={event =>
+											updateWeighted(index, {
+												weight: Number(event.target.value) || 1
+											})
+										}
+										type="number"
+										min={1}
+									/>
+								</label>
+								<button
+									className="icon-button danger"
+									type="button"
+									aria-label={tr('copy.removeTarget')}
+									onClick={() =>
+										setModel(current => ({
+											...current,
+											routing: {
+												weighted: {
+													targets: (current.routing.weighted?.targets ?? []).filter(
+														(_, itemIndex) => itemIndex !== index
+													)
+												}
+											}
+										}))
+									}
+								>
+									<Trash2 size={16} />
+								</button>
+							</div>
+						))}
+					</div>
+					<button
+						className="button"
+						type="button"
+						onClick={() =>
+							setModel(current => ({
+								...current,
+								routing: {
+									weighted: {
+										targets: [
+											...(current.routing.weighted?.targets ?? []),
+											{ model: defaultTarget, weight: 1 }
+										]
+									}
+								}
+							}))
+						}
+					>
+						<Plus size={16} />
+						{tr('copy.addTarget')}
+					</button>
+				</FieldGroup>
+			) : strategy === 'failover' ? (
+				<FieldGroup
+					label={tr('copy.failoverTargets')}
+					tooltip={props.help.field<LocalLLMFailoverRouting>('LocalLLMFailoverRouting', 'targets')}
+				>
+					<div className="failover-group-list">
+						{failoverGroups.map((group, groupIndex) => (
+							<section className="match-card" key={groupIndex}>
+								<div className="match-card-header">
+									<strong>
+										{groupIndex === 0
+											? tr('copy.firstAttempt')
+											: tr('copy.fallbackGroupValue', groupIndex + 1)}
+									</strong>
+									<Tooltip content={tr('copy.removeGroup')}>
+										<button
+											className="icon-button danger"
+											type="button"
+											aria-label={tr('copy.removeFailoverGroupValue')}
+											onClick={() =>
+												updateFailoverGroups(
+													failoverGroups.filter((_, itemIndex) => itemIndex !== groupIndex)
+												)
+											}
+										>
+											<Trash2 size={15} />
+										</button>
+									</Tooltip>
+								</div>
+								<div className="match-card-body">
+									<div className="target-list">
+										{group.map((target, targetIndex) => (
+											<div className="target-row failover" key={targetIndex}>
+												<VirtualTargetSelector
+													label={tr('copy.model')}
+													targetModel={target.model}
+													baseModels={props.baseModels}
+													options={targetOptions}
+													providers={props.providers}
+													onChange={value =>
+														updateFailoverGroups(
+															failoverGroups.map((item, itemIndex) =>
+																itemIndex === groupIndex
+																	? item.map((groupTarget, groupTargetIndex) =>
+																			groupTargetIndex === targetIndex
+																				? { ...groupTarget, model: value }
+																				: groupTarget
+																		)
+																	: item
+															)
+														)
+													}
+												/>
+												<button
+													className="icon-button danger"
+													type="button"
+													aria-label={tr('copy.removeTarget')}
+													onClick={() =>
+														updateFailoverGroups(
+															failoverGroups
+																.map((item, itemIndex) =>
+																	itemIndex === groupIndex
+																		? item.filter(
+																				(_, groupTargetIndex) => groupTargetIndex !== targetIndex
+																			)
+																		: item
+																)
+																.filter(item => item.length > 0)
+														)
+													}
+												>
+													<Trash2 size={16} />
+												</button>
+											</div>
+										))}
+									</div>
+									<button
+										className="button small"
+										type="button"
+										onClick={() =>
+											updateFailoverGroups(
+												failoverGroups.map((item, itemIndex) =>
+													itemIndex === groupIndex
+														? [...item, { model: defaultTarget, priority: groupIndex }]
+														: item
+												)
+											)
+										}
+									>
+										<Plus size={16} />
+										{tr('copy.addTarget')}
+									</button>
+								</div>
+							</section>
+						))}
+					</div>
+					<button
+						className="button"
+						type="button"
+						onClick={() =>
+							updateFailoverGroups([
+								...failoverGroups,
+								[{ model: defaultTarget, priority: failoverGroups.length }]
+							])
+						}
+					>
+						<Plus size={16} />
+						{tr('copy.addFallbackGroup')}
+					</button>
+				</FieldGroup>
+			) : (
+				<FieldGroup
+					label={tr('copy.conditionalTargets')}
+					tooltip={props.help.field<LocalLLMConditionalRouting>(
+						'LocalLLMConditionalRouting',
+						'targets'
+					)}
+				>
+					<div className="target-list">
+						{conditionalTargets.map((target, index) => {
+							const isFallback = !target.when?.trim();
+							return (
+								<div className="conditional-target-card" key={index}>
+									<div className="match-card-header">
+										<strong>
+											{isFallback ? tr('copy.fallback') : tr('copy.ruleValue', index + 1)}
+										</strong>
+										<Tooltip content={tr('copy.removeRule')}>
+											<button
+												className="icon-button danger"
+												type="button"
+												aria-label={tr('copy.removeConditionalTarget')}
+												onClick={() =>
+													setModel(current => ({
+														...current,
+														routing: {
+															conditional: {
+																targets: (current.routing.conditional?.targets ?? []).filter(
+																	(_, itemIndex) => itemIndex !== index
+																)
+															}
+														}
+													}))
+												}
+											>
+												<Trash2 size={15} />
+											</button>
+										</Tooltip>
+									</div>
+									<div className="conditional-target-body">
+										<FieldGroup
+											label={tr('copy.condition')}
+											tooltip={props.help.field<LocalLLMConditionalTarget>(
+												'LocalLLMConditionalTarget',
+												'when'
+											)}
+										>
+											<MiniMonacoEditor
+												language="cel"
+												value={target.when ?? ''}
+												onChange={value =>
+													updateConditional(index, {
+														when: value.trim() ? value : undefined
+													})
+												}
+												placeholder={
+													index === conditionalTargets.length - 1
+														? tr('copy.blankFinalConditionMeansFallback')
+														: 'json(request.body).route == "code"'
+												}
+											/>
+										</FieldGroup>
+										<VirtualTargetSelector
+											label={tr('copy.targetModel')}
+											targetModel={target.model}
+											baseModels={props.baseModels}
+											options={targetOptions}
+											providers={props.providers}
+											onChange={value => updateConditional(index, { model: value })}
+										/>
+									</div>
+								</div>
+							);
+						})}
+					</div>
+					{hasInvalidConditionalFallback ? (
+						<StatusBanner
+							state="warn"
+							title={tr('copy.onlyTheFinalConditionalTargetCanOmitACondition')}
+						/>
+					) : null}
+					<div className="button-row">
+						<button
+							className="button"
+							type="button"
+							onClick={() =>
+								setModel(current => ({
+									...current,
+									routing: {
+										conditional: {
+											targets: [
+												...(current.routing.conditional?.targets ?? []),
+												{
+													when: 'json(request.body).route == "code"',
+													model: defaultTarget
+												}
+											]
+										}
+									}
+								}))
+							}
+						>
+							<Plus size={16} />
+							{tr('copy.addRule')}
+						</button>
+						<button
+							className="button"
+							type="button"
+							onClick={() =>
+								setModel(current => ({
+									...current,
+									routing: {
+										conditional: {
+											targets: [
+												...(current.routing.conditional?.targets ?? []).filter(target =>
+													target.when?.trim()
+												),
+												{ model: defaultTarget }
+											]
+										}
+									}
+								}))
+							}
+						>
+							<Plus size={16} />
+							{tr('copy.addFallback')}
+						</button>
+					</div>
+				</FieldGroup>
+			)}
 
-      <details>
-        <summary>{tr("copy.generatedVirtualModelConfig")}</summary>
-        <YamlBlock value={preview ?? {}} />
-      </details>
-      {props.saveError ? (
-        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
-          {props.saveError}
-        </StatusBanner>
-      ) : null}
-    </Drawer>
-  );
+			<details>
+				<summary>{tr('copy.generatedVirtualModelConfig')}</summary>
+				<YamlBlock value={preview ?? {}} />
+			</details>
+			{props.saveError ? (
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
+					{props.saveError}
+				</StatusBanner>
+			) : null}
+		</Drawer>
+	);
 }
 
 function VirtualTargetSelector(props: {
-  label: string;
-  targetModel: string;
-  baseModels: LlmModel[];
-  options: Array<{
-    value: string;
-    label: ReactNode;
-    icon?: ReactNode;
-    searchText?: string;
-  }>;
-  providers: LlmProvider[];
-  onChange: (model: string) => void;
+	label: string;
+	targetModel: string;
+	baseModels: LlmModel[];
+	options: Array<{
+		value: string;
+		label: ReactNode;
+		icon?: ReactNode;
+		searchText?: string;
+	}>;
+	providers: LlmProvider[];
+	onChange: (model: string) => void;
 }) {
-  const selectedModelName = selectedConfiguredModelName(
-    props.targetModel,
-    props.baseModels,
-  );
-  const selectedModel = props.baseModels.find(
-    (model) => model.name === selectedModelName,
-  );
-  const wildcard = Boolean(
-    selectedModel && isWildcardModelName(selectedModel.name),
-  );
-  const wildcardPrefix = selectedModel
-    ? wildcardModelPrefix(selectedModel.name)
-    : "";
-  const resolvedSuffix = wildcard
-    ? wildcardResolvedSuffix(
-        props.targetModel,
-        selectedModelName,
-        wildcardPrefix,
-      )
-    : "";
-  const provider = selectedModel
-    ? resolvedProviderLabel(selectedModel.provider, props.providers)
-    : null;
+	const selectedModelName = selectedConfiguredModelName(props.targetModel, props.baseModels);
+	const selectedModel = props.baseModels.find(model => model.name === selectedModelName);
+	const wildcard = Boolean(selectedModel && isWildcardModelName(selectedModel.name));
+	const wildcardPrefix = selectedModel ? wildcardModelPrefix(selectedModel.name) : '';
+	const resolvedSuffix = wildcard
+		? wildcardResolvedSuffix(props.targetModel, selectedModelName, wildcardPrefix)
+		: '';
+	const provider = selectedModel
+		? resolvedProviderLabel(selectedModel.provider, props.providers)
+		: null;
 
-  return (
-    <div className="target-field">
-      <span className="target-label">{props.label}</span>
-      <Dropdown
-        ariaLabel={props.label}
-        value={selectedModelName}
-        searchable
-        options={props.options}
-        placeholder={tr("copy.noConfiguredModels")}
-        onChange={(value) => props.onChange(concreteModelName(value, ""))}
-      />
-      {wildcard ? (
-        <div className="target-resolved-composite">
-          {wildcardPrefix ? (
-            <span className="target-prefix">{wildcardPrefix}</span>
-          ) : null}
-          <CatalogModelSelector
-            ariaLabel={tr("copy.specificModel")}
-            value={resolvedSuffix}
-            provider={provider}
-            onChange={(value) =>
-              props.onChange(concreteModelName(selectedModelName, value))
-            }
-            placeholder="claude-haiku-4-5"
-          />
-        </div>
-      ) : null}
-    </div>
-  );
+	return (
+		<div className="target-field">
+			<span className="target-label">{props.label}</span>
+			<Dropdown
+				ariaLabel={props.label}
+				value={selectedModelName}
+				searchable
+				options={props.options}
+				placeholder={tr('copy.noConfiguredModels')}
+				onChange={value => props.onChange(concreteModelName(value, ''))}
+			/>
+			{wildcard ? (
+				<div className="target-resolved-composite">
+					{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
+					<CatalogModelSelector
+						ariaLabel={tr('copy.specificModel')}
+						value={resolvedSuffix}
+						provider={provider}
+						onChange={value => props.onChange(concreteModelName(selectedModelName, value))}
+						placeholder="claude-haiku-4-5"
+					/>
+				</div>
+			) : null}
+		</div>
+	);
 }
 
 function ProviderBadge(props: { provider: ProviderName }) {
-  return (
-    <span className="badge provider-badge">
-      <ProviderIcon provider={props.provider} />
-      {providerDisplayName(props.provider)}
-    </span>
-  );
+	return (
+		<span className="badge provider-badge">
+			<ProviderIcon provider={props.provider} />
+			{providerDisplayName(props.provider)}
+		</span>
+	);
 }
 
-function ModelProviderBadge(props: {
-  model: LlmModel;
-  providers: LlmProvider[];
-}) {
-  const reference = providerReferenceName(props.model.provider);
-  if (reference) {
-    const shared = props.providers.find(
-      (provider) => provider.name === reference,
-    );
-    const provider = shared ? providerLabel(shared.provider) : "custom";
-    return (
-      <Link
-        className="badge provider-badge badge-link"
-        to="/llm/providers"
-        search={{ provider: reference }}
-      >
-        <ProviderIcon provider={provider as ProviderName} />
-        {reference}
-        <span className="muted">{tr("copy.reference")}</span>
-      </Link>
-    );
-  }
-  return (
-    <ProviderBadge
-      provider={providerLabel(props.model.provider) as ProviderName}
-    />
-  );
+function ModelProviderBadge(props: { model: LlmModel; providers: LlmProvider[] }) {
+	const reference = providerReferenceName(props.model.provider);
+	if (reference) {
+		const shared = props.providers.find(provider => provider.name === reference);
+		const provider = shared ? providerLabel(shared.provider) : 'custom';
+		return (
+			<Link
+				className="badge provider-badge badge-link"
+				to="/llm/providers"
+				search={{ provider: reference }}
+			>
+				<ProviderIcon provider={provider as ProviderName} />
+				{reference}
+				<span className="muted">{tr('copy.reference')}</span>
+			</Link>
+		);
+	}
+	return <ProviderBadge provider={providerLabel(props.model.provider) as ProviderName} />;
 }
 
 function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
-  const policies = [
-    props.model.defaults && Object.keys(props.model.defaults).length
-      ? "defaults"
-      : null,
-    props.model.overrides && Object.keys(props.model.overrides).length
-      ? "overrides"
-      : null,
-    props.model.transformation && Object.keys(props.model.transformation).length
-      ? "transformation"
-      : null,
-    props.model.finalTransformation &&
-    Object.keys(props.model.finalTransformation).length
-      ? "finalTransformation"
-      : null,
-    props.model.requestHeaders ? "requestHeaders" : null,
-    props.model.responseHeaders ? "responseHeaders" : null,
-    props.model.health ? "health" : null,
-    props.model.authorization ? "authorization" : null,
-    props.model.promptCaching ? "promptCaching" : null,
-  ].filter(Boolean);
-  if (props.warnings > 0)
-    return (
-      <span className="badge warn">
-        {props.warnings}
-        {tr("copy.warnings")}
-      </span>
-    );
-  if (props.model.auth)
-    return <span className="badge">{tr("copy.customAuthDetected")}</span>;
-  if (policies.length > 0)
-    return (
-      <span className="badge ok">
-        {tr("copy.valuePolicies", { count: policies.length })}
-      </span>
-    );
-  return <span className="badge">{tr("copy.none")}</span>;
+	const policies = [
+		props.model.defaults && Object.keys(props.model.defaults).length ? 'defaults' : null,
+		props.model.overrides && Object.keys(props.model.overrides).length ? 'overrides' : null,
+		props.model.transformation && Object.keys(props.model.transformation).length
+			? 'transformation'
+			: null,
+		props.model.finalTransformation && Object.keys(props.model.finalTransformation).length
+			? 'finalTransformation'
+			: null,
+		props.model.requestHeaders ? 'requestHeaders' : null,
+		props.model.responseHeaders ? 'responseHeaders' : null,
+		props.model.health ? 'health' : null,
+		props.model.authorization ? 'authorization' : null,
+		props.model.promptCaching ? 'promptCaching' : null
+	].filter(Boolean);
+	if (props.warnings > 0)
+		return (
+			<span className="badge warn">
+				{props.warnings}
+				{tr('copy.warnings')}
+			</span>
+		);
+	if (props.model.auth) return <span className="badge">{tr('copy.customAuthDetected')}</span>;
+	if (policies.length > 0)
+		return <span className="badge ok">{tr('copy.valuePolicies', { count: policies.length })}</span>;
+	return <span className="badge">{tr('copy.none')}</span>;
 }
 
 function parseOptionalYamlMapping(text: string) {
-  const trimmed = text.trim();
-  if (!trimmed || trimmed === "{}") return null;
-  const parsed = parseYamlText(trimmed);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(tr("copy.expectedAYamlMapping"));
-  }
-  return parsed as Record<string, unknown>;
+	const trimmed = text.trim();
+	if (!trimmed || trimmed === '{}') return null;
+	const parsed = parseYamlText(trimmed);
+	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+		throw new Error(tr('copy.expectedAYamlMapping'));
+	}
+	return parsed as Record<string, unknown>;
 }
 
-function optionalMappingYamlText(
-  value: Record<string, unknown> | null | undefined,
-) {
-  return value && Object.keys(value).length ? toYamlText(value) : "";
+function optionalMappingYamlText(value: Record<string, unknown> | null | undefined) {
+	return value && Object.keys(value).length ? toYamlText(value) : '';
 }
 
 function modelConfigForDisplay(model: LlmModel | undefined) {
-  if (!model) return {};
-  const { id: _id, ...config } = model;
-  return config;
+	if (!model) return {};
+	const { id: _id, ...config } = model;
+	return config;
 }
 
 function initialUpstreamMode(model: LlmModel): UpstreamModelMode {
-  if (model.params?.model) return "explicit";
-  const expression = model.transformation?.model;
-  if (
-    expression &&
-    expression === stripPrefixExpression(stripPrefixCandidate(model.name))
-  )
-    return "strip";
-  if (expression) return "custom";
-  return "incoming";
+	if (model.params?.model) return 'explicit';
+	const expression = model.transformation?.model;
+	if (expression && expression === stripPrefixExpression(stripPrefixCandidate(model.name)))
+		return 'strip';
+	if (expression) return 'custom';
+	return 'incoming';
 }
 
 function stripPrefixCandidate(name: string) {
-  const slash = name.indexOf("/");
-  if (slash < 0) return null;
-  return name.slice(0, slash + 1);
+	const slash = name.indexOf('/');
+	if (slash < 0) return null;
+	return name.slice(0, slash + 1);
 }
 
 function stripPrefixExpression(prefix: string | null) {
-  if (!prefix) return null;
-  return `llmRequest.model.stripPrefix("${prefix}")`;
+	if (!prefix) return null;
+	return `llmRequest.model.stripPrefix("${prefix}")`;
 }
 
-function defaultIncomingModelMatch(provider: LlmModel["provider"]) {
-  const providerName =
-    providerReferenceName(provider) ?? providerLabel(provider);
-  return `${providerName === "openAI" ? "openai" : providerName || "model"}/*`;
+function defaultIncomingModelMatch(provider: LlmModel['provider']) {
+	const providerName = providerReferenceName(provider) ?? providerLabel(provider);
+	return `${providerName === 'openAI' ? 'openai' : providerName || 'model'}/*`;
 }
 
 function applyUpstreamMode(
-  model: LlmModel,
-  mode: UpstreamModelMode,
-  explicitModel: string,
-  customModelExpression: string,
+	model: LlmModel,
+	mode: UpstreamModelMode,
+	explicitModel: string,
+	customModelExpression: string
 ): LlmModel {
-  const next: LlmModel = structuredClone(model);
-  const transformation = { ...(next.transformation ?? {}) };
-  delete transformation.model;
-  const prefixExpression = stripPrefixExpression(
-    stripPrefixCandidate(next.name),
-  );
+	const next: LlmModel = structuredClone(model);
+	const transformation = { ...(next.transformation ?? {}) };
+	delete transformation.model;
+	const prefixExpression = stripPrefixExpression(stripPrefixCandidate(next.name));
 
-  if (mode === "strip" && prefixExpression) {
-    transformation.model = prefixExpression;
-  } else if (mode === "custom" && customModelExpression.trim()) {
-    transformation.model = customModelExpression.trim();
-  }
+	if (mode === 'strip' && prefixExpression) {
+		transformation.model = prefixExpression;
+	} else if (mode === 'custom' && customModelExpression.trim()) {
+		transformation.model = customModelExpression.trim();
+	}
 
-  next.transformation = Object.keys(transformation).length
-    ? transformation
-    : null;
+	next.transformation = Object.keys(transformation).length ? transformation : null;
 
-  if (providerReferenceName(next.provider)) {
-    next.params =
-      mode === "explicit" && explicitModel
-        ? { model: explicitModel }
-        : undefined;
-    return next;
-  }
-  next.params = { ...(next.params ?? {}) };
+	if (providerReferenceName(next.provider)) {
+		next.params = mode === 'explicit' && explicitModel ? { model: explicitModel } : undefined;
+		return next;
+	}
+	next.params = { ...(next.params ?? {}) };
 
-  if (mode === "explicit") {
-    next.params.model = explicitModel || null;
-  } else {
-    next.params.model = null;
-  }
+	if (mode === 'explicit') {
+		next.params.model = explicitModel || null;
+	} else {
+		next.params.model = null;
+	}
 
-  return next;
+	return next;
 }
 
-function expressionMap(
-  value: LlmModel["transformation"],
-): Record<string, string> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
+function expressionMap(value: LlmModel['transformation']): Record<string, string> {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+	return Object.fromEntries(
+		Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+	);
 }
 
 function authorizationSummary(value: AuthorizationDraft | null | undefined) {
-  const rules = Array.isArray(value?.rules) ? value.rules : [];
-  if (!rules.length) return tr("copy.noAuthorizationRulesConfigured");
-  return tr("copy.valueRulesConfigured", { count: rules.length });
+	const rules = Array.isArray(value?.rules) ? value.rules : [];
+	if (!rules.length) return tr('copy.noAuthorizationRulesConfigured');
+	return tr('copy.valueRulesConfigured', { count: rules.length });
 }
