@@ -296,11 +296,13 @@ pub struct BackendConfig {
 	pool_max_size: Option<usize>,
 	/// Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.
 	/// PINGs are sent even on idle connections to proactively evict dead connections from the pool.
-	/// Set to "0s" to disable.
-	#[serde(default = "defaults::h2_keepalive_interval", with = "serde_dur")]
+	/// Disabled by default ("0s"). Note: many gRPC servers enforce a minimum ping interval
+	/// and will reject connections that ping more frequently.
+	#[serde(default, with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	h2_keepalive_interval: Duration,
 	/// Timeout waiting for a PING ACK before considering the connection dead and closing it.
+	/// Only applies when h2_keepalive_interval is set. Defaults to 5s.
 	#[serde(default = "defaults::h2_keepalive_timeout", with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	h2_keepalive_timeout: Duration,
@@ -330,7 +332,7 @@ impl Default for BackendConfig {
 			connect_timeout: defaults::connect_timeout(),
 			pool_idle_timeout: defaults::pool_idle_timeout(),
 			pool_max_size: None,
-			h2_keepalive_interval: defaults::h2_keepalive_interval(),
+			h2_keepalive_interval: Duration::ZERO,
 			h2_keepalive_timeout: defaults::h2_keepalive_timeout(),
 		}
 	}
@@ -346,9 +348,6 @@ mod defaults {
 	}
 	pub fn pool_idle_timeout() -> Duration {
 		Duration::from_secs(90)
-	}
-	pub fn h2_keepalive_interval() -> Duration {
-		Duration::from_secs(30)
 	}
 	pub fn h2_keepalive_timeout() -> Duration {
 		Duration::from_secs(5)
