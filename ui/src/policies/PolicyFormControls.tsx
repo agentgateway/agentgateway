@@ -106,7 +106,10 @@ export function KeyValueEditor(props: {
 				<div className="empty-inline">{tr('copy.noValuesConfigured')}</div>
 			)}
 			{props.quickKeys?.length ? (
-				<div className="kv-quick-row" aria-label={tr('copy.valueQuickKeys')}>
+				<div
+					className="kv-quick-row"
+					aria-label={tr('copy.valueQuickKeys', [props.label ?? tr('copy.metadata')])}
+				>
 					{props.quickKeys.map(key => (
 						<button
 							className="choice-pill compact"

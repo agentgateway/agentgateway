@@ -230,7 +230,7 @@ export function TrafficDumpRoutesView(props: {
 												<button
 													className="icon-button"
 													type="button"
-													aria-label={tr('copy.viewValue')}
+													aria-label={tr('copy.viewValue', [routeDisplayName(row.route)])}
 													onClick={() => setSelectedRouteKey(row.route.key)}
 												>
 													<Eye size={16} />
@@ -295,7 +295,7 @@ function RuntimeListenerTable(props: {
 									<button
 										className="icon-button"
 										type="button"
-										aria-label={tr('copy.viewValue')}
+										aria-label={tr('copy.viewValue', [listenerDisplayName(listener)])}
 										onClick={() => props.onSelect(listener)}
 									>
 										<Eye size={16} />

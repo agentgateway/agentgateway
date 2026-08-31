@@ -270,7 +270,7 @@ function DatabaseResourcesPanel(props: {
 									<th>ID</th>
 									<th>{tr('copy.revision')}</th>
 									<th>{tr('copy.updated')}</th>
-									<th>{tr('copy.value')}</th>
+									<th>{tr('schema.value')}</th>
 								</tr>
 							</thead>
 							<tbody>

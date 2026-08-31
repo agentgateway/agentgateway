@@ -17,16 +17,16 @@ const formats: ProviderFormat[] = [
 	'rerank'
 ];
 
-const formatLabels: Record<ProviderFormat, string> = {
-	completions: 'Chat completions (/v1/chat/completions)',
-	messages: 'Anthropic messages (/v1/messages)',
-	responses: 'Responses (/v1/responses)',
-	embeddings: 'Embeddings (/v1/embeddings)',
-	anthropicTokenCount: 'Anthropic token count (/v1/messages/count_tokens)',
-	generateContent: tr('copy.geminiChatModelsModelGenerateContent'),
-	geminiCountTokens: tr('copy.geminiTokenCountModelsModelCountTokens'),
-	realtime: 'Realtime (/v1/realtime)',
-	rerank: 'Rerank (/v2/rerank)'
+const formatLabelKeys: Record<ProviderFormat, string> = {
+	completions: 'chatCompletionsFormat',
+	messages: 'anthropicMessagesFormat',
+	responses: 'responsesFormat',
+	embeddings: 'embeddingsFormat',
+	anthropicTokenCount: 'anthropicTokenCountFormat',
+	generateContent: 'geminiChatModelsModelGenerateContent',
+	geminiCountTokens: 'geminiTokenCountModelsModelCountTokens',
+	realtime: 'realtimeFormat',
+	rerank: 'rerankFormat'
 };
 
 export function CustomFormats(props: {
@@ -81,10 +81,10 @@ export function CustomFormats(props: {
 								onChange={event => toggle(type, event.target.checked)}
 							/>
 							<span className="format-toggle-box" aria-hidden="true" />
-							<span>{formatLabels[type]}</span>
+							<span>{formatLabel(type)}</span>
 						</label>
 						<input
-							aria-label={tr('copy.valuePathOverride')}
+							aria-label={tr('copy.valuePathOverride', [formatLabel(type)])}
 							disabled={!selected}
 							value={selected?.path ?? ''}
 							placeholder={props.help.field<ProviderFormatConfig>(
@@ -99,6 +99,10 @@ export function CustomFormats(props: {
 			})}
 		</div>
 	);
+}
+
+function formatLabel(type: ProviderFormat) {
+	return tr(`copy.${formatLabelKeys[type]}`);
 }
 
 function customProvider(provider: ModelProvider): CustomProvider {

@@ -34,7 +34,7 @@ export function ListEditor(props: {
 								<span>{value}</span>
 								<button
 									type="button"
-									aria-label={tr('copy.removeValue')}
+									aria-label={tr('copy.removeValue', [value])}
 									onClick={() => props.onChange(props.values.filter(item => item !== value))}
 								>
 									{tr('copy.x')}
@@ -43,7 +43,7 @@ export function ListEditor(props: {
 						))}
 					</div>
 				) : (
-					<div className="empty-inline">{props.emptyText ?? 'No values configured.'}</div>
+					<div className="empty-inline">{props.emptyText ?? tr('copy.noValuesConfigured')}</div>
 				)}
 				<div className="list-editor-row">
 					<input

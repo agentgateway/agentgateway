@@ -26,6 +26,7 @@ const surfaceConfig: Record<
 	SurfaceKind,
 	{
 		title: string;
+		name: string;
 		description: string;
 		icon: typeof Bot;
 		enabled: (config: GatewayConfig | undefined) => boolean;
@@ -37,6 +38,9 @@ const surfaceConfig: Record<
 		get title() {
 			return tr('copy.enableLlm');
 		},
+		get name() {
+			return tr('copy.models');
+		},
 		get description() {
 			return tr(
 				'copy.createTheLlmConfigurationSectionSoModelsProvidersKeysGuardrailsLogsAndPlayground_197f4qj'
@@ -45,11 +49,16 @@ const surfaceConfig: Record<
 		icon: Bot,
 		enabled: config => Boolean(config?.llm),
 		destination: '/llm/models',
-		destinationLabel: 'Continue to models'
+		get destinationLabel() {
+			return tr('copy.continueToValue', [tr('copy.models')]);
+		}
 	},
 	mcp: {
 		get title() {
 			return tr('copy.enableMcp');
+		},
+		get name() {
+			return tr('copy.servers');
 		},
 		get description() {
 			return tr(
@@ -59,11 +68,16 @@ const surfaceConfig: Record<
 		icon: Server,
 		enabled: config => Boolean(config?.mcp),
 		destination: '/mcp/servers',
-		destinationLabel: 'Continue to servers'
+		get destinationLabel() {
+			return tr('copy.continueToValue', [tr('copy.servers')]);
+		}
 	},
 	traffic: {
 		get title() {
 			return tr('copy.enableTraffic');
+		},
+		get name() {
+			return tr('copy.gateways');
 		},
 		get description() {
 			return tr(
@@ -74,7 +88,9 @@ const surfaceConfig: Record<
 		enabled: config =>
 			Boolean(config && ('gateways' in config || 'routes' in config || 'binds' in config)),
 		destination: '/traffic/gateways',
-		destinationLabel: 'Continue to gateways'
+		get destinationLabel() {
+			return tr('copy.continueToValue', [tr('copy.gateways')]);
+		}
 	}
 };
 
@@ -154,7 +170,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	if (!loading && !configError && enabled) {
 		return (
 			<div className="page-stack">
-				<StatusBanner state="loading" title={tr('copy.openingValue')} />
+				<StatusBanner state="loading" title={tr('copy.openingValue', [surface.destinationLabel])} />
 			</div>
 		);
 	}
@@ -183,13 +199,9 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 						<Icon size={18} />
 					</span>
 					<div>
-						<h3>
-							{enabled ? `${surface.title.replace('Enable ', '')} is enabled` : surface.title}
-						</h3>
+						<h3>{enabled ? tr('copy.valueEnabled', [surface.name]) : surface.title}</h3>
 						<p>
-							{enabled
-								? 'The top-level configuration section already exists.'
-								: surface.description}
+							{enabled ? tr('copy.topLevelConfigurationSectionAlreadyExists') : surface.description}
 						</p>
 					</div>
 				</div>

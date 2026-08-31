@@ -424,7 +424,7 @@ export function OidcPolicyEditor(props: {
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'scopes')}
 					values={scopes}
 					placeholder="profile"
-					emptyText="No additional scopes configured."
+					emptyText={tr('copy.noAdditionalScopesConfigured')}
 					suggestions={['profile', 'email', 'offline_access']}
 					onChange={setScopes}
 				/>
@@ -494,7 +494,7 @@ function SourceEditor(props: {
 					}
 				/>
 				{activeMode === 'none' ? (
-					<div className="empty-inline">{props.optionalText ?? 'No source configured.'}</div>
+					<div className="empty-inline">{props.optionalText ?? tr('copy.noSourceConfigured')}</div>
 				) : activeMode === 'inline' ? (
 					<MiniMonacoEditor
 						language="json"
