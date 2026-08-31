@@ -188,8 +188,9 @@ func NewAgwStatusSyncer(
 	}
 	if enableInference {
 		syncer.inferencePools = StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]{
-			Name:   "inferencePools",
-			Client: kclient.NewFilteredDelayed[*inf.InferencePool](client, wellknown.InferencePoolGVR, f),
+			Name:           "inferencePools",
+			ControllerName: controllerName,
+			Client:         kclient.NewFilteredDelayed[*inf.InferencePool](client, wellknown.InferencePoolGVR, f),
 			Build: func(om metav1.ObjectMeta, s inf.InferencePoolStatus) *inf.InferencePool {
 				return &inf.InferencePool{
 					ObjectMeta: om,
@@ -403,6 +404,13 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 				merged.Parents = mergeRouteParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)
 				mergedAny = &merged
 			}
+		case inf.InferencePoolStatus:
+			cur, ok := any(current).(*inf.InferencePool)
+			if ok {
+				merged := desired
+				merged.Parents = mergeInferencePoolParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)
+				mergedAny = merged
+			}
 		}
 
 		merged, ok := mergedAny.(S)
@@ -510,6 +518,37 @@ func mergeRouteParentStatuses(ourControllerName string, existing []gwv1.RoutePar
 			return c
 		}
 		return compareParentReference(a.ParentRef, b.ParentRef)
+	})
+
+	out = append(out, ours...)
+	return out
+}
+
+func mergeInferencePoolParentStatuses(ourControllerName string, existing []inf.ParentStatus, desired []inf.ParentStatus) []inf.ParentStatus {
+	out := make([]inf.ParentStatus, 0, len(existing)+len(desired))
+
+	// Preserve any entries not owned by our controller.
+	for _, p := range existing {
+		if string(p.ControllerName) != ourControllerName {
+			out = append(out, p)
+		}
+	}
+
+	// Only add entries owned by our controller from the desired status.
+	// This ensures we can clear stale entries by publishing an empty desired list.
+	ours := make([]inf.ParentStatus, 0, len(desired))
+	for _, p := range desired {
+		if string(p.ControllerName) == ourControllerName {
+			ours = append(ours, p)
+		}
+	}
+
+	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
+	slices.SortFunc(ours, func(a, b inf.ParentStatus) int {
+		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
+			return c
+		}
+		return compareInferencePoolParentReference(a.ParentRef, b.ParentRef)
 	})
 
 	out = append(out, ours...)
@@ -697,6 +736,37 @@ func compareParentReference(a, b gwv1.ParentReference) int {
 		return c
 	}
 	return comparePortNumberPtr(a.Port, b.Port)
+}
+
+func compareInferencePoolParentReference(a, b inf.ParentReference) int {
+	// ParentReference includes fields with defaults. Canonicalize those defaults so omitted vs explicitly-set
+	// default values don't introduce ordering churn.
+	if c := cmp.Compare(inferencePoolParentRefGroupOrDefault(a.Group), inferencePoolParentRefGroupOrDefault(b.Group)); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(inferencePoolParentRefKindOrDefault(a.Kind), inferencePoolParentRefKindOrDefault(b.Kind)); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(string(a.Namespace), string(b.Namespace)); c != 0 {
+		return c
+	}
+	return cmp.Compare(string(a.Name), string(b.Name))
+}
+
+func inferencePoolParentRefGroupOrDefault(g *inf.Group) string {
+	if g == nil {
+		// ParentReference.Group default.
+		return "gateway.networking.k8s.io"
+	}
+	return string(*g)
+}
+
+func inferencePoolParentRefKindOrDefault(k inf.Kind) string {
+	if k == "" {
+		// ParentReference.Kind default.
+		return "Gateway"
+	}
+	return string(k)
 }
 
 func parentRefGroupOrDefault(g *gwv1.Group) string {
