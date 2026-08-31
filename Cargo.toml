@@ -128,7 +128,7 @@ indexmap = { version = "2.13", features = ["serde"] }
 insta = { version = "1.47", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.12", features = ["serde"] }
 itertools = "0.15"
-jsonwebtoken = { version = "10.4" }
+jsonwebtoken = { version = "11.0" }
 lazy_static = "1.5"
 libc = "0.2"
 notify = "8.2"
@@ -143,7 +143,7 @@ opentelemetry-otlp = { version = "0.32", default-features = false, features = ["
 opentelemetry-proto = { version = "0.32", features = ["gen-tonic", "logs"] }
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
 parking_lot = "0.12"
-pem = "3.0.6"
+pem = "4.0.0"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"
