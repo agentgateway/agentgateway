@@ -57,9 +57,18 @@ impl CreditCardRecognizer {
 
 impl Recognizer for CreditCardRecognizer {
 	fn recognize(&self, text: &str) -> Vec<super::recognizer_result::RecognizerResult> {
-		self.recognizer.recognize(text)
+		self
+			.recognizer
+			.recognize(text)
+			.into_iter()
+			.filter(|result| luhn::valid(&normalize_card_number(&result.matched)))
+			.collect()
 	}
 	fn name(&self) -> &str {
 		self.recognizer.name()
 	}
+}
+
+fn normalize_card_number(value: &str) -> String {
+	value.chars().filter(|c| *c != ' ' && *c != '-').collect()
 }

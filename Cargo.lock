@@ -281,6 +281,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "libc",
+ "luhn",
  "mediatype",
  "mimalloc",
  "multer",
@@ -2447,6 +2448,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "digits_iterator"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af83450b771231745d43edf36dc9b7813ab83be5e8cbea344ccced1a09dfebcd"
+
+[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4213,6 +4220,15 @@ name = "lru-slab"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
+
+[[package]]
+name = "luhn"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d10b831402a3b10e018c8bc7f0ec3344a67d0725919cbaf393accb9baf8700b"
+dependencies = [
+ "digits_iterator",
+]
 
 [[package]]
 name = "macro_rules_attribute"

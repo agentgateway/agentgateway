@@ -86,6 +86,7 @@ ipnet.workspace = true
 itertools.workspace = true
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
+luhn.workspace = true
 mediatype = "0.21.0"
 notify-debouncer-full.workspace = true
 notify.workspace = true

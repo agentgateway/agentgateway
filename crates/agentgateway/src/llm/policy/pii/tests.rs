@@ -105,6 +105,14 @@ fn test_url_recognizer() {
 	);
 }
 
+fn credit_card_matches(text: &str) -> Vec<(String, usize, usize)> {
+	credit_card_recognizer::CreditCardRecognizer::new()
+		.recognize(text)
+		.into_iter()
+		.map(|result| (result.matched, result.start, result.end))
+		.collect()
+}
+
 #[test]
 fn test_credit_card_recognizer() {
 	let recognizer = credit_card_recognizer::CreditCardRecognizer::new();
@@ -119,6 +127,66 @@ fn test_credit_card_recognizer() {
 		assert!(result.score > 0.0);
 		assert!(result.matched.contains("1111") || result.matched.contains("5555"));
 	}
+}
+
+#[test]
+fn test_credit_card_recognizer_valid_luhn_formats() {
+	let cases = [
+		("visa contiguous: 4111111111111111", "4111111111111111"),
+		("visa spaces: 4111 1111 1111 1111", "4111 1111 1111 1111"),
+		("visa hyphens: 4111-1111-1111-1111", "4111-1111-1111-1111"),
+		("mastercard: 5555555555554444", "5555555555554444"),
+		(
+			"mastercard hyphens: 5555-5555-5555-4444",
+			"5555-5555-5555-4444",
+		),
+		("amex contiguous: 378282246310005", "378282246310005"),
+		("amex spaces: 3782 8224 6310 005", "3782 8224 6310 005"),
+		("amex hyphens: 3782-8224-6310-005", "3782-8224-6310-005"),
+		("discover: 6011111111111117", "6011111111111117"),
+		(
+			"discover hyphens: 6011-1111-1111-1117",
+			"6011-1111-1111-1117",
+		),
+	];
+
+	for (text, expected) in cases {
+		let matches = credit_card_matches(text);
+		assert_eq!(matches.len(), 1, "{text}");
+		assert_eq!(matches[0].0, expected, "{text}");
+		assert_eq!(&text[matches[0].1..matches[0].2], expected, "{text}");
+	}
+}
+
+#[test]
+fn test_credit_card_recognizer_rejects_invalid_checksum() {
+	let cases = [
+		"visa: 4111111111111112",
+		"visa hyphens: 4111-1111-1111-1112",
+		"mastercard: 5555555555554445",
+		"amex: 378282246310006",
+		"discover: 6011111111111118",
+	];
+
+	for text in cases {
+		assert!(
+			credit_card_matches(text).is_empty(),
+			"expected no match for {text}"
+		);
+	}
+}
+
+#[test]
+fn test_credit_card_recognizer_ignores_surrounding_digits() {
+	assert!(credit_card_matches("41111111111111119").is_empty());
+	assert!(credit_card_matches("x4111111111111111y").is_empty());
+	assert_eq!(
+		credit_card_matches("prefix 4111111111111111 suffix")
+			.into_iter()
+			.map(|(matched, _, _)| matched)
+			.collect::<Vec<_>>(),
+		vec!["4111111111111111".to_string()]
+	);
 }
 
 #[test]

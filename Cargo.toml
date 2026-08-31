@@ -131,6 +131,7 @@ itertools = "0.15"
 jsonwebtoken = { version = "10.4" }
 lazy_static = "1.5"
 libc = "0.2"
+luhn = "1.0"
 notify = "8.2"
 notify-debouncer-full = "0.7"
 md-5 = "0.11"
