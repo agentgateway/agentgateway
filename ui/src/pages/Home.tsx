@@ -22,7 +22,7 @@ import {
 	useUpdateConfig,
 	useUpsertConfigResource
 } from '@/hooks';
-import { tr, translateText } from '@/i18n';
+import { currentLanguage, tr, translateText } from '@/i18n';
 import { McpSettingsDrawer } from '@/pages/McpServers';
 import { LlmSettingsDrawer } from '@/pages/models/LlmSettingsDrawer';
 import { ReadonlyModeBanner, TrafficDumpOverview } from '@/pages/traffic/TrafficConfigDumpPanel';
@@ -417,7 +417,10 @@ function configWarningLabel(warning: string) {
 		);
 	}
 	const modelWarning = warning.match(/^([^:]+): (.+)$/);
-	if (modelWarning) return `${modelWarning[1]}：${translateText(modelWarning[2])}`;
+	if (modelWarning) {
+		const separator = currentLanguage() === 'zh-CN' ? '：' : ': ';
+		return `${modelWarning[1]}${separator}${translateText(modelWarning[2])}`;
+	}
 	return translateText(warning);
 }
 
