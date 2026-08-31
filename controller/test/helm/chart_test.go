@@ -504,6 +504,27 @@ controllerName: example.com/custom-agentgateway
     enabled: false
 `,
 		},
+		{
+			name: "monitoring-key-alerts",
+			filterKinds: []string{
+				"AgentgatewayParameters",
+				"PrometheusRule",
+			},
+			valuesYAML: `monitoring:
+  enabled: true
+  proxy:
+    podMonitor:
+      enabled: false
+  serviceMonitor:
+    enabled: false
+    extraLabels:
+      release: kube-prom
+  grafanaDashboard:
+    enabled: false
+  keyRejection:
+    enabled: true
+`,
+		},
 	}
 
 	for _, chart := range charts {

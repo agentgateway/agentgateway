@@ -69,4 +69,100 @@ data:
   agentgateway.json: |
 {{ .Files.Get "files/agentgateway-dashboard.json" | indent 4 }}
 {{- end }}
+{{- if .Values.monitoring.keyRejection.enabled }}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: {{ .Values.monitoring.keyRejection.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+spec:
+  rawConfig:
+    config:
+      metrics:
+        fields:
+          add:
+            # Classifies why an upstream provider rejected the API key agentgateway
+            # sends it, as a low-cardinality label on agentgateway_requests_total.
+            #
+            # 401 and 403 are auth-shaped by definition and classify on their own.
+            # Other statuses are only considered when the body carries a credential
+            # phrase, because Gemini and xAI report a rejected key as 400 while a
+            # bare 400 is otherwise an ordinary malformed request.
+            #
+            # The body is read only on those statuses, so successful traffic pays
+            # nothing but the status comparison. Every sub-expression is null-safe:
+            # a failed expression yields "unknown" and would hide a real rejection.
+            llm_key_error: >-
+              (response.code == 401 || response.code == 403
+               || response.code == 400 || response.code == 404)
+              ? coalesce(string(response.bodyPrefix), "").lowerAscii().with(body,
+                  (response.code == 401 || response.code == 403
+                   || body.matches('api key not valid|invalid api key|incorrect api key|api key is invalid|wrong api key|invalid_api_key|api_key_invalid|authentication fail'))
+                  ? (body.matches('expir|lapsed|no longer valid') ? "expired"
+                    : body.matches('revoked|deactivated|disabled|suspended|not found|no longer exists|unknown key') ? "revoked"
+                    : body.matches('invalid|incorrect|not valid|wrong api key|malformed|bad api key|authentication fail') ? "invalid"
+                    : body.matches('unauthorized|not authorized|permission|forbidden|access denied') ? "unauthorized"
+                    : "unrecognized")
+                  : "none")
+              : "none"
+{{- end }}
+{{- if .Values.monitoring.alertRules.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "agentgateway.fullname" . }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway.labels" . | nindent 4 }}
+    {{- with (default .Values.monitoring.serviceMonitor.extraLabels .Values.monitoring.alertRules.extraLabels) }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+  - name: agentgateway-credentials
+    rules:
+    # Fires on any upstream 401/403: the credential agentgateway presents to the
+    # provider was rejected. A client presenting a bad key to agentgateway is a
+    # different condition and carries reason="APIKeyAuth", not "Upstream".
+    #
+    # The nested label_replace copies the backend into `provider`, then shortens it
+    # for LLM backends, whose raw name looks like "/llm:model:openai/*:0". Backends
+    # that do not match keep their full name.
+    - alert: AgentgatewayUpstreamKeyRejected
+      expr: >-
+        label_replace(
+          label_replace(
+            sum by (gateway, backend) (increase(agentgateway_requests_total{reason="Upstream", status=~"401|403"}[{{ .Values.monitoring.alertRules.window }}])),
+            "provider", "$1", "backend", "(.*)"),
+          "provider", "$1", "backend", "/llm:model:([^/:]+).*")
+        > 0
+      for: 0m
+      labels:
+        {{- toYaml .Values.monitoring.alertRules.alertLabels | nindent 8 }}
+      annotations:
+        summary: "{{ `{{ $labels.provider }}` }} rejected the API key agentgateway sends it"
+        description: "{{ `{{ $value | printf \"%.0f\" }}` }} request(s) to {{ `{{ $labels.provider }}` }} on gateway {{ `{{ $labels.gateway }}` }} were rejected with HTTP 401/403. LLM traffic through this backend is failing."
+    # Catches rejections a provider reports with a status other than 401/403 (Gemini
+    # and xAI answer a dead key with 400) and names the reason. Requires
+    # monitoring.keyRejection.enabled; without that label the query returns no
+    # series and the rule never fires.
+    - alert: AgentgatewayUpstreamKeyRejectedClassified
+      expr: >-
+        label_replace(
+          label_replace(
+            sum by (gateway, backend, llm_key_error) (increase(agentgateway_requests_total{llm_key_error=~"expired|revoked|invalid|unauthorized|unrecognized"}[{{ .Values.monitoring.alertRules.window }}])),
+            "provider", "$1", "backend", "(.*)"),
+          "provider", "$1", "backend", "/llm:model:([^/:]+).*")
+        > 0
+      for: 0m
+      labels:
+        {{- toYaml .Values.monitoring.alertRules.alertLabels | nindent 8 }}
+      annotations:
+        summary: "API key agentgateway uses for {{ `{{ $labels.provider }}` }} is {{ `{{ $labels.llm_key_error }}` }}"
+        description: "{{ `{{ $labels.provider }}` }} on gateway {{ `{{ $labels.gateway }}` }} rejected agentgateway's API key as {{ `{{ $labels.llm_key_error }}` }}."
+{{- end }}
 {{- end }}

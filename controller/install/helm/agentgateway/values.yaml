@@ -312,3 +312,33 @@ monitoring:
     # -- Labels that the Grafana sidecar uses to discover dashboards.
     labels:
       grafana_dashboard: "1"
+
+  alertRules:
+    # -- Create a PrometheusRule with alerts that fire when an upstream LLM provider
+    #    rejects the API key agentgateway sends it. Prometheus evaluates these rules
+    #    itself and routes them through Alertmanager, so no Grafana datasource
+    #    configuration is needed; the alerts appear in Grafana under Alerting as
+    #    data source-managed rules.
+    enabled: true
+    # -- Additional labels to add to the PrometheusRule. Prometheus only picks up
+    #    rules matching its ruleSelector, which commonly requires the label of the
+    #    Prometheus release (e.g. release: prometheus). When unset, the
+    #    monitoring.serviceMonitor.extraLabels value is reused, since the same label
+    #    usually selects both.
+    extraLabels: {}
+    # -- Lookback window for the rule queries. A key rejection is a step change, so
+    #    this only needs to be long enough to survive a scrape gap.
+    window: 10m
+    # -- Labels attached to firing alerts, used to route them to a receiver.
+    alertLabels:
+      severity: critical
+
+  keyRejection:
+    # -- Create an AgentgatewayParameters resource that adds an `llm_key_error` label
+    #    to agentgateway_requests_total, classifying why a provider rejected the key.
+    #    Reference it from a GatewayClass via `gatewayClassParametersRefs` for it to
+    #    take effect. Without it the 401/403 alert still works, but rejections that
+    #    providers report as 400 (Gemini, xAI) are not detected.
+    enabled: false
+    # -- Name of the generated AgentgatewayParameters resource.
+    name: agentgateway-key-rejection

@@ -25,4 +25,18 @@ to let Prometheus scrape the controller and proxy metrics endpoints.
 {{- if .Values.monitoring.grafanaDashboard.enabled }}
 A Grafana dashboard ConfigMap has also been created for automatic Grafana sidecar discovery.
 {{- end }}
+{{- if .Values.monitoring.alertRules.enabled }}
+A PrometheusRule has been created with alerts that fire when an upstream LLM provider
+rejects the API key agentgateway sends it. Prometheus must select it via its ruleSelector;
+if your rules carry a release label, set monitoring.alertRules.extraLabels accordingly.
+{{- end }}
+{{- if .Values.monitoring.keyRejection.enabled }}
+An AgentgatewayParameters resource named "{{ .Values.monitoring.keyRejection.name }}" adds the
+llm_key_error metric label. It only takes effect on gateways that reference it, for example:
+
+  gatewayClassParametersRefs:
+    agentgateway:
+      name: {{ .Values.monitoring.keyRejection.name }}
+      namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- end }}
