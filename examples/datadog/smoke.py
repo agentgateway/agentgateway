@@ -44,9 +44,9 @@ def total(data, name, **labels):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--live",
+        "--datadog",
         action="store_true",
-        help="Generate traffic and validate metrics, without local trace assertions",
+        help="Generate traffic for Datadog and validate metrics without local trace assertions",
     )
     parser.add_argument(
         "--capture-content",
@@ -129,9 +129,9 @@ def main():
     print(
         "PASS: HTTP success/errors, streaming, input/output/cache tokens, synthetic USD cost, TTFT and TPOT"
     )
-    if args.live:
+    if args.datadog:
         print(
-            "Traffic sent. Datadog UI/API verification is still required; --live does not assert ingestion."
+            "Traffic sent. Datadog UI/API verification is still required; --datadog does not assert ingestion."
         )
         return
     spans = []

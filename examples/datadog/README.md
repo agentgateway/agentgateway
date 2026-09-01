@@ -1,68 +1,180 @@
 # Datadog observability
 
-This example targets **agentgateway v1.5.0** and **Datadog Agent 7.82.3**. It provides immediate metrics collection with the stock OpenMetrics check, plus a separate OTLP trace path for Datadog LLM Observability. No Datadog SDK is needed inside agentgateway.
+This example targets **agentgateway v1.5.0** and **Datadog Agent 7.82.3**. It
+collects metrics with Datadog's stock OpenMetrics check and sends traces through
+OpenTelemetry to Datadog Agent Observability. No Datadog SDK is required inside
+agentgateway.
 
-The default Docker Compose configuration is `compose.yaml`. Running `docker compose up -d` without additional Compose files starts agentgateway, a deterministic OpenAI-compatible provider fixture, and a local OpenTelemetry Collector. The fixture also captures OTLP/HTTP protobuf traces for local assertions. This configuration does not call paid models or send data to Datadog. Adding `compose.datadog.yaml` as an override starts the Datadog Agent and exports synthetic telemetry to Datadog.
+## Choose a workflow
+
+| Goal | Docker Compose files | Credentials |
+| --- | --- | --- |
+| Validate metrics and traces locally | [`compose.yaml`](compose.yaml) | None |
+| Send synthetic telemetry to Datadog | `compose.yaml` and [`compose.datadog.yaml`](compose.datadog.yaml) | Datadog API key |
+| Test prompt and completion capture | Add [`compose.content.yaml`](compose.content.yaml) to the synthetic configuration | Datadog API key only when exporting |
+| Call a real OpenAI model | [`compose.openai.yaml`](compose.openai.yaml) and `compose.datadog.yaml` | Datadog and OpenAI API keys |
+
+The default `compose.yaml` configuration starts agentgateway, a deterministic
+OpenAI-compatible provider fixture, and an OpenTelemetry Collector. The fixture
+also captures OTLP/HTTP protobuf traces for local assertions. This configuration
+does not call paid models or send data to Datadog. Adding
+`compose.datadog.yaml` starts the Datadog Agent and sends synthetic telemetry to
+the organization associated with the configured API key. The Compose files use
+specific image tags for the gateway, Collector, Agent, and fixture runtime so
+the test uses consistent component versions.
+
+```mermaid
+flowchart LR
+    Smoke[smoke.py] --> Gateway[agentgateway]
+    Gateway -->|OpenAI-compatible requests| Fixture[Provider fixture]
+    Gateway -->|OTLP/HTTP traces| Collector[OpenTelemetry Collector]
+    Collector -->|Default local path| Fixture
+    Collector -->|Datadog override| Agent[Datadog Agent]
+    Agent --> Datadog[Datadog]
+    Agent -->|scrapes OpenMetrics| Gateway
+```
+
+OpenMetrics collection can be validated locally. Datadog ingestion, dashboard
+rendering, Agent Observability conversion, live Kubernetes behavior,
+multi-replica behavior, and performance testing require separate validation in
+the target environment.
 
 ## Prerequisites
 
 The local test requires:
 
-- [Docker](https://docs.docker.com/get-docker/) with [Docker Compose](https://docs.docker.com/compose/install/), installed through Docker Desktop or the Compose CLI plugin.
-- [uv](https://docs.astral.sh/uv/) to create the Python environment and run `smoke.py`.
-- Network access on the first run to download container images and Python packages.
+- [Docker](https://docs.docker.com/get-docker/) with
+  [Docker Compose](https://docs.docker.com/compose/install/), installed through
+  Docker Desktop or the Compose CLI plugin.
+- [uv](https://docs.astral.sh/uv/) to create the Python environment and run the
+  smoke test.
+- `curl` to inspect raw metrics and send the optional real-provider request.
+- Network access on the first run to download container images and Python
+  packages.
 - Available loopback ports `13000`, `18080`, and `18520`.
 
-Exporting the synthetic telemetry also requires a Datadog organization, its API key, and the correct [Datadog site](https://docs.datadoghq.com/getting_started/site/). Datadog LLM Observability must be enabled in the organization to verify traces in that product. The local test does not require a Datadog account.
+Exporting synthetic telemetry requires a Datadog organization, an API key, and
+the correct [Datadog site](https://docs.datadoghq.com/getting_started/site/).
+Agent Observability, which Datadog documentation also calls LLM Observability,
+must be enabled for the organization to verify traces in that product. Local
+validation does not require a Datadog account.
 
-The optional real-provider test requires an OpenAI API key with billing enabled and the name of an OpenAI model available to that account. It makes a paid API request. The selected model must support the OpenAI Chat Completions API.
+The optional real-provider test requires an OpenAI API key with billing enabled
+and an OpenAI model that supports the Chat Completions API. It makes a paid API
+request.
 
-## Run the local test
+All commands below run from the example directory unless stated otherwise:
 
 ```sh
 cd examples/datadog
+```
+
+## Run the local test
+
+Start the default configuration and run the smoke test:
+
+```sh
 docker compose up -d
 uv run smoke.py
 ```
 
-The test verifies HTTP success/500/429 responses, streaming, input/output/cache token accounting, estimated USD cost, time to first token, time per output token, OTLP/HTTP protobuf export, HTTP error status normalization, W3C parent propagation, and omission of prompt/response content. The provider's test prices are **synthetic**, not real provider pricing. Metrics are saved to ignored `var/metrics.txt`.
+The smoke test verifies:
 
-Traces pass through the OpenTelemetry Collector configured in `collector.yaml`. The Collector image version is fixed in `compose.yaml` for reproducible testing. In v1.5.0, a provider HTTP 429/500 is recorded in the GenAI span's `http.status` attribute, but the separate OpenTelemetry span status remains `Unset`. The gateway treats a received HTTP response as a successful transport result and sets span status to `Error` only when the upstream call itself returns an error, such as a connection failure. Consequently, an observability backend may receive the correct HTTP status without classifying the GenAI operation as an error. This was fixed on `main` by [PR #3261](https://github.com/agentgateway/agentgateway/pull/3261), after the v1.5.0 release.
+- Successful provider responses and HTTP 429/500 errors.
+- Streaming and non-streaming OpenAI-compatible responses.
+- Input, output, and cached-input token accounting.
+- Synthetic estimated cost, time to first token, and time per output token.
+- OTLP/HTTP protobuf export, W3C parent propagation, and HTTP error
+  classification.
+- Omission of prompt and completion content from exported traces.
 
-Because this example runs v1.5.0, the Collector marks GenAI spans with `http.status >= 400` as errors and supplies `error.type` when missing. Treating a provider rejection such as 429 as a failed GenAI operation is deliberate. At the HTTP server-span layer, OpenTelemetry normally leaves 4xx status unset because the client may be at fault. This rule is scoped to GenAI operations rather than every gateway HTTP span. Successful spans and existing error types are preserved. Remove the `transform/gateway_errors` processor in `collector.yaml` after upgrading to a release that contains PR #3261; that release classifies provider responses in the gateway and records the numeric HTTP status as `error.type`.
+The fixture prices are synthetic and do not represent provider pricing. The
+test saves the raw metric payload to the ignored `var/metrics.txt` file.
 
-Host ports bind only to IPv4 loopback: gateway `127.0.0.1:13000`, metrics `127.0.0.1:18520`, fixture capture endpoint `127.0.0.1:18080`. Inside the Compose network, the proxy still uses metrics port 15020. No admin port is published. If a port is occupied, adjust both Compose and the smoke test.
+Inspect the live Prometheus payload directly:
 
-## Send synthetic telemetry to a Datadog trial
+```sh
+curl http://127.0.0.1:18520/metrics
+```
 
-1. Create a local `.env` file containing the trial organization's API key and site. Keep this file private (`chmod 600 .env`); it is ignored by Git. Do not paste keys into issues, example YAML, screenshots, or command output.
+| Endpoint | Host address | Purpose |
+| --- | --- | --- |
+| Gateway | `127.0.0.1:13000` | OpenAI-compatible requests |
+| Metrics | `127.0.0.1:18520` | Raw Prometheus metrics |
+| Fixture | `127.0.0.1:18080` | Health and captured-trace endpoints |
+
+All ports bind only to IPv4 loopback. Inside the Compose network, the gateway
+still exposes metrics on port 15020. No admin port is published. If a port is
+occupied, update both the Compose configuration and the smoke test.
+
+Leave the stack running to continue with synthetic Datadog export, or stop it:
+
+```sh
+docker compose down
+```
+
+## Send synthetic telemetry to Datadog
+
+1. Create an ignored `.env` file with the API key and site for the Datadog
+   organization:
 
    ```dotenv
-   DD_API_KEY=replace-with-your-trial-api-key
+   DD_API_KEY=replace-with-your-datadog-api-key
    DD_SITE=us3.datadoghq.com
    ```
 
-   Use the site where your organization actually resides; for US1 use `datadoghq.com`. API and application keys are different: an API key permits ingestion. Dashboard/API queries may additionally need a suitably scoped application key, but the example does not require one.
+   Keep this file private with `chmod 600 .env`. Use the site where the
+   organization resides; for US1 use `datadoghq.com`. API and application keys
+   are different: an API key permits ingestion. API queries may additionally
+   require a suitably scoped application key, but this example does not.
 
-2. Start Docker Compose with the Datadog override. This adds the Datadog Agent and sends synthetic metrics and traces to the organization associated with `DD_API_KEY`:
+2. Start the synthetic configuration with the Datadog override, generate
+   traffic, and run two OpenMetrics scrapes:
 
    ```sh
    docker compose -f compose.yaml -f compose.datadog.yaml up -d
-   uv run smoke.py --live
-   docker compose -f compose.yaml -f compose.datadog.yaml exec datadog agent check openmetrics
+   uv run smoke.py --datadog
+   docker compose -f compose.yaml -f compose.datadog.yaml \
+     exec datadog agent check openmetrics --check-rate
    ```
 
-   Do not share `docker compose config` or container inspection output: environment variables can contain the API key. This setup intentionally omits Docker socket/host filesystem mounts, container autodiscovery, and log collection; it needs only network access to the synthetic gateway. It is a development setup, not a production Agent deployment.
+   The first counter scrape establishes a baseline. `--check-rate` performs
+   successive checks so counter metrics can appear. Repeat `uv run smoke.py
+   --datadog` across scrape intervals when populating rate charts.
 
-3. In Datadog, verify `agentgateway.requests.count`, `agentgateway.gen_ai.token.usage.sum`, and `agentgateway.gen_ai.cost.usd.count`, scoped to `env:datadog-dev`. A successful health check alone does not prove counters were collected. Counters need successive scrapes; repeat the smoke test across scrape intervals to populate rate charts.
+3. In Datadog, open **Metrics > Explorer** and search for these exact metrics:
 
-4. Import `dashboard.json` using Datadog's dashboard JSON import. Enable percentile aggregations on the latency distributions in Metrics Summary for p95 panels. Scope the `env` variable to `datadog-dev`. Controller/MCP/guardrail panels remain empty until corresponding traffic exists.
+   - `agentgateway.requests.count`
+   - `agentgateway.gen_ai.token.usage.sum`
+   - `agentgateway.gen_ai.cost.usd.count`
 
-5. Open LLM Observability and verify gateway LLM spans under `ml_app:agentgateway` or the configured service name. Confirm models, token counts, errors, and trace relationships—not just presence in APM. Allow several minutes for processing. LLM Observability must be enabled for the organization; a successful OTLP response alone is not proof of product ingestion.
+   Filter them by `env:datadog-dev`. A successful
+   `agentgateway.openmetrics.health` service check proves that the endpoint was
+   reachable; it does not prove that counter samples reached Datadog.
 
-   Agent Observability displays `COST UNAVAILABLE` for the synthetic `datadog-test` model because that model is not in Datadog's pricing catalog. This is expected. The synthetic cost calculated by agentgateway remains available in the `agw.ai.usage.cost.*` span tags and the `agentgateway.gen_ai.cost.usd.count` metric.
+4. In **Dashboards**, import [`dashboard.json`](dashboard.json) with the dashboard JSON import
+   action. Set the `env` template variable to `datadog-dev`. Enable percentile
+   aggregations for the latency distributions in Metrics Summary before using
+   the p95 widgets. Controller, MCP, and guardrail widgets remain empty until
+   their corresponding components or traffic are present. To see an exact
+   metric name used by a widget, edit the widget and inspect its query.
 
-The `--live` smoke test verifies requests and local metrics; it **does not claim** to verify Datadog ingestion. The development override sends metadata-only traces through the Collector to the Agent's OTLP/HTTP receiver. Only synthetic data should be used in this example.
+5. Open **Agent Observability > Traces** and search for
+   `ml_app:agentgateway`. Verify models, token counts, errors, and trace
+   relationships. Allow several minutes for processing. A successful OTLP
+   response or a trace in APM alone does not prove ingestion into Agent
+   Observability.
+
+   Agent Observability displays `COST UNAVAILABLE` for the synthetic
+   `datadog-test` model because that model is not in Datadog's pricing catalog.
+   This is expected. The cost calculated from the fixture rates remains visible
+   in the `agw.ai.usage.cost.*` span tags and the
+   `agentgateway.gen_ai.cost.usd.count` metric.
+
+The `--datadog` smoke mode validates requests and local metrics, but it does not
+assert Datadog ingestion. The override sends metadata-only traces through the
+Collector to the Agent's OTLP/HTTP receiver. Use only non-sensitive test prompts
+with this development configuration.
 
 Stop the stack when finished to avoid unnecessary trial usage:
 
@@ -70,20 +182,143 @@ Stop the stack when finished to avoid unnecessary trial usage:
 docker compose -f compose.yaml -f compose.datadog.yaml down
 ```
 
-To return to local trace capture, stop the Datadog stack and run `docker compose up -d` without the override.
+To return to local trace capture, run `docker compose up -d` without the
+Datadog override.
+
+## Troubleshooting
+
+### The Datadog Agent container is unhealthy
+
+An invalid API key or incorrect `DD_SITE` can make the Agent unhealthy even
+when its local OpenMetrics check can reach agentgateway. Verify the organization
+site and API key, then inspect the Agent:
+
+```sh
+docker compose -f compose.yaml -f compose.datadog.yaml ps
+docker compose -f compose.yaml -f compose.datadog.yaml \
+  exec datadog agent status
+```
+
+Do not share `docker compose config`, container inspection output, or the local
+`.env` file; those outputs can contain credentials.
+
+### The OpenMetrics check succeeds but metrics are missing in Datadog
+
+Run the check with rate calculation:
+
+```sh
+docker compose -f compose.yaml -f compose.datadog.yaml \
+  exec datadog agent check openmetrics --check-rate
+```
+
+Confirm that the output reports metric samples, then:
+
+1. Run `uv run smoke.py --datadog` again between scrape intervals.
+2. Verify `DD_API_KEY` and `DD_SITE`.
+3. Allow several minutes for intake and indexing.
+4. Search in **Metrics > Explorer** using the exact metric name.
+5. Remove filters other than `env:datadog-dev` while troubleshooting.
+
+The service check alone is insufficient because it only reports whether the
+metrics endpoint responded successfully.
+
+### Raw metrics are unavailable
+
+Check the containers and query the loopback endpoint:
+
+```sh
+docker compose ps
+curl --fail http://127.0.0.1:18520/metrics
+```
+
+The gateway container does not need a Docker health check to serve metrics. If
+the port is already in use, change the host-side `18520` mapping and the URL in
+`smoke.py` together.
+
+### Traces do not appear in Agent Observability
+
+- Confirm that Agent Observability is enabled for the organization.
+- Confirm that the Agent is healthy and that `DD_SITE` selects the correct
+  organization.
+- Search for `ml_app:agentgateway` and allow several minutes for processing.
+- Remember that the default local stack exports traces to the fixture. Include
+  `compose.datadog.yaml` to export them to Datadog.
+
+### Agent Observability reports `COST UNAVAILABLE`
+
+This is expected for the synthetic `datadog-test` model. Datadog can estimate
+cost only when it recognizes the provider and returned model and receives token
+usage. Use the span's `agw.ai.usage.cost.total` tag to inspect agentgateway's
+synthetic calculation.
+
+### Dashboard percentile widgets are empty
+
+Enable percentile aggregations for the corresponding distribution metrics in
+Metrics Summary, wait for processing, and confirm that more than one scrape has
+occurred. Controller panels require the controller configuration described
+below.
+
+### Kubernetes metrics are duplicated
+
+Choose one proxy deployment method: `proxy-values.yaml` for the standalone
+proxy chart or `proxy-parameters.yaml` for controller-provisioned proxies. Do
+not apply both to the same workload, and do not scrape the same endpoint through
+both Autodiscovery and separate Prometheus discovery.
+
+## Optional prompt and completion capture
+
+By default, traces exported by this example do not contain prompt or completion
+content. To validate content capture with synthetic data locally, add the
+content override:
+
+```sh
+docker compose -f compose.yaml -f compose.content.yaml up -d
+uv run smoke.py --capture-content
+```
+
+To send synthetic captured content to the Datadog trial, include both overrides:
+
+```sh
+docker compose -f compose.yaml -f compose.content.yaml \
+  -f compose.datadog.yaml up -d
+uv run smoke.py --datadog
+```
+
+Then find the span under `ml_app:agentgateway` and inspect its Messages section.
+The `--datadog` mode sends traffic but does not assert product ingestion.
+
+Restore metadata-only local mode with `docker compose up -d`. For Datadog
+export, omit `compose.content.yaml` when starting the stack again.
+
+The content override adds these expressions to `config.tracing.fields.add`:
+
+```yaml
+gen_ai.input.messages: 'llm.prompt'
+gen_ai.output.messages: 'llm.completion.map(c, {"role":"assistant", "content":c})'
+```
+
+The values must arrive as valid JSON message arrays. Use synthetic traffic
+first. Before production, apply content redaction and size limits, choose a
+sampling policy, and review access controls in both Agent Observability and APM.
+Capturing content adds memory and serialization overhead. Enabling capture is
+not a redaction mechanism. Gateway observability covers only operations crossing
+the proxy; it does not replace application instrumentation or configure quality
+evaluations.
 
 ## Send a request to a real OpenAI model
 
-The synthetic provider remains the default. To verify Datadog's cost estimate for a real model, stop that stack and explicitly start the real-provider configuration. Add the following values to the ignored `.env` file, selecting a model available to your OpenAI account:
+The synthetic provider remains the default. To test a real model, add these
+values to the ignored `.env` file:
 
 ```dotenv
 OPENAI_API_KEY=replace-with-your-openai-api-key
 OPENAI_MODEL=replace-with-a-chat-completions-model
 ```
 
-Keep the OpenAI key private. Requests in this mode use the OpenAI API and may incur charges. Do not combine this configuration with `compose.content.yaml`; prompt and response capture remains disabled.
+Keep the OpenAI key private. This mode makes a paid API request. Do not combine
+it with `compose.content.yaml`; exported traces remain metadata-only.
 
-Start agentgateway with the real OpenAI configuration and the Datadog Agent:
+Start agentgateway with the real-provider configuration and Datadog Agent:
 
 ```sh
 docker compose down
@@ -102,7 +337,38 @@ curl http://127.0.0.1:13000/v1/chat/completions \
   }'
 ```
 
-Allow several minutes for processing, then find the span in Datadog Agent Observability under `ml_app:agentgateway`. Datadog can estimate cost when the configured provider and returned model name match its pricing catalog and token usage is present. This estimate uses Datadog's pricing data; compare it separately with the cost attributes and metrics calculated by agentgateway.
+Allow several minutes for processing, then find the span in **Agent
+Observability > Traces** under `ml_app:agentgateway`. Datadog can estimate cost
+when the provider, returned model, and token usage match its pricing catalog.
+
+agentgateway calculates cost only when its own model catalog contains rates for
+the returned model. [`config-openai.yaml`](config-openai.yaml) does not include provider rates because
+they vary over time and by agreement. To compare the two estimates, add the
+exact provider model and its current per-million-token rates to a local copy of
+that configuration:
+
+```yaml
+config:
+  modelCatalog:
+    - inline:
+        providers:
+          openai:
+            models:
+              replace-with-exact-provider-model:
+                rates:
+                  input: "replace-with-input-rate"
+                  output: "replace-with-output-rate"
+                  cacheRead: "replace-with-cached-input-rate"
+```
+
+Merge `modelCatalog` into the existing `config` object rather than adding a
+second `config` key.
+
+For one request, compare Datadog's **Estimated Cost** with
+`agw.ai.usage.cost.total` on the same span. The
+`agentgateway.gen_ai.cost.usd.count` metric is cumulative; compare its change
+across scrape intervals while no unrelated traffic is running. These values may
+differ because Datadog and agentgateway use separate pricing catalogs.
 
 Stop the real-provider stack when finished:
 
@@ -110,73 +376,133 @@ Stop the real-provider stack when finished:
 docker compose -f compose.openai.yaml -f compose.datadog.yaml down
 ```
 
-## Production metrics configuration
+## Deploy OpenMetrics collection
 
-Use `openmetrics.yaml` with the stock Datadog Agent, changing `gateway:15020` and the tags to match your deployment. The file collects all proxy and runtime metric families except the per-resource MCP request counter. Explicit mappings preserve the metric names used by the dashboard; `raw_metric_prefix` removes the source `agentgateway_` prefix before the wildcard collects the remaining families.
+### Stock Agent configuration
 
-**Keep `use_latest_spec: true` for the v1.5.0 proxy.** It serves OpenMetrics counter TYPE names with a `text/plain` content type. Datadog's default Prometheus parser can silently omit request, cost, and other counters. The Go controller uses the Prometheus parser (`use_latest_spec: false`).
+Use [`openmetrics.yaml`](openmetrics.yaml) with a stock Datadog Agent outside Docker Compose,
+changing `gateway:15020` and the tags for the deployment. The file collects all
+proxy and runtime metric families except the per-resource MCP request counter.
+Explicit mappings preserve the names used by the dashboard.
+`raw_metric_prefix` removes the source `agentgateway_` prefix before the
+wildcard collects the remaining families.
 
-### Kubernetes
+Keep `use_latest_spec: true` for the v1.5.0 proxy. It serves OpenMetrics counter
+type names with a `text/plain` content type; Datadog's default Prometheus parser
+can silently omit request, cost, and other counters. The Go controller uses the
+Prometheus parser with `use_latest_spec: false`.
 
-Choose one proxy configuration method; do not apply both proxy files to the same workload:
+All OpenMetrics series are Datadog custom metrics. Wildcard collection increases
+custom-metric volume, particularly when labels create many contexts. Review
+usage and tag cardinality for the deployment and retain the Agent's sample
+limit.
 
-- Standalone proxy Helm chart: merge `kubernetes/proxy-values.yaml` into its values.
-- Controller-provisioned proxy: use `kubernetes/proxy-parameters.yaml` and reference it from the Gateway's `spec.infrastructure.parametersRef`. Adapt the namespace and merge with existing parameters. For DaemonSet proxies, put the same pod-template overlay under `spec.daemonSet`.
+### Kubernetes Autodiscovery
 
-When running the controller, additionally merge `kubernetes/controller-values.yaml` into its Helm values to collect controller metrics on port 9092. This configuration applies to the controller pod and is independent of the proxy method selected above. It collects every metric exposed by the controller, including Go and process runtime metrics, and preserves the curated names used by the dashboard for reconciliation metrics. Datadog treats these series as custom metrics, so review their volume and tag cardinality for your deployment.
+Choose one proxy configuration method:
 
-The Autodiscovery annotation identifier must match the container name: `agentgateway` for the proxy, `controller` for the controller. Configure the Datadog Agent in that cluster separately. These examples do not install it or change your existing cluster.
+- For the standalone proxy Helm chart, merge
+  [`kubernetes/proxy-values.yaml`](kubernetes/proxy-values.yaml)
+  into its values.
+- For a controller-provisioned proxy, use
+  [`kubernetes/proxy-parameters.yaml`](kubernetes/proxy-parameters.yaml) and reference it from the Gateway's
+  `spec.infrastructure.parametersRef`. Adapt the namespace and merge it with
+  existing parameters. For DaemonSet proxies, put the same pod-template overlay
+  under `spec.daemonSet`.
 
-Use `%%host%%` and scrape each pod individually. Do not scrape a load-balanced Service that mixes process-local counters. Prometheus annotations or PodMonitors alone do not configure Datadog unless you separately enable Prometheus discovery. Avoid duplicate collection through simultaneous discovery methods. Keep management ports private; allow only the appropriate Datadog Agent traffic through NetworkPolicy. Do not expose admin port 15000.
+Do not apply both proxy files to the same workload. They are alternative ways
+to place the same Autodiscovery annotation on a proxy pod.
 
-### Metric meanings and limits
+When running the controller, additionally merge
+[`kubernetes/controller-values.yaml`](kubernetes/controller-values.yaml) into its Helm values. This independent
+annotation collects controller metrics on port 9092, including Go and process
+runtime metrics, while retaining the names used by the dashboard for
+reconciliation metrics.
+
+The Autodiscovery annotation identifier must match the container name:
+`agentgateway` for the proxy and `controller` for the controller. These files do
+not install or configure the Datadog Agent in the cluster.
+
+Use `%%host%%` and scrape every pod individually. Do not scrape a load-balanced
+Service that combines process-local counters. Prometheus annotations or
+PodMonitors do not configure Datadog unless Prometheus discovery is separately
+enabled. Keep management ports private, allow only the appropriate Agent
+traffic through NetworkPolicy, and do not expose admin port 15000.
+
+### Key mapped metrics
+
+The wildcard also collects runtime and transport metrics. The table below lists
+the stable mappings used by the dashboard. See agentgateway's
+[source metric catalog](../../schema/metrics.md) for the source families.
 
 | Datadog metric | Meaning |
 | --- | --- |
-| `agentgateway.requests.count` | HTTP request counter; use status/reason tags for errors and `protocol:mcp` for MCP transport traffic |
+| `agentgateway.requests.count` | HTTP request counter; use `status` and `reason` for errors and `protocol:mcp` for MCP transport traffic |
 | `agentgateway.request.duration` | HTTP latency distribution, in seconds |
 | `agentgateway.gen_ai.request.duration` | LLM request latency distribution, in seconds |
 | `agentgateway.gen_ai.time_to_first_token` | Time-to-first-token distribution, in seconds |
 | `agentgateway.gen_ai.time_per_output_token` | Time-per-output-token distribution, in seconds |
 | `agentgateway.gen_ai.token.usage.sum` | Token totals, separated by `token_type` |
-| `agentgateway.gen_ai.cost.usd.count` | Estimated cumulative USD for requests with known usage/pricing |
-| `agentgateway.cost_catalog.lookups.count` | Pricing lookup outcomes, including missing/unpriced models |
+| `agentgateway.gen_ai.cost.usd.count` | Estimated cumulative USD for requests with known usage and pricing |
+| `agentgateway.cost_catalog.lookups.count` | Pricing lookup outcomes, including missing or unpriced models |
 | `agentgateway.controller.reconciliations.count` | Optional controller reconciliation counter |
 
-Histograms also export monotonic `.sum` and `.count`. Token histogram `.count` counts observations, **not tokens**. Input tokens already include cached input, so do not add cache categories to input totals. Cost is incomplete when usage/pricing is missing; it is not an invoice. Error status is not a default GenAI histogram dimension, so default metrics cannot provide per-model error rates.
+Histograms also export monotonic `.sum` and `.count` metrics. Token histogram
+`.count` counts observations, not tokens. Input tokens already include cached
+input, so do not add cache categories to input totals. Cost is incomplete when
+usage or pricing is missing and is not an invoice. Error status is not a default
+GenAI histogram dimension, so default metrics cannot provide per-model error
+rates.
 
-Built-in series identity labels are preserved for the collected metric families. The label allowlist prevents user-configured custom dimensions from being exported automatically. Per-resource MCP counters are deliberately omitted because their `resource` label can contain unbounded or sensitive tool names and URIs; HTTP MCP traffic remains available. To collect `mcp_requests`, remove it from `exclude_metrics`, explicitly map it to `mcp.requests`, and add `resource`, `resource_type`, and `server` to `include_labels` after reviewing the possible values. Do not drop `resource` while collecting this counter because doing so can merge independent series incorrectly.
+The label allowlist preserves the built-in identities of collected families
+while preventing user-configured custom dimensions from being exported
+automatically. Avoid request IDs, user IDs, prompts, and arbitrary URLs as
+metric labels. If custom dimensions distinguish independent counters, add every
+bounded identity label or aggregate before scraping; dropping one can merge
+independent series incorrectly.
 
-Avoid request IDs, user IDs, prompts, and arbitrary URLs as metric labels. If you customize gateway metric dimensions, include all distinguishing bounded labels or aggregate upstream before scraping. The generic OpenMetrics check counts these as custom metrics; budget for tags and distributions and retain its sample limit.
-
-## Optional prompt/completion capture
-
-By default no prompts or completions leave the gateway. To enable prompt and completion capture for the synthetic test data, add the content-capture override:
-
-```sh
-docker compose -f compose.yaml -f compose.content.yaml up -d
-uv run smoke.py --capture-content
-```
-
-To test synthetic content in the trial account, also include `-f compose.datadog.yaml` and use `smoke.py --live`. Restore metadata-only mode with `docker compose up -d` (or the Datadog override without the content override).
-
-The content-capture override adds the following to `config.tracing.fields.add`:
+The per-resource `mcp_requests` counter is excluded by default because its
+`resource` label can contain unbounded or sensitive tool names and URIs. HTTP
+MCP traffic remains available through `agentgateway.requests.count`. To opt in,
+remove `mcp_requests` from `exclude_metrics`, map it to `mcp.requests`, and add
+its identity labels:
 
 ```yaml
-gen_ai.input.messages: 'llm.prompt'
-gen_ai.output.messages: 'llm.completion.map(c, {"role":"assistant", "content":c})'
+metrics:
+  - mcp_requests: mcp.requests
+  - .*
+exclude_metrics: []
+include_labels:
+  - resource
+  - resource_type
+  - server
 ```
 
-The values must arrive as valid JSON message arrays in Datadog. Use synthetic traffic first. Before production, apply content redaction and size limits, choose sampling, and review access controls in both LLM Observability and APM. Capturing content adds memory/serialization overhead. Enabling content capture is not a redaction mechanism. Gateway observability covers only operations crossing the proxy; it does not replace application instrumentation or configure quality evaluations automatically.
+Merge this fragment into the existing configuration rather than replacing the
+other mappings or labels. Review the possible `resource` values before enabling
+collection. Do not collect the counter while dropping `resource` because that
+can merge independent series.
 
-## Migrate to the named integration
+## agentgateway v1.5.0 error-status compatibility
 
-The proposed `DataDog/integrations-extras/agentgateway` check packages the mappings and dashboard. It is not bundled with the Agent or published yet. Install its versioned wheel in a custom Agent image, configure the check name `agentgateway` with `component: proxy` or `controller`, and remove the corresponding generic `openmetrics` instance. Never run both against the same endpoint. Metric names remain unchanged; first counter samples after migration establish a new baseline.
+In v1.5.0, a provider HTTP 429 or 500 is recorded in the GenAI span's
+`http.status` attribute, but the separate OpenTelemetry span status remains
+`Unset`. The gateway received an HTTP response successfully at the transport
+layer even though the GenAI operation failed. This was fixed after v1.5.0 by
+[PR #3261](https://github.com/agentgateway/agentgateway/pull/3261).
 
-The default metrics dashboard works with either check. The scrape-health service check is `agentgateway.openmetrics.health` for both configurations because both use the `agentgateway` namespace.
+For v1.5.0, [`collector.yaml`](collector.yaml) applies `transform/gateway_errors` only to GenAI
+spans with `http.status >= 400`. It marks the span as an error and supplies
+`error.type` when missing. Successful spans, unrelated HTTP spans, and existing
+error types are preserved. Remove the processor from `collector.yaml` after
+upgrading to a release that contains PR #3261; that release performs the
+classification in the gateway and records the numeric HTTP status as
+`error.type`.
 
-## Validation status
+## References
 
-The local synthetic stack and the real Agent check can be tested without an account. Account ingestion, dashboard rendering, LLM Observability conversion, live Kubernetes deployment, multi-replica behavior, and overhead/load testing require separate acceptance checks. Do not equate local test success with completion of those checks.
-
-References: [OpenMetrics](https://docs.datadoghq.com/integrations/openmetrics/), [Kubernetes Autodiscovery](https://docs.datadoghq.com/containers/kubernetes/integrations/), [LLM Observability OTLP](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/), [Agent Observability cost](https://docs.datadoghq.com/llm_observability/investigate/cost/), [community installation](https://docs.datadoghq.com/agent/guide/use-community-integrations/).
+- [Datadog OpenMetrics](https://docs.datadoghq.com/integrations/openmetrics/)
+- [Kubernetes Autodiscovery](https://docs.datadoghq.com/containers/kubernetes/integrations/)
+- [LLM Observability with OpenTelemetry](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/)
+- [Agent Observability cost](https://docs.datadoghq.com/llm_observability/investigate/cost/)
+- [Datadog community integrations](https://docs.datadoghq.com/agent/guide/use-community-integrations/)
