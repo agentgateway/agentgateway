@@ -27,6 +27,7 @@ production readiness.
 | Python checks | Ruff and mypy pass; two deprecation warnings originate in Datadog-generated Pydantic models |
 | Datadog asset validation | Metadata, dashboards, package, service checks, README, HTTP usage, imports, signatures, integration style, config/models, OpenMetrics limit and CODEOWNERS pass |
 | Kubernetes configuration | Annotation/config parsing and chart rendering checked; no cluster deployment performed |
+| Real OpenAI configuration | Compose parsing and proxy startup with placeholder credentials; paid API calls and Datadog cost estimation were not exercised |
 
 The counter reset test verifies submission through the Agent's monotonic-count
 API. It does not establish multi-replica correctness in a live Datadog account.

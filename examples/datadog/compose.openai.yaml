@@ -1,0 +1,25 @@
+# Replaces the synthetic provider stack with an explicitly configured paid OpenAI request path.
+name: agentgateway-datadog
+services:
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.146.0
+    command: [--config=/etc/otelcol/config.yaml]
+    environment:
+      OTLP_EXPORT_ENDPOINT: http://datadog:4318
+    volumes:
+      - ./collector.yaml:/etc/otelcol/config.yaml:ro
+  gateway:
+    image: ghcr.io/agentgateway/agentgateway:v1.5.0
+    command: [-f, /example/config-openai.yaml]
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in the ignored .env file}
+      OPENAI_MODEL: ${OPENAI_MODEL:?Set OPENAI_MODEL in the ignored .env file}
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf
+    volumes:
+      - ./config-openai.yaml:/example/config-openai.yaml:ro
+    ports:
+      - "127.0.0.1:13000:3000"
+      - "127.0.0.1:18520:15020"
+    depends_on:
+      collector:
+        condition: service_started

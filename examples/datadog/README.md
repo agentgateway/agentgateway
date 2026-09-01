@@ -15,6 +15,8 @@ The local test requires:
 
 Exporting the synthetic telemetry also requires a Datadog organization, its API key, and the correct [Datadog site](https://docs.datadoghq.com/getting_started/site/). Datadog LLM Observability must be enabled in the organization to verify traces in that product. The local test does not require a Datadog account.
 
+The optional real-provider test requires an OpenAI API key with billing enabled and the name of an OpenAI model available to that account. It makes a paid API request. The selected model must support the OpenAI Chat Completions API.
+
 ## Run the local test
 
 ```sh
@@ -58,6 +60,8 @@ Host ports bind only to IPv4 loopback: gateway `127.0.0.1:13000`, metrics `127.0
 
 5. Open LLM Observability and verify gateway LLM spans under `ml_app:agentgateway` or the configured service name. Confirm models, token counts, errors, and trace relationships—not just presence in APM. Allow several minutes for processing. LLM Observability must be enabled for the organization; a successful OTLP response alone is not proof of product ingestion.
 
+   Agent Observability displays `COST UNAVAILABLE` for the synthetic `datadog-test` model because that model is not in Datadog's pricing catalog. This is expected. The synthetic cost calculated by agentgateway remains available in the `agw.ai.usage.cost.*` span tags and the `agentgateway.gen_ai.cost.usd.count` metric.
+
 The `--live` smoke test verifies requests and local metrics; it **does not claim** to verify Datadog ingestion. The development override sends metadata-only traces through the Collector to the Agent's OTLP/HTTP receiver. Only synthetic data should be used in this example.
 
 Stop the stack when finished to avoid unnecessary trial usage:
@@ -67,6 +71,44 @@ docker compose -f compose.yaml -f compose.datadog.yaml down
 ```
 
 To return to local trace capture, stop the Datadog stack and run `docker compose up -d` without the override.
+
+## Send a request to a real OpenAI model
+
+The synthetic provider remains the default. To verify Datadog's cost estimate for a real model, stop that stack and explicitly start the real-provider configuration. Add the following values to the ignored `.env` file, selecting a model available to your OpenAI account:
+
+```dotenv
+OPENAI_API_KEY=replace-with-your-openai-api-key
+OPENAI_MODEL=replace-with-a-chat-completions-model
+```
+
+Keep the OpenAI key private. Requests in this mode use the OpenAI API and may incur charges. Do not combine this configuration with `compose.content.yaml`; prompt and response capture remains disabled.
+
+Start agentgateway with the real OpenAI configuration and the Datadog Agent:
+
+```sh
+docker compose down
+docker compose -f compose.openai.yaml -f compose.datadog.yaml up -d
+```
+
+Send one request through the `openai-live` alias:
+
+```sh
+curl http://127.0.0.1:13000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "openai-live",
+    "messages": [{"role": "user", "content": "Reply with exactly: Datadog test complete."}],
+    "max_completion_tokens": 32
+  }'
+```
+
+Allow several minutes for processing, then find the span in Datadog Agent Observability under `ml_app:agentgateway`. Datadog can estimate cost when the configured provider and returned model name match its pricing catalog and token usage is present. This estimate uses Datadog's pricing data; compare it separately with the cost attributes and metrics calculated by agentgateway.
+
+Stop the real-provider stack when finished:
+
+```sh
+docker compose -f compose.openai.yaml -f compose.datadog.yaml down
+```
 
 ## Production metrics configuration
 
@@ -137,4 +179,4 @@ The local synthetic stack and the real Agent check can be tested without an acco
 
 See [VALIDATION.md](VALIDATION.md) for recorded results, reproduction commands, and remaining acceptance work.
 
-References: [OpenMetrics](https://docs.datadoghq.com/integrations/openmetrics/), [Kubernetes Autodiscovery](https://docs.datadoghq.com/containers/kubernetes/integrations/), [LLM Observability OTLP](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/), [community installation](https://docs.datadoghq.com/agent/guide/use-community-integrations/).
+References: [OpenMetrics](https://docs.datadoghq.com/integrations/openmetrics/), [Kubernetes Autodiscovery](https://docs.datadoghq.com/containers/kubernetes/integrations/), [LLM Observability OTLP](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/), [Agent Observability cost](https://docs.datadoghq.com/llm_observability/investigate/cost/), [community installation](https://docs.datadoghq.com/agent/guide/use-community-integrations/).
