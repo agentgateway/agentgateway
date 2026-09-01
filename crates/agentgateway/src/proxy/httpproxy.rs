@@ -114,6 +114,32 @@ fn select_route_chain(
 	}
 }
 
+fn selected_route_path<'a>(listener: &'a Listener, routes: &'a [Arc<Route>]) -> RoutePath<'a> {
+	RoutePath {
+		listener: &listener.name,
+		service: routes.last().and_then(|route| route.service_key.as_ref()),
+		routes: routes.iter().map(|route| &route.name).collect(),
+		route_inlines: routes
+			.iter()
+			.map(|route| route.inline_policies.as_slice())
+			.collect(),
+	}
+}
+
+fn select_route_and_policies(
+	inputs: &ProxyInputs,
+	target_address: SocketAddr,
+	listener: &Listener,
+	req: &Request,
+) -> Result<(SelectedRouteChain, store::RoutePolicies), ProxyError> {
+	let selected = select_route_chain(inputs, target_address, listener, req)?;
+	let policies = inputs
+		.stores
+		.read_binds()
+		.route_policies(&selected_route_path(listener, &selected.routes));
+	Ok((selected, policies))
+}
+
 pub(crate) async fn authorize_substrate_connect(
 	inputs: &Arc<ProxyInputs>,
 	bind_name: &BindKey,
@@ -136,35 +162,17 @@ pub(crate) async fn authorize_substrate_connect(
 		.listeners
 		.best_match(host)
 		.ok_or(ProxyError::ListenerNotFound)?;
-	let selected = matches!(
+	let policies = if matches!(
 		listener.protocol,
 		ListenerProtocol::HTTP | ListenerProtocol::HTTPS(_)
-	)
-	.then(|| select_route_chain(inputs, target_address, &listener, req))
-	.transpose()?;
-	let route_inlines = selected
-		.as_ref()
-		.map(|selected| {
-			selected
-				.routes
-				.iter()
-				.map(|route| route.inline_policies.as_slice())
-				.collect()
-		})
-		.unwrap_or_default();
-	let path = RoutePath {
-		listener: &listener.name,
-		service: selected
-			.as_ref()
-			.and_then(|selected| selected.routes.last())
-			.and_then(|route| route.service_key.as_ref()),
-		routes: selected
-			.as_ref()
-			.map(|selected| selected.routes.iter().map(|route| &route.name).collect())
-			.unwrap_or_default(),
-		route_inlines,
+	) {
+		select_route_and_policies(inputs, target_address, &listener, req)?.1
+	} else {
+		inputs
+			.stores
+			.read_binds()
+			.route_policies(&selected_route_path(&listener, &[]))
 	};
-	let policies = inputs.stores.read_binds().route_policies(&path);
 	let mut log = RequestLog::new(
 		log::CelLogging::new(inputs.cfg.logging.clone(), inputs.cfg.metrics.clone()),
 		inputs.metrics.clone(),
@@ -955,8 +963,8 @@ impl HTTPProxy {
 
 		Self::detect_misdirected(&bind, &req, &selected_listener).snapshot_on_err(log, &mut req)?;
 
-		let selected_route_chain =
-			select_route_chain(&inputs, self.target_address, &selected_listener, &req)
+		let (selected_route_chain, route_policies) =
+			select_route_and_policies(&inputs, self.target_address, &selected_listener, &req)
 				.snapshot_on_err(log, &mut req)?;
 		let selected_route = selected_route_chain
 			.routes
@@ -990,25 +998,7 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
-		let route_inlines = selected_route_chain
-			.routes
-			.iter()
-			.map(|route| route.inline_policies.as_slice())
-			.collect();
-		let route_path = RoutePath {
-			listener: &selected_listener.name,
-			service: selected_route_chain
-				.routes
-				.last()
-				.and_then(|r| r.service_key.as_ref()),
-			routes: selected_route_chain
-				.routes
-				.iter()
-				.map(|route| &route.name)
-				.collect(),
-			route_inlines,
-		};
-		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
+		let route_path = selected_route_path(&selected_listener, &selected_route_chain.routes);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let explicit_route_retry = !route_policies.retry.is_empty();
