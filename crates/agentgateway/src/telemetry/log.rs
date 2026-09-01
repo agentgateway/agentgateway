@@ -2458,6 +2458,15 @@ impl SpanWriteOnDrop {
 		}
 	}
 
+	pub fn record_http_client_status(&mut self, status: http::StatusCode) {
+		self.add_attribute(KeyValue::new("http.status", i64::from(status.as_u16())));
+		if status.is_client_error() || status.is_server_error() {
+			// This is an outbound client span. A received error response is a successful
+			// transport result, but the operation represented by the span failed.
+			self.set_error(status.as_u16().to_string(), String::new());
+		}
+	}
+
 	pub fn record_grpc_result<T>(&mut self, result: &Result<tonic::Response<T>, tonic::Status>) {
 		match result {
 			Ok(_) => self.add_attribute(KeyValue::new("grpc.status", 0_i64)),
@@ -2835,6 +2844,48 @@ mod tests {
 			ProxyResponseReason::ExtAuth.to_string(),
 		)));
 		assert_eq!(child.status, Status::error("authorization denied"));
+	}
+
+	#[test]
+	fn outbound_client_span_classifies_http_response_status() {
+		let (tracer, _exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer);
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing);
+
+		for (status, expected) in [
+			(http::StatusCode::OK, Status::default()),
+			(http::StatusCode::FOUND, Status::default()),
+			(http::StatusCode::TOO_MANY_REQUESTS, Status::error("")),
+			(http::StatusCode::INTERNAL_SERVER_ERROR, Status::error("")),
+		] {
+			let mut span = request.span_writer().start_outbound(OutboundCallLabels {
+				kind: OutboundCallKind::Primary,
+				subtype: OutboundCallSubtype::Llm,
+			});
+			span.record_http_client_status(status);
+
+			assert_eq!(span.status, expected, "status {status}");
+			assert!(
+				span
+					.attributes
+					.contains(&KeyValue::new("http.status", i64::from(status.as_u16()),))
+			);
+			let error_type = span
+				.attributes
+				.iter()
+				.find(|attribute| attribute.key.as_str() == "error.type");
+			if status.is_client_error() || status.is_server_error() {
+				assert_eq!(
+					error_type.map(|attribute| attribute.value.as_str().into_owned()),
+					Some(status.as_u16().to_string()),
+				);
+			} else {
+				assert!(error_type.is_none());
+			}
+		}
 	}
 
 	#[test]

@@ -2908,10 +2908,7 @@ async fn make_backend_call(
 	let resp = upstream.call(call).await;
 	if let Some(span) = span.as_deref_mut() {
 		match &resp {
-			Ok(response) => span.add_attribute(KeyValue::new(
-				"http.status",
-				i64::from(response.status().as_u16()),
-			)),
+			Ok(response) => span.record_http_client_status(response.status()),
 			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}
@@ -4725,12 +4722,7 @@ impl PolicyClient {
 			return;
 		};
 		match result {
-			Ok(response) => {
-				span.add_attribute(KeyValue::new(
-					"http.status",
-					i64::from(response.status().as_u16()),
-				));
-			},
+			Ok(response) => span.record_http_client_status(response.status()),
 			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}
