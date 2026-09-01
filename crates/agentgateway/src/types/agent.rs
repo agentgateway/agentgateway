@@ -3249,7 +3249,7 @@ pub mod defaults {
 mod tests {
 	use super::*;
 
-	#[cfg(feature = "crypto-aws-lc-fips")]
+	#[cfg(feature = "fips")]
 	fn fips_test_certificate() -> (Vec<u8>, Vec<u8>) {
 		let key = rcgen::KeyPair::generate().expect("generate test key");
 		let mut params =
@@ -3375,8 +3375,7 @@ mod tests {
 		assert_eq!(profiled.alpn_protocols, vec![b"http/1.1".to_vec()]);
 	}
 
-	// Keep the `fips_config_` prefix: tools/fips-tests.sh uses it as a CI filter.
-	#[cfg(feature = "crypto-aws-lc-fips")]
+	#[cfg(feature = "fips")]
 	#[test]
 	fn fips_config_static_frontend_tls_rejects_non_approved_cipher_suite() {
 		use crate::transport::tls::CipherSuite;
@@ -3403,8 +3402,7 @@ mod tests {
 		);
 	}
 
-	// Keep the `fips_config_` prefix: tools/fips-tests.sh uses it as a CI filter.
-	#[cfg(feature = "crypto-aws-lc-fips")]
+	#[cfg(feature = "fips")]
 	#[test]
 	fn fips_config_dynamic_ca_tls_rejects_non_approved_key_exchange_group() {
 		use crate::transport::tls::KeyExchangeGroup;

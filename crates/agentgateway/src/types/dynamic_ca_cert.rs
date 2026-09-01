@@ -95,9 +95,7 @@ impl DynamicCaCertResolver {
 		];
 
 		let private_key = PrivatePkcs8KeyDer::from(key_der);
-		let signing_key = self
-			.provider
-			.key_provider
+		let signing_key = crate::crypto::tls::key_provider(&self.provider)
 			.load_private_key(private_key.into())
 			.ok()?;
 

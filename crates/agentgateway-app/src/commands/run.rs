@@ -23,7 +23,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 		return Ok(());
 	}
 	if version_long {
-		println!("{}", version::BuildInfo::new());
+		println!("{}", build_info());
 		return Ok(());
 	}
 	if let Some(copy_self) = copy_self {
@@ -46,14 +46,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				&config.logging.level,
 				config.logging.format == LoggingFormat::Json,
 			);
-			info!("version: {}", version::BuildInfo::new());
-			// Which crypto backend is compiled in, and whether it operates in FIPS mode.
-			// Without this the two builds are indistinguishable at runtime.
-			info!(
-				backend = agentgateway::crypto::CRYPTO_BACKEND,
-				fips = agentgateway::crypto::provider().fips(),
-				"crypto backend"
-			);
+			info!("version: {}", build_info());
 			info!(
 				"running with config: {}",
 				serdes::yamlviajson::to_string(&config)?
@@ -110,6 +103,13 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 			}
 			result
 		})
+}
+
+fn build_info() -> version::BuildInfo {
+	version::BuildInfo::new().with_crypto(
+		agentgateway::crypto::CRYPTO_BACKEND,
+		agentgateway::crypto::provider().fips(),
+	)
 }
 
 #[cfg(not(target_env = "musl"))]

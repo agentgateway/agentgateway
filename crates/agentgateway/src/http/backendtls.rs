@@ -401,11 +401,10 @@ impl LocalBackendTLS {
 	}
 }
 
-#[cfg(all(test, feature = "crypto-aws-lc-fips"))]
+#[cfg(all(test, feature = "fips"))]
 mod tests {
 	use super::*;
 
-	// Keep the `fips_config_` prefix: tools/fips-tests.sh uses it as a CI filter.
 	#[test]
 	fn fips_config_backend_tls_rejects_non_approved_key_exchange_group() {
 		let result = ResolvedBackendTLS {

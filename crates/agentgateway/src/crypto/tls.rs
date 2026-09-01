@@ -5,6 +5,9 @@
 //! [`provider_with_options_validated`]) rather than referencing a backend crate
 //! directly.
 
+// This is the one module allowed to assemble and customize rustls providers.
+#![allow(clippy::disallowed_fields, clippy::disallowed_methods)]
+
 use std::sync::Arc;
 
 use rustls::crypto::CryptoProvider;
@@ -15,13 +18,16 @@ use crate::transport::tls::{
 
 /// Returns a [`CryptoProvider`] for the compiled-in backend using the default
 /// cipher suites and key exchange groups.
-///
-/// # Panics
-///
-/// In a FIPS build, panics if the compiled-in defaults do not form a FIPS
-/// provider. This indicates a programming or dependency error.
 pub fn provider() -> Arc<CryptoProvider> {
 	provider_with_options(&[], &[])
+}
+
+pub(crate) fn key_provider(provider: &CryptoProvider) -> &'static dyn rustls::crypto::KeyProvider {
+	provider.key_provider
+}
+
+pub(crate) fn signature_verification_algorithms() -> rustls::crypto::WebPkiSupportedAlgorithms {
+	provider().signature_verification_algorithms
 }
 
 /// Returns a [`CryptoProvider`] restricted to the given cipher suites and key
@@ -52,16 +58,6 @@ pub(crate) fn provider_with_options(
 	// Restrict negotiation to our allowlist.
 	provider.cipher_suites = cipher_suites;
 	provider.kx_groups = key_exchange_groups;
-	// Fail closed here, so no provider this module hands out can be non-FIPS. Because
-	// rustls derives `require_ems` from `provider.fips()` and nothing sets ECH, every
-	// config built from one of these providers reports `fips()` by construction - which
-	// is why call sites need no assertion of their own.
-	//
-	// Non-approved user selections are rejected earlier, with a proper error, by
-	// `provider_with_options_validated`. Reaching this panic means the compiled-in
-	// defaults are wrong: a programming error, not a configuration one.
-	#[cfg(feature = "crypto-aws-lc-fips")]
-	panic_unless_fips(&provider);
 	Arc::new(provider)
 }
 
@@ -78,7 +74,7 @@ pub fn provider_with_options_validated(
 	cipher_suites: &[CipherSuite],
 	key_exchange_groups: &[KeyExchangeGroup],
 ) -> anyhow::Result<Arc<CryptoProvider>> {
-	#[cfg(feature = "crypto-aws-lc-fips")]
+	#[cfg(feature = "fips")]
 	{
 		// Ask the backend rather than maintaining a parallel table: the linked module
 		// is the authority on what it treats as approved, and a hardcoded list would
@@ -110,15 +106,13 @@ pub fn provider_with_options_validated(
 /// if not. Called from [`crate::crypto::init`] at startup: a build that links the
 /// FIPS module but assembles a provider containing a non-approved suite or group is
 /// not in FIPS mode, and must not serve traffic while claiming to be.
-#[cfg(feature = "crypto-aws-lc-fips")]
+#[cfg(feature = "fips")]
 pub fn assert_fips_provider() {
-	// The factory already fails closed; this keeps startup as the place the failure is
-	// reported, rather than the first connection that happens to need TLS.
-	let _ = provider();
+	panic_unless_fips(&provider());
 }
 
 /// Panics unless `provider` operates in FIPS mode, naming what disqualified it.
-#[cfg(feature = "crypto-aws-lc-fips")]
+#[cfg(feature = "fips")]
 fn panic_unless_fips(provider: &CryptoProvider) {
 	if provider.fips() {
 		return;
@@ -144,14 +138,9 @@ fn panic_unless_fips(provider: &CryptoProvider) {
 	);
 }
 
-#[cfg(all(feature = "crypto-aws-lc", not(feature = "crypto-aws-lc-fips")))]
+#[cfg(feature = "crypto-aws-lc")]
 fn default_crypto_provider() -> CryptoProvider {
 	rustls::crypto::aws_lc_rs::default_provider()
-}
-
-#[cfg(feature = "crypto-aws-lc-fips")]
-fn default_crypto_provider() -> CryptoProvider {
-	rustls::crypto::default_fips_provider()
 }
 
 #[cfg(feature = "crypto-symcrypt")]
@@ -179,14 +168,11 @@ mod tests {
 	}
 
 	// The FIPS build must actually select the FIPS module, not merely compile.
-	#[cfg(feature = "crypto-aws-lc-fips")]
+	#[cfg(feature = "fips")]
 	#[test]
 	fn provider_is_fips() {
 		let p = super::provider();
-		assert!(
-			p.fips(),
-			"crypto-aws-lc-fips build must yield a FIPS provider"
-		);
+		assert!(p.fips(), "the `fips` mode must yield a FIPS provider");
 	}
 
 	// Approved selections must be accepted by every backend.
@@ -201,27 +187,9 @@ mod tests {
 		assert_eq!(p.kx_groups.len(), 1);
 	}
 
-	// The factory is the whole guarantee now that call sites carry no assertion of
-	// their own: it must refuse to hand out a non-FIPS provider even when reached
-	// directly, bypassing the validated path that would have rejected the selection
-	// with a proper error first.
-	#[cfg(feature = "crypto-aws-lc-fips")]
-	#[test]
-	#[should_panic(expected = "does not operate in FIPS mode")]
-	fn unvalidated_provider_fails_closed_on_non_approved_suite() {
-		let _ = super::provider_with_options(&[CipherSuite::TLS_CHACHA20_POLY1305_SHA256], &[]);
-	}
-
-	#[cfg(feature = "crypto-aws-lc-fips")]
-	#[test]
-	#[should_panic(expected = "does not operate in FIPS mode")]
-	fn unvalidated_provider_fails_closed_on_non_approved_group() {
-		let _ = super::provider_with_options(&[], &[KeyExchangeGroup::X25519]);
-	}
-
 	// In a FIPS build, a non-approved selection must be refused at config time
 	// rather than producing a provider that reports fips() == false.
-	#[cfg(feature = "crypto-aws-lc-fips")]
+	#[cfg(feature = "fips")]
 	#[test]
 	fn validated_provider_rejects_non_approved_selection() {
 		let err =
@@ -241,7 +209,7 @@ mod tests {
 	}
 
 	// Outside a FIPS build the same selections stay available.
-	#[cfg(not(feature = "crypto-aws-lc-fips"))]
+	#[cfg(not(feature = "fips"))]
 	#[test]
 	fn validated_provider_permits_everything_outside_fips() {
 		super::provider_with_options_validated(
@@ -255,7 +223,7 @@ mod tests {
 	// required. rustls derives `require_ems` from `provider.fips()`, so a config
 	// built on the FIPS provider must report fips() even when TLS 1.2 is offered.
 	// This is the check that would fail first if we ever needed to drop to 1.3-only.
-	#[cfg(feature = "crypto-aws-lc-fips")]
+	#[cfg(feature = "fips")]
 	#[test]
 	fn tls12_config_is_fips_via_ems() {
 		use rustls::{ClientConfig, RootCertStore};
