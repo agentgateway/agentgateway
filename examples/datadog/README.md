@@ -67,9 +67,12 @@ Use `openmetrics.yaml` with the stock Datadog Agent, changing `gateway:15020` an
 
 ### Kubernetes
 
+Choose one proxy configuration method; do not apply both proxy files to the same workload:
+
 - Standalone proxy Helm chart: merge `kubernetes/proxy-values.yaml` into its values.
-- Controller Helm chart: merge `kubernetes/controller-values.yaml` into its values. This collects only controller metrics on port 9092.
 - Controller-provisioned proxy: use `kubernetes/proxy-parameters.yaml` and reference it from the Gateway's `spec.infrastructure.parametersRef`. Adapt the namespace and merge with existing parameters. For DaemonSet proxies, put the same pod-template overlay under `spec.daemonSet`.
+
+When running the controller, additionally merge `kubernetes/controller-values.yaml` into its Helm values to collect controller metrics on port 9092. This configuration applies to the controller pod and is independent of the proxy method selected above.
 
 The Autodiscovery annotation identifier must match the container name: `agentgateway` for the proxy, `controller` for the controller. Configure the Datadog Agent in that cluster separately. These examples do not install it or change your existing cluster.
 
