@@ -119,7 +119,7 @@ func TestResolverBackendRefGrant(t *testing.T) {
 					JwksPath: ptr.Of(agentgateway.LongString("keys")),
 					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
 						BackendRef: &gwv1.BackendObjectReference{
-							Name:      gwv1.ObjectName(targetName),
+							Name:      targetName,
 							Namespace: tt.refNamespace,
 							Port:      new(gwv1.PortNumber(80)),
 						},

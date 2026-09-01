@@ -195,7 +195,7 @@ func (r *defaultResolver) resolveTunnelProxy(
 		}
 		var port int32
 		if p := ptr.OrEmpty(backendRef.Port); p != 0 {
-			port = int32(p)
+			port = p
 		} else if backend.Static.Port != 0 {
 			port = backend.Static.Port
 		} else {

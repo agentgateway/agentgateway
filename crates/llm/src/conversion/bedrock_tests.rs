@@ -1383,11 +1383,76 @@ fn test_embeddings_response_translation_cohere() {
 	let translated = from_embeddings::translate_response(&bytes, &headers, model).unwrap();
 	let openai_resp = translated
 		.serialize()
-		.and_then(|b| serde_json::from_slice::<types::embeddings::Response>(&b))
+		.and_then(|b| serde_json::from_slice::<types::embeddings::typed::Response>(&b))
 		.unwrap();
 
 	assert_eq!(openai_resp.object, "list");
-	assert_eq!(openai_resp.usage.unwrap().prompt_tokens, 10);
+	assert_eq!(
+		openai_resp.data[0].embedding,
+		vec![0.1_f32, 0.2_f32, 0.3_f32]
+	);
+	assert_eq!(
+		openai_resp.data[1].embedding,
+		vec![0.4_f32, 0.5_f32, 0.6_f32]
+	);
+	assert_eq!(openai_resp.usage.prompt_tokens, 10);
+}
+
+#[test]
+fn test_embeddings_response_translation_cohere_v4_uses_float_vectors() {
+	let model = "cohere.embed-v4:0";
+	let bedrock_resp = json!({
+		"embeddings": {
+			"float": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
+			"int8": [[1, 2, 3], [4, 5, 6]]
+		},
+		"id": "123",
+		"texts": ["hello", "world"]
+	});
+	let bytes = serde_json::to_vec(&bedrock_resp).unwrap();
+	let headers = HeaderMap::new();
+
+	let translated = from_embeddings::translate_response(&bytes, &headers, model).unwrap();
+	let openai_resp = translated
+		.serialize()
+		.and_then(|b| serde_json::from_slice::<types::embeddings::typed::Response>(&b))
+		.unwrap();
+
+	assert_eq!(
+		openai_resp.data[0].embedding,
+		vec![0.1_f32, 0.2_f32, 0.3_f32]
+	);
+	assert_eq!(
+		openai_resp.data[1].embedding,
+		vec![0.4_f32, 0.5_f32, 0.6_f32]
+	);
+}
+
+#[test]
+fn test_embeddings_response_translation_cohere_v4_requires_float_vectors() {
+	let model = "cohere.embed-v4:0";
+	let bedrock_resp = json!({
+		"embeddings": {
+			"uint8": [[1, 2, 3]],
+			"int8": [[-1, 0, 1]]
+		},
+		"id": "123",
+		"texts": ["hello"]
+	});
+	let bytes = serde_json::to_vec(&bedrock_resp).unwrap();
+	let headers = HeaderMap::new();
+
+	let err = match from_embeddings::translate_response(&bytes, &headers, model) {
+		Ok(_) => panic!("expected a response without float embeddings to fail"),
+		Err(err) => err,
+	};
+
+	assert!(matches!(err, crate::AIError::ResponseParsing(_)));
+	assert!(
+		err
+			.to_string()
+			.contains("Cohere response did not include float embeddings; received types: int8, uint8")
+	);
 }
 
 #[test]

@@ -792,15 +792,25 @@ pub fn merge_model_catalog_sources(
 		.value
 		.as_object()
 		.ok_or_else(|| anyhow::anyhow!("modelCatalog resource must be an object"))?;
-	let mut sources = ["base", "custom"]
-		.into_iter()
-		.filter_map(|field| value.get(field))
-		.map(|inline| {
-			Ok(crate::ModelCatalogSource::InlineCatalog {
-				inline: serde_json::from_value(inline.clone())?,
-			})
-		})
-		.collect::<anyhow::Result<Vec<_>>>()?;
+	let mut sources = Vec::new();
+	if let Some(base) = value.get("base") {
+		let mut inline: crate::llm::catalog::Catalog = serde_json::from_value(base.clone())?;
+		if inline.metadata.is_none() {
+			inline.metadata = Some(crate::llm::catalog::CatalogMetadata {
+				source: "models.dev".to_string(),
+				// Legacy base catalogs predate generatedAt. Treat them as older than every
+				// timestamped catalog rather than guessing from the resource timestamp,
+				// which may also reflect an unrelated custom-overlay edit.
+				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+			});
+		}
+		sources.push(crate::ModelCatalogSource::InlineCatalog { inline });
+	}
+	if let Some(custom) = value.get("custom") {
+		sources.push(crate::ModelCatalogSource::InlineCatalog {
+			inline: serde_json::from_value(custom.clone())?,
+		});
+	}
 	sources.append(&mut configured);
 	Ok(sources)
 }
@@ -1835,6 +1845,29 @@ mod tests {
 			created_at: Utc::now(),
 			updated_at: Utc::now(),
 		}
+	}
+
+	#[test]
+	fn legacy_catalog_base_is_older_than_timestamped_bases() {
+		let resource = ConfigResource {
+			..test_resource(
+				ConfigResourceKind::ModelCatalog,
+				"default",
+				json!({"base": {"providers": {}}}),
+			)
+		};
+
+		let sources = merge_model_catalog_sources(&[resource], Vec::new()).unwrap();
+		let crate::ModelCatalogSource::InlineCatalog { inline } = &sources[0] else {
+			panic!("base must be an inline catalog")
+		};
+		assert_eq!(
+			inline.metadata,
+			Some(crate::llm::catalog::CatalogMetadata {
+				source: "models.dev".to_string(),
+				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+			})
+		);
 	}
 
 	#[test]

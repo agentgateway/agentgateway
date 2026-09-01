@@ -139,6 +139,7 @@ func TestHelmChartTemplate(t *testing.T) {
 
 	valuesCases := []struct {
 		name          string
+		filterKinds   []string
 		valuesYAML    string
 		expectedError string
 	}{
@@ -148,6 +149,9 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "xds-tls-enabled",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `controller:
   xds:
     mode: tls
@@ -155,6 +159,9 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "pdb-min-available",
+			filterKinds: []string{
+				"PodDisruptionBudget",
+			},
 			valuesYAML: `controller:
   podDisruptionBudget:
     minAvailable: 1
@@ -162,6 +169,9 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "pdb-max-unavailable",
+			filterKinds: []string{
+				"PodDisruptionBudget",
+			},
 			valuesYAML: `controller:
   podDisruptionBudget:
     maxUnavailable: 25%
@@ -169,6 +179,9 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "service-full-config",
+			filterKinds: []string{
+				"Service",
+			},
 			valuesYAML: `controller:
   service:
     type: LoadBalancer
@@ -206,6 +219,10 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "hpa-and-vpa",
+			filterKinds: []string{
+				"HorizontalPodAutoscaler",
+				"VerticalPodAutoscaler",
+			},
 			valuesYAML: `controller:
   horizontalPodAutoscaler:
     minReplicas: 1
@@ -230,12 +247,20 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "priority-class-name",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `controller:
   priorityClassName: system-cluster-critical
 `,
 		},
 		{
 			name: "additional-labels",
+			filterKinds: []string{
+				"ServiceAccount",
+				"Service",
+				"Deployment",
+			},
 			valuesYAML: `commonLabels:
     extra-label-key: extra-label-value
     another-label: "true"
@@ -243,6 +268,9 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "extra-containers",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `controller:
   extraContainers:
     - name: httpbin
@@ -254,6 +282,9 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "extra-env",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `controller:
   extraEnv:
     LOG_FORMAT: json
@@ -272,6 +303,9 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "extra-volumes",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `controller:
   extraVolumeMounts:
     - name: plugin-cache
@@ -285,12 +319,19 @@ func TestHelmChartTemplate(t *testing.T) {
 		},
 		{
 			name: "gateway-class-name",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `gatewayClassName: custom-agentgateway
 controllerName: example.com/custom-agentgateway
 `,
 		},
 		{
 			name: "restricted-write-namespaces",
+			filterKinds: []string{
+				"ClusterRoleBinding",
+				"RoleBinding",
+			},
 			valuesYAML: `rbac:
   gatewayNamespaces:
   - team-a
@@ -298,7 +339,16 @@ controllerName: example.com/custom-agentgateway
 `,
 		},
 		{
+			name: "istio-disabled",
+			valuesYAML: `istio:
+  enabled: false
+`,
+		},
+		{
 			name: "dns-config",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `dnsConfig:
   options:
     - name: ndots
@@ -308,13 +358,33 @@ controllerName: example.com/custom-agentgateway
 `,
 		},
 		{
+			name: "topology-spread-constraints",
+			filterKinds: []string{
+				"Deployment",
+			},
+			valuesYAML: `topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        agentgateway: agentgateway
+`,
+		},
+		{
 			name: "revision-history-limit",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `controller:
   revisionHistoryLimit: 3
 `,
 		},
 		{
 			name: "revision-history-limit-zero",
+			filterKinds: []string{
+				"Deployment",
+			},
 			valuesYAML: `controller:
   revisionHistoryLimit: 0
 `,
@@ -342,6 +412,11 @@ controllerName: example.com/custom-agentgateway
 		},
 		{
 			name: "monitoring-enabled",
+			filterKinds: []string{
+				"ConfigMap",
+				"PodMonitor",
+				"ServiceMonitor",
+			},
 			valuesYAML: `monitoring:
   enabled: true
   serviceMonitor:
@@ -358,6 +433,11 @@ controllerName: example.com/custom-agentgateway
 		},
 		{
 			name: "monitoring-enabled-no-dashboard",
+			filterKinds: []string{
+				"ConfigMap",
+				"PodMonitor",
+				"ServiceMonitor",
+			},
 			valuesYAML: `monitoring:
   enabled: true
   grafanaDashboard:
@@ -366,6 +446,11 @@ controllerName: example.com/custom-agentgateway
 		},
 		{
 			name: "monitoring-enabled-no-service-monitor",
+			filterKinds: []string{
+				"ConfigMap",
+				"PodMonitor",
+				"ServiceMonitor",
+			},
 			valuesYAML: `monitoring:
   enabled: true
   serviceMonitor:
@@ -376,6 +461,9 @@ controllerName: example.com/custom-agentgateway
 		},
 		{
 			name: "monitoring-custom-proxy-namespace-selector",
+			filterKinds: []string{
+				"PodMonitor",
+			},
 			valuesYAML: `monitoring:
   enabled: true
   proxy:
@@ -387,6 +475,9 @@ controllerName: example.com/custom-agentgateway
 		},
 		{
 			name: "monitoring-custom-gateway-class-names",
+			filterKinds: []string{
+				"PodMonitor",
+			},
 			valuesYAML: `monitoring:
   enabled: true
   proxy:
@@ -399,6 +490,11 @@ controllerName: example.com/custom-agentgateway
 		},
 		{
 			name: "monitoring-no-pod-monitor",
+			filterKinds: []string{
+				"ConfigMap",
+				"PodMonitor",
+				"ServiceMonitor",
+			},
 			valuesYAML: `monitoring:
   enabled: true
   proxy:
@@ -454,7 +550,7 @@ controllerName: example.com/custom-agentgateway
 
 				require.NoError(t, err, "helm template failed: %s", stderr.String())
 
-				got := output.Bytes()
+				got := filterHelmObjects(output.Bytes(), vc.filterKinds)
 
 				// Golden file path: testdata/<chart>/<values-case>.golden
 				goldenDir := filepath.Join("testdata", chart)
@@ -484,4 +580,31 @@ controllerName: example.com/custom-agentgateway
 			})
 		}
 	}
+}
+
+func filterHelmObjects(output []byte, kinds []string) []byte {
+	if len(kinds) == 0 {
+		return output
+	}
+
+	included := make(map[string]struct{}, len(kinds))
+	for _, kind := range kinds {
+		included[kind] = struct{}{}
+	}
+
+	var filtered bytes.Buffer
+	for document := range bytes.SplitSeq(output, []byte("---\n")) {
+		for line := range bytes.SplitSeq(document, []byte("\n")) {
+			kind, found := bytes.CutPrefix(line, []byte("kind: "))
+			if !found {
+				continue
+			}
+			if _, found := included[string(kind)]; found {
+				filtered.WriteString("---\n")
+				filtered.Write(document)
+			}
+			break
+		}
+	}
+	return filtered.Bytes()
 }

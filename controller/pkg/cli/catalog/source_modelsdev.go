@@ -22,7 +22,7 @@ func init() {
 		if err != nil {
 			return nil, nil, err
 		}
-		return modelsDevTransform(api, modelsDevSelectProviders(api, opts.providers), opts.legacy)
+		return modelsDevTransform(api, modelsDevSelectProviders(api, opts.providers, opts.excludeProviders), opts.legacy)
 	}
 }
 
@@ -105,13 +105,23 @@ func modelsDevFetchAPI(ctx context.Context) (map[string]modelsDevProvider, error
 	return modelsDevDecodeAPI(io.LimitReader(resp.Body, 64<<20))
 }
 
-func modelsDevSelectProviders(api map[string]modelsDevProvider, requested []string) []string {
-	if len(requested) > 0 {
-		return requested
+func modelsDevSelectProviders(api map[string]modelsDevProvider, requested, excluded []string) []string {
+	selected := requested
+	if len(selected) == 0 {
+		selected = make([]string, 0, len(modelsDevProviderIDs))
+		for id := range modelsDevProviderIDs {
+			if _, ok := api[id]; ok {
+				selected = append(selected, id)
+			}
+		}
 	}
-	ids := make([]string, 0, len(modelsDevProviderIDs))
-	for id := range modelsDevProviderIDs {
-		if _, ok := api[id]; ok {
+	omit := make(map[string]struct{}, len(excluded))
+	for _, id := range excluded {
+		omit[id] = struct{}{}
+	}
+	ids := make([]string, 0, len(selected))
+	for _, id := range selected {
+		if _, ok := omit[id]; !ok {
 			ids = append(ids, id)
 		}
 	}

@@ -216,6 +216,7 @@ impl From<Option<VersionedBackendTLS>> for Transport {
 pub struct ConnectionConfig {
 	pub transport: Transport,
 	pub tcp: Option<types::backend::TCP>,
+	pub max_connection_duration: Option<Duration>,
 }
 
 impl From<Transport> for ConnectionConfig {
@@ -223,6 +224,7 @@ impl From<Transport> for ConnectionConfig {
 		Self {
 			transport,
 			tcp: None,
+			max_connection_duration: None,
 		}
 	}
 }
@@ -319,7 +321,11 @@ impl Connector {
 		connection: ConnectionConfig,
 		http: bool,
 	) -> Result<Socket, http::Error> {
-		let ConnectionConfig { transport, tcp } = connection;
+		let ConnectionConfig {
+			transport,
+			tcp,
+			max_connection_duration,
+		} = connection;
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
 		let tls = match transport.application() {
@@ -351,7 +357,7 @@ impl Connector {
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.connection, false)).await?;
 
-				let con = connect_tunnel::handshake_proxy(con, &dest, tcfg.token, self.h2_config.clone())
+				let con = connect_tunnel::handshake(con, &dest, tcfg.token, self.h2_config.clone())
 					.await
 					.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");
@@ -444,6 +450,12 @@ impl Connector {
 
 			"connected"
 		);
+
+		if let Some(max_age) = max_connection_duration {
+			socket
+				.ext_mut()
+				.insert(stream::ConnectionDeadline(connect_start + max_age));
+		}
 
 		socket.with_logging(LoggingMode::Upstream);
 		Ok(socket)
@@ -540,6 +552,11 @@ impl Client {
 		if let Some(pool_max) = backend_config.pool_max_size {
 			b.pool_max_idle_per_host(pool_max);
 		};
+		if !backend_config.h2_keepalive_interval.is_zero() {
+			b.http2_keep_alive_interval(Some(backend_config.h2_keepalive_interval));
+			b.http2_keep_alive_timeout(backend_config.h2_keepalive_timeout);
+			b.http2_keep_alive_while_idle(true);
+		}
 
 		let connector = Connector {
 			resolver: Arc::new(resolver),
@@ -808,6 +825,42 @@ mod tests {
 				"tunnel protocol {tp:?} should map to no source role",
 			);
 		}
+	}
+
+	#[tokio::test]
+	async fn max_connection_duration_sets_pool_deadline_on_connect() {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		tokio::spawn(async move { while listener.accept().await.is_ok() {} });
+
+		let client = Client::new(
+			&Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			None,
+		);
+
+		let max_age = Duration::from_secs(60);
+		let before = std::time::Instant::now();
+		let socket = client
+			.connect_raw(
+				Target::Address(addr),
+				ConnectionConfig {
+					transport: Transport::Plain(ApplicationTransport::Plaintext),
+					tcp: None,
+					max_connection_duration: Some(max_age),
+				},
+			)
+			.await
+			.expect("connect to loopback listener");
+		let deadline = agent_pool::connect::Connection::connected(&socket)
+			.get_valid_until()
+			.expect("deadline should be set");
+		assert!(deadline >= before + max_age);
+		assert!(deadline <= std::time::Instant::now() + max_age);
 	}
 
 	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback

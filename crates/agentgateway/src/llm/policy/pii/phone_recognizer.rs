@@ -23,7 +23,7 @@ impl PhoneRecognizer {
 impl Recognizer for PhoneRecognizer {
 	fn recognize(&self, text: &str) -> Vec<RecognizerResult> {
 		static CANDIDATE_RE: Lazy<Regex> =
-			Lazy::new(|| Regex::new(r"(?i)(^|[^0-9])([+()]?[0-9][0-9\s().\-]{6,30})").unwrap());
+			Lazy::new(|| Regex::new(r"(?i)(^|[^0-9])([+()]?[0-9][0-9\t\p{Zs}().\-]{6,30})").unwrap());
 
 		// Map region strings once.
 		fn to_country(code: &str) -> Option<country::Id> {

@@ -68,6 +68,21 @@ fn test_phone_recognizer() {
 }
 
 #[test]
+fn test_phone_recognizer_does_not_cross_line_breaks() {
+	let recognizer = PhoneRecognizer::new();
+	let text = "Call (212) 555-0100\n123 in the next line";
+
+	let results = recognizer.recognize(text);
+
+	assert!(
+		results
+			.iter()
+			.any(|result| result.matched == "(212) 555-0100"),
+		"expected the phone number before the line break to be recognized, got {results:?}"
+	);
+}
+
+#[test]
 fn test_url_recognizer() {
 	let recognizer = UrlRecognizer::new();
 

@@ -319,6 +319,14 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 	(!messages.is_empty()).then_some(messages)
 }
 
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic-style cache breakpoint, accepted by OpenAI-compat providers (Bedrock, OpenRouter)
+	"cache_control",
+	// OpenAI explicit prompt-cache breakpoint
+	"prompt_cache_breakpoint",
+];
+
 impl super::RequestType for Request {
 	fn body_is_json(&self) -> bool {
 		true
@@ -481,7 +489,14 @@ impl super::RequestType for Request {
 			match &mut msg.content {
 				Some(Content::Text(text)) => f(scope, text),
 				Some(Content::Array(parts)) => {
-					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), &mut |text| f(scope, text));
+					super::scan_text_runs(
+						parts,
+						" ",
+						|p| p.text.as_mut(),
+						|p| Some(&mut p.rest),
+						PRESERVED_REST_KEYS,
+						&mut |text| f(scope, text),
+					);
 				},
 				None => {},
 			}

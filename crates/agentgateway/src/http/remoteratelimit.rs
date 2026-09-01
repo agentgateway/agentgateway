@@ -1,8 +1,8 @@
-use ::http::{HeaderMap, StatusCode};
+use ::http::HeaderMap;
 use itertools::Itertools;
 
 use crate::cel::{Executor, Expression};
-use crate::http::localratelimit::RateLimitType;
+use crate::http::localratelimit::{self, RateLimitType};
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
 use crate::http::remoteratelimit::proto::{RateLimitDescriptor, RateLimitRequest};
@@ -453,18 +453,16 @@ impl RemoteRateLimit {
 			..
 		} = cr;
 		let mut res = PolicyResponse::default();
-		// if not OK, we directly respond
+		// if not OK, deny; ProxyError::into_response_with_grpc builds the 429 from this error
 		if overall_code != (proto::rate_limit_response::Code::Ok as i32) {
-			let mut rb = ::http::response::Builder::new().status(StatusCode::TOO_MANY_REQUESTS);
-			if let Some(hm) = rb.headers_mut() {
-				process_headers(hm, response_headers_to_add);
-				process_ratelimit_status_headers(hm, &statuses);
-			}
-			let resp = rb
-				.body(http::Body::from(raw_body))
-				.map_err(|e| ProxyError::Processing(e.into()))?;
-			res.direct_response = Some(resp);
-			return Ok(res);
+			let mut hm = HeaderMap::new();
+			process_headers(&mut hm, response_headers_to_add);
+			process_ratelimit_status_headers(&mut hm, &statuses);
+			return Err(ProxyError::RemoteRateLimitExceeded {
+				status: ratelimit_status(&statuses),
+				raw_body,
+				response_headers: Box::new(hm),
+			});
 		}
 
 		process_headers(req.headers_mut(), request_headers_to_add);
@@ -569,34 +567,40 @@ fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 	}
 }
 
-/// Derives the standard `x-ratelimit-*` headers from the rate limit service's per-descriptor
-/// statuses. When multiple descriptors apply, the most-constrained one (fewest requests
-/// remaining) is reported, matching the limit a client is most likely to hit next.
-fn process_ratelimit_status_headers(
-	hm: &mut HeaderMap,
+/// When multiple descriptors apply, the most-constrained one (fewest requests remaining)
+/// is reported, matching the limit a client is most likely to hit next.
+fn ratelimit_status(
 	statuses: &[proto::rate_limit_response::DescriptorStatus],
-) {
-	let Some(best) = statuses
+) -> Option<localratelimit::RateLimitStatus> {
+	let best = statuses
 		.iter()
 		.filter(|status| status.current_limit.is_some())
-		.min_by_key(|status| status.limit_remaining)
-	else {
-		return;
-	};
-	let Some(limit) = best.current_limit.as_ref() else {
-		return;
-	};
+		.min_by_key(|status| status.limit_remaining)?;
+	let limit = best.current_limit.as_ref()?;
 	let reset_seconds = best
 		.duration_until_reset
 		.as_ref()
 		.map(|d| d.seconds.max(0) as u64)
 		.unwrap_or(0);
-	http::x_headers::set_ratelimit_headers(
-		hm,
-		limit.requests_per_unit as u64,
-		best.limit_remaining as u64,
+	Some(localratelimit::RateLimitStatus {
+		limit: limit.requests_per_unit as u64,
+		remaining: best.limit_remaining as u64,
 		reset_seconds,
-	);
+	})
+}
+
+fn process_ratelimit_status_headers(
+	hm: &mut HeaderMap,
+	statuses: &[proto::rate_limit_response::DescriptorStatus],
+) {
+	if let Some(status) = ratelimit_status(statuses) {
+		http::x_headers::set_ratelimit_headers(
+			hm,
+			status.limit,
+			status.remaining,
+			status.reset_seconds,
+		);
+	}
 }
 
 fn eval_cost(

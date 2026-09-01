@@ -155,6 +155,9 @@ spec:
                         maxItems: 64
                         minItems: 1
                         type: array
+                        x-kubernetes-list-map-keys:
+                        - field
+                        x-kubernetes-list-type: map
                       modelAliases:
                         additionalProperties:
                           type: string
@@ -308,6 +311,19 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the guardrail's verdict is enforced or only
+                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                        assessment rejects the request/response and an anonymized assessment masks
+                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                        invoked and its assessment recorded (metrics + structured log), but the
+                                        request/response is never blocked or masked.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.
@@ -932,6 +948,16 @@ spec:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     location:
                                       default: us-central1
                                       description: |-
@@ -1388,6 +1414,16 @@ spec:
                                     endpoint.
                                     See https://developers.openai.com/api/reference/resources/moderations for more information.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     model:
                                       description: |-
                                         Moderation model to use. For example,
@@ -1862,6 +1898,7 @@ spec:
                                         streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
+                                      - Audit
                                       - Mask
                                       - Reject
                                       type: string
@@ -1943,6 +1980,16 @@ spec:
                                   description: Webhook that receives requests for
                                     prompt guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                        without blocking or masking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     backendRef:
                                       description: |-
                                         Webhook server to reach.
@@ -2086,6 +2133,19 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the guardrail's verdict is enforced or only
+                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                        assessment rejects the request/response and an anonymized assessment masks
+                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                        invoked and its assessment recorded (metrics + structured log), but the
+                                        request/response is never blocked or masked.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.
@@ -2710,6 +2770,16 @@ spec:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     location:
                                       default: us-central1
                                       description: |-
@@ -3173,6 +3243,7 @@ spec:
                                         streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
+                                      - Audit
                                       - Mask
                                       - Reject
                                       type: string
@@ -3233,6 +3304,16 @@ spec:
                                   description: Webhook that receives responses for
                                     prompt guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                        without blocking or masking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     backendRef:
                                       description: |-
                                         Webhook server to reach.
@@ -3425,6 +3506,9 @@ spec:
                         maxItems: 64
                         minItems: 1
                         type: array
+                        x-kubernetes-list-map-keys:
+                        - field
+                        x-kubernetes-list-type: map
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [defaults finalTransformations
@@ -6856,6 +6940,14 @@ spec:
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
+                      maxConcurrentRequests:
+                        description: |-
+                          Maximum number of in-flight HTTP requests across this gateway/port.
+                          This includes HTTP/1 requests and HTTP/2 streams. Requests over the limit
+                          are rejected immediately with a 503 response. Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
                       maxConnectionDuration:
                         description: |-
                           Maximum time a connection is allowed to remain open.
@@ -6872,8 +6964,8 @@ spec:
                     - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
                         http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
-                        maxConnectionDuration] must be set
-                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        maxConcurrentRequests maxConnectionDuration] must be set
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -7039,10 +7131,19 @@ spec:
                             - message: time must be at least 1 second
                               rule: duration(self) >= duration('1s')
                         type: object
+                      maxConnections:
+                        description: |-
+                          Maximum number of active downstream connections on this gateway/port.
+                          Connections over the limit are closed immediately. Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [keepalive] must be set
-                      rule: '[has(self.keepalive)].filter(x,x==true).size() >= 1'
+                    - message: at least one of the fields in [keepalive maxConnections]
+                        must be set
+                      rule: '[has(self.keepalive),has(self.maxConnections)].filter(x,x==true).size()
+                        >= 1'
                   tls:
                     description: Settings for managing incoming TLS connections.
                     properties:

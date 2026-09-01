@@ -25,6 +25,10 @@ spec:
           namespace: cross-ns-with-grant
           group: agentgateway.dev
           kind: AgentgatewayBackend
+        - name: cross-ns-pool-with-grant
+          namespace: cross-ns-with-grant
+          group: inference.networking.k8s.io
+          kind: InferencePool
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -43,6 +47,10 @@ spec:
           namespace: cross-ns-without-grant
           group: agentgateway.dev
           kind: AgentgatewayBackend
+        - name: cross-ns-pool-without-grant
+          namespace: cross-ns-without-grant
+          group: inference.networking.k8s.io
+          kind: InferencePool
 ---
 apiVersion: v1
 kind: Service
@@ -63,6 +71,25 @@ spec:
     host: with-grant.example.com
     port: 80
 ---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: cross-ns-pool-with-grant
+  namespace: cross-ns-with-grant
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: cross-ns-service-with-grant
+    port:
+      number: 8080
+  selector:
+    matchLabels:
+      app: with-grant
+  targetPorts:
+    - number: 8080
+---
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
@@ -80,6 +107,9 @@ spec:
     - group: agentgateway.dev
       kind: AgentgatewayBackend
       name: cross-ns-backend-with-grant
+    - group: inference.networking.k8s.io
+      kind: InferencePool
+      name: cross-ns-pool-with-grant
 ---
 apiVersion: v1
 kind: Service
@@ -99,10 +129,69 @@ spec:
   static:
     host: without-grant.example.com
     port: 80
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: cross-ns-pool-without-grant
+  namespace: cross-ns-without-grant
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: cross-ns-service-without-grant
+    port:
+      number: 8080
+  selector:
+    matchLabels:
+      app: without-grant
+  targetPorts:
+    - number: 8080
 
 ---
 # Output
 output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 8080
+            service:
+              hostname: cross-ns-service-with-grant.cross-ns-with-grant.svc.cluster.local
+              namespace: cross-ns-with-grant
+          failureMode: FAIL_CLOSED
+      key: cross-ns-with-grant/cross-ns-pool-with-grant:inference
+      name:
+        kind: InferencePool
+        name: cross-ns-pool-with-grant
+        namespace: cross-ns-with-grant
+      target:
+        service:
+          hostname: cross-ns-pool-with-grant.cross-ns-with-grant.inference.cluster.local
+          namespace: cross-ns-with-grant
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: cross-ns-with-grant/cross-ns-pool-with-grant:inferencetls
+      name:
+        kind: InferencePool
+        name: cross-ns-pool-with-grant
+        namespace: cross-ns-with-grant
+      target:
+        service:
+          hostname: cross-ns-service-with-grant.cross-ns-with-grant.svc.cluster.local
+          namespace: cross-ns-with-grant
+          port: 8080
 - gateway:
     Name: test-gateway
     Namespace: default
@@ -118,6 +207,12 @@ output:
       - backend:
           backend: cross-ns-with-grant/cross-ns-backend-with-grant
         weight: 1
+      - backend:
+          port: 8080
+          service:
+            hostname: cross-ns-pool-with-grant.cross-ns-with-grant.inference.cluster.local
+            namespace: cross-ns-with-grant
+        weight: 1
       key: default/cross-ns-with-refgrant.00.http
       listenerKey: default/test-gateway.http
       name:
@@ -132,6 +227,7 @@ output:
       backends:
       - weight: 1
       - weight: 1
+      - weight: 1
       key: default/cross-ns-without-refgrant.00.http
       listenerKey: default/test-gateway.http
       name:
@@ -139,6 +235,38 @@ output:
         name: cross-ns-without-refgrant
         namespace: default
 status:
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: cross-ns-pool-with-grant
+    namespace: cross-ns-with-grant
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: cross-ns-pool-without-grant
+    namespace: cross-ns-without-grant
+  spec: null
+  status: {}
 - apiVersion: gateway.networking.k8s.io/v1
   kind: HTTPRoute
   metadata:
@@ -179,8 +307,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: backendRef cross-ns-without-grant/cross-ns-backend-without-grant
-          not accessible to a HTTPRoute in namespace "default" (missing a ReferenceGrant?)
+        message: backendRef cross-ns-without-grant/cross-ns-pool-without-grant not
+          accessible to a HTTPRoute in namespace "default" (missing a ReferenceGrant?)
         reason: RefNotPermitted
         status: "False"
         type: ResolvedRefs

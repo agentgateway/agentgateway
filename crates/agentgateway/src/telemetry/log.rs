@@ -265,6 +265,16 @@ impl<T> AsyncLog<T> {
 	}
 }
 
+impl<T: Default> AsyncLog<T> {
+	// Like non_atomic_mutate, but initializes with T::default() when the cell is empty
+	// instead of skipping the mutation.
+	pub fn mutate_or_default(&self, f: impl FnOnce(&mut T)) {
+		let mut cur = self.0.take().unwrap_or_default();
+		f(&mut cur);
+		self.0.store(Some(cur));
+	}
+}
+
 impl<T> AsyncLog<T> {
 	pub fn store(&self, v: Option<T>) {
 		self.0.store(v)
@@ -291,6 +301,9 @@ impl<T: Debug> Debug for AsyncLog<T> {
 		f.debug_struct("AsyncLog").finish_non_exhaustive()
 	}
 }
+
+/// Per-request accumulator of prompt-guard guardrail interventions.
+pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 
 #[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
@@ -686,6 +699,7 @@ impl CelLogging {
 				inputs.resp,
 				inputs.llm_response,
 				inputs.mcp,
+				inputs.guardrails,
 				Some(inputs.end_time),
 				inputs.proxy,
 			)
@@ -707,6 +721,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub resp: Option<&'a cel::ResponseSnapshot>,
 	pub llm_response: Option<&'a LLMContext>,
 	pub mcp: Option<&'a MCPInfo>,
+	pub guardrails: Option<&'a Vec<cel::GuardrailInfo>>,
 	pub end_time: &'a cel::RequestTime,
 	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
@@ -922,6 +937,14 @@ impl From<RequestLog> for DropOnLog {
 
 fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
 	cel::ProxyContext {
+		error: log
+			.error
+			.as_ref()
+			.zip(log.reason)
+			.map(|(message, reason)| cel::ErrorContext {
+				reason: reason.to_string(),
+				message: message.clone(),
+			}),
 		bind: log.bind_name.clone(),
 		gateway: log
 			.listener_name
@@ -1004,6 +1027,7 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
+			guardrails: Default::default(),
 			budgets: None,
 			a2a_method: None,
 			a2a_response: None,
@@ -1094,6 +1118,7 @@ impl RequestLog {
 			resp: response_snapshot,
 			llm_response,
 			mcp: mcp.filter(|m| !m.is_empty()),
+			guardrails: None,
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
 			proxy: Some(&proxy_timing),
@@ -1173,6 +1198,7 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
+	pub guardrails: GuardrailLog,
 	pub budgets: Option<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
@@ -1190,6 +1216,10 @@ pub struct RequestLog {
 	pub source_context: Option<cel::SourceContext>,
 
 	pub response_bytes: u64,
+}
+
+fn request_log_level(error: Option<&str>) -> &'static str {
+	if error.is_some() { "error" } else { "info" }
 }
 
 impl Drop for DropOnLog {
@@ -1263,6 +1293,7 @@ impl Drop for DropOnLog {
 			}
 
 			let mcp = log.mcp_status.take();
+			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so
@@ -1282,6 +1313,7 @@ impl Drop for DropOnLog {
 				resp: log.response_snapshot.as_ref(),
 				llm_response: llm_response.as_ref(),
 				mcp: mcp.as_ref().filter(|m| !m.is_empty()),
+				guardrails: guardrails.as_ref(),
 				end_time: &cel_end_time,
 				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),
@@ -1363,7 +1395,7 @@ impl Drop for DropOnLog {
 					.metrics
 					.mcp_requests
 					.get_or_create(&MCPCall {
-						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
+						method: mcp.method_name.clone().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
 						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
@@ -1374,7 +1406,13 @@ impl Drop for DropOnLog {
 					.inc();
 			}
 
-			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
+			let level = request_log_level(log.error.as_deref());
+			let level_filter = if level == "error" {
+				Level::ERROR
+			} else {
+				Level::INFO
+			};
+			let maybe_enable_log = agent_core::telemetry::enabled("request", &level_filter);
 			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
 			let log_store_enabled = log_store::enabled()
@@ -1452,6 +1490,10 @@ impl Drop for DropOnLog {
 					None
 				}
 			});
+
+			let guardrails_json = guardrails
+				.as_ref()
+				.map(|g| serde_json::Value::Array(g.iter().map(cel::GuardrailInfo::minimal).collect()));
 
 			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 			let mut kv = vec![
@@ -1739,6 +1781,11 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.params.seed)
 						.map(Into::into),
 				),
+				// Not part of official semconv
+				(
+					"agw.ai.guardrails",
+					guardrails_json.as_ref().map(json_value_to_value_bag),
+				),
 				("retry.attempt", log.retry_attempt.display()),
 				("error", log.error.quoted()),
 				("reason", reason.display()),
@@ -1756,7 +1803,7 @@ impl Drop for DropOnLog {
 				.or_else(|| {
 					let request = log.request_snapshot.as_ref()?;
 					crate::http::is_grpc_content_type(&request.headers)
-						.then(|| request.path.path().trim_start_matches('/').to_owned())
+						.then(|| strng::new(request.path.path().trim_start_matches('/')))
 				});
 
 			if enable_trace && let Some(t) = &log.tracer {
@@ -1802,7 +1849,7 @@ impl Drop for DropOnLog {
 					let eval = v.as_ref().map(json_value_to_value_bag);
 					otlp_kv.push((k, eval));
 				}
-				otel.emit("info", "request", &otlp_kv);
+				otel.emit(level, "request", &otlp_kv);
 			}
 
 			if maybe_enable_log || log_store_enabled {
@@ -1828,7 +1875,7 @@ impl Drop for DropOnLog {
 				}
 
 				if maybe_enable_log {
-					agent_core::telemetry::log("info", "request", &kv);
+					agent_core::telemetry::log(level, "request", &kv);
 				}
 
 				if log_store_enabled {

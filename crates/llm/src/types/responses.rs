@@ -196,6 +196,14 @@ fn visit_tool_item_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut 
 	}
 }
 
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic-style cache breakpoint, accepted by some OpenAI-compat providers
+	"cache_control",
+	// OpenAI explicit prompt-cache breakpoint
+	"prompt_cache_breakpoint",
+];
+
 fn scan_value_text_runs(
 	scope: ContentScope,
 	parts: &mut Vec<Value>,
@@ -216,6 +224,9 @@ fn scan_value_text_runs(
 				_ => None,
 			}
 		},
+		// parts are pass-through JSON, so `rest` is the whole part
+		|part| Some(part),
+		PRESERVED_REST_KEYS,
 		&mut |text| f(scope, text),
 	);
 }

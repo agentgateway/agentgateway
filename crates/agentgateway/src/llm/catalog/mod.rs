@@ -3,9 +3,9 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use anyhow::{Context, bail};
+use anyhow::Context;
 use arc_swap::ArcSwap;
-pub use model::{Breakdown, Catalog};
+pub use model::{Breakdown, Catalog, CatalogMetadata};
 use model::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
@@ -20,6 +20,7 @@ mod model;
 pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
+const BUILTIN_CATALOG_JSON: &str = include_str!("../../../../../catalog/model-catalog.json");
 
 pub struct ModelCatalog {
 	state: ArcSwap<ModelCatalogState>,
@@ -54,16 +55,21 @@ impl Default for ModelCatalog {
 
 impl ModelCatalog {
 	pub async fn new(sources: Vec<ModelCatalogSource>) -> anyhow::Result<Arc<Self>> {
-		let catalog = Arc::new(Self::default());
-		if sources.is_empty() {
-			return Ok(catalog);
-		}
-		catalog.state.store(Arc::new(ModelCatalogState {
-			snapshot: Arc::new(CatalogSnapshot::empty()),
-			sources,
-		}));
-		if let Err(e) = catalog.reload().await {
-			warn!("model catalog load failed; will load when the files become valid: {e:#}")
+		let builtin =
+			model::from_json(BUILTIN_CATALOG_JSON).context("invalid built-in model catalog")?;
+		let catalog = Arc::new(Self {
+			state: ArcSwap::from_pointee(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::from_catalogs([builtin])),
+				sources,
+			}),
+			file_watch: Mutex::new(None),
+		});
+		if !catalog.state.load().sources.is_empty()
+			&& let Err(e) = catalog.reload().await
+		{
+			warn!(
+				"model catalog overlay load failed; using built-in catalog until the configured sources become valid: {e:#}"
+			)
 		}
 		catalog.update_file_watch()?;
 		Ok(catalog)
@@ -86,14 +92,6 @@ impl ModelCatalog {
 		sources: Vec<ModelCatalogSource>,
 	) -> anyhow::Result<()> {
 		if self.state.load().sources == sources {
-			return Ok(());
-		}
-		if sources.is_empty() {
-			self.state.store(Arc::new(ModelCatalogState {
-				snapshot: Arc::new(CatalogSnapshot::empty()),
-				sources,
-			}));
-			self.update_file_watch()?;
 			return Ok(());
 		}
 		let loaded = load_sources(&sources).await?;
@@ -214,9 +212,24 @@ impl CatalogSnapshot {
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
-		let merged = catalogs
+		let mut base: Option<CatalogData> = None;
+		let mut overlays = Vec::new();
+		for catalog in catalogs {
+			let Some(candidate_metadata) = catalog.metadata.as_ref() else {
+				overlays.push(catalog);
+				continue;
+			};
+			let replace = base
+				.as_ref()
+				.and_then(|catalog| catalog.metadata.as_ref())
+				.is_none_or(|current| candidate_metadata.generated_at >= current.generated_at);
+			if replace {
+				base = Some(catalog);
+			}
+		}
+		let merged = overlays
 			.into_iter()
-			.fold(CatalogData::default(), CatalogData::override_with);
+			.fold(base.unwrap_or_default(), CatalogData::override_with);
 		let model_tags = merged
 			.providers
 			.values()
@@ -549,11 +562,9 @@ struct LoadedCatalog {
 }
 
 async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCatalog> {
-	if sources.is_empty() {
-		bail!("no model catalog sources supplied");
-	}
-
-	let mut catalogs = Vec::with_capacity(sources.len());
+	let builtin = model::from_json(BUILTIN_CATALOG_JSON).context("invalid built-in model catalog")?;
+	let mut catalogs = Vec::with_capacity(sources.len() + 1);
+	catalogs.push(builtin);
 	let mut missing = Vec::new();
 	for source in sources {
 		match source {
@@ -581,16 +592,6 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCa
 				catalogs.push(inline.clone());
 			},
 		}
-	}
-	if catalogs.is_empty() {
-		bail!(
-			"no configured model catalog sources are currently readable; missing files: {}",
-			missing
-				.iter()
-				.map(|p| p.display().to_string())
-				.collect::<Vec<_>>()
-				.join(", ")
-		);
 	}
 	Ok(LoadedCatalog {
 		snapshot: CatalogSnapshot::from_catalogs(catalogs),
@@ -1135,6 +1136,40 @@ mod tests {
 		assert_eq!(cost, Some(9.0), "later layer's rate wins");
 	}
 
+	#[test]
+	fn newest_generated_base_wins_before_user_overlays() {
+		let generated = |day: u8, rate: &str| {
+			model::from_json(&format!(
+				r#"{{"metadata":{{"source":"models.dev","generatedAt":"2026-08-{day:02}T00:00:00Z"}},"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{rate}"}}}}}}}}}}}}"#
+			))
+			.unwrap()
+		};
+		let input_cost = |snapshot: &CatalogSnapshot| {
+			snapshot
+				.price(
+					"openai",
+					"my-model",
+					&LLMResponse {
+						input_tokens: Some(1_000_000),
+						..Default::default()
+					},
+					CacheTokenConvention::InputIncludesCache,
+				)
+				.0
+		};
+
+		let day7 = CatalogSnapshot::from_catalogs([generated(5, "5"), generated(7, "7")]);
+		assert_eq!(input_cost(&day7), Some(7.0));
+
+		let day10 = CatalogSnapshot::from_catalogs([generated(10, "10"), generated(7, "7")]);
+		assert_eq!(input_cost(&day10), Some(10.0));
+
+		let user_override = model::from_json(&test_catalog("12")).unwrap();
+		let overridden =
+			CatalogSnapshot::from_catalogs([generated(10, "10"), generated(7, "7"), user_override]);
+		assert_eq!(input_cost(&overridden), Some(12.0));
+	}
+
 	#[tokio::test]
 	async fn missing_later_layer_is_skipped() {
 		let dir = tempfile::tempdir().unwrap();
@@ -1169,19 +1204,53 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn all_missing_layers_are_not_loaded() {
+	async fn all_missing_layers_fall_back_to_builtin() {
 		let dir = tempfile::tempdir().unwrap();
-		let err = load_sources(&[ModelCatalogSource::File {
+		let loaded = load_sources(&[ModelCatalogSource::File {
 			file: dir.path().join("base.json"),
 		}])
 		.await
-		.unwrap_err();
+		.unwrap();
 
+		assert_eq!(loaded.missing.len(), 1);
+		assert!(loaded.snapshot.catalog.is_some());
 		assert!(
-			err
-				.to_string()
-				.contains("no configured model catalog sources are currently readable")
+			loaded
+				.snapshot
+				.catalog
+				.as_ref()
+				.unwrap()
+				.resolve("openai", "gpt-4o-mini")
+				.is_some(),
+			"built-in catalog remains available"
 		);
+	}
+
+	#[tokio::test]
+	async fn metadata_free_file_is_an_overlay_regardless_of_name() {
+		let dir = tempfile::tempdir().unwrap();
+		let file = dir.path().join("base-costs.json");
+		fs_err::tokio::write(
+			&file,
+			r#"{"providers":{"openai":{"models":{"gpt-4o-mini":{"rates":{"input":"999"}}}}}}"#,
+		)
+		.await
+		.unwrap();
+		let loaded = load_sources(&[ModelCatalogSource::File { file }])
+			.await
+			.unwrap();
+		let (cost, status) = loaded.snapshot.price(
+			"openai",
+			"gpt-4o-mini",
+			&LLMResponse {
+				input_tokens: Some(1_000_000),
+				..Default::default()
+			},
+			CacheTokenConvention::InputIncludesCache,
+		);
+
+		assert_eq!(status, CostLookupStatus::Exact);
+		assert_eq!(cost, Some(999.0));
 	}
 
 	#[test]

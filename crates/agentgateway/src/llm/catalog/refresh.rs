@@ -3,6 +3,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{Context, bail};
+use chrono::Utc;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -35,7 +36,11 @@ pub async fn refresh_models_dev_base_catalog(
 }
 
 pub async fn fetch_models_dev_base_catalog() -> anyhow::Result<RefreshBaseCatalogResponse> {
-	let catalog = fetch_models_dev_catalog().await?;
+	let mut catalog = fetch_models_dev_catalog().await?;
+	catalog.metadata = Some(model::CatalogMetadata {
+		source: MODELS_DEV_SOURCE.to_string(),
+		generated_at: Utc::now(),
+	});
 	let providers = catalog.providers.len();
 	let models = catalog
 		.providers
@@ -48,6 +53,8 @@ pub async fn fetch_models_dev_base_catalog() -> anyhow::Result<RefreshBaseCatalo
 		catalog,
 	})
 }
+
+const MODELS_DEV_SOURCE: &str = "models.dev";
 
 async fn fetch_models_dev_catalog() -> anyhow::Result<model::Catalog> {
 	let response = reqwest::get("https://models.dev/api.json")

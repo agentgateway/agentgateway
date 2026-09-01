@@ -37,6 +37,7 @@ const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
+const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
@@ -829,6 +830,10 @@ mod responses {
 	const EMBEDDING_RESPONSES: &[(&str, &str)] = &[
 		("response/bedrock-titan/embeddings.json", BEDROCK_TITAN),
 		("response/bedrock-cohere/embeddings.json", BEDROCK_COHERE),
+		(
+			"response/bedrock-cohere-v4/embeddings.json",
+			BEDROCK_COHERE_V4,
+		),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/vertex/embeddings.json", VERTEX),
 		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
@@ -1043,10 +1048,11 @@ mod responses {
 		};
 		for (path, provider) in EMBEDDING_RESPONSES {
 			match *provider {
-				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => {
+				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_COHERE_V4 | BEDROCK_NOVA => {
 					let model = match *provider {
 						BEDROCK_TITAN => "amazon.titan-embed-text-v2:0",
 						BEDROCK_COHERE => "cohere.embed-english-v3",
+						BEDROCK_COHERE_V4 => "cohere.embed-v4:0",
 						_ => "amazon.nova-2-multimodal-embeddings-v1:0",
 					};
 					test_response(provider, path, |i| {

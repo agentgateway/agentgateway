@@ -26,7 +26,7 @@ use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
-use crate::telemetry::log::{AsyncLog, RequestLog};
+use crate::telemetry::log::{AsyncLog, GuardrailLog, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
@@ -291,6 +291,14 @@ struct ChatRequestContext<'a> {
 struct ChatResponseContext<'a> {
 	model: &'a str,
 	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
+}
+
+/// Log handles and content-capture flags threaded through response processing.
+#[derive(Default, Clone)]
+pub struct LLMLogging {
+	pub response: AsyncLog<LLMInfo>,
+	pub guardrails: GuardrailLog,
+	pub content: LogContentFields,
 }
 
 // Context provider to each response translation (streaming)
@@ -1218,8 +1226,7 @@ impl AIProvider {
 		// duplicated. countTokens is unary and never sets one, but Google honours `alt=sse` there
 		// too and answers with SSE framing that `CountTokensResponse` cannot parse — so drop the
 		// client's `alt` on both native routes (same gate as the render below). Stripping it here
-		// rather than at parse time keeps it intact on the paths above, which forward the client's
-		// URI untouched.
+		// rather than at parse time keeps `alt` intact on the paths above.
 		if route_type == RouteType::GeminiCountTokens
 			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
 		{
@@ -1390,15 +1397,11 @@ impl AIProvider {
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
-				// Store the region in request extensions so AWS signing can use it.
 				return http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						uri.authority = Some(Authority::from_str(&provider.get_host(route_type))?);
 						Ok(())
 					})?;
-					req.extensions.insert(bedrock::AwsRegion {
-						region: provider.region.as_str().to_string(),
-					});
 					Ok(())
 				});
 			},
@@ -1478,6 +1481,13 @@ impl AIProvider {
 			{
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+						// Native Gemini prefers query API keys over the bound Bearer credential.
+						// Removing parameters from an already-valid URI cannot fail.
+						let _ = http::modify_query_parameters(
+							&mut req.uri,
+							std::iter::empty::<(&str, &str)>(),
+							["key", "$key"],
+						);
 						let explicit_authorization = req
 							.extensions
 							.get::<AppliedBackendAuthLocation>()
@@ -1498,6 +1508,12 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
+				req.extensions.insert(bedrock::AwsRegion {
+					region: provider.region.as_str().to_string(),
+				});
+				Ok(())
+			}),
 			_ => Ok(()),
 		}
 	}
@@ -1979,8 +1995,16 @@ impl AIProvider {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
 				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
+				let guardrail_log = log.as_ref().map(|l| l.guardrails.clone());
 				if let Some((response, guardrail)) = p
-					.apply_prompt_guard(&client, req, http_headers, claims, original.as_deref())
+					.apply_prompt_guard(
+						&client,
+						req,
+						http_headers,
+						claims,
+						original.as_deref(),
+						guardrail_log.as_ref(),
+					)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -2175,8 +2199,7 @@ impl AIProvider {
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
-		log: AsyncLog<llm::LLMInfo>,
-		log_content: LogContentFields,
+		logging: LLMLogging,
 		model_catalog: Option<&Arc<catalog::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -2189,8 +2212,7 @@ impl AIProvider {
 				req,
 				rate_limit,
 				req_snapshot,
-				log,
-				log_content,
+				logging,
 				model_catalog.cloned(),
 				resp,
 			);
@@ -2201,16 +2223,16 @@ impl AIProvider {
 
 		match req.input_format {
 			InputFormat::CountTokens => {
-				self.process_count_tokens_response(req, buffered, model_catalog, &log)
+				self.process_count_tokens_response(req, buffered, model_catalog, &logging.response)
 			},
 			InputFormat::GeminiCountTokens => {
-				self.process_gemini_count_tokens_response(req, buffered, model_catalog, &log)
+				self.process_gemini_count_tokens_response(req, buffered, model_catalog, &logging.response)
 			},
 			InputFormat::Embeddings => {
-				self.process_embeddings_buffered_response(req, buffered, model_catalog, &log)
+				self.process_embeddings_buffered_response(req, buffered, model_catalog, &logging.response)
 			},
 			InputFormat::Rerank => {
-				self.process_rerank_buffered_response(req, buffered, model_catalog, &log)
+				self.process_rerank_buffered_response(req, buffered, model_catalog, &logging.response)
 			},
 			_ => {
 				self
@@ -2219,8 +2241,7 @@ impl AIProvider {
 						req,
 						rate_limit,
 						req_snapshot,
-						log,
-						log_content,
+						logging,
 						model_catalog,
 						buffered,
 					)
@@ -2236,11 +2257,15 @@ impl AIProvider {
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
-		log: AsyncLog<llm::LLMInfo>,
-		log_content: LogContentFields,
+		logging: LLMLogging,
 		model_catalog: Option<&catalog::ModelCatalog>,
 		buffered: BufferedResponse,
 	) -> Result<Response, AIError> {
+		let LLMLogging {
+			response: log,
+			guardrails: guardrail_log,
+			content: log_content,
+		} = logging;
 		let BufferedResponse { mut parts, bytes } = buffered;
 
 		let (llm_resp, body) = if !parts.status.is_success() {
@@ -2267,6 +2292,7 @@ impl AIProvider {
 				&prompt_guard_headers,
 				&rate_limit.prompt_guard,
 				req_snapshot.as_deref(),
+				Some(&guardrail_log),
 			)
 			.await
 			.map_err(|e| {
@@ -2353,6 +2379,23 @@ impl AIProvider {
 		let BufferedResponse {
 			mut parts, bytes, ..
 		} = buffered;
+		parts.headers.remove(header::CONTENT_LENGTH);
+		if !parts.status.is_success() {
+			let body = self.process_error(
+				&req,
+				parts.status,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
+			return Ok(Self::finalize_response(
+				parts,
+				body.into(),
+				req,
+				LLMResponse::default(),
+				model_catalog,
+				log,
+			));
+		}
 		let (bytes, count) = match self {
 			AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
 				types::count_tokens::Response::translate_response(bytes)?
@@ -2374,7 +2417,6 @@ impl AIProvider {
 			},
 		};
 
-		parts.headers.remove(header::CONTENT_LENGTH);
 		Ok(Self::finalize_response(
 			parts,
 			bytes.into(),
@@ -2613,11 +2655,15 @@ impl AIProvider {
 		req: LLMRequest,
 		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
-		log: AsyncLog<llm::LLMInfo>,
-		log_content: LogContentFields,
+		logging: LLMLogging,
 		model_catalog: Option<Arc<catalog::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		let LLMLogging {
+			response: log,
+			guardrails: guardrail_log,
+			content: log_content,
+		} = logging;
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
@@ -2683,6 +2729,7 @@ impl AIProvider {
 				&client,
 				&prompt_guard_headers,
 				req_snapshot.clone(),
+				guardrail_log,
 			)
 		} else {
 			vec![]
@@ -2904,6 +2951,7 @@ impl AIProvider {
 				// the Google shape the client expects.
 				Ok(bytes.clone())
 			},
+			(_, InputFormat::CountTokens) => Ok(bytes.clone()),
 			(AIProvider::Bedrock(_), InputFormat::Embeddings) => {
 				conversion::bedrock::from_embeddings::translate_error(bytes)
 			},

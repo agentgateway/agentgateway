@@ -1379,6 +1379,41 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 }
 
 #[tokio::test]
+async fn anthropic_count_tokens_preserves_upstream_errors() {
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::CountTokens,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+		provider: "aws.bedrock".into(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let body =
+		bytes::Bytes::from_static(br#"{"message":"The provided model does not support CountTokens"}"#);
+	let mut parts = ::http::Response::new(()).into_parts().0;
+	parts.status = ::http::StatusCode::BAD_REQUEST;
+	let buffered = BufferedResponse {
+		parts,
+		bytes: body.clone(),
+	};
+
+	let resp = provider
+		.process_count_tokens_response(req, buffered, None, &Default::default())
+		.expect("error response should process");
+	assert_eq!(resp.status(), ::http::StatusCode::BAD_REQUEST);
+	assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), body);
+}
+
+#[tokio::test]
 async fn vertex_anthropic_messages_prepares_vertex_body() {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
@@ -2275,8 +2310,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)
@@ -2333,8 +2367,7 @@ async fn upstream_encoding_is_applied_after_messages_response_translation() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			upstream,
 		)
@@ -2491,8 +2524,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			},
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)
@@ -2795,15 +2827,15 @@ fn setup_request_gemini_native_builds_generate_content_path() {
 }
 
 #[test]
-fn setup_request_gemini_native_streaming_adds_alt_sse_and_keeps_client_query() {
+fn setup_request_gemini_native_streaming_adds_alt_sse_and_strips_client_api_keys() {
 	let provider = AIProvider::Gemini(gemini::Provider { model: None });
-	// The client's own alt=sse is dropped in favour of the path-provided one, while any other
-	// parameter such as key survives.
+	// The client's own alt=sse is dropped in favour of the path-provided one. Credential query
+	// parameters are stripped while unrelated parameters survive.
 	let llm_request = native_gemini_llm_request("models/gemini-2.5-flash", true);
 	let mut req = crate::http::tests_common::request(
-		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc",
+		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc&%24key=def&keep=yes",
 		http::Method::POST,
-		&[],
+		&[("authorization", "Bearer AIzaOperatorKey")],
 	);
 
 	provider
@@ -2821,26 +2853,30 @@ fn setup_request_gemini_native_streaming_adds_alt_sse_and_keeps_client_query() {
 		req.uri().path(),
 		"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
 	);
-	assert_eq!(req.uri().query(), Some("alt=sse&key=abc"));
+	assert_eq!(req.uri().query(), Some("alt=sse&keep=yes"));
 }
 
 #[test]
-fn setup_request_gemini_native_streaming_keeps_client_alt_with_host_override() {
-	// hostOverride without pathPrefix forwards the client's URI verbatim, so alt=sse must
-	// still be there: the upstream would otherwise answer with the JSON-array variant.
-	for provider in [
-		AIProvider::Gemini(gemini::Provider { model: None }),
-		AIProvider::Vertex(vertex::Provider {
-			model: None,
-			region: None,
-			project_id: strng::new("test-project"),
-		}),
+fn setup_request_strips_query_api_keys_only_for_native_gemini() {
+	for (provider, expected_query) in [
+		(
+			AIProvider::Gemini(gemini::Provider { model: None }),
+			"alt=sse&keep=yes",
+		),
+		(
+			AIProvider::Vertex(vertex::Provider {
+				model: None,
+				region: None,
+				project_id: strng::new("test-project"),
+			}),
+			"alt=sse&key=abc&%24key=def&keep=yes",
+		),
 	] {
 		let llm_request = native_gemini_llm_request("gemini-2.5-flash", true);
 		let mut req = crate::http::tests_common::request(
-			"https://proxy.example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+			"https://proxy.example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc&%24key=def&keep=yes",
 			http::Method::POST,
-			&[],
+			&[("authorization", "Bearer ya29.operator-token")],
 		);
 
 		provider
@@ -2858,7 +2894,7 @@ fn setup_request_gemini_native_streaming_keeps_client_alt_with_host_override() {
 			req.uri().path(),
 			"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
 		);
-		assert_eq!(req.uri().query(), Some("alt=sse"));
+		assert_eq!(req.uri().query(), Some(expected_query));
 	}
 }
 
@@ -2870,9 +2906,9 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 		..native_gemini_llm_request("gemini-2.5-flash", false)
 	};
 	let mut req = crate::http::tests_common::request(
-		"https://example.com/v1/chat/completions",
+		"https://example.com/v1/chat/completions?key=abc&%24key=def",
 		http::Method::POST,
-		&[],
+		&[("authorization", "Bearer AIzaOperatorKey")],
 	);
 
 	provider
@@ -2887,6 +2923,7 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 		.expect("setup_request should succeed");
 
 	assert_eq!(req.uri().path(), "/v1beta/openai/chat/completions");
+	assert_eq!(req.uri().query(), Some("key=abc&%24key=def"));
 }
 
 #[test]
@@ -2925,6 +2962,37 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
 		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_bedrock_sets_signing_region_with_host_override() {
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("ca-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let mut req = crate::http::tests_common::request(
+		"https://bedrock-vpce.example.com/model/example/converse",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(&mut req, RouteType::Messages, None, None, None, true)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().authority().map(|authority| authority.as_str()),
+		Some("bedrock-vpce.example.com")
+	);
+	assert_eq!(
+		req
+			.extensions()
+			.get::<bedrock::AwsRegion>()
+			.map(|region| region.region.as_str()),
+		Some("ca-central-1")
 	);
 }
 

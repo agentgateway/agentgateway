@@ -1,14 +1,18 @@
 package syncer
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"istio.io/istio/pkg/kube/kclient"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	syncstatus "github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 )
 
 func TestMergePolicyAncestorStatuses_SortsOurEntriesOnly(t *testing.T) {
@@ -67,6 +71,94 @@ func TestMergeRouteParentStatuses_SortsOurEntriesOnly(t *testing.T) {
 	require.Equal(t, string(out[3].ControllerName), our)
 	require.Equal(t, string(out[2].ParentRef.Name), "m")
 	require.Equal(t, string(out[3].ParentRef.Name), "z")
+}
+
+func TestMergeInferencePoolParentStatuses_ClearsOurEntries(t *testing.T) {
+	our := "agentgateway.dev/agentgateway"
+	existing := []inf.ParentStatus{
+		{ControllerName: "", ParentRef: inf.ParentReference{Name: "istio"}},
+		{ControllerName: inf.ControllerName(our), ParentRef: inf.ParentReference{Name: "stale"}},
+	}
+
+	out := mergeInferencePoolParentStatuses(our, existing, nil)
+	require.Equal(t, existing[:1], out)
+}
+
+func TestStatusSyncerApplyStatus_MergesInferencePoolParents(t *testing.T) {
+	our := "agentgateway.dev/agentgateway"
+	other := "kgateway.dev/kgateway"
+	current := &inf.InferencePool{
+		Name:            "pool",
+		Namespace:       "default",
+		ResourceVersion: "2",
+		Status: inf.InferencePoolStatus{Parents: []inf.ParentStatus{
+			{
+				ControllerName: "",
+				ParentRef:      inf.ParentReference{Name: "istio"},
+				Conditions:     []metav1.Condition{{Type: "Accepted", Message: "current istio status"}},
+			},
+			{
+				ControllerName: inf.ControllerName(other),
+				ParentRef:      inf.ParentReference{Name: "other"},
+				Conditions:     []metav1.Condition{{Type: "Accepted", Message: "current other status"}},
+			},
+			{ControllerName: inf.ControllerName(our), ParentRef: inf.ParentReference{Name: "stale"}},
+		}},
+	}
+	desired := inf.InferencePoolStatus{Parents: []inf.ParentStatus{
+		{
+			ControllerName: "",
+			ParentRef:      inf.ParentReference{Name: "istio"},
+			Conditions:     []metav1.Condition{{Type: "Accepted", Message: "stale istio status"}},
+		},
+		{
+			ControllerName: inf.ControllerName(other),
+			ParentRef:      inf.ParentReference{Name: "other"},
+			Conditions:     []metav1.Condition{{Type: "Accepted", Message: "stale other status"}},
+		},
+		{ControllerName: "deleted.example/controller", ParentRef: inf.ParentReference{Name: "deleted"}},
+		{ControllerName: inf.ControllerName(our), ParentRef: inf.ParentReference{Name: "z"}},
+		{ControllerName: inf.ControllerName(our), ParentRef: inf.ParentReference{Name: "m"}},
+	}}
+	client := &inferencePoolStatusClient{current: current}
+	syncer := StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]{
+		Name:           "inferencePool",
+		ControllerName: our,
+		Client:         client,
+		Build: func(om metav1.ObjectMeta, status inf.InferencePoolStatus) *inf.InferencePool {
+			return &inf.InferencePool{ObjectMeta: om, Status: status}
+		},
+	}
+	statusAny := any(desired)
+
+	syncer.ApplyStatus(context.Background(), syncstatus.Resource{
+		Name: current.Name, Namespace: current.Namespace,
+		ResourceVersion: "1",
+	}, &statusAny)
+
+	require.NotNil(t, client.updated)
+	require.Equal(t, current.ResourceVersion, client.updated.ResourceVersion)
+	require.Equal(t, []inf.ParentStatus{
+		current.Status.Parents[0],
+		current.Status.Parents[1],
+		desired.Parents[4],
+		desired.Parents[3],
+	}, client.updated.Status.Parents)
+}
+
+type inferencePoolStatusClient struct {
+	kclient.Client[*inf.InferencePool]
+	current *inf.InferencePool
+	updated *inf.InferencePool
+}
+
+func (c *inferencePoolStatusClient) Get(_, _ string) *inf.InferencePool {
+	return c.current.DeepCopy()
+}
+
+func (c *inferencePoolStatusClient) UpdateStatus(pool *inf.InferencePool) (*inf.InferencePool, error) {
+	c.updated = pool.DeepCopy()
+	return pool, nil
 }
 
 func TestMergeGatewayAddresses_SortsOutput(t *testing.T) {

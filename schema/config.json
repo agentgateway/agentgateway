@@ -421,7 +421,9 @@
             },
             "connectTimeout": "11s",
             "poolIdleTimeout": "1m30s",
-            "poolMaxSize": null
+            "poolMaxSize": null,
+            "h2KeepaliveInterval": "0s",
+            "h2KeepaliveTimeout": "5s"
           }
         },
         "hbone": {
@@ -536,6 +538,17 @@
     "Catalog": {
       "type": "object",
       "properties": {
+        "metadata": {
+          "description": "Identifies a generated base catalog and when its contents last changed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "providers": {
           "description": "Map of provider name to its supported models and pricing.",
           "type": "object",
@@ -546,6 +559,25 @@
         }
       },
       "additionalProperties": false
+    },
+    "CatalogMetadata": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Upstream used to generate this base catalog, such as `models.dev`.",
+          "type": "string"
+        },
+        "generatedAt": {
+          "description": "Time the generated catalog contents last changed.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "generatedAt"
+      ]
     },
     "Provider": {
       "type": "object",
@@ -1079,6 +1111,16 @@
           "format": "uint",
           "minimum": 0,
           "default": null
+        },
+        "h2KeepaliveInterval": {
+          "description": "Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.\nPINGs are sent even on idle connections to proactively evict dead connections from the pool.\nDisabled by default (\"0s\"). Note: many gRPC servers enforce a minimum ping interval\nand will reject connections that ping more frequently.",
+          "type": "string",
+          "default": "0s"
+        },
+        "h2KeepaliveTimeout": {
+          "description": "Timeout waiting for a PING ACK before considering the connection dead and closing it.\nOnly applies when h2_keepalive_interval is set. Defaults to 5s.",
+          "type": "string",
+          "default": "5s"
         }
       },
       "additionalProperties": false
@@ -1175,6 +1217,17 @@
           "maximum": 65535,
           "default": null
         },
+        "protocol": {
+          "description": "Protocol handling for the entire bind. When omitted, it is inferred from the listeners.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBindProtocol"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "listeners": {
           "description": "Named listeners bound on this port, which may use different protocols and TLS.",
           "type": "array",
@@ -1196,6 +1249,23 @@
       "additionalProperties": false,
       "required": [
         "listeners"
+      ]
+    },
+    "LocalBindProtocol": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "HTTP",
+            "TLS",
+            "TCP"
+          ]
+        },
+        {
+          "description": "EXPERIMENTAL: Detects TLS, plaintext HTTP, or opaque TCP from the first bytes of each\nconnection and chooses the appropriate listener. Use an explicit protocol whenever\npossible. AUTO requires client-first opaque protocols that look like a TLS or HTTP request.",
+          "type": "string",
+          "const": "AUTO"
+        }
       ]
     },
     "LocalListener": {
@@ -4491,6 +4561,13 @@
             "string",
             "null"
           ]
+        },
+        "maxConnectionDuration": {
+          "description": "Maximum time a connection to the backend may stay open. A connection past this duration is\nnot reused for new requests; a fresh connection is established instead, while in-flight\nrequests are not interrupted.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -4604,8 +4681,11 @@
           "type": "string"
         },
         "audiences": {
-          "description": "Accepted token audiences, matched against the JWT `aud` claim.",
-          "type": "array",
+          "description": "Accepted token audiences, matched against the JWT `aud` claim.\nIf unset, audience validation is disabled.",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string"
           }
@@ -4673,7 +4753,6 @@
       "additionalProperties": false,
       "required": [
         "issuer",
-        "audiences",
         "resourceMetadata"
       ]
     },
@@ -5148,6 +5227,11 @@
           "description": "Reject the request or response when content matches.",
           "type": "string",
           "const": "reject"
+        },
+        {
+          "description": "Observe mode: record what the guard would have done (metrics + structured\nlog) but never block or mask — the content always passes through.",
+          "type": "string",
+          "const": "audit"
         }
       ]
     },
@@ -5236,6 +5320,10 @@
         "failureMode": {
           "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
           "$ref": "#/$defs/WebhookFailureMode"
+        },
+        "action": {
+          "description": "Whether to enforce the webhook's verdict or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
         }
       },
       "additionalProperties": false,
@@ -5258,6 +5346,21 @@
         }
       ]
     },
+    "RejectAuditAction": {
+      "description": "Action for guards that cannot mask (only reject or observe). Bedrock,\nwebhook, OpenAI moderation, Google Model Armor, and Azure Content Safety\ndecide *what* they flag; the gateway only chooses whether to enforce that\nverdict or merely record it.",
+      "oneOf": [
+        {
+          "description": "Enforce the guard's native verdict (block, or — for Bedrock — anonymize).\nThis is the default and preserves the enforcing behavior.",
+          "type": "string",
+          "const": "reject"
+        },
+        {
+          "description": "Observe mode: invoke the guard and record its verdict (metrics +\nstructured log) but never block or mask — the content always passes\nthrough.",
+          "type": "string",
+          "const": "audit"
+        }
+      ]
+    },
     "Moderation": {
       "type": "object",
       "properties": {
@@ -5267,6 +5370,10 @@
             "string",
             "null"
           ]
+        },
+        "action": {
+          "description": "Whether to reject flagged content or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
           "description": "Backend policies used when calling the moderation provider.",
@@ -5297,6 +5404,10 @@
         "region": {
           "description": "AWS region where the guardrail is deployed",
           "type": "string"
+        },
+        "action": {
+          "description": "Whether to enforce the guardrail's verdict or only observe it.\n\n`reject` (the default) enforces the guardrail: a `BLOCKED` assessment\nrejects the request/response and an `ANONYMIZED` assessment masks the\nmatched content, exactly as before.\n\n`audit` records successful assessments without enforcing their verdict.\n`audit` guarantees non-enforcement gateway-side even when the AWS resource\nis configured to `BLOCK`/`ANONYMIZE`.",
+          "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
           "description": "Backend policies for AWS authentication (optional, defaults to implicit AWS auth)",
@@ -5336,6 +5447,10 @@
             "null"
           ]
         },
+        "action": {
+          "description": "Whether to reject flagged content or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
+        },
         "policies": {
           "description": "Backend policies for GCP authentication (optional, defaults to implicit GCP auth)",
           "anyOf": [
@@ -5361,6 +5476,10 @@
         "endpoint": {
           "description": "The Azure Content Safety endpoint hostname (e.g., \"<resource-name>.cognitiveservices.azure.com\")",
           "type": "string"
+        },
+        "action": {
+          "description": "Whether to reject flagged content or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
           "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
@@ -7462,21 +7581,13 @@
             }
           ]
         },
-        "targetPort": {
-          "description": "Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.\nThis is independent from `connect_target_port`, which is used for raw CONNECT tunnels.",
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 1,
-          "maximum": 65535,
-          "default": 443
-        },
         "connectTargetPort": {
-          "description": "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.",
+          "description": "Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.",
           "type": "integer",
           "format": "uint16",
           "minimum": 1,
           "maximum": 65535,
-          "default": 444
+          "default": 8443
         },
         "cacheTtl": {
           "description": "How long successful actor assignments are reused. Defaults to 5s; 0s disables reuse.",
@@ -9890,6 +10001,15 @@
             "null"
           ],
           "default": null
+        },
+        "maxConcurrentRequests": {
+          "description": "Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests\nand HTTP/2 streams. Requests over the limit are rejected immediately.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1
         }
       },
       "additionalProperties": false
@@ -9983,13 +10103,26 @@
       "properties": {
         "keepalives": {
           "description": "TCP keepalive settings for downstream connections.",
-          "$ref": "#/$defs/KeepaliveConfig"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeepaliveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxConnections": {
+          "description": "Maximum number of active downstream connections on this bind. Connections over the limit\nare closed immediately.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "keepalives"
-      ]
+      "additionalProperties": false
     },
     "NetworkAuthorization": {
       "description": "CEL authorization rules for downstream network connections.",

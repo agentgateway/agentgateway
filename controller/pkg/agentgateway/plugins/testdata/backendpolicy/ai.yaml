@@ -160,18 +160,22 @@ output:
               - CONTENT_SCOPE_TOOL_OUTPUT
               - CONTENT_SCOPE_TOOL_INPUT
             - openaiModeration:
+                action: REJECT_AUDIT_ACTION_REJECT
                 inlinePolicies:
                 - backendTls:
                     verification: INSECURE_ALL
             - bedrockGuardrails:
+                action: REJECT_AUDIT_ACTION_REJECT
                 identifier: bedrock-guardrail-identifier
                 region: us-west-2
                 version: DRAFT
             - googleModelArmor:
+                action: REJECT_AUDIT_ACTION_REJECT
                 location: us-central1
                 projectId: model-armor-project-id
                 templateId: model-armor-template-id
             - webhook:
+                action: REJECT_AUDIT_ACTION_REJECT
                 backend:
                   port: 80
                   service:

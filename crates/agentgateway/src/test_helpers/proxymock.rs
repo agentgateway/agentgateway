@@ -1287,9 +1287,16 @@ impl TestBind {
 		client
 	}
 
-	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+	/// Like [`Self::serve`], but the server-side socket already carries a downstream mTLS
+	/// identity, simulating a connection tunneled over HBONE where the outer Istio mTLS
+	/// layer authenticated the peer (see `Gateway::terminate_gateway_hbone`).
+	pub fn serve_with_src_identity(
+		&self,
+		bind_name: BindKey,
+		src_identity: crate::transport::tls::TlsInfo,
+	) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
-		let server = Socket::from_memory(
+		let mut server = Socket::from_memory(
 			server,
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
@@ -1298,6 +1305,46 @@ impl TestBind {
 				raw_peer_addr: None,
 			},
 		);
+		server
+			.ext_mut()
+			.insert(crate::transport::stream::TLSConnectionInfo {
+				src_identity: Some(src_identity),
+				..Default::default()
+			});
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
+		let bind = Gateway::proxy_bind(
+			bind_name,
+			bind.protocol,
+			server,
+			self.pi.clone(),
+			self.drain_rx.clone(),
+		);
+		tokio::spawn(bind);
+		client
+	}
+
+	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+		self.serve_tunnel_with_tls_info(bind_name, None)
+	}
+
+	pub fn serve_tunnel_with_tls_info(
+		&self,
+		bind_name: BindKey,
+		tls_info: Option<crate::transport::stream::TLSConnectionInfo>,
+	) -> DuplexStream {
+		let (client, server) = tokio::io::duplex(8192);
+		let mut server = Socket::from_memory(
+			server,
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse().unwrap(),
+				local_addr: "127.0.0.1:80".parse().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		);
+		if let Some(tls_info) = tls_info {
+			server.ext_mut().insert(tls_info);
+		}
 		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
 		let bind_protocol = bind.protocol;
 		let tunnel_protocol = bind.tunnel_protocol;
@@ -1344,6 +1391,22 @@ impl TestBind {
 			info!("finished real listener...");
 		});
 
+		addr
+	}
+
+	pub async fn serve_gateway_listener(&self, bind_name: BindKey) -> SocketAddr {
+		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+		listener.set_nonblocking(true).unwrap();
+		let addr = listener.local_addr().unwrap();
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap().bind;
+		let (_tx, config) = tokio::sync::watch::channel(bind);
+		let pi = self.pi.clone();
+		let drain = self.drain_rx.clone();
+		tokio::spawn(async move {
+			Gateway::run_bind(pi, drain, config, listener)
+				.await
+				.unwrap();
+		});
 		addr
 	}
 }
@@ -1394,6 +1457,7 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
+		admission: Default::default(),
 	});
 	TestBind {
 		pi,

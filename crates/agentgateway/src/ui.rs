@@ -334,16 +334,7 @@ async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), Error
 	let yaml_content = yamlviajson::to_string(&config_json).map_err(ErrorResponse::Anyhow)?;
 	let yaml_file_content = format!("{CONFIG_SCHEMA_HEADER}{yaml_content}");
 
-	let resources =
-		crate::resource_manager::ResourceFetcher::cached_or_direct(app.resource_manager.clone());
-	if let Err(e) = Box::pin(crate::types::local::NormalizedLocalConfig::from(
-		&app.state,
-		&resources,
-		app.state.gateway(),
-		yaml_content.as_str(),
-	))
-	.await
-	{
+	if let Err(e) = validate_config_in_task(app, yaml_content).await {
 		return Err(ErrorResponse::String(e.to_string()));
 	}
 
@@ -644,16 +635,28 @@ async fn validate_materialized_config(
 	let base = app.cfg()?.read_to_string().await?;
 	let config_content = crate::config_store::materialize_config(base.as_str(), resources)
 		.map_err(resource_api_error)?;
+	validate_config_in_task(app, config_content)
+		.await
+		.map_err(|err| ErrorResponse::Status(StatusCode::UNPROCESSABLE_ENTITY, err.to_string()))?;
+	Ok(())
+}
+
+async fn validate_config_in_task(app: &App, config: String) -> anyhow::Result<()> {
+	let state = app.state.clone();
 	let resources =
 		crate::resource_manager::ResourceFetcher::cached_or_direct(app.resource_manager.clone());
-	crate::types::local::NormalizedLocalConfig::from(
-		&app.state,
-		&resources,
-		app.state.gateway(),
-		config_content.as_str(),
-	)
-	.await
-	.map_err(|err| ErrorResponse::Status(StatusCode::UNPROCESSABLE_ENTITY, err.to_string()))?;
+	let gateway = state.gateway();
+
+	// Boxing these futures keeps their state on the heap, but each nested `poll` still adds its
+	// native stack frame to the gateway and HTTP frames already handling this request. In debug
+	// builds the generated config-conversion frames are particularly large, so start a new task to
+	// have Tokio poll the conversion from the scheduler root instead.
+	tokio::spawn(async move {
+		crate::types::local::NormalizedLocalConfig::from(&state, &resources, gateway, config.as_str())
+			.await
+			.map(|_| ())
+	})
+	.await??;
 	Ok(())
 }
 

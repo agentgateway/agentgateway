@@ -75,13 +75,28 @@ pub struct Executor<'a> {
 	#[dynamic(rename = "mcpGuardrails")]
 	pub mcp_guardrails: ExtensionOrDirect<'a, McpGuardrailsDynamicMetadata>,
 
+	pub guardrails: Option<&'a Vec<GuardrailInfo>>,
+
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct ErrorContext {
+	/// Broad classification of the failure, such as `UpstreamFailure` or `Timeout`.
+	pub reason: String,
+	/// Human-readable failure detail. Exact message is subject to change.
+	pub message: String,
 }
 
 #[apply(schema!)]
 #[derive(Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct ProxyContext {
+	/// The final gateway error when the response was synthesized from a failed request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub error: Option<ErrorContext>,
 	/// The bind that accepted the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub bind: Option<Strng>,
@@ -125,6 +140,7 @@ impl ProxyContext {
 		response_processing_duration: Option<std::time::Duration>,
 	) -> Self {
 		Self {
+			error: None,
 			bind: None,
 			gateway: None,
 			listener: None,
@@ -638,6 +654,7 @@ impl<'a> Executor<'a> {
 		resp: Option<&'a ResponseSnapshot>,
 		llm: Option<&'a LLMContext>,
 		mcp: Option<&'a MCPInfo>,
+		guardrails: Option<&'a Vec<GuardrailInfo>>,
 		end_time: Option<&'a RequestTime>,
 		proxy: Option<&'a ProxyContext>,
 	) -> Self {
@@ -650,6 +667,7 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
+		this.guardrails = guardrails;
 		if let Some(proxy) = proxy {
 			this.proxy = ExtensionOrDirect::Direct(Some(proxy));
 		}
@@ -1408,6 +1426,57 @@ impl PartialEq for RequestRef<'_> {
 	}
 }
 
+/// Records one prompt-guard guardrail intervention.
+#[apply(schema!)]
+#[derive(Default, cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct GuardrailInfo {
+	/// The phase the guardrail intervened in: `request` or `response`.
+	pub phase: Strng,
+	/// The guard kind that intervened, such as `bedrockGuardrails`.
+	pub guard: Strng,
+	/// The action the guardrail took (mask/reject/audit/failOpen).
+	pub action: Strng,
+	#[serde(flatten, default)]
+	#[dynamic(flatten)]
+	pub detail: GuardDetail,
+}
+
+#[apply(schema!)]
+#[derive(Default, cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct GuardDetail {
+	/// The configured guardrail identifier.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrail_id: Option<Strng>,
+	/// The configured guardrail version.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrail_version: Option<Strng>,
+	/// The reason the guardrail reported for its action.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub action_reason: Option<String>,
+	/// Assessment detail reported by the guardrail provider, redacted to metadata
+	/// only. Content-bearing fields (such as the matched text) are never included.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub assessments: Vec<serde_json::Value>,
+}
+
+impl GuardrailInfo {
+	/// Minimal details about which guardrail fired, when it fired and what the action was.
+	/// Does not include detailed reasons or assessments.
+	pub fn minimal(&self) -> serde_json::Value {
+		let mut entry = serde_json::json!({
+			"phase": self.phase,
+			"guard": self.guard,
+			"action": self.action,
+		});
+		if let Some(id) = &self.detail.guardrail_id {
+			entry["guardrailId"] = id.as_str().into();
+		}
+		entry
+	}
+}
+
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct LLMContext {
@@ -2084,6 +2153,8 @@ pub struct ExecutorSerde {
 	pub jwt: Option<jwt::Claims>,
 
 	/// `apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.
+	/// In addition to `key`, user-supplied metadata fields are flattened into this object; for example,
+	/// `apiKey.group`. Metadata values are plain JSON and are not treated as secrets.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_key: Option<apikey::Claims>,
 
@@ -2109,8 +2180,9 @@ pub struct ExecutorSerde {
 	pub destination: Option<DestinationContext>,
 
 	/// `mcp` contains attributes about the MCP request.
-	/// Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.
-	/// Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.
+	/// Request-time CEL includes identity fields (`tool`, `prompt`, `resource`,
+	/// `task`) plus `methodName`. Post-request CEL may also include fields like
+	/// `sessionId` and tool payloads.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<MCPInfo>,
 
@@ -2133,6 +2205,12 @@ pub struct ExecutorSerde {
 		rename = "mcpGuardrails"
 	)]
 	pub mcp_guardrails: Option<McpGuardrailsDynamicMetadata>,
+
+	/// `guardrails` contains one entry per prompt-guard guardrail intervention, in either the
+	/// request or response phase. Only present in CEL that runs after the request completes,
+	/// such as log and metric fields.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrails: Option<Vec<GuardrailInfo>>,
 
 	/// `metadata` contains values set by transformation metadata expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2229,6 +2307,7 @@ impl ExecutorSerde {
 		exec.extauthz = ExtensionOrDirect::Direct(self.extauthz.as_ref());
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
 		exec.mcp_guardrails = ExtensionOrDirect::Direct(self.mcp_guardrails.as_ref());
+		exec.guardrails = self.guardrails.as_ref();
 		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
 		exec.mcp = self.mcp.as_ref();
 
@@ -2271,6 +2350,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 			body_prefix: Some(BufferedBody::complete(Bytes::from(r#"{"ok": true}"#))),
 		}),
 		proxy: Some(ProxyContext {
+			error: Some(ErrorContext {
+				reason: "UpstreamFailure".to_string(),
+				message: "upstream call failed: connection refused".to_string(),
+			}),
 			bind: Some("bind".into()),
 			gateway: Some(ProxyGatewayContext {
 				namespace: "ns-1".into(),
@@ -2384,7 +2467,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			cost_status: None,
 		}),
 		mcp: Some(MCPInfo {
-			method_name: Some("tools/call".to_string()),
+			method_name: Some("tools/call".into()),
 			session_id: Some("session-123".to_string()),
 			tool: Some(MCPTool {
 				target: "my-mcp-server".to_string(),
@@ -2416,6 +2499,17 @@ pub fn full_example_executor() -> ExecutorSerde {
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),
 		mcp_guardrails: Some(McpGuardrailsDynamicMetadata::default()),
+		guardrails: Some(vec![GuardrailInfo {
+			phase: "request".into(),
+			guard: "bedrockGuardrails".into(),
+			action: "reject".into(),
+			detail: GuardDetail {
+				guardrail_id: Some("gr-abc123".into()),
+				guardrail_version: Some("1".into()),
+				action_reason: Some("Guardrail blocked.".into()),
+				assessments: vec![],
+			},
+		}]),
 		metadata: Some(TransformationMetadata::default()),
 	}
 }

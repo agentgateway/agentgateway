@@ -97,7 +97,7 @@ func ComputeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.
 		gw.GetAnnotations()[annotations.InternalPorts],
 		func(p int32) bool {
 			for _, l := range gw.Spec.Listeners {
-				if int32(l.Port) == p {
+				if l.Port == p {
 					return true
 				}
 			}
@@ -105,7 +105,7 @@ func ComputeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.
 		},
 	)
 	for _, l := range gw.Spec.Listeners {
-		portModes[int32(l.Port)] = gwInternal.Has(l.Port)
+		portModes[l.Port] = gwInternal.Has(l.Port)
 	}
 
 	slices.SortFunc(lsets, func(a, b *gwv1.ListenerSet) int {

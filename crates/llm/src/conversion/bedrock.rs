@@ -469,6 +469,24 @@ pub mod from_embeddings {
 		} else if model.contains("cohere") {
 			let resp: types::bedrock::CohereEmbeddingResponse =
 				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+			let embeddings = match resp.embeddings {
+				types::bedrock::CohereEmbeddings::ByIndex(embeddings) => embeddings,
+				types::bedrock::CohereEmbeddings::ByType(mut embeddings) => {
+					let Some(float_embeddings) = embeddings.remove("float") else {
+						let mut received_types = embeddings.keys().map(String::as_str).collect::<Vec<_>>();
+						received_types.sort_unstable();
+						return Err(AIError::ResponseParsing(serde::de::Error::custom(format!(
+							"Cohere response did not include float embeddings; received types: {}",
+							if received_types.is_empty() {
+								"none".to_string()
+							} else {
+								received_types.join(", ")
+							}
+						))));
+					};
+					float_embeddings
+				},
+			};
 
 			// Cohere doesn't include token counts in the JSON body;
 			// Bedrock surfaces them via response headers instead.
@@ -480,8 +498,7 @@ pub mod from_embeddings {
 
 			let typed_resp = types::embeddings::typed::Response {
 				object: "list".to_string(),
-				data: resp
-					.embeddings
+				data: embeddings
 					.into_iter()
 					.enumerate()
 					.map(|(i, e)| types::embeddings::typed::Embedding {

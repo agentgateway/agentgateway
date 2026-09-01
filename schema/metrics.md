@@ -14,6 +14,7 @@
 | --- | --- | --- | --- |
 | `agentgateway_request_duration_seconds` | Histogram | seconds | Duration of HTTP requests (seconds). |
 | `agentgateway_request_processing_seconds` | Histogram | seconds | Duration from receiving an HTTP request to sending the primary outbound call (seconds). |
+| `agentgateway_requests_shed_total` | Counter | — | Total downstream requests rejected by the in-flight request limit. |
 | `agentgateway_requests_total` | Counter | — | The total number of HTTP requests sent. |
 | `agentgateway_response_bytes_total` | Counter | bytes | Total HTTP response bytes received. |
 | `agentgateway_response_processing_seconds` | Histogram | seconds | Duration from receiving the primary outbound response to sending the HTTP response (seconds). |
@@ -23,6 +24,7 @@
 
 | Metric | Type | Unit | Description |
 | --- | --- | --- | --- |
+| `agentgateway_downstream_connections_shed_total` | Counter | — | Total downstream connections closed by the active connection limit. |
 | `agentgateway_downstream_connections_total` | Counter | — | The total number of downstream connections established. |
 | `agentgateway_downstream_received_bytes_total` | Counter | bytes | Total TCP bytes received per connection labels. |
 | `agentgateway_downstream_sent_bytes_total` | Counter | bytes | Total TCP bytes transmitted per connection labels. |

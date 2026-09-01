@@ -1186,6 +1186,9 @@ struct LocalBind {
 	/// via in-process routing). A numeric port is required unless `mode` is `internal`.
 	#[serde(default)]
 	port: Option<u16>,
+	/// Protocol handling for the entire bind. When omitted, it is inferred from the listeners.
+	#[serde(default)]
+	protocol: Option<LocalBindProtocol>,
 	/// Named listeners bound on this port, which may use different protocols and TLS.
 	listeners: Vec<LocalListener>,
 	/// Protocol used to tunnel backend connections, such as Direct or HBONE.
@@ -1195,6 +1198,31 @@ struct LocalBind {
 	/// Set to `internal` to create a routing-only bind that does not bind a socket.
 	#[serde(default)]
 	mode: BindMode,
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "UPPERCASE", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[allow(clippy::upper_case_acronyms)]
+enum LocalBindProtocol {
+	HTTP,
+	TLS,
+	TCP,
+	/// EXPERIMENTAL: Detects TLS, plaintext HTTP, or opaque TCP from the first bytes of each
+	/// connection and chooses the appropriate listener. Use an explicit protocol whenever
+	/// possible. AUTO requires client-first opaque protocols that look like a TLS or HTTP request.
+	AUTO,
+}
+
+impl From<LocalBindProtocol> for BindProtocol {
+	fn from(protocol: LocalBindProtocol) -> Self {
+		match protocol {
+			LocalBindProtocol::HTTP => BindProtocol::http,
+			LocalBindProtocol::TLS => BindProtocol::tls,
+			LocalBindProtocol::TCP => BindProtocol::tcp,
+			LocalBindProtocol::AUTO => BindProtocol::auto,
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -3085,7 +3113,10 @@ async fn convert(
 			bind: Arc::new(Bind {
 				key: bind_name,
 				address: sockaddr,
-				protocol: detect_bind_protocol(&ls),
+				protocol: b
+					.protocol
+					.map(BindProtocol::from)
+					.unwrap_or_else(|| detect_bind_protocol(&ls)),
 				tunnel_protocol: b.tunnel_protocol,
 				mode: b.mode,
 			}),
@@ -3301,7 +3332,6 @@ async fn convert(
 
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
-
 	let normalized = NormalizedLocalConfig {
 		budget_registration: Default::default(),
 		model_catalog,

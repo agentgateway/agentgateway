@@ -27,7 +27,7 @@ const DEFAULT_PARKING_MAX: usize = 1024;
 const DEFAULT_PARKING_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 const DEFAULT_PARKING_RETRY_FACTOR: f64 = 1.1;
 const DEFAULT_ACTOR_PORT: u16 = 80;
-const DEFAULT_CONNECT_TARGET_PORT: NonZeroU16 = NonZeroU16::new(444).unwrap();
+const DEFAULT_CONNECT_TARGET_PORT: NonZeroU16 = NonZeroU16::new(8443).unwrap();
 const TARGET_PORT_HEADER: &str = "x-ate-target-port";
 pub(crate) const STALE_ASSIGNMENT_HEADER: &str = "x-ate-assignment-stale";
 
@@ -145,10 +145,6 @@ pub(crate) struct SubstrateRequestState {
 	current: Arc<Mutex<Option<CachedAssignment>>>,
 }
 
-fn default_target_port() -> NonZeroU16 {
-	NonZeroU16::new(443).unwrap()
-}
-
 fn default_cache_ttl() -> Duration {
 	Duration::from_secs(5)
 }
@@ -244,12 +240,7 @@ pub struct SubstrateIngress {
 	/// Backend that receives ResumeActor calls and policies used when connecting to it.
 	#[serde(flatten)]
 	pub target: SimpleBackendReferenceWithPolicies,
-	/// Port on the resumed worker pod's ordinary atunnel ingress. Defaults to 443.
-	/// This is independent from `connect_target_port`, which is used for raw CONNECT tunnels.
-	#[serde(default = "default_target_port")]
-	#[cfg_attr(feature = "schema", schemars(with = "std::num::NonZeroU16"))]
-	pub target_port: NonZeroU16,
-	/// Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 444.
+	/// Port on the resumed worker pod's atunnel CONNECT listener. Defaults to 8443.
 	#[serde(default = "default_connect_target_port")]
 	#[cfg_attr(feature = "schema", schemars(with = "std::num::NonZeroU16"))]
 	pub connect_target_port: NonZeroU16,
@@ -326,7 +317,7 @@ impl SubstrateIngress {
 									assignment.worker_pod_ip
 								))
 							})?;
-						return Ok(SocketAddr::new(ip, self.target_port.get()));
+						return Ok(SocketAddr::new(ip, self.connect_target_port.get()));
 					},
 					Ok(Err(status)) if self.retryable_while_parked(status.code()) => {
 						let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -441,18 +432,6 @@ impl SubstrateRequestState {
 			"{}.{}{}:{}",
 			self.actor.name, self.actor.atespace, ACTOR_DNS_SUFFIX, self.actor_port
 		)
-	}
-
-	/// Resolves the actor assignment at the worker's raw CONNECT listener.
-	pub(crate) async fn resolve_connect_target(&self) -> Result<Target, crate::proxy::ProxyResponse> {
-		let target = self.resolve_target().await?;
-		match target {
-			Target::Address(address) => Ok(Target::Address(SocketAddr::new(
-				address.ip(),
-				self.ingress.connect_target_port.get(),
-			))),
-			_ => unreachable!("Substrate assignments are always socket addresses"),
-		}
 	}
 
 	pub(crate) async fn resolve_target(&self) -> Result<Target, crate::proxy::ProxyResponse> {
@@ -657,8 +636,8 @@ mod tests {
 	use crate::types::agent::{Backend, ResourceName};
 
 	#[test]
-	fn default_target_port_matches_atunnel_ingress() {
-		assert_eq!(super::default_target_port().get(), 443);
+	fn default_connect_target_port_matches_atunnel_connect_ingress() {
+		assert_eq!(super::default_connect_target_port().get(), 8443);
 	}
 
 	#[derive(Clone)]
@@ -734,7 +713,7 @@ mod tests {
 			.attach_route_policy(serde_json::json!({
 				"substrateIngress": {
 					"host": control.address.to_string(),
-					"targetPort": actor.address().port(),
+					"connectTargetPort": actor.address().port(),
 					"cacheTtl": "5s"
 				}
 			}))
@@ -781,7 +760,7 @@ mod tests {
 			.attach_route_policy(serde_json::json!({
 				"substrateIngress": {
 					"host": control.address.to_string(),
-					"targetPort": actor.address().port(),
+					"connectTargetPort": actor.address().port(),
 				}
 			}))
 			.await;
