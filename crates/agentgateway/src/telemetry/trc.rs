@@ -364,9 +364,7 @@ fn request_span_status(request: &RequestLog, attributes: &mut Vec<KeyValue>) -> 
 				.unwrap_or_else(|| "_OTHER".to_string()),
 			error.clone(),
 		)
-	} else if let Some(status) = request.status.filter(|status| {
-		status.is_server_error() || (request.llm_request.is_some() && status.is_client_error())
-	}) {
+	} else if let Some(status) = request.status.filter(http::StatusCode::is_server_error) {
 		(status.as_u16().to_string(), String::new())
 	} else {
 		return Status::default();
@@ -959,10 +957,10 @@ mod tests {
 	}
 
 	#[test]
-	fn send_exports_gen_ai_http_error_status() {
+	fn send_exports_gen_ai_server_error_status() {
 		let (tracer, exporter) = test_tracer();
 		let mut request = test_request_log();
-		request.status = Some(http::StatusCode::TOO_MANY_REQUESTS);
+		request.status = Some(http::StatusCode::INTERNAL_SERVER_ERROR);
 		request.llm_request = Some(test_llm_request());
 		let mut outgoing = TraceParent::new();
 		outgoing.flags = 1;
@@ -993,7 +991,7 @@ mod tests {
 		assert!(
 			spans[0]
 				.attributes
-				.contains(&KeyValue::new("error.type", "429"))
+				.contains(&KeyValue::new("error.type", "500"))
 		);
 	}
 
@@ -1010,8 +1008,8 @@ mod tests {
 			(
 				http::StatusCode::TOO_MANY_REQUESTS,
 				true,
-				Status::error(""),
-				Some("429"),
+				Status::default(),
+				None,
 			),
 			(
 				http::StatusCode::INTERNAL_SERVER_ERROR,
