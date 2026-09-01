@@ -2,11 +2,20 @@
 
 This example targets **agentgateway v1.5.0** and **Datadog Agent 7.82.3**. It provides immediate metrics collection with the stock OpenMetrics check, plus a separate OTLP trace path for Datadog LLM Observability. No Datadog SDK is needed inside agentgateway.
 
-The default Compose stack stays local and uses a synthetic OpenAI-compatible provider. It does not call paid models or send data to Datadog. Only the opt-in Datadog override exports telemetry.
+The default Docker Compose configuration is `compose.yaml`. Running `docker compose up -d` without additional Compose files starts agentgateway, a synthetic OpenAI-compatible provider, and a local OpenTelemetry Collector. This configuration does not call paid models or send data to Datadog. Adding the opt-in `compose.datadog.yaml` override starts the Datadog Agent and exports synthetic telemetry to Datadog.
+
+## Prerequisites
+
+The local test requires:
+
+- [Docker](https://docs.docker.com/get-docker/) with [Docker Compose](https://docs.docker.com/compose/install/), installed through Docker Desktop or the Compose CLI plugin. The commands below use `docker compose`, not the legacy `docker-compose` command.
+- [uv](https://docs.astral.sh/uv/) to create the Python environment and run `smoke.py`.
+- Network access on the first run to download container images and Python packages.
+- Available loopback ports `13000`, `18080`, and `18520`.
+
+Exporting the synthetic telemetry also requires a Datadog organization, its API key, and the correct [Datadog site](https://docs.datadoghq.com/getting_started/site/). Datadog LLM Observability must be enabled in the organization to verify traces in that product. The local test does not require a Datadog account.
 
 ## Run the local test
-
-Requires Docker Compose and [uv](https://docs.astral.sh/uv/).
 
 ```sh
 cd examples/datadog
