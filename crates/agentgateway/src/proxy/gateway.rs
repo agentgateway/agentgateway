@@ -764,6 +764,7 @@ impl Gateway {
 			.map(|h| h.max_buffer_size)
 			.unwrap_or(def.max_buffer_size);
 		let server = auto_server(policies.http.as_ref());
+		let substrate_egress = policies.substrate_egress;
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(raw_stream),
@@ -771,6 +772,7 @@ impl Gateway {
 				let inputs = inputs.clone();
 				let connection = connection.clone();
 				let drain = drain.clone();
+				let substrate_egress = substrate_egress.clone();
 				async move {
 					let mut req = req.map(crate::http::Body::new);
 					req.extensions_mut().insert(BufferLimit::new(buffer));
@@ -838,14 +840,10 @@ impl Gateway {
 							(SocketAddr::new(target_ip, port), bind)
 						}
 					};
-					if let Err(error) = super::httpproxy::authorize_substrate_connect(
-						&inputs,
-						&bind.key,
-						target_address,
-						connection.as_ref(),
-						&mut req,
-					)
-					.await
+					if let Some(policy) = substrate_egress
+						&& let Err(error) = policy
+							.authorize_connect(&inputs, connection.as_ref(), &mut req)
+							.await
 					{
 						return Ok(match error {
 							crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
@@ -862,9 +860,6 @@ impl Gateway {
 							},
 						};
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
-						downstream
-							.ext_mut()
-							.insert(crate::http::substrate::SubstrateEgressAuthorized);
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						downstream.ext_mut().insert(BufferLimit::new(buffer));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;

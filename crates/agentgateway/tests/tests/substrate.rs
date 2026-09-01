@@ -593,7 +593,7 @@ async fn substrate_egress_connect_status(
 		.with_route(basic_route(*upstream.address()))
 		.with_connect_mode_on_port(agentgateway::types::frontend::ConnectMode::Tunnel, 15012);
 	gateway
-		.attach_route_policy(json!({
+		.attach_frontend_policy(json!({
 			"substrateEgress": {
 				"host": api.address.to_string(),
 			}

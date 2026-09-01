@@ -2,20 +2,17 @@ use serde::Deserialize;
 use tonic::Code;
 
 use super::{ActorRef, TRACE_POLICY_KIND, valid_resource_name};
-use crate::http::{PolicyResponse, Request};
-use crate::proxy::ProxyError;
+use crate::http::Request;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::store::RequestPolicyTrait;
+use crate::proxy::{ProxyError, ProxyResponse};
+use crate::telemetry::log;
 use crate::telemetry::log::RequestLog;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::transport::stream::TLSConnectionInfo;
+use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::*;
 
 const ACTOR_IDENTITY_OID: &str = "1.3.6.1.4.1.11129.2.12.2";
-
-#[derive(Clone)]
-pub(crate) struct SubstrateEgressAuthorized;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -26,7 +23,7 @@ struct ActorIdentity {
 	purpose: String,
 }
 
-/// Authorizes an actor's egress to the hostname recovered from an internal CONNECT listener.
+/// Validates an actor's identity before accepting a CONNECT tunnel.
 #[apply(schema!)]
 pub struct SubstrateEgress {
 	/// Backend that receives GetActor calls and policies used when connecting to it.
@@ -77,22 +74,40 @@ impl SubstrateEgress {
 		}
 		Ok(identity)
 	}
-}
 
-impl RequestPolicyTrait for SubstrateEgress {
-	async fn apply(
+	pub(crate) async fn authorize_connect(
+		&self,
+		inputs: &Arc<ProxyInputs>,
+		connection: &Extension,
+		req: &mut Request,
+	) -> Result<(), ProxyResponse> {
+		let tcp = connection
+			.copy::<TCPConnectionInfo>(req.extensions_mut())
+			.expect("tcp connection must be set")
+			.clone();
+		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		let mut log = RequestLog::new(
+			log::CelLogging::new(inputs.cfg.logging.clone(), inputs.cfg.metrics.clone()),
+			inputs.metrics.clone(),
+			inputs.model_catalog.clone(),
+			agent_core::Timestamp::now(),
+			tcp,
+		);
+		self
+			.authorize(
+				&PolicyClient::new(inputs.clone()).with_parent(req),
+				&mut log,
+				req,
+			)
+			.await
+	}
+
+	async fn authorize(
 		&self,
 		client: &PolicyClient,
 		log: &mut RequestLog,
 		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
-		if req
-			.extensions()
-			.get::<SubstrateEgressAuthorized>()
-			.is_some()
-		{
-			return Ok(PolicyResponse::default());
-		}
+	) -> Result<(), ProxyResponse> {
 		let identity = Self::identity(req)?;
 		let actor = ActorRef {
 			atespace: identity.atespace,
@@ -144,7 +159,7 @@ impl RequestPolicyTrait for SubstrateEgress {
 		{
 			return Err(ProxyError::SubstrateEgressDenied("actor is not running".to_owned()).into());
 		}
-		Ok(PolicyResponse::default())
+		Ok(())
 	}
 }
 
