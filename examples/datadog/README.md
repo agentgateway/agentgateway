@@ -177,6 +177,4 @@ The default metrics dashboard works with either check. The scrape-health service
 
 The local synthetic stack and the real Agent check can be tested without an account. Account ingestion, dashboard rendering, LLM Observability conversion, live Kubernetes deployment, multi-replica behavior, and overhead/load testing require separate acceptance checks. Do not equate local test success with completion of those checks.
 
-See [VALIDATION.md](VALIDATION.md) for recorded results, reproduction commands, and remaining acceptance work.
-
 References: [OpenMetrics](https://docs.datadoghq.com/integrations/openmetrics/), [Kubernetes Autodiscovery](https://docs.datadoghq.com/containers/kubernetes/integrations/), [LLM Observability OTLP](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/), [Agent Observability cost](https://docs.datadoghq.com/llm_observability/investigate/cost/), [community installation](https://docs.datadoghq.com/agent/guide/use-community-integrations/).
