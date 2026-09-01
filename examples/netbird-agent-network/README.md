@@ -540,23 +540,6 @@ and `agentgateway.group` request-log attributes, but it does not enable the
 request-log database, model catalog, or Admin UI access needed for
 agentgateway-side usage dashboards.
 
-- To prepare a pricing catalog, install `agctl` v1.5.0 and import OpenAI and
-  Anthropic pricing with `agctl catalog import`:
-
-  ```bash
-  CATALOG_DIR=$(mktemp -d)
-  agctl catalog import --providers openai,anthropic --pretty \
-    --out "${CATALOG_DIR}/catalog.json"
-  ```
-
-  This generates a local file; it does not configure the running gateway.
-  Follow the Kubernetes [model costs][agentgateway-model-costs] guide to load
-  it into a ConfigMap in `netbird-agent-network` and reference it through
-  `spec.modelCatalog.sources` on the existing Gateway-level
-  `AgentgatewayParameters/netbird-agentgateway`. Preserve its private
-  `ClusterIP` Service setting and NetBird identity mappings. Catalog rates
-  are USD per million tokens. NetBird continues to use its own pricing
-  catalog; it does not import agentgateway's rates.
 - Follow the Kubernetes [cost dashboard][agentgateway-cost-dashboard] guide to
   record request data, configure model pricing, and view requests, tokens, and
   cost by NetBird user or authorizing group. Without a model catalog, requests
@@ -569,5 +552,4 @@ The `x-netbird-groups` value is stored as one CSV string. For example,
 separate groups.
 
 [agentgateway-cost-dashboard]: https://agentgateway.dev/docs/kubernetes/latest/llm/cost-controls/dashboard/
-[agentgateway-model-costs]: https://agentgateway.dev/docs/kubernetes/latest/llm/cost-controls/costs/
 [agentgateway-admin-ui]: https://agentgateway.dev/docs/kubernetes/latest/observability/ui/
