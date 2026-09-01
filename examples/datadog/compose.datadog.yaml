@@ -1,4 +1,4 @@
-# Opt-in: sends synthetic telemetry to the Datadog organization owning DD_API_KEY.
+# When explicitly included, sends synthetic telemetry to the Datadog organization owning DD_API_KEY.
 services:
   collector:
     environment:

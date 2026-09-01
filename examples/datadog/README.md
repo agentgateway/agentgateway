@@ -2,7 +2,7 @@
 
 This example targets **agentgateway v1.5.0** and **Datadog Agent 7.82.3**. It provides immediate metrics collection with the stock OpenMetrics check, plus a separate OTLP trace path for Datadog LLM Observability. No Datadog SDK is needed inside agentgateway.
 
-The default Docker Compose configuration is `compose.yaml`. Running `docker compose up -d` without additional Compose files starts agentgateway, a synthetic OpenAI-compatible provider, and a local OpenTelemetry Collector. This configuration does not call paid models or send data to Datadog. Adding the opt-in `compose.datadog.yaml` override starts the Datadog Agent and exports synthetic telemetry to Datadog.
+The default Docker Compose configuration is `compose.yaml`. Running `docker compose up -d` without additional Compose files starts agentgateway, a synthetic OpenAI-compatible provider, and a local OpenTelemetry Collector. This configuration does not call paid models or send data to Datadog. Adding `compose.datadog.yaml` as an override starts the Datadog Agent and exports synthetic telemetry to Datadog.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ Host ports bind only to IPv4 loopback: gateway `127.0.0.1:13000`, metrics `127.0
 
    Use the site where your organization actually resides; for US1 use `datadoghq.com`. API and application keys are different: an API key permits ingestion. Dashboard/API queries may additionally need a suitably scoped application key, but the example does not require one.
 
-2. Start the opt-in stack:
+2. Start Docker Compose with the Datadog override. This adds the Datadog Agent and sends synthetic metrics and traces to the organization associated with `DD_API_KEY`:
 
    ```sh
    docker compose -f compose.yaml -f compose.datadog.yaml up -d
@@ -107,7 +107,7 @@ Built-in series identity labels are preserved. Per-resource MCP counters are del
 
 ## Optional prompt/completion capture
 
-By default no prompts or completions leave the gateway. The explicit synthetic opt-in is runnable:
+By default no prompts or completions leave the gateway. To enable prompt and completion capture for the synthetic test data, add the content-capture override:
 
 ```sh
 docker compose -f compose.yaml -f compose.content.yaml up -d
@@ -116,14 +116,14 @@ uv run smoke.py --capture-content
 
 To test synthetic content in the trial account, also include `-f compose.datadog.yaml` and use `smoke.py --live`. Restore metadata-only mode with `docker compose up -d` (or the Datadog override without the content override).
 
-The opt-in adds the following to `config.tracing.fields.add`:
+The content-capture override adds the following to `config.tracing.fields.add`:
 
 ```yaml
 gen_ai.input.messages: 'llm.prompt'
 gen_ai.output.messages: 'llm.completion.map(c, {"role":"assistant", "content":c})'
 ```
 
-The values must arrive as valid JSON message arrays in Datadog. Use synthetic traffic first. Before production, apply content redaction and size limits, choose sampling, and review access controls in both LLM Observability and APM. Capturing content adds memory/serialization overhead. This opt-in is not a redaction mechanism. Gateway observability covers only operations crossing the proxy; it does not replace application instrumentation or configure quality evaluations automatically.
+The values must arrive as valid JSON message arrays in Datadog. Use synthetic traffic first. Before production, apply content redaction and size limits, choose sampling, and review access controls in both LLM Observability and APM. Capturing content adds memory/serialization overhead. Enabling content capture is not a redaction mechanism. Gateway observability covers only operations crossing the proxy; it does not replace application instrumentation or configure quality evaluations automatically.
 
 ## Migrate to the named integration
 
