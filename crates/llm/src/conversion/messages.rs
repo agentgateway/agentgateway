@@ -7,7 +7,152 @@ use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
 use crate::types::messages::typed as messages;
-use crate::{AIError, StreamingUsageGuard, parse};
+use crate::{AIError, PromptCachingConfig, StreamingUsageGuard, parse};
+
+const MAX_PROMPT_CACHE_BREAKPOINTS: usize = 4;
+
+fn has_cache_control(value: &serde_json::Value) -> bool {
+	value
+		.get("cache_control")
+		.is_some_and(|value| !value.is_null())
+}
+
+fn cache_control_value() -> serde_json::Value {
+	serde_json::json!({"type": "ephemeral"})
+}
+
+fn system_prompt_tokens(system: &serde_json::Value) -> usize {
+	let words = match system {
+		serde_json::Value::String(text) => text.split_whitespace().count(),
+		serde_json::Value::Array(blocks) => blocks
+			.iter()
+			.filter_map(|block| block.get("text").and_then(serde_json::Value::as_str))
+			.map(|text| text.split_whitespace().count())
+			.sum(),
+		_ => 0,
+	};
+	(words * 13) / 10
+}
+
+fn add_cache_control_to_content(content: &mut serde_json::Value) -> bool {
+	if let serde_json::Value::String(text) = content {
+		let text = std::mem::take(text);
+		*content = serde_json::json!([{
+			"type": "text",
+			"text": text,
+			"cache_control": cache_control_value(),
+		}]);
+		return true;
+	}
+	let serde_json::Value::Array(blocks) = content else {
+		return false;
+	};
+	blocks
+		.iter_mut()
+		.rev()
+		.find_map(|block| {
+			let object = block.as_object_mut()?;
+			if object.contains_key("cache_control") {
+				return None;
+			}
+			object.insert("cache_control".to_string(), cache_control_value());
+			Some(())
+		})
+		.is_some()
+}
+
+fn cache_control_count(request: &serde_json::Value) -> usize {
+	let system = request
+		.get("system")
+		.and_then(serde_json::Value::as_array)
+		.into_iter()
+		.flatten()
+		.filter(|block| has_cache_control(block))
+		.count();
+	let messages = request
+		.get("messages")
+		.and_then(serde_json::Value::as_array)
+		.into_iter()
+		.flatten()
+		.filter_map(|message| message.get("content"))
+		.filter_map(serde_json::Value::as_array)
+		.flatten()
+		.filter(|block| has_cache_control(block))
+		.count();
+	let tools = request
+		.get("tools")
+		.and_then(serde_json::Value::as_array)
+		.into_iter()
+		.flatten()
+		.filter(|tool| has_cache_control(tool))
+		.count();
+	system + messages + tools
+}
+
+/// Apply policy-driven prompt cache breakpoints to a native Anthropic Messages request.
+///
+/// This operates on the JSON tree instead of the typed request so fields added by Anthropic
+/// remain intact on the native passthrough path.
+pub fn apply_prompt_caching(request: &mut serde_json::Value, caching: &PromptCachingConfig) {
+	let mut cache_points_used = cache_control_count(request);
+
+	if caching.cache_system
+		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
+		&& let Some(system) = request.get_mut("system")
+		&& !system
+			.as_array()
+			.is_some_and(|blocks| blocks.iter().any(has_cache_control))
+		&& caching
+			.min_tokens
+			.is_none_or(|min_tokens| system_prompt_tokens(system) >= min_tokens)
+	{
+		if let serde_json::Value::String(text) = system {
+			let text = std::mem::take(text);
+			*system = serde_json::json!([{
+				"type": "text",
+				"text": text,
+				"cache_control": cache_control_value(),
+			}]);
+		} else if let Some(block) = system.as_array_mut().and_then(|blocks| blocks.last_mut())
+			&& let Some(object) = block.as_object_mut()
+		{
+			object.insert("cache_control".to_string(), cache_control_value());
+		}
+		cache_points_used += 1;
+	}
+
+	if caching.cache_messages
+		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
+		&& let Some(messages) = request
+			.get_mut("messages")
+			.and_then(serde_json::Value::as_array_mut)
+		&& messages.len() >= 2
+	{
+		let target = (messages.len() - 2).saturating_sub(caching.cache_message_offset);
+		let content = messages[target].get_mut("content");
+		if let Some(content) = content
+			&& !content
+				.as_array()
+				.is_some_and(|blocks| blocks.iter().any(has_cache_control))
+			&& add_cache_control_to_content(content)
+		{
+			cache_points_used += 1;
+		}
+	}
+
+	if caching.cache_tools
+		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
+		&& let Some(tools) = request
+			.get_mut("tools")
+			.and_then(serde_json::Value::as_array_mut)
+		&& !tools.is_empty()
+		&& !tools.iter().any(has_cache_control)
+		&& let Some(tool) = tools.last_mut()
+		&& let Some(object) = tool.as_object_mut()
+	{
+		object.insert("cache_control".to_string(), cache_control_value());
+	}
+}
 
 const ANTHROPIC_MIN_THINKING_BUDGET_TOKENS: u64 = 1024;
 
@@ -24,6 +169,7 @@ fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> O
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use serde_json::json;
 
 	#[test]
 	fn cap_thinking_budget_enforces_anthropic_bounds() {
@@ -31,6 +177,67 @@ mod tests {
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1024), None);
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1025), Some(1024));
 		assert_eq!(cap_thinking_budget_to_max_tokens(8192, 4096), Some(4095));
+	}
+
+	#[test]
+	fn prompt_caching_adds_native_anthropic_breakpoints() {
+		let mut request = json!({
+			"model": "claude-sonnet-4-5",
+			"max_tokens": 128,
+			"system": "system prompt",
+			"messages": [
+				{"role": "assistant", "content": "previous answer"},
+				{"role": "user", "content": "current question"}
+			],
+			"tools": [{
+				"name": "lookup",
+				"input_schema": {"type": "object"}
+			}]
+		});
+		let caching = PromptCachingConfig {
+			cache_system: true,
+			cache_messages: true,
+			cache_tools: true,
+			min_tokens: Some(1),
+			cache_message_offset: 0,
+		};
+
+		apply_prompt_caching(&mut request, &caching);
+		let output = serde_json::to_value(request).unwrap();
+		assert_eq!(output["system"][0]["cache_control"]["type"], "ephemeral");
+		assert_eq!(
+			output["messages"][0]["content"][0]["cache_control"]["type"],
+			"ephemeral"
+		);
+		assert_eq!(output["tools"][0]["cache_control"]["type"], "ephemeral");
+	}
+
+	#[test]
+	fn prompt_caching_respects_system_minimum_and_existing_breakpoints() {
+		let mut request = json!({
+			"model": "claude-sonnet-4-5",
+			"max_tokens": 128,
+			"system": "short",
+			"messages": [
+				{"role": "assistant", "content": [{"type": "text", "text": "previous", "cache_control": {"type": "ephemeral"}}]},
+				{"role": "user", "content": "current"}
+			]
+		});
+		let caching = PromptCachingConfig {
+			cache_system: true,
+			cache_messages: true,
+			cache_tools: false,
+			min_tokens: Some(1024),
+			cache_message_offset: 0,
+		};
+
+		apply_prompt_caching(&mut request, &caching);
+		let output = serde_json::to_value(request).unwrap();
+		assert!(output["system"].is_string());
+		assert_eq!(
+			output["messages"][0]["content"][0]["cache_control"]["type"],
+			"ephemeral"
+		);
 	}
 }
 

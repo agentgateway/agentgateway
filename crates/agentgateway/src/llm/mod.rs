@@ -402,8 +402,11 @@ fn apply_openai_moderation(
 	Ok(())
 }
 
-fn render_anthropic_messages(req: types::ChatRequest) -> Result<Vec<u8>, AIError> {
-	match req {
+fn render_anthropic_messages(
+	req: types::ChatRequest,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
+	let body = match req {
 		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(&req),
 		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
@@ -412,7 +415,18 @@ fn render_anthropic_messages(req: types::ChatRequest) -> Result<Vec<u8>, AIError
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to messages"
 		))),
+	}?;
+
+	if !matches!(ctx.provider, AIProvider::Anthropic(_)) {
+		return Ok(body);
 	}
+	let Some(caching) = ctx.prompt_caching else {
+		return Ok(body);
+	};
+	let mut request: serde_json::Value =
+		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
+	conversion::messages::apply_prompt_caching(&mut request, caching);
+	serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
 }
 
 fn render_vertex_gemini(
@@ -505,9 +519,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req)?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx)?)
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
