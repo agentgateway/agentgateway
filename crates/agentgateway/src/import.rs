@@ -326,8 +326,25 @@ struct LiteLlmCredential {
 	source_path: String,
 	provider_hint: Option<String>,
 	params: Map<String, Value>,
-	request_headers: LiteLlmExtraHeaders,
-	organization: Option<String>,
+	upstream_headers: LiteLlmUpstreamHeaders,
+}
+
+#[derive(Debug, Default)]
+struct LiteLlmUpstreamHeaders {
+	organization: LiteLlmOrganization,
+	extra_headers: LiteLlmExtraHeaders,
+}
+
+impl LiteLlmUpstreamHeaders {
+	fn any_present(&self) -> bool {
+		self.organization.present || self.extra_headers.present
+	}
+}
+
+#[derive(Debug, Default)]
+struct LiteLlmOrganization {
+	present: bool,
+	value: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -372,7 +389,7 @@ impl ConfigImporter for LiteLlmImporter {
 			let deployment = counts.entry(model.model_name.clone()).or_default();
 			*deployment += 1;
 			let internal_name = imported_model_name(self.source(), &model.model_name, *deployment);
-			let Some((public_name, mut imported, credential_name, model_extra_headers_present)) =
+			let Some((public_name, mut imported, credential_name, model_upstream_headers)) =
 				import_litellm_model(
 					internal_name.clone(),
 					model,
@@ -388,7 +405,7 @@ impl ConfigImporter for LiteLlmImporter {
 					self.source(),
 					&source_path,
 					&credential_name,
-					model_extra_headers_present,
+					&model_upstream_headers,
 					&mut imported,
 					&mut plan,
 				);
@@ -582,7 +599,7 @@ impl LiteLlmCredentials {
 
 			let mut params = Map::new();
 			move_litellm_provider_params(&mut credential_values, &mut params);
-			let request_headers = take_litellm_extra_headers(
+			let extra_headers = take_litellm_extra_headers(
 				&mut credential_values,
 				&format!("{source_path}.credential_values"),
 				findings,
@@ -605,8 +622,10 @@ impl LiteLlmCredentials {
 				source_path,
 				provider_hint,
 				params,
-				request_headers,
-				organization,
+				upstream_headers: LiteLlmUpstreamHeaders {
+					organization,
+					extra_headers,
+				},
 			});
 		}
 
@@ -660,7 +679,7 @@ impl LiteLlmCredentials {
 		source: &str,
 		model_source_path: &str,
 		credential_name: &str,
-		model_extra_headers_present: bool,
+		model_upstream_headers: &LiteLlmUpstreamHeaders,
 		model: &mut ImportedModel,
 		plan: &mut ImportPlan,
 	) {
@@ -712,8 +731,8 @@ impl LiteLlmCredentials {
 		}
 
 		if credential.params.is_empty()
-			&& credential.request_headers.values.is_empty()
-			&& credential.organization.is_none()
+			&& credential.upstream_headers.extra_headers.values.is_empty()
+			&& credential.upstream_headers.organization.value.is_none()
 		{
 			plan.findings.push(ImportFinding {
 				source_path: reference_path,
@@ -724,7 +743,6 @@ impl LiteLlmCredentials {
 			});
 			return;
 		}
-		model.request_headers_override_defaults = model_extra_headers_present;
 		let can_reference = model
 			.params
 			.iter()
@@ -733,29 +751,50 @@ impl LiteLlmCredentials {
 		let mut organization_findings = Vec::new();
 		let credential_request_headers = request_headers_for_provider(
 			&provider,
-			credential.organization.as_deref(),
-			&credential.request_headers.values,
+			credential.upstream_headers.organization.value.as_deref(),
+			&credential.upstream_headers.extra_headers.values,
 			&format!("{}.credential_values.organization", credential.source_path),
 			&mut organization_findings,
 		);
-		let credential_headers_emitted = can_reference || !model.request_headers_override_defaults;
-		if credential_headers_emitted
-			&& credential.organization.is_some()
+		let credential_organization_emitted =
+			can_reference || !model_upstream_headers.organization.present;
+		if credential_organization_emitted
+			&& credential.upstream_headers.organization.value.is_some()
 			&& self
 				.reported_organization_providers
 				.insert((credential.name.clone(), provider.clone()))
 		{
 			plan.findings.extend(organization_findings);
 		}
-		if credential_headers_emitted
+		let credential_extra_headers_emitted =
+			can_reference || !model_upstream_headers.extra_headers.present;
+		if credential_extra_headers_emitted
 			&& self
 				.reported_request_headers
 				.insert(credential.name.clone())
 		{
-			plan
-				.findings
-				.extend(credential.request_headers.exact_findings.iter().cloned());
+			plan.findings.extend(
+				credential
+					.upstream_headers
+					.extra_headers
+					.exact_findings
+					.iter()
+					.cloned(),
+			);
 		}
+
+		let organization = if model_upstream_headers.organization.present {
+			model_upstream_headers.organization.value.as_deref()
+		} else {
+			credential.upstream_headers.organization.value.as_deref()
+		};
+		let extra_headers = if model_upstream_headers.extra_headers.present {
+			&model_upstream_headers.extra_headers.values
+		} else {
+			&credential.upstream_headers.extra_headers.values
+		};
+		model.request_headers = build_request_headers(&provider, organization, extra_headers);
+		model.request_headers_override_defaults = model_upstream_headers.any_present();
 		if first_use {
 			plan.findings.push(ImportFinding {
 				source_path: credential.source_path.clone(),
@@ -768,10 +807,8 @@ impl LiteLlmCredentials {
 			model
 				.params
 				.retain(|key, _| key == "model" || !credential.params.contains_key(key));
-			if !model.request_headers_override_defaults && !model.request_headers.is_empty() {
-				let model_headers = std::mem::take(&mut model.request_headers);
-				model.request_headers = credential_request_headers.clone();
-				model.request_headers.extend(model_headers);
+			if !model.request_headers_override_defaults {
+				model.request_headers.clear();
 			}
 			let key = (credential.name.clone(), provider.clone());
 			let provider_name = if let Some(provider_name) = self.emitted.get(&key) {
@@ -800,11 +837,6 @@ impl LiteLlmCredentials {
 			let model_params = std::mem::take(&mut model.params);
 			model.params = credential.params.clone();
 			model.params.extend(model_params);
-			if !model.request_headers_override_defaults {
-				let model_headers = std::mem::take(&mut model.request_headers);
-				model.request_headers = credential_request_headers;
-				model.request_headers.extend(model_headers);
-			}
 			plan.findings.push(ImportFinding {
 			source_path: reference_path,
 			status: ImportStatus::Approximate,
@@ -822,7 +854,12 @@ fn import_litellm_model(
 	source_path: &str,
 	use_rpm_weights: bool,
 	findings: &mut Vec<ImportFinding>,
-) -> Option<(String, ImportedModel, Option<String>, bool)> {
+) -> Option<(
+	String,
+	ImportedModel,
+	Option<String>,
+	LiteLlmUpstreamHeaders,
+)> {
 	let LiteLlmModel {
 		model_name: public_name,
 		litellm_params: mut params,
@@ -922,20 +959,20 @@ fn import_litellm_model(
 		&format!("{source_path}.litellm_params.organization"),
 		findings,
 	);
-	let LiteLlmExtraHeaders {
-		present: extra_headers_present,
-		values: extra_headers,
-		exact_findings,
-	} = take_litellm_extra_headers(
+	let extra_headers = take_litellm_extra_headers(
 		&mut params,
 		&format!("{source_path}.litellm_params"),
 		findings,
 	);
-	findings.extend(exact_findings);
+	findings.extend(extra_headers.exact_findings.iter().cloned());
+	let model_upstream_headers = LiteLlmUpstreamHeaders {
+		organization,
+		extra_headers,
+	};
 	let request_headers = request_headers_for_provider(
 		provider,
-		organization.as_deref(),
-		&extra_headers,
+		model_upstream_headers.organization.value.as_deref(),
+		&model_upstream_headers.extra_headers.values,
 		&format!("{source_path}.litellm_params.organization"),
 		findings,
 	);
@@ -1028,7 +1065,7 @@ fn import_litellm_model(
 			weight,
 		},
 		credential_name,
-		extra_headers_present,
+		model_upstream_headers,
 	))
 }
 
@@ -1102,7 +1139,10 @@ fn take_litellm_extra_headers(
 			message: "LiteLLM extra_headers must be an object of fixed string values and was not emitted"
 				.to_string(),
 		});
-		return LiteLlmExtraHeaders::default();
+		return LiteLlmExtraHeaders {
+			present: true,
+			..Default::default()
+		};
 	};
 	if headers.is_empty() {
 		return LiteLlmExtraHeaders {
@@ -1194,15 +1234,33 @@ fn take_litellm_organization(
 	source: &mut Map<String, Value>,
 	source_path: &str,
 	findings: &mut Vec<ImportFinding>,
-) -> Option<String> {
-	let value = source.remove("organization")?;
+) -> LiteLlmOrganization {
+	let Some(value) = source.remove("organization") else {
+		return LiteLlmOrganization::default();
+	};
 	let Value::String(value) = normalize_environment_references(value) else {
 		findings.push(ImportFinding {
 			source_path: source_path.to_string(),
 			status: ImportStatus::Manual,
 			message: "LiteLLM organization must be a string and was not emitted".to_string(),
 		});
-		return None;
+		return LiteLlmOrganization {
+			present: true,
+			value: None,
+		};
+	};
+	if value.is_empty() {
+		findings.push(ImportFinding {
+			source_path: source_path.to_string(),
+			status: ImportStatus::Manual,
+			message:
+				"Empty LiteLLM organization may resolve from process-level defaults and was not emitted"
+					.to_string(),
+		});
+		return LiteLlmOrganization {
+			present: true,
+			value: None,
+		};
 	};
 	if value.parse::<::http::HeaderValue>().is_err() {
 		findings.push(ImportFinding {
@@ -1211,9 +1269,15 @@ fn take_litellm_organization(
 			message: "LiteLLM organization is not a valid HTTP header value and was not emitted"
 				.to_string(),
 		});
-		return None;
+		return LiteLlmOrganization {
+			present: true,
+			value: None,
+		};
 	}
-	Some(value)
+	LiteLlmOrganization {
+		present: true,
+		value: Some(value),
+	}
 }
 
 fn request_headers_for_provider(
@@ -1223,10 +1287,8 @@ fn request_headers_for_provider(
 	source_path: &str,
 	findings: &mut Vec<ImportFinding>,
 ) -> IndexMap<String, String> {
-	let mut headers = IndexMap::new();
-	if let Some(organization) = organization {
+	if organization.is_some() {
 		if provider == "openAI" {
-			headers.insert("openai-organization".to_string(), organization.to_string());
 			findings.push(ImportFinding {
 				source_path: source_path.to_string(),
 				status: ImportStatus::Exact,
@@ -1242,6 +1304,20 @@ fn request_headers_for_provider(
 				),
 			});
 		}
+	}
+	build_request_headers(provider, organization, extra_headers)
+}
+
+fn build_request_headers(
+	provider: &str,
+	organization: Option<&str>,
+	extra_headers: &IndexMap<String, String>,
+) -> IndexMap<String, String> {
+	let mut headers = IndexMap::new();
+	if provider == "openAI"
+		&& let Some(organization) = organization
+	{
+		headers.insert("openai-organization".to_string(), organization.to_string());
 	}
 	// OpenAI applies per-request extra headers after its organization default, so a
 	// fixed OpenAI-Organization entry in extra_headers intentionally wins here.

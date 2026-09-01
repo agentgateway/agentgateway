@@ -27,6 +27,7 @@ config:
           model: gpt-4o-mini
         requestHeaders:
           set:
+            openai-organization: $OPENAI_ORGANIZATION
             x-credential-header: model
             x-request-id: $REQUEST_ID
       - name: chat-with-empty-headers
@@ -35,7 +36,8 @@ config:
         params:
           model: gpt-4.1
         requestHeaders:
-          set: {}
+          set:
+            openai-organization: $OPENAI_ORGANIZATION
       - name: chat-inline-with-overrides
         provider: openAI
         params:
@@ -44,6 +46,7 @@ config:
           baseUrl: "https://example.com/v1"
         requestHeaders:
           set:
+            openai-organization: $OPENAI_ORGANIZATION
             x-inline: model
       - name: chat-inline-with-empty-headers
         provider: openAI
@@ -52,7 +55,61 @@ config:
           model: gpt-4.1-nano
           baseUrl: "https://example.com/v1"
         requestHeaders:
-          set: {}
+          set:
+            openai-organization: $OPENAI_ORGANIZATION
+      - name: chat-with-organization-override
+        provider:
+          reference: imported/litellm/openai-org
+        params:
+          model: o3
+        requestHeaders:
+          set:
+            openai-organization: $MODEL_ORGANIZATION
+            x-credential-header: credential
+      - name: chat-inline-with-organization-override
+        provider: openAI
+        params:
+          apiKey: $OPENAI_API_KEY
+          model: o3-mini
+          baseUrl: "https://example.com/v1"
+        requestHeaders:
+          set:
+            openai-organization: $MODEL_ORGANIZATION
+            x-credential-header: credential
+      - name: chat-with-invalid-headers
+        provider:
+          reference: imported/litellm/openai-org
+        params:
+          model: gpt-5
+        requestHeaders:
+          set:
+            openai-organization: $OPENAI_ORGANIZATION
+      - name: chat-inline-with-invalid-headers
+        provider: openAI
+        params:
+          apiKey: $OPENAI_API_KEY
+          model: gpt-5-mini
+          baseUrl: "https://example.com/v1"
+        requestHeaders:
+          set:
+            openai-organization: $OPENAI_ORGANIZATION
+      - name: chat-with-invalid-organization
+        provider:
+          reference: imported/litellm/openai-org
+        params:
+          model: gpt-5.1
+        requestHeaders:
+          set:
+            x-credential-header: credential
+      - name: chat-inline-with-empty-organization
+        provider: openAI
+        params:
+          apiKey: $OPENAI_API_KEY
+          model: gpt-5.1-mini
+          baseUrl: "https://example.com/v1"
+        requestHeaders:
+          set:
+            x-credential-header: credential
       - name: local
         provider: ollama
         params:
@@ -126,12 +183,66 @@ findings:
   - sourcePath: "model_list[4].litellm_params.litellm_credential_name"
     status: approximate
     message: "Applied LiteLLM credential \"openai-org\" inline because model-level provider parameters override the shared credential"
-  - sourcePath: "model_list[5].litellm_params.extra_headers.X-Static"
+  - sourcePath: "model_list[5].litellm_params.organization"
+    status: exact
+    message: Mapped OpenAI organization to the upstream OpenAI-Organization header
+  - sourcePath: "model_list[5]"
+    status: exact
+    message: Imported model deployment for chat-with-organization-override
+  - sourcePath: "model_list[5].litellm_params.litellm_credential_name"
+    status: exact
+    message: "Mapped LiteLLM credential \"openai-org\" to reusable agentgateway provider \"imported/litellm/openai-org\""
+  - sourcePath: "model_list[6].litellm_params.organization"
+    status: exact
+    message: Mapped OpenAI organization to the upstream OpenAI-Organization header
+  - sourcePath: "model_list[6]"
+    status: exact
+    message: Imported model deployment for chat-inline-with-organization-override
+  - sourcePath: "model_list[6].litellm_params.litellm_credential_name"
+    status: approximate
+    message: "Applied LiteLLM credential \"openai-org\" inline because model-level provider parameters override the shared credential"
+  - sourcePath: "model_list[7].litellm_params.extra_headers"
+    status: manual
+    message: LiteLLM extra_headers must be an object of fixed string values and was not emitted
+  - sourcePath: "model_list[7]"
+    status: exact
+    message: Imported model deployment for chat-with-invalid-headers
+  - sourcePath: "model_list[7].litellm_params.litellm_credential_name"
+    status: exact
+    message: "Mapped LiteLLM credential \"openai-org\" to reusable agentgateway provider \"imported/litellm/openai-org\""
+  - sourcePath: "model_list[8].litellm_params.extra_headers"
+    status: manual
+    message: LiteLLM extra_headers must be an object of fixed string values and was not emitted
+  - sourcePath: "model_list[8]"
+    status: exact
+    message: Imported model deployment for chat-inline-with-invalid-headers
+  - sourcePath: "model_list[8].litellm_params.litellm_credential_name"
+    status: approximate
+    message: "Applied LiteLLM credential \"openai-org\" inline because model-level provider parameters override the shared credential"
+  - sourcePath: "model_list[9].litellm_params.organization"
+    status: manual
+    message: LiteLLM organization must be a string and was not emitted
+  - sourcePath: "model_list[9]"
+    status: exact
+    message: Imported model deployment for chat-with-invalid-organization
+  - sourcePath: "model_list[9].litellm_params.litellm_credential_name"
+    status: exact
+    message: "Mapped LiteLLM credential \"openai-org\" to reusable agentgateway provider \"imported/litellm/openai-org\""
+  - sourcePath: "model_list[10].litellm_params.organization"
+    status: manual
+    message: Empty LiteLLM organization may resolve from process-level defaults and was not emitted
+  - sourcePath: "model_list[10]"
+    status: exact
+    message: Imported model deployment for chat-inline-with-empty-organization
+  - sourcePath: "model_list[10].litellm_params.litellm_credential_name"
+    status: approximate
+    message: "Applied LiteLLM credential \"openai-org\" inline because model-level provider parameters override the shared credential"
+  - sourcePath: "model_list[11].litellm_params.extra_headers.X-Static"
     status: exact
     message: "Mapped fixed upstream header \"x-static\""
-  - sourcePath: "model_list[5].litellm_params.organization"
+  - sourcePath: "model_list[11].litellm_params.organization"
     status: manual
     message: "LiteLLM organization was not emitted because provider \"ollama\" is not OpenAI"
-  - sourcePath: "model_list[5]"
+  - sourcePath: "model_list[11]"
     status: exact
     message: Imported model deployment for local
