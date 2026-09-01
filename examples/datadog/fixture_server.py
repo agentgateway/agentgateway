@@ -1,4 +1,4 @@
-"""Deterministic OpenAI-compatible test server and local OTLP capture sink.
+"""Deterministic OpenAI-compatible provider fixture and local OTLP capture sink.
 
 Only synthetic data belongs here. Neither real credentials nor paid models are used.
 """

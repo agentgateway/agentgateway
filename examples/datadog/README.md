@@ -2,7 +2,7 @@
 
 This example targets **agentgateway v1.5.0** and **Datadog Agent 7.82.3**. It provides immediate metrics collection with the stock OpenMetrics check, plus a separate OTLP trace path for Datadog LLM Observability. No Datadog SDK is needed inside agentgateway.
 
-The default Docker Compose configuration is `compose.yaml`. Running `docker compose up -d` without additional Compose files starts agentgateway, a synthetic OpenAI-compatible provider, and a local OpenTelemetry Collector. This configuration does not call paid models or send data to Datadog. Adding `compose.datadog.yaml` as an override starts the Datadog Agent and exports synthetic telemetry to Datadog.
+The default Docker Compose configuration is `compose.yaml`. Running `docker compose up -d` without additional Compose files starts agentgateway, a deterministic OpenAI-compatible provider fixture, and a local OpenTelemetry Collector. The fixture also captures OTLP/HTTP protobuf traces for local assertions. This configuration does not call paid models or send data to Datadog. Adding `compose.datadog.yaml` as an override starts the Datadog Agent and exports synthetic telemetry to Datadog.
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ Traces pass through the OpenTelemetry Collector configured in `collector.yaml`. 
 
 Because this example runs v1.5.0, the Collector marks GenAI spans with `http.status >= 400` as errors and supplies `error.type` when missing. Treating a provider rejection such as 429 as a failed GenAI operation is deliberate. At the HTTP server-span layer, OpenTelemetry normally leaves 4xx status unset because the client may be at fault. This rule is scoped to GenAI operations rather than every gateway HTTP span. Successful spans and existing error types are preserved. Remove the `transform/gateway_errors` processor in `collector.yaml` after upgrading to a release that contains PR #3261; that release classifies provider responses in the gateway and records the numeric HTTP status as `error.type`.
 
-Host ports bind only to IPv4 loopback: gateway `127.0.0.1:13000`, metrics `127.0.0.1:18520`, mock capture endpoint `127.0.0.1:18080`. Inside the Compose network, the proxy still uses metrics port 15020. No admin port is published. If a port is occupied, adjust both Compose and the smoke test.
+Host ports bind only to IPv4 loopback: gateway `127.0.0.1:13000`, metrics `127.0.0.1:18520`, fixture capture endpoint `127.0.0.1:18080`. Inside the Compose network, the proxy still uses metrics port 15020. No admin port is published. If a port is occupied, adjust both Compose and the smoke test.
 
 ## Send synthetic telemetry to a Datadog trial
 

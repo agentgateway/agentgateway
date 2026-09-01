@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["opentelemetry-proto==1.36.0", "prometheus-client==0.22.1"]
 # ///
-"""Run with `uv run smoke.py`; exercises the real v1.5.0 proxy against the mock."""
+"""Exercise the real v1.5.0 proxy against the deterministic provider fixture."""
 
 import argparse
 import base64
