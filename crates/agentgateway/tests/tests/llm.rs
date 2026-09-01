@@ -540,7 +540,7 @@ llm:
 		.await
 		.expect("request recording should be enabled");
 	assert_eq!(requests.len(), 1);
-	assert_eq!(requests[0].body, multipart_audio_body("real-model"));
+	assert_multipart_audio_body(&requests[0].body, "real-model").await;
 }
 
 #[tokio::test]
@@ -575,7 +575,7 @@ llm:
 		.await
 		.expect("request recording should be enabled");
 	assert_eq!(requests.len(), 1);
-	assert_eq!(requests[0].body, multipart_audio_body("upstream-model"));
+	assert_multipart_audio_body(&requests[0].body, "upstream-model").await;
 }
 
 #[tokio::test]
@@ -617,7 +617,7 @@ llm:
 		.await
 		.expect("request recording should be enabled");
 	assert_eq!(requests.len(), 1);
-	assert_eq!(requests[0].body, multipart_audio_body("upstream-model"));
+	assert_multipart_audio_body(&requests[0].body, "upstream-model").await;
 }
 
 #[tokio::test]
@@ -659,7 +659,7 @@ llm:
 		.await
 		.expect("request recording should be enabled");
 	assert_eq!(requests.len(), 1);
-	assert_eq!(requests[0].body, multipart_audio_body("real-model"));
+	assert_multipart_audio_body(&requests[0].body, "real-model").await;
 }
 
 #[tokio::test]
@@ -1000,6 +1000,46 @@ fn multipart_audio_body(model: &str) -> Vec<u8> {
 		model,
 	)
 	.into_bytes()
+}
+
+async fn assert_multipart_audio_body(body: &[u8], expected_model: &str) {
+	let stream = futures_util::stream::once(std::future::ready(Ok::<bytes::Bytes, multer::Error>(
+		bytes::Bytes::copy_from_slice(body),
+	)));
+	let mut multipart = multer::Multipart::new(stream, "audio-boundary");
+	let mut saw_file = false;
+	let mut saw_model = false;
+	while let Some(field) = multipart
+		.next_field()
+		.await
+		.expect("upstream multipart body should parse")
+	{
+		match field.name() {
+			Some("file") => {
+				assert_eq!(field.file_name(), Some("audio.wav"));
+				assert_eq!(field.content_type().map(|v| v.as_ref()), Some("audio/wav"));
+				assert_eq!(
+					field
+						.bytes()
+						.await
+						.expect("file field should read")
+						.as_ref(),
+					b"fake-audio-public-model-bytes"
+				);
+				saw_file = true;
+			},
+			Some("model") => {
+				assert_eq!(
+					field.text().await.expect("model field should read"),
+					expected_model
+				);
+				saw_model = true;
+			},
+			name => panic!("unexpected multipart field {name:?}"),
+		}
+	}
+	assert!(saw_file, "multipart body should include the file field");
+	assert!(saw_model, "multipart body should include the model field");
 }
 
 async fn send_multipart_audio(io: MemoryClient, body: Vec<u8>) -> Response {
