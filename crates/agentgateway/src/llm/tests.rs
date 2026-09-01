@@ -50,6 +50,52 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 }
 
 #[test]
+fn native_anthropic_applies_prompt_caching_policy() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let translation = provider
+		.chat_translation(InputFormat::Messages, Some("claude-sonnet-4-5"), None)
+		.unwrap();
+	let request: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-5",
+		"max_tokens": 128,
+		"system": "system prompt",
+		"messages": [
+			{"role": "assistant", "content": "previous answer"},
+			{"role": "user", "content": "current question"}
+		],
+		"tools": [{"name": "lookup", "input_schema": {"type": "object"}}],
+		"future_anthropic_field": true
+	}))
+	.unwrap();
+	let caching = PromptCachingConfig {
+		cache_system: true,
+		cache_messages: true,
+		cache_tools: true,
+		min_tokens: Some(1),
+		cache_message_offset: 0,
+	};
+
+	let rendered = translation
+		.render_request(
+			types::ChatRequest::Messages(request),
+			&ChatRequestContext {
+				provider: &provider,
+				headers: &HeaderMap::new(),
+				prompt_caching: Some(&caching),
+			},
+		)
+		.unwrap();
+	let output: Value = serde_json::from_slice(&rendered.body).unwrap();
+	assert_eq!(output["future_anthropic_field"], true);
+	assert_eq!(output["system"][0]["cache_control"]["type"], "ephemeral");
+	assert_eq!(
+		output["messages"][0]["content"][0]["cache_control"]["type"],
+		"ephemeral"
+	);
+	assert_eq!(output["tools"][0]["cache_control"]["type"], "ephemeral");
+}
+
+#[test]
 fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	let vertex = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
