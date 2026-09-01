@@ -14,7 +14,8 @@ processors:
     trace_statements:
       - context: span
         statements:
-          # v1.5.0 forwards provider HTTP errors without setting OTLP error status.
+          # Compatibility workaround for v1.5.0. PR #3261 fixes this on main;
+          # remove this processor after upgrading to a release that contains it.
           # Do not relabel unrelated HTTP spans or clear existing error statuses.
           - set(span.status.code, STATUS_CODE_ERROR) where span.attributes["gen_ai.operation.name"] != nil and span.attributes["http.status"] >= 400
           - set(span.attributes["error.type"], "http_error") where span.attributes["gen_ai.operation.name"] != nil and span.attributes["http.status"] >= 400 and span.attributes["error.type"] == nil

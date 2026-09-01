@@ -7,6 +7,7 @@ production readiness.
 ## Versions
 
 - agentgateway: `ghcr.io/agentgateway/agentgateway:v1.5.0`
+  (predates the provider error-status fix in PR #3261)
 - Datadog Agent: `registry.datadoghq.com/agent:7.82.3`
 - Community check candidate: `datadog-agentgateway` 1.0.0 (unpublished)
 - Collector image tag: `otel/opentelemetry-collector-contrib:0.146.0`
