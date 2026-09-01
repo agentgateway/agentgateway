@@ -2,6 +2,7 @@ package agentgateway
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -648,7 +649,7 @@ const (
 type FailureMode string
 
 // MCP target selection for this backend.
-// +kubebuilder:validation:ExactlyOneOf=selector;static
+// +kubebuilder:validation:ExactlyOneOf=selector;static;openapi
 type McpTargetSelector struct {
 	// Name of the MCP target.
 	// +required
@@ -665,6 +666,11 @@ type McpTargetSelector struct {
 	// instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// OpenAPI target. Exposes a REST API as MCP tools, generated from an
+	// OpenAPI schema.
+	// +optional
+	OpenAPI *McpOpenAPITarget `json:"openapi,omitempty"`
 }
 
 const (
@@ -736,6 +742,48 @@ type McpTarget struct {
 // Protocol to use for an MCP target.
 // +k8s:enum
 type MCPProtocol string
+
+// MCP OpenAPI target configuration. Exposes a REST API as MCP tools by
+// fetching and translating an OpenAPI schema.
+// +kubebuilder:validation:ExactlyOneOf=host;backendRef
+// +kubebuilder:validation:XValidation:rule="has(self.backendRef) == has(self.port)",message="port must be set if and only if backendRef is set; when using host, embed the port in the host value (e.g. \"localhost:8080\")"
+// +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.policies)",message="mcp target policies may not be used with backendRef"
+type McpOpenAPITarget struct {
+	// Hostname and port of the backend REST API, e.g. `localhost:8080`. A
+	// bare hostname with no port (e.g. `localhost`) defaults to port 80. A
+	// scheme prefix (e.g. `https://`) is not accepted here; use `policies.tls`
+	// to connect over TLS.
+	// +optional
+	Host *ShortString `json:"host,omitempty"`
+
+	// Namespace-local `Service` resource by name.
+	// When set, this replaces `host`; `port` must be set alongside it.
+	// +optional
+	BackendRef *corev1.LocalObjectReference `json:"backendRef,omitempty"`
+
+	// Port number of the backend REST API. Required when `backendRef` is
+	// set; when using `host`, embed the port in the host value itself
+	// instead.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port *int32 `json:"port,omitempty"`
+
+	// Schema source for the OpenAPI spec. Either the literal schema content
+	// as a JSON or YAML string, or an object with one of:
+	//   - `url`: a remote URL to fetch the schema from. Fetched once when
+	//     this backend is reconciled; not polled or refreshed automatically.
+	//   - `configMapRef`: a reference to a key within a namespace-local
+	//     `ConfigMap` containing the schema content.
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +required
+	Schema apiextensionsv1.JSON `json:"schema"`
+
+	// Policies for communicating with the backend REST API.
+	// This field may only be used with host-based targets, not `backendRef`.
+	// +optional
+	Policies *BackendSimple `json:"policies,omitempty"`
+}
 
 const (
 	// MCPProtocolStreamableHTTP specifies that `StreamableHTTP` must be used as

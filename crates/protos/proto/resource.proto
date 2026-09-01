@@ -1974,11 +1974,17 @@ message MCPTarget {
     UNDEFINED = 0;
     SSE = 1;
     STREAMABLE_HTTP = 2;
+    OPENAPI = 3;
   }
   string name = 1;
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+  // Fully-resolved OpenAPI schema (JSON or YAML text). Required when protocol == OPENAPI.
+  // Any file/URL schema source is resolved into this field by the producer (e.g. the
+  // Kubernetes controller) before this is sent over xDS; the data plane never fetches
+  // anything itself for this field.
+  string openapi_schema = 5;
 }
 
 message BackendReference {

@@ -211,3 +211,70 @@ spec:
           path: /api/chat
       host: llm.example.com
       port: 443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openapi-host-inline-schema
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      openapi:
+        host: petstore.example.com:8080
+        schema: '{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openapi-backendref-with-port
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      openapi:
+        backendRef:
+          name: petstore-svc
+        port: 8080
+        schema:
+          url: https://petstore.example.com/openapi.json
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openapi-host-configmap-schema
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      openapi:
+        host: petstore.example.com:8080
+        schema:
+          configMapRef:
+            name: openapi-schema-cm
+            key: schema.json
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-target-static-only
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      static:
+        host: petstore.example.com
+        port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-target-selector-only
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      selector:
+        services:
+          matchLabels:
+            app: petstore

@@ -2106,6 +2106,21 @@ fn mcp_target_from_proto(
 					},
 				})
 			},
+			Protocol::Openapi => {
+				if s.openapi_schema.is_empty() {
+					return Err(ProtoError::Generic(
+						"openapi MCP target requires openapi_schema".to_string(),
+					));
+				}
+				let schema = stacker::grow(2 * 1024 * 1024, || {
+					yamlviajson::from_str::<openapiv3::OpenAPI>(&s.openapi_schema)
+				})
+				.map_err(|e| ProtoError::Generic(format!("invalid openapi schema: {e}")))?;
+				McpTargetSpec::OpenAPI(OpenAPITarget {
+					backend,
+					schema: Arc::new(schema),
+				})
+			},
 		},
 	})
 }
@@ -4278,6 +4293,41 @@ mod tests {
 				BackendReference::Invalid
 			));
 		}
+	}
+
+	#[test]
+	fn mcp_target_from_proto_openapi() {
+		let valid_schema = r#"{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}"#;
+		let proto = proto::agent::McpTarget {
+			name: "petstore".to_string(),
+			protocol: proto::agent::mcp_target::Protocol::Openapi as i32,
+			openapi_schema: valid_schema.to_string(),
+			..Default::default()
+		};
+		let target = mcp_target_from_proto(&proto, &mut Diagnostics::default()).unwrap();
+		match target.spec {
+			McpTargetSpec::OpenAPI(OpenAPITarget { schema, .. }) => {
+				assert_eq!(schema.openapi, "3.0.0");
+			},
+			other => panic!("expected OpenAPI target, got {other:?}"),
+		}
+
+		let missing_schema = proto::agent::McpTarget {
+			name: "petstore".to_string(),
+			protocol: proto::agent::mcp_target::Protocol::Openapi as i32,
+			openapi_schema: String::new(),
+			..Default::default()
+		};
+		let err = mcp_target_from_proto(&missing_schema, &mut Diagnostics::default()).unwrap_err();
+		assert!(err.to_string().contains("openapi_schema"), "{err}");
+
+		let malformed_schema = proto::agent::McpTarget {
+			name: "petstore".to_string(),
+			protocol: proto::agent::mcp_target::Protocol::Openapi as i32,
+			openapi_schema: "not a valid schema".to_string(),
+			..Default::default()
+		};
+		mcp_target_from_proto(&malformed_schema, &mut Diagnostics::default()).unwrap_err();
 	}
 
 	fn jwt_sign_from_proto_for_test(

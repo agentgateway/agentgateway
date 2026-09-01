@@ -293,3 +293,108 @@ spec:
           name: other-backend
         formats:
         - type: Completions
+---
+_err: port must be set if and only if backendRef is set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openapi-backendref-missing-port
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      openapi:
+        backendRef:
+          name: petstore-svc
+        schema: '{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}'
+---
+_err: port must be set if and only if backendRef is set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openapi-host-with-port
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      openapi:
+        host: petstore.example.com:8080
+        port: 8080
+        schema: '{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}'
+---
+_err: exactly one of the fields in [host backendRef] must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openapi-host-and-backendref
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      openapi:
+        host: petstore.example.com:8080
+        backendRef:
+          name: petstore-svc
+        port: 8080
+        schema: '{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}'
+---
+_err: mcp target policies may not be used with backendRef
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openapi-backendref-with-policies
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      openapi:
+        backendRef:
+          name: petstore-svc
+        port: 8080
+        schema: '{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}'
+        policies:
+          auth:
+            key: secret
+---
+_err: exactly one of the fields in [selector static openapi] must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-target-openapi-and-static
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      static:
+        host: petstore.example.com
+        port: 8080
+      openapi:
+        host: petstore.example.com:8080
+        schema: '{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}'
+---
+_err: exactly one of the fields in [selector static openapi] must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-target-openapi-and-selector
+spec:
+  mcp:
+    targets:
+    - name: petstore
+      selector:
+        services:
+          matchLabels:
+            app: petstore
+      openapi:
+        host: petstore.example.com:8080
+        schema: '{"openapi":"3.0.0","info":{"title":"t","version":"1"},"paths":{}}'
+---
+_err: exactly one of the fields in [selector static openapi] must be set
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-target-none-of-selector-static-openapi
+spec:
+  mcp:
+    targets:
+    - name: petstore

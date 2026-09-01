@@ -1,0 +1,14 @@
+- key: test-ns/openapi-backendref-mcp-backend
+  mcp:
+    targets:
+    - backend:
+        port: 8080
+        service:
+          hostname: mcp-service.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: openapi-target
+      openapiSchema: '{"openapi":"3.0.0","info":{"title":"test","version":"1.0"},"paths":{}}'
+      protocol: OPENAPI
+  name:
+    name: openapi-backendref-mcp-backend
+    namespace: test-ns
