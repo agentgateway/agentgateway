@@ -13,40 +13,9 @@ podAnnotations:
                 "agentgateway_controller_reconciliations": "controller.reconciliations",
                 "agentgateway_controller_reconcile_duration_seconds": "controller.reconcile.duration",
                 "agentgateway_controller_reconciliations_running": "controller.reconciliations_running"
-              }
+              },
+              ".*"
             ],
-            "include_labels": [
-              "gateway",
-              "listener",
-              "route",
-              "backend",
-              "method",
-              "status",
-              "reason",
-              "protocol",
-              "gen_ai_operation_name",
-              "gen_ai_system",
-              "gen_ai_request_model",
-              "gen_ai_response_model",
-              "gen_ai_token_type",
-              "phase",
-              "action",
-              "resource_type",
-              "server",
-              "controller",
-              "namespace",
-              "le",
-              "result",
-              "bind",
-              "route_rule",
-              "name"
-            ],
-            "rename_labels": {
-              "gen_ai_system": "provider",
-              "gen_ai_request_model": "request_model",
-              "gen_ai_response_model": "response_model",
-              "gen_ai_token_type": "token_type"
-            },
             "histogram_buckets_as_distributions": true,
             "collect_counters_with_distributions": true,
             "tags": [
