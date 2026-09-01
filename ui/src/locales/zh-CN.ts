@@ -2810,12 +2810,14 @@ const zhCN = {
 			denyAll: '全部拒绝',
 			denyAllLowercase: '全部拒绝',
 			allModels: '所有模型',
+			budgets: '预算',
 			modelAccess: '模型访问',
 			selectedModels: '已选模型',
 			accessMode: '访问模式',
 			allowedModelPatterns: '允许的模型匹配模式',
 			modelPatternPlaceholder: 'gpt-5.5 或 openai/*',
 			noModelPatternsConfigured: '未配置模型模式。',
+			invalidBudgets: '预算配置无效',
 			invalidModelAccess: '模型访问配置无效',
 			addAtLeastOneModelPatternOrSelectDenyAll: '至少添加一个模型匹配模式，或选择“全部拒绝”。',
 			wildcardCannotBeCombinedWithOtherModelPatterns: '“*”不能与其他模型匹配模式同时使用。',
@@ -2824,6 +2826,9 @@ const zhCN = {
 			thisKeyCanRequestAnyModel: '此密钥可请求任意模型。',
 			requestsMayOnlyUseModelsMatchingPatternsBelow: '请求只能使用与以下匹配模式相符的模型。',
 			thisKeyCannotRequestAnyModel: '此密钥不能请求任何模型。',
+			limitWhichRequestedModelNamesThisKeyCanUse: '限制此密钥可请求的模型名称。',
+			attachCustomMetadataToRequestsAuthenticatedWithThisKey:
+				'为使用此密钥进行身份验证的请求附加自定义元数据。',
 			capHowMuchThisKeyCanSpendOrConsumeDuringEachRollingWindow:
 				'限制此密钥在每个滚动时间窗口内可支出的金额或可消耗的令牌数。',
 			budgetNamesMustBePresentAndUniqueRollingWindowsAreRequiredAndAmountsMustBeNonNegative:

@@ -3071,12 +3071,14 @@ const en = {
 			denyAll: 'Deny all',
 			denyAllLowercase: 'deny all',
 			allModels: 'all models',
+			budgets: 'Budgets',
 			modelAccess: 'Model access',
 			selectedModels: 'Selected models',
 			accessMode: 'Access mode',
 			allowedModelPatterns: 'Allowed model patterns',
 			modelPatternPlaceholder: 'gpt-5.5 or openai/*',
 			noModelPatternsConfigured: 'No model patterns configured.',
+			invalidBudgets: 'Invalid budgets',
 			invalidModelAccess: 'Invalid model access',
 			addAtLeastOneModelPatternOrSelectDenyAll:
 				'Add at least one model pattern or select Deny all.',
@@ -3089,6 +3091,10 @@ const en = {
 			requestsMayOnlyUseModelsMatchingPatternsBelow:
 				'Requests may only use models matching the patterns below.',
 			thisKeyCannotRequestAnyModel: 'This key cannot request any model.',
+			limitWhichRequestedModelNamesThisKeyCanUse:
+				'Limit which requested model names this key can use.',
+			attachCustomMetadataToRequestsAuthenticatedWithThisKey:
+				'Attach custom metadata to requests authenticated with this key.',
 			capHowMuchThisKeyCanSpendOrConsumeDuringEachRollingWindow:
 				'Cap how much this key can spend or consume during each rolling window.',
 			budgetNamesMustBePresentAndUniqueRollingWindowsAreRequiredAndAmountsMustBeNonNegative:
