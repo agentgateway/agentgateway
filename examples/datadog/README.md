@@ -8,7 +8,7 @@ The default Docker Compose configuration is `compose.yaml`. Running `docker comp
 
 The local test requires:
 
-- [Docker](https://docs.docker.com/get-docker/) with [Docker Compose](https://docs.docker.com/compose/install/), installed through Docker Desktop or the Compose CLI plugin. The commands below use `docker compose`, not the legacy `docker-compose` command.
+- [Docker](https://docs.docker.com/get-docker/) with [Docker Compose](https://docs.docker.com/compose/install/), installed through Docker Desktop or the Compose CLI plugin.
 - [uv](https://docs.astral.sh/uv/) to create the Python environment and run `smoke.py`.
 - Network access on the first run to download container images and Python packages.
 - Available loopback ports `13000`, `18080`, and `18520`.
