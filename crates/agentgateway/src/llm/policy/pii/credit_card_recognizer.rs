@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::llm::policy::pii::pattern_recognizer::PatternRecognizer;
 use crate::llm::policy::pii::recognizer::Recognizer;
 
@@ -69,6 +71,10 @@ impl Recognizer for CreditCardRecognizer {
 	}
 }
 
-fn normalize_card_number(value: &str) -> String {
-	value.chars().filter(|c| *c != ' ' && *c != '-').collect()
+fn normalize_card_number(value: &str) -> Cow<'_, str> {
+	if value.bytes().any(|byte| byte == b' ' || byte == b'-') {
+		Cow::Owned(value.chars().filter(|c| *c != ' ' && *c != '-').collect())
+	} else {
+		Cow::Borrowed(value)
+	}
 }
