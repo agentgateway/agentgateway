@@ -19,6 +19,24 @@ model_list:
     extra_headers:
       X-Credential-Header: model
       X-Request-ID: os.environ/REQUEST_ID
+- model_name: chat-with-empty-headers
+  litellm_params:
+    model: openai/gpt-4.1
+    litellm_credential_name: openai-org
+    extra_headers: {}
+- model_name: chat-inline-with-overrides
+  litellm_params:
+    model: openai/gpt-4.1-mini
+    litellm_credential_name: openai-org
+    api_base: https://example.com/v1
+    extra_headers:
+      X-Inline: model
+- model_name: chat-inline-with-empty-headers
+  litellm_params:
+    model: openai/gpt-4.1-nano
+    litellm_credential_name: openai-org
+    api_base: https://example.com/v1
+    extra_headers: {}
 - model_name: local
   litellm_params:
     model: ollama/llama3

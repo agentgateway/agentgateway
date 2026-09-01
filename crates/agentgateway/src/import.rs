@@ -47,6 +47,7 @@ pub struct ImportedModel {
 	pub params: Map<String, Value>,
 	pub defaults: Map<String, Value>,
 	pub request_headers: IndexMap<String, String>,
+	pub request_headers_override_defaults: bool,
 	pub weight: usize,
 }
 
@@ -193,7 +194,7 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 					Value::Object(model.defaults.clone()),
 				);
 			}
-			if !model.request_headers.is_empty() {
+			if model.request_headers_override_defaults || !model.request_headers.is_empty() {
 				value.insert(
 					"requestHeaders".to_string(),
 					json!({"set": model.request_headers}),
@@ -331,6 +332,7 @@ struct LiteLlmCredential {
 
 #[derive(Debug, Default)]
 struct LiteLlmExtraHeaders {
+	present: bool,
 	values: IndexMap<String, String>,
 	exact_findings: Vec<ImportFinding>,
 }
@@ -341,6 +343,7 @@ struct LiteLlmCredentials {
 	ambiguous: HashSet<String>,
 	used: HashSet<String>,
 	emitted: HashMap<(String, String), String>,
+	reported_request_headers: HashSet<String>,
 	reported_organization_providers: HashSet<(String, String)>,
 }
 
@@ -369,13 +372,15 @@ impl ConfigImporter for LiteLlmImporter {
 			let deployment = counts.entry(model.model_name.clone()).or_default();
 			*deployment += 1;
 			let internal_name = imported_model_name(self.source(), &model.model_name, *deployment);
-			let Some((public_name, mut imported, credential_name)) = import_litellm_model(
-				internal_name.clone(),
-				model,
-				&source_path,
-				use_rpm_weights,
-				&mut plan.findings,
-			) else {
+			let Some((public_name, mut imported, credential_name, model_extra_headers_present)) =
+				import_litellm_model(
+					internal_name.clone(),
+					model,
+					&source_path,
+					use_rpm_weights,
+					&mut plan.findings,
+				)
+			else {
 				continue;
 			};
 			if let Some(credential_name) = credential_name {
@@ -383,6 +388,7 @@ impl ConfigImporter for LiteLlmImporter {
 					self.source(),
 					&source_path,
 					&credential_name,
+					model_extra_headers_present,
 					&mut imported,
 					&mut plan,
 				);
@@ -629,6 +635,7 @@ impl LiteLlmCredentials {
 			ambiguous,
 			used: HashSet::new(),
 			emitted: HashMap::new(),
+			reported_request_headers: HashSet::new(),
 			reported_organization_providers: HashSet::new(),
 		}
 	}
@@ -653,6 +660,7 @@ impl LiteLlmCredentials {
 		source: &str,
 		model_source_path: &str,
 		credential_name: &str,
+		model_extra_headers_present: bool,
 		model: &mut ImportedModel,
 		plan: &mut ImportPlan,
 	) {
@@ -716,6 +724,12 @@ impl LiteLlmCredentials {
 			});
 			return;
 		}
+		model.request_headers_override_defaults = model_extra_headers_present;
+		let can_reference = model
+			.params
+			.iter()
+			.filter(|(key, _)| key.as_str() != "model")
+			.all(|(key, value)| credential.params.get(key) == Some(value));
 		let mut organization_findings = Vec::new();
 		let credential_request_headers = request_headers_for_provider(
 			&provider,
@@ -724,17 +738,25 @@ impl LiteLlmCredentials {
 			&format!("{}.credential_values.organization", credential.source_path),
 			&mut organization_findings,
 		);
-		if credential.organization.is_some()
+		let credential_headers_emitted = can_reference || !model.request_headers_override_defaults;
+		if credential_headers_emitted
+			&& credential.organization.is_some()
 			&& self
 				.reported_organization_providers
 				.insert((credential.name.clone(), provider.clone()))
 		{
 			plan.findings.extend(organization_findings);
 		}
-		if first_use {
+		if credential_headers_emitted
+			&& self
+				.reported_request_headers
+				.insert(credential.name.clone())
+		{
 			plan
 				.findings
 				.extend(credential.request_headers.exact_findings.iter().cloned());
+		}
+		if first_use {
 			plan.findings.push(ImportFinding {
 				source_path: credential.source_path.clone(),
 				status: ImportStatus::Exact,
@@ -742,16 +764,11 @@ impl LiteLlmCredentials {
 			});
 		}
 
-		let can_reference = model
-			.params
-			.iter()
-			.filter(|(key, _)| key.as_str() != "model")
-			.all(|(key, value)| credential.params.get(key) == Some(value));
 		if can_reference {
 			model
 				.params
 				.retain(|key, _| key == "model" || !credential.params.contains_key(key));
-			if !model.request_headers.is_empty() {
+			if !model.request_headers_override_defaults && !model.request_headers.is_empty() {
 				let model_headers = std::mem::take(&mut model.request_headers);
 				model.request_headers = credential_request_headers.clone();
 				model.request_headers.extend(model_headers);
@@ -783,9 +800,11 @@ impl LiteLlmCredentials {
 			let model_params = std::mem::take(&mut model.params);
 			model.params = credential.params.clone();
 			model.params.extend(model_params);
-			let model_headers = std::mem::take(&mut model.request_headers);
-			model.request_headers = credential_request_headers;
-			model.request_headers.extend(model_headers);
+			if !model.request_headers_override_defaults {
+				let model_headers = std::mem::take(&mut model.request_headers);
+				model.request_headers = credential_request_headers;
+				model.request_headers.extend(model_headers);
+			}
 			plan.findings.push(ImportFinding {
 			source_path: reference_path,
 			status: ImportStatus::Approximate,
@@ -803,7 +822,7 @@ fn import_litellm_model(
 	source_path: &str,
 	use_rpm_weights: bool,
 	findings: &mut Vec<ImportFinding>,
-) -> Option<(String, ImportedModel, Option<String>)> {
+) -> Option<(String, ImportedModel, Option<String>, bool)> {
 	let LiteLlmModel {
 		model_name: public_name,
 		litellm_params: mut params,
@@ -904,6 +923,7 @@ fn import_litellm_model(
 		findings,
 	);
 	let LiteLlmExtraHeaders {
+		present: extra_headers_present,
 		values: extra_headers,
 		exact_findings,
 	} = take_litellm_extra_headers(
@@ -1004,9 +1024,11 @@ fn import_litellm_model(
 			params: output_params,
 			defaults,
 			request_headers,
+			request_headers_override_defaults: false,
 			weight,
 		},
 		credential_name,
+		extra_headers_present,
 	))
 }
 
@@ -1084,6 +1106,7 @@ fn take_litellm_extra_headers(
 	};
 	if headers.is_empty() {
 		return LiteLlmExtraHeaders {
+			present: true,
 			values: IndexMap::new(),
 			exact_findings: vec![ImportFinding {
 				source_path: format!("{source_prefix}.extra_headers"),
@@ -1161,6 +1184,7 @@ fn take_litellm_extra_headers(
 		}
 	}
 	LiteLlmExtraHeaders {
+		present: true,
 		values: result,
 		exact_findings,
 	}
