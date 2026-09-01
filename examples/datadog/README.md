@@ -112,7 +112,7 @@ docker compose -f compose.openai.yaml -f compose.datadog.yaml down
 
 ## Production metrics configuration
 
-Use `openmetrics.yaml` with the stock Datadog Agent, changing `gateway:15020` and the tags to match your deployment. The file contains a curated metric list and the same metric names as the proposed `agentgateway` community check.
+Use `openmetrics.yaml` with the stock Datadog Agent, changing `gateway:15020` and the tags to match your deployment. The file collects all proxy and runtime metric families except the per-resource MCP request counter. Explicit mappings preserve the metric names used by the dashboard; `raw_metric_prefix` removes the source `agentgateway_` prefix before the wildcard collects the remaining families.
 
 **Keep `use_latest_spec: true` for the v1.5.0 proxy.** It serves OpenMetrics counter TYPE names with a `text/plain` content type. Datadog's default Prometheus parser can silently omit request, cost, and other counters. The Go controller uses the Prometheus parser (`use_latest_spec: false`).
 
@@ -145,7 +145,9 @@ Use `%%host%%` and scrape each pod individually. Do not scrape a load-balanced S
 
 Histograms also export monotonic `.sum` and `.count`. Token histogram `.count` counts observations, **not tokens**. Input tokens already include cached input, so do not add cache categories to input totals. Cost is incomplete when usage/pricing is missing; it is not an invoice. Error status is not a default GenAI histogram dimension, so default metrics cannot provide per-model error rates.
 
-Built-in series identity labels are preserved. Per-resource MCP counters are deliberately omitted because their resource label can contain unbounded or sensitive URIs; HTTP MCP traffic remains available. Avoid request IDs, user IDs, prompts, and arbitrary URLs as metric labels. If you customize gateway metric dimensions, include all distinguishing bounded labels or aggregate upstream before scraping. Dropping distinguishing labels can merge independent counters incorrectly. The generic OpenMetrics check counts these as custom metrics; budget for tags and distributions and retain its sample limit.
+Built-in series identity labels are preserved for the collected metric families. The label allowlist prevents user-configured custom dimensions from being exported automatically. Per-resource MCP counters are deliberately omitted because their `resource` label can contain unbounded or sensitive tool names and URIs; HTTP MCP traffic remains available. To collect `mcp_requests`, remove it from `exclude_metrics`, explicitly map it to `mcp.requests`, and add `resource`, `resource_type`, and `server` to `include_labels` after reviewing the possible values. Do not drop `resource` while collecting this counter because doing so can merge independent series incorrectly.
+
+Avoid request IDs, user IDs, prompts, and arbitrary URLs as metric labels. If you customize gateway metric dimensions, include all distinguishing bounded labels or aggregate upstream before scraping. The generic OpenMetrics check counts these as custom metrics; budget for tags and distributions and retain its sample limit.
 
 ## Optional prompt/completion capture
 

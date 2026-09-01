@@ -18,24 +18,29 @@ spec:
                       "use_latest_spec": true,
                       "openmetrics_endpoint": "http://%%host%%:15020/metrics",
                       "namespace": "agentgateway",
+                      "raw_metric_prefix": "agentgateway_",
                       "metrics": [
                         {
-                          "agentgateway_requests": "requests",
-                          "agentgateway_request_duration_seconds": "request.duration",
-                          "agentgateway_request_processing_seconds": "request.processing",
-                          "agentgateway_response_bytes": "response.bytes",
-                          "agentgateway_downstream_connections": "downstream.connections",
-                          "agentgateway_downstream_connections_shed": "downstream.connections_shed",
-                          "agentgateway_requests_shed": "requests_shed",
-                          "agentgateway_retries": "retries",
-                          "agentgateway_guardrail_checks": "guardrail.checks",
-                          "agentgateway_cost_catalog_lookups": "cost_catalog.lookups",
-                          "agentgateway_gen_ai_client_token_usage": "gen_ai.token.usage",
-                          "agentgateway_gen_ai_client_cost_usd": "gen_ai.cost.usd",
-                          "agentgateway_gen_ai_server_request_duration": "gen_ai.request.duration",
-                          "agentgateway_gen_ai_server_time_to_first_token": "gen_ai.time_to_first_token",
-                          "agentgateway_gen_ai_server_time_per_output_token": "gen_ai.time_per_output_token"
-                        }
+                          "requests": "requests",
+                          "request_duration_seconds": "request.duration",
+                          "request_processing_seconds": "request.processing",
+                          "response_bytes": "response.bytes",
+                          "downstream_connections": "downstream.connections",
+                          "downstream_connections_shed": "downstream.connections_shed",
+                          "requests_shed": "requests_shed",
+                          "retries": "retries",
+                          "guardrail_checks": "guardrail.checks",
+                          "cost_catalog_lookups": "cost_catalog.lookups",
+                          "gen_ai_client_token_usage": "gen_ai.token.usage",
+                          "gen_ai_client_cost_usd": "gen_ai.cost.usd",
+                          "gen_ai_server_request_duration": "gen_ai.request.duration",
+                          "gen_ai_server_time_to_first_token": "gen_ai.time_to_first_token",
+                          "gen_ai_server_time_per_output_token": "gen_ai.time_per_output_token"
+                        },
+                        ".*"
+                      ],
+                      "exclude_metrics": [
+                        "mcp_requests"
                       ],
                       "include_labels": [
                         "gateway",
@@ -53,15 +58,14 @@ spec:
                         "gen_ai_token_type",
                         "phase",
                         "action",
-                        "resource_type",
-                        "server",
-                        "controller",
-                        "namespace",
                         "le",
-                        "result",
                         "bind",
                         "route_rule",
-                        "name"
+                        "kind",
+                        "subtype",
+                        "transport",
+                        "tag",
+                        "url"
                       ],
                       "rename_labels": {
                         "gen_ai_system": "provider",
