@@ -65,6 +65,81 @@ struct DatabaseAttributes {
 	user_agent_name: Option<String>,
 }
 
+struct HttpSemconvAttributes<'a> {
+	client_address: String,
+	server_address: Option<&'a str>,
+	server_port: Option<u16>,
+	url_scheme: &'a str,
+	url_path: Option<&'a str>,
+	url_query: Option<&'a str>,
+	network_protocol_version: Option<&'static str>,
+}
+
+impl<'a> HttpSemconvAttributes<'a> {
+	fn new(log: &'a RequestLog) -> Self {
+		let (url_path, url_query) = log.path.as_deref().map_or((None, None), |path| {
+			let (path, query) = semconv::path_and_query(path);
+			(Some(path), query)
+		});
+
+		Self {
+			client_address: log.tcp_info.peer_addr.ip().to_string(),
+			server_address: log.host.as_deref(),
+			server_port: log.server_port,
+			url_scheme: log.scheme.as_ref().map_or_else(
+				|| {
+					if log.tls_info.is_some() {
+						"https"
+					} else {
+						"http"
+					}
+				},
+				|scheme| scheme.as_str(),
+			),
+			url_path,
+			url_query,
+			network_protocol_version: log.version.as_ref().and_then(semconv::protocol_version),
+		}
+	}
+
+	fn apply<'b>(&'b self, attributes: &mut Vec<(&'b str, Option<ValueBag<'b>>)>) {
+		attributes
+			.reserve(1 + usize::from(self.server_port.is_some()) + usize::from(self.url_query.is_some()));
+
+		for (key, value) in &mut *attributes {
+			*key = semconv::http_attribute(key);
+			match *key {
+				semconv::attribute::CLIENT_ADDRESS => {
+					*value = Some(self.client_address.as_str().into());
+				},
+				semconv::attribute::SERVER_ADDRESS => {
+					*value = self.server_address.map(Into::into);
+				},
+				semconv::attribute::URL_PATH => {
+					*value = self.url_path.map(Into::into);
+				},
+				semconv::attribute::NETWORK_PROTOCOL_VERSION => {
+					*value = self.network_protocol_version.map(Into::into);
+				},
+				_ => {},
+			}
+		}
+
+		attributes.push((semconv::attribute::URL_SCHEME, Some(self.url_scheme.into())));
+
+		if let Some(port) = self.server_port {
+			attributes.push((
+				semconv::attribute::SERVER_PORT,
+				Some(i64::from(port).into()),
+			));
+		}
+
+		if let Some(query) = self.url_query {
+			attributes.push((semconv::attribute::URL_QUERY, Some(query.into())));
+		}
+	}
+}
+
 fn database_llm_payload(
 	mode: Option<crate::types::frontend::DatabaseLlmMode>,
 	input_messages: Option<&[agent_llm::types::NormalizedMessage]>,
@@ -1824,82 +1899,13 @@ impl Drop for DropOnLog {
 					.is_some_and(|span| span.is_sampled());
 
 			let needs_otel = trace_needs_otel || otlp_log_enabled || use_otel_stdout;
-			let needs_http_semconv = needs_otel && !is_tcp;
-
-			let client_address = needs_http_semconv.then(|| log.tcp_info.peer_addr.ip().to_string());
-
-			let server_scheme = needs_http_semconv.then(|| {
-				if let Some(scheme) = log.scheme.as_ref() {
-					scheme.as_str()
-				} else if log.tls_info.is_some() {
-					"https"
-				} else {
-					"http"
-				}
-			});
-
-			let (url_path, url_query) = if needs_http_semconv {
-				log.path.as_deref().map_or((None, None), |path| {
-					let (path, query) = semconv::path_and_query(path);
-					(Some(path), query)
-				})
-			} else {
-				(None, None)
-			};
-
-			let server_port = if needs_http_semconv {
-				log.server_port
-			} else {
-				None
-			};
+			let http_semconv = (needs_otel && !is_tcp).then(|| HttpSemconvAttributes::new(&log));
 
 			let mut otel_kv = needs_otel.then(|| {
 				let mut otel_kv = kv.clone();
 
-				if needs_http_semconv {
-					otel_kv.reserve(
-						usize::from(server_scheme.is_some())
-							+ usize::from(server_port.is_some())
-							+ usize::from(url_query.is_some()),
-					);
-
-					for (key, value) in &mut otel_kv {
-						*key = semconv::http_attribute(key);
-						match *key {
-							semconv::attribute::CLIENT_ADDRESS => {
-								*value = client_address.as_deref().map(Into::into);
-							},
-							semconv::attribute::SERVER_ADDRESS => {
-								*value = log.host.as_deref().map(Into::into);
-							},
-							semconv::attribute::URL_PATH => {
-								*value = url_path.map(Into::into);
-							},
-							semconv::attribute::NETWORK_PROTOCOL_VERSION => {
-								*value = log
-									.version
-									.as_ref()
-									.and_then(semconv::protocol_version)
-									.map(Into::into);
-							},
-							_ => {},
-						}
-					}
-
-					if let Some(scheme) = server_scheme {
-						otel_kv.push((semconv::attribute::URL_SCHEME, Some(scheme.into())));
-					}
-
-					if let Some(port) = server_port {
-						otel_kv.push((
-							semconv::attribute::SERVER_PORT,
-							Some(i64::from(port).into()),
-						));
-					}
-
-					if let Some(query) = url_query {
-						otel_kv.push((semconv::attribute::URL_QUERY, Some(query.into())));
-					}
+				if let Some(http_semconv) = &http_semconv {
+					http_semconv.apply(&mut otel_kv);
 				}
 
 				otel_kv
