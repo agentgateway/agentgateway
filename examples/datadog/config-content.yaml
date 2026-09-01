@@ -1,6 +1,7 @@
 # Synthetic content capture ONLY. Do not use with private prompts without redaction.
 config:
   tracing:
+    otlpEndpoint: http://collector:4318/v1/traces
     randomSampling: true
     fields:
       add:

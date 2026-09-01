@@ -26,7 +26,6 @@ services:
     image: ghcr.io/agentgateway/agentgateway:v1.5.0
     command: [-f, /example/config.yaml]
     environment:
-      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://collector:4318/v1/traces
       OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf
     volumes:
       - ./config.yaml:/example/config.yaml:ro

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schema/local.json
 config:
   tracing:
-    # Endpoint and HTTP protocol come from the OTEL_EXPORTER_OTLP_TRACES_* env vars.
+    otlpEndpoint: http://collector:4318/v1/traces
     randomSampling: true
     fields:
       add:
