@@ -948,7 +948,7 @@ mod tests {
 		}
 
 		let mcp = crate::mcp::MCPInfo {
-			method_name: Some("tools/call".to_string()),
+			method_name: Some(strng::literal!("tools/call")),
 			..Default::default()
 		};
 

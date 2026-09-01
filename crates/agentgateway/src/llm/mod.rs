@@ -1226,8 +1226,7 @@ impl AIProvider {
 		// duplicated. countTokens is unary and never sets one, but Google honours `alt=sse` there
 		// too and answers with SSE framing that `CountTokensResponse` cannot parse — so drop the
 		// client's `alt` on both native routes (same gate as the render below). Stripping it here
-		// rather than at parse time keeps it intact on the paths above, which forward the client's
-		// URI untouched.
+		// rather than at parse time keeps `alt` intact on the paths above.
 		if route_type == RouteType::GeminiCountTokens
 			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
 		{
@@ -1482,6 +1481,13 @@ impl AIProvider {
 			{
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+						// Native Gemini prefers query API keys over the bound Bearer credential.
+						// Removing parameters from an already-valid URI cannot fail.
+						let _ = http::modify_query_parameters(
+							&mut req.uri,
+							std::iter::empty::<(&str, &str)>(),
+							["key", "$key"],
+						);
 						let explicit_authorization = req
 							.extensions
 							.get::<AppliedBackendAuthLocation>()
@@ -2373,6 +2379,23 @@ impl AIProvider {
 		let BufferedResponse {
 			mut parts, bytes, ..
 		} = buffered;
+		parts.headers.remove(header::CONTENT_LENGTH);
+		if !parts.status.is_success() {
+			let body = self.process_error(
+				&req,
+				parts.status,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
+			return Ok(Self::finalize_response(
+				parts,
+				body.into(),
+				req,
+				LLMResponse::default(),
+				model_catalog,
+				log,
+			));
+		}
 		let (bytes, count) = match self {
 			AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
 				types::count_tokens::Response::translate_response(bytes)?
@@ -2394,7 +2417,6 @@ impl AIProvider {
 			},
 		};
 
-		parts.headers.remove(header::CONTENT_LENGTH);
 		Ok(Self::finalize_response(
 			parts,
 			bytes.into(),
@@ -2929,6 +2951,7 @@ impl AIProvider {
 				// the Google shape the client expects.
 				Ok(bytes.clone())
 			},
+			(_, InputFormat::CountTokens) => Ok(bytes.clone()),
 			(AIProvider::Bedrock(_), InputFormat::Embeddings) => {
 				conversion::bedrock::from_embeddings::translate_error(bytes)
 			},

@@ -421,7 +421,9 @@
             },
             "connectTimeout": "11s",
             "poolIdleTimeout": "1m30s",
-            "poolMaxSize": null
+            "poolMaxSize": null,
+            "h2KeepaliveInterval": "0s",
+            "h2KeepaliveTimeout": "5s"
           }
         },
         "hbone": {
@@ -536,6 +538,17 @@
     "Catalog": {
       "type": "object",
       "properties": {
+        "metadata": {
+          "description": "Identifies a generated base catalog and when its contents last changed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "providers": {
           "description": "Map of provider name to its supported models and pricing.",
           "type": "object",
@@ -546,6 +559,25 @@
         }
       },
       "additionalProperties": false
+    },
+    "CatalogMetadata": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Upstream used to generate this base catalog, such as `models.dev`.",
+          "type": "string"
+        },
+        "generatedAt": {
+          "description": "Time the generated catalog contents last changed.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "generatedAt"
+      ]
     },
     "Provider": {
       "type": "object",
@@ -1079,6 +1111,16 @@
           "format": "uint",
           "minimum": 0,
           "default": null
+        },
+        "h2KeepaliveInterval": {
+          "description": "Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.\nPINGs are sent even on idle connections to proactively evict dead connections from the pool.\nDisabled by default (\"0s\"). Note: many gRPC servers enforce a minimum ping interval\nand will reject connections that ping more frequently.",
+          "type": "string",
+          "default": "0s"
+        },
+        "h2KeepaliveTimeout": {
+          "description": "Timeout waiting for a PING ACK before considering the connection dead and closing it.\nOnly applies when h2_keepalive_interval is set. Defaults to 5s.",
+          "type": "string",
+          "default": "5s"
         }
       },
       "additionalProperties": false

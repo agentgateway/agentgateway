@@ -81,9 +81,22 @@ pub struct Executor<'a> {
 }
 
 #[apply(schema!)]
+#[derive(cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct ErrorContext {
+	/// Broad classification of the failure, such as `UpstreamFailure` or `Timeout`.
+	pub reason: String,
+	/// Human-readable failure detail. Exact message is subject to change.
+	pub message: String,
+}
+
+#[apply(schema!)]
 #[derive(Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct ProxyContext {
+	/// The final gateway error when the response was synthesized from a failed request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub error: Option<ErrorContext>,
 	/// The bind that accepted the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub bind: Option<Strng>,
@@ -127,6 +140,7 @@ impl ProxyContext {
 		response_processing_duration: Option<std::time::Duration>,
 	) -> Self {
 		Self {
+			error: None,
 			bind: None,
 			gateway: None,
 			listener: None,
@@ -2139,6 +2153,8 @@ pub struct ExecutorSerde {
 	pub jwt: Option<jwt::Claims>,
 
 	/// `apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.
+	/// In addition to `key`, user-supplied metadata fields are flattened into this object; for example,
+	/// `apiKey.group`. Metadata values are plain JSON and are not treated as secrets.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_key: Option<apikey::Claims>,
 
@@ -2164,8 +2180,9 @@ pub struct ExecutorSerde {
 	pub destination: Option<DestinationContext>,
 
 	/// `mcp` contains attributes about the MCP request.
-	/// Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.
-	/// Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.
+	/// Request-time CEL includes identity fields (`tool`, `prompt`, `resource`,
+	/// `task`) plus `methodName`. Post-request CEL may also include fields like
+	/// `sessionId` and tool payloads.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<MCPInfo>,
 
@@ -2333,6 +2350,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 			body_prefix: Some(BufferedBody::complete(Bytes::from(r#"{"ok": true}"#))),
 		}),
 		proxy: Some(ProxyContext {
+			error: Some(ErrorContext {
+				reason: "UpstreamFailure".to_string(),
+				message: "upstream call failed: connection refused".to_string(),
+			}),
 			bind: Some("bind".into()),
 			gateway: Some(ProxyGatewayContext {
 				namespace: "ns-1".into(),
@@ -2446,7 +2467,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			cost_status: None,
 		}),
 		mcp: Some(MCPInfo {
-			method_name: Some("tools/call".to_string()),
+			method_name: Some("tools/call".into()),
 			session_id: Some("session-123".to_string()),
 			tool: Some(MCPTool {
 				target: "my-mcp-server".to_string(),

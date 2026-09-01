@@ -155,6 +155,9 @@ spec:
                         maxItems: 64
                         minItems: 1
                         type: array
+                        x-kubernetes-list-map-keys:
+                        - field
+                        x-kubernetes-list-type: map
                       modelAliases:
                         additionalProperties:
                           type: string
@@ -3503,6 +3506,9 @@ spec:
                         maxItems: 64
                         minItems: 1
                         type: array
+                        x-kubernetes-list-map-keys:
+                        - field
+                        x-kubernetes-list-type: map
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [defaults finalTransformations

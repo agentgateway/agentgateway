@@ -668,16 +668,15 @@ impl HTTPProxy {
 			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
 			.map_err(|e| e.0);
-
-		log.with(|l| {
-			l.error = ret.as_ref().err().and_then(|e| {
-				if let ProxyResponse::Error(e) = e {
-					Some(e.to_string())
-				} else {
-					None
-				}
-			})
+		let error = ret.as_ref().err().and_then(|e| match e {
+			ProxyResponse::Error(e) => Some(cel::ErrorContext {
+				reason: e.as_reason().to_string(),
+				message: e.to_string(),
+			}),
+			ProxyResponse::DirectResponse(_) => None,
 		});
+
+		log.with(|l| l.error = error.as_ref().map(|e| e.message.clone()));
 		let reason = match &ret {
 			Ok(_) => ProxyResponseReason::Upstream,
 			Err(e) => e.as_reason(),
@@ -686,6 +685,16 @@ impl HTTPProxy {
 			ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
 			ProxyResponse::DirectResponse(dr) => *dr,
 		});
+		if let Some(error) = error {
+			if let Some(proxy) = resp.extensions_mut().get_mut::<cel::ProxyContext>() {
+				proxy.error = Some(error);
+			} else {
+				resp.extensions_mut().insert(cel::ProxyContext {
+					error: Some(error),
+					..Default::default()
+				});
+			}
+		}
 
 		if let Some(l) = log.as_mut() {
 			l.cel.ctx().maybe_buffer_response_body(&mut resp).await;
@@ -2222,15 +2231,16 @@ async fn build_simple_backend_call(
 #[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
-	route_policies: Arc<store::LLMRequestPolicies>,
+	mut route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
-	base_policies: Arc<BackendPolicies>,
+	mut base_policies: Arc<BackendPolicies>,
 	route_path: Option<RoutePath<'_>>,
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<Response, ProxyResponse> {
-	if let Backend::LLMRouter(_, router) = backend {
+	let resolved_backend;
+	let backend = if let Backend::LLMRouter(_, router) = backend {
 		let resolved = match router.resolve(&mut req).await {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
@@ -2242,21 +2252,13 @@ async fn make_backend_call(
 			&selected_backend.inline_policies,
 			route_path.clone(),
 		);
-		let route_policies = route_policies.merge_backend_policies(Some(resolved.llm_policy));
-		let policies = Arc::new(base_policies.as_ref().clone().merge(concrete_policies));
-		let backend = selected_backend.backend.backend;
-		return Box::pin(make_backend_call(
-			inputs,
-			route_policies,
-			&backend,
-			policies,
-			route_path,
-			req,
-			log,
-			response_policies,
-		))
-		.await;
-	}
+		route_policies = route_policies.merge_backend_policies(Some(resolved.llm_policy));
+		base_policies = Arc::new(base_policies.as_ref().clone().merge(concrete_policies));
+		resolved_backend = Box::new(selected_backend.backend.backend);
+		resolved_backend.as_ref()
+	} else {
+		backend
+	};
 
 	let policy_client = PolicyClient::new(inputs.clone()).with_parent(&req);
 	let hbone_source = req

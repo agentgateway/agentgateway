@@ -5,7 +5,7 @@ use ::http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use anyhow::anyhow;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
-use tracing::debug;
+use tracing::{debug, warn};
 use url::form_urlencoded;
 
 use super::{
@@ -243,7 +243,12 @@ fn classify_token_endpoint_error(status: StatusCode, body: String) -> FetchError
 			source: detailed,
 		}
 	} else {
-		debug!(%status, error = %detailed, "oauth token exchange returned non-success status");
+		// Only authorization server failures warrant a warning.
+		if status.is_server_error() {
+			warn!(%status, error = %detailed, "oauth token exchange returned non-success status");
+		} else {
+			debug!(%status, error = %detailed, "oauth token exchange returned non-success status");
+		}
 		FetchError::Upstream(anyhow!("token exchange returned status {status}"))
 	}
 }

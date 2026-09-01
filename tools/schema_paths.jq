@@ -224,6 +224,12 @@ def schema_paths(prefix):
     (.value | schema_paths($path + "."))
   else
     empty
+  end),
+
+  (if (.type // [] | if type == "array" then . else [.] end | contains(["object"])) and .additionalProperties == true then
+    [prefix + "*", "", "any"]
+  else
+    empty
   end);
 
 [schema_paths("")] | .[]  | ["|`" + .[0] + "`|" + .[2] + "|" + .[1] + "|"] | join(",")

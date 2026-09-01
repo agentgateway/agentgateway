@@ -17,6 +17,7 @@ use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
+use agent_core::strng::Strng;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
@@ -454,7 +455,7 @@ impl MCPTask {
 #[dynamic(rename_all = "camelCase")]
 pub struct MCPInfo {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub method_name: Option<String>,
+	pub method_name: Option<Strng>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub session_id: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]

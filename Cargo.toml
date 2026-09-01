@@ -143,7 +143,7 @@ opentelemetry-otlp = { version = "0.32", default-features = false, features = ["
 opentelemetry-proto = { version = "0.32", features = ["gen-tonic", "logs"] }
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
 parking_lot = "0.12"
-pem = "3.0.6"
+pem = "4.0.0"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"

@@ -5,15 +5,52 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
 
 type ModelCatalog struct {
+	Metadata  *CatalogMetadata    `json:"metadata,omitempty"`
 	Providers map[string]Provider `json:"providers"`
 }
 
+type CatalogMetadata struct {
+	Source      string    `json:"source"`
+	GeneratedAt time.Time `json:"generatedAt"`
+}
+
+func (c *ModelCatalog) overlayWith(overlay *ModelCatalog) {
+	if c.Providers == nil {
+		c.Providers = map[string]Provider{}
+	}
+	for providerID, overlayProvider := range overlay.Providers {
+		provider := c.Providers[providerID]
+		if provider.Models == nil {
+			provider.Models = map[string]Model{}
+		}
+		for modelID, overlayModel := range overlayProvider.Models {
+			model := provider.Models[modelID]
+			model.Rates.overlayWith(overlayModel.Rates)
+			if len(overlayModel.Tiers) > 0 {
+				model.Tiers = overlayModel.Tiers
+			}
+			model.Tags = append(model.Tags, overlayModel.Tags...)
+			provider.Models[modelID] = model
+		}
+		c.Providers[providerID] = provider
+	}
+}
+
 func (c *ModelCatalog) Validate() error {
+	if c.Metadata != nil {
+		if c.Metadata.Source == "" {
+			return fmt.Errorf("metadata source is required")
+		}
+		if c.Metadata.GeneratedAt.IsZero() {
+			return fmt.Errorf("metadata generatedAt is required")
+		}
+	}
 	for provider, p := range c.Providers {
 		for model, m := range p.Models {
 			if err := m.validate(); err != nil {
@@ -57,6 +94,16 @@ type Money string
 
 func (r Rates) IsZero() bool {
 	return r == Rates{}
+}
+
+func (r *Rates) overlayWith(overlay Rates) {
+	dst := reflect.ValueOf(r).Elem()
+	src := reflect.ValueOf(overlay)
+	for i := range src.NumField() {
+		if !src.Field(i).IsZero() {
+			dst.Field(i).Set(src.Field(i))
+		}
+	}
 }
 
 func (m Money) Decimal() (decimal.Decimal, error) {

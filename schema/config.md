@@ -12,6 +12,9 @@
 |`config.modelCatalog[].file`|string|Path to a file on disk containing the model cost catalog.|
 |`config.modelCatalog[].inline`|string|Model cost catalog provided inline as a string.|
 |`config.modelCatalog[].inline`|object|Model cost catalog provided inline as structured data.|
+|`config.modelCatalog[].inline.metadata`|object|Identifies a generated base catalog and when its contents last changed.|
+|`config.modelCatalog[].inline.metadata.source`|string|Upstream used to generate this base catalog, such as `models.dev`.|
+|`config.modelCatalog[].inline.metadata.generatedAt`|string|Time the generated catalog contents last changed.|
 |`config.modelCatalog[].inline.providers`|object|Map of provider name to its supported models and pricing.|
 |`config.modelCatalog[].inline.providers.*.models`|object|Map of model ID to its pricing rates and tiers.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model.|
@@ -101,6 +104,8 @@
 |`config.backend.connectTimeout`|string|Maximum time to wait when establishing a connection to an upstream. Defaults to 11 seconds.|
 |`config.backend.poolIdleTimeout`|string|The maximum duration to keep an idle connection alive.|
 |`config.backend.poolMaxSize`|integer|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
+|`config.backend.h2KeepaliveInterval`|string|Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.<br>PINGs are sent even on idle connections to proactively evict dead connections from the pool.<br>Disabled by default ("0s"). Note: many gRPC servers enforce a minimum ping interval<br>and will reject connections that ping more frequently.|
+|`config.backend.h2KeepaliveTimeout`|string|Timeout waiting for a PING ACK before considering the connection dead and closing it.<br>Only applies when h2_keepalive_interval is set. Defaults to 5s.|
 |`config.hbone`|object|HBONE (HTTP/2 CONNECT tunnel) protocol configuration.|
 |`config.hbone.windowSize`|integer|HTTP/2 per-stream flow-control window size in bytes. Defaults to 4 MiB.|
 |`config.hbone.connectionWindowSize`|integer|HTTP/2 connection-level flow-control window size in bytes. Defaults to 16 MiB.|
@@ -310,6 +315,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -507,6 +513,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.authentik`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.entra`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata.*`|any||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.url`|string||
@@ -649,6 +656,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -925,6 +933,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -1201,6 +1210,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -1475,6 +1485,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -1787,6 +1798,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -2063,6 +2075,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -2337,6 +2350,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -2526,7 +2540,9 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`binds[].listeners[].routes[].policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`binds[].listeners[].routes[].policies.ai.overrides.*`|any||
 |`binds[].listeners[].routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`binds[].listeners[].routes[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -2660,6 +2676,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -2892,6 +2909,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -3316,6 +3334,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -3601,6 +3620,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -3968,6 +3988,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -4266,6 +4287,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -4567,6 +4589,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -4855,6 +4878,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -5144,6 +5168,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -5428,6 +5453,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -5791,6 +5817,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -6109,6 +6136,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -6532,6 +6560,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -6822,6 +6851,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -7132,6 +7162,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -7448,6 +7479,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -7724,6 +7756,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -8000,6 +8033,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -8274,6 +8308,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -8586,6 +8621,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -8862,6 +8898,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -9136,6 +9173,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -9325,7 +9363,9 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.overrides.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -9484,6 +9524,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -9907,6 +9948,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -10197,6 +10239,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -10507,6 +10550,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -10823,6 +10867,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -11099,6 +11144,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -11375,6 +11421,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -11649,6 +11696,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -11961,6 +12009,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -12237,6 +12286,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -12511,6 +12561,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -12700,7 +12751,9 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -12822,6 +12875,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -13245,6 +13299,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -13535,6 +13590,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -13845,6 +13901,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -14161,6 +14218,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -14437,6 +14495,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -14713,6 +14772,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -14987,6 +15047,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -15299,6 +15360,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -15575,6 +15637,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -15849,6 +15912,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -16038,7 +16102,9 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`binds[].listeners[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`binds[].listeners[].routes[].backends[].policies.ai.overrides.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`binds[].listeners[].routes[].backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -16199,6 +16265,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -16518,6 +16585,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -16816,6 +16884,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -17117,6 +17186,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -17405,6 +17475,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -17805,6 +17876,7 @@
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -18116,6 +18188,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.claims.*`|any||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -18406,6 +18479,7 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.claims.*`|any||
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -18692,6 +18766,7 @@
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`frontendPolicies.tracing.policies.backendAuth.jwtSign.claims.*`|any||
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -19065,6 +19140,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -19262,6 +19338,7 @@
 |`policies[].policy.mcpAuthentication.provider.authentik`|object||
 |`policies[].policy.mcpAuthentication.provider.entra`|object||
 |`policies[].policy.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
+|`policies[].policy.mcpAuthentication.resourceMetadata.*`|any||
 |`policies[].policy.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`policies[].policy.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.mcpAuthentication.jwks.url`|string||
@@ -19404,6 +19481,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -19680,6 +19758,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -19956,6 +20035,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -20230,6 +20310,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -20542,6 +20623,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -20818,6 +20900,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -21092,6 +21175,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -21281,7 +21365,9 @@
 |`policies[].policy.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`policies[].policy.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`policies[].policy.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`policies[].policy.ai.defaults.*`|any||
 |`policies[].policy.ai.overrides`|object|Request body values that replace client-provided values.|
+|`policies[].policy.ai.overrides.*`|any||
 |`policies[].policy.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`policies[].policy.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`policies[].policy.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -21415,6 +21501,7 @@
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -21647,6 +21734,7 @@
 |`policies[].policy.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -22071,6 +22159,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -22356,6 +22445,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -22723,6 +22813,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -23021,6 +23112,7 @@
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -23322,6 +23414,7 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -23610,6 +23703,7 @@
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -23899,6 +23993,7 @@
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -24183,6 +24278,7 @@
 |`policies[].policy.substrateEgress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`policies[].policy.substrateEgress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`policies[].policy.substrateEgress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.substrateEgress.policies.backendAuth.jwtSign.claims.*`|any||
 |`policies[].policy.substrateEgress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`policies[].policy.substrateEgress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`policies[].policy.substrateEgress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -24409,7 +24505,9 @@
 |`policies[].policy.delay`|object|Inject artificial latency before forwarding requests.|
 |`policies[].policy.delay.duration`|string|Artificial latency injected before the request is forwarded to the backend. Either a duration<br>string such as `2s`, or a CEL expression evaluated against the request that returns a duration<br>(e.g. `duration("500ms")`) or a number interpreted as milliseconds (e.g.<br>`random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A<br>non-positive result injects no delay.|
 |`workloads`|[]object|workloads defines the set of workloads that the proxy can serve. These are selected by `services`.<br>This is an advanced feature that is mostly for testing; usage of inline `backends` on routes and<br>policies is typically preferred.|
+|`workloads[].*`|any||
 |`services`|[]object|services defines the set of services that the proxy can route to. These consist of `workloads`.<br>This is an advanced feature that is mostly for testing; usage of inline `backends` on routes and<br>policies is typically preferred.|
+|`services[].*`|any||
 |`backends`|[]object|backends defines explicit backends that can be referenced by routes and policies.<br>Typically, inline backends are used on the routes/policies, but this allows re-using the same backend<br>across different configurations.|
 |`backends[].host`|string|Hostname or IP address of the upstream to route to.|
 |`backends[].dynamic`|object|Resolve the dial target from request metadata using a CEL expression.|
@@ -24544,6 +24642,7 @@
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].mcp.targets[].policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -24862,6 +24961,7 @@
 |`backends[].ai.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -25285,6 +25385,7 @@
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -25575,6 +25676,7 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -25885,6 +25987,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -26201,6 +26304,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -26477,6 +26581,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -26753,6 +26858,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -27027,6 +27133,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -27339,6 +27446,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -27615,6 +27723,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -27889,6 +27998,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -28078,7 +28188,9 @@
 |`backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`backends[].ai.policies.ai.defaults.*`|any||
 |`backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`backends[].ai.policies.ai.overrides.*`|any||
 |`backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -28237,6 +28349,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -28660,6 +28773,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -28950,6 +29064,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -29260,6 +29375,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -29576,6 +29692,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -29852,6 +29969,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -30128,6 +30246,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -30402,6 +30521,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -30714,6 +30834,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -30990,6 +31111,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -31264,6 +31386,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -31453,7 +31576,9 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`backends[].ai.groups[].providers[].policies.ai.overrides.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -31573,6 +31698,7 @@
 |`backends[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -31996,6 +32122,7 @@
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -32286,6 +32413,7 @@
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -32596,6 +32724,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -32912,6 +33041,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -33188,6 +33318,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -33464,6 +33595,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -33738,6 +33870,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -34050,6 +34183,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -34326,6 +34460,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -34600,6 +34735,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -34789,7 +34925,9 @@
 |`backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`backends[].policies.ai.defaults.*`|any||
 |`backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`backends[].policies.ai.overrides.*`|any||
 |`backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -34992,6 +35130,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -35189,6 +35328,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.authentik`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.entra`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
+|`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata.*`|any||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.url`|string||
@@ -35331,6 +35471,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -35607,6 +35748,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -35883,6 +36025,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -36157,6 +36300,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -36469,6 +36613,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -36745,6 +36890,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -37019,6 +37165,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -37208,7 +37355,9 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routeGroups[].routes[].policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routeGroups[].routes[].policies.ai.overrides.*`|any||
 |`routeGroups[].routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routeGroups[].routes[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -37342,6 +37491,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -37574,6 +37724,7 @@
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -37998,6 +38149,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -38283,6 +38435,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -38650,6 +38803,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -38948,6 +39102,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -39249,6 +39404,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -39537,6 +39693,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -39826,6 +39983,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -40110,6 +40268,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -40473,6 +40632,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -40791,6 +40951,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -41214,6 +41375,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -41504,6 +41666,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -41814,6 +41977,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -42130,6 +42294,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -42406,6 +42571,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -42682,6 +42848,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -42956,6 +43123,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -43268,6 +43436,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -43544,6 +43713,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -43818,6 +43988,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -44007,7 +44178,9 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.overrides.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -44166,6 +44339,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -44589,6 +44763,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -44879,6 +45054,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -45189,6 +45365,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -45505,6 +45682,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -45781,6 +45959,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -46057,6 +46236,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -46331,6 +46511,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -46643,6 +46824,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -46919,6 +47101,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -47193,6 +47376,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -47382,7 +47566,9 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -47504,6 +47690,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -47927,6 +48114,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -48217,6 +48405,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -48527,6 +48716,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -48843,6 +49033,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -49119,6 +49310,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -49395,6 +49587,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -49669,6 +49862,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -49981,6 +50175,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -50257,6 +50452,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -50531,6 +50727,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -50720,7 +50917,9 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routeGroups[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routeGroups[].routes[].backends[].policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routeGroups[].routes[].backends[].policies.ai.overrides.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routeGroups[].routes[].backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -50909,6 +51108,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -51207,6 +51407,7 @@
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -51508,6 +51709,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -51796,6 +51998,7 @@
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -52222,6 +52425,7 @@
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -52520,6 +52724,7 @@
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -52821,6 +53026,7 @@
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -53109,6 +53315,7 @@
 |`gateways.*.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`gateways.*.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`gateways.*.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`gateways.*.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`gateways.*.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`gateways.*.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -53555,6 +53762,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -53752,6 +53960,7 @@
 |`routes[].policies.mcpAuthentication.provider.authentik`|object||
 |`routes[].policies.mcpAuthentication.provider.entra`|object||
 |`routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
+|`routes[].policies.mcpAuthentication.resourceMetadata.*`|any||
 |`routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.mcpAuthentication.jwks.url`|string||
@@ -53894,6 +54103,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -54170,6 +54380,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -54446,6 +54657,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -54720,6 +54932,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -55032,6 +55245,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -55308,6 +55522,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -55582,6 +55797,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -55771,7 +55987,9 @@
 |`routes[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routes[].policies.ai.defaults.*`|any||
 |`routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routes[].policies.ai.overrides.*`|any||
 |`routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routes[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -55905,6 +56123,7 @@
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -56137,6 +56356,7 @@
 |`routes[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -56561,6 +56781,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -56846,6 +57067,7 @@
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -57213,6 +57435,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -57511,6 +57734,7 @@
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -57812,6 +58036,7 @@
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -58100,6 +58325,7 @@
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -58389,6 +58615,7 @@
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -58673,6 +58900,7 @@
 |`routes[].policies.substrateEgress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].policies.substrateEgress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].policies.substrateEgress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.substrateEgress.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].policies.substrateEgress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].policies.substrateEgress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].policies.substrateEgress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -59036,6 +59264,7 @@
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -59354,6 +59583,7 @@
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -59777,6 +60007,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -60067,6 +60298,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -60377,6 +60609,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -60693,6 +60926,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -60969,6 +61203,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -61245,6 +61480,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -61519,6 +61755,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -61831,6 +62068,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -62107,6 +62345,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -62381,6 +62620,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -62570,7 +62810,9 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routes[].backends[].ai.policies.ai.defaults.*`|any||
 |`routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routes[].backends[].ai.policies.ai.overrides.*`|any||
 |`routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routes[].backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -62729,6 +62971,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -63152,6 +63395,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -63442,6 +63686,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -63752,6 +63997,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -64068,6 +64314,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -64344,6 +64591,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -64620,6 +64868,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -64894,6 +65143,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -65206,6 +65456,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -65482,6 +65733,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -65756,6 +66008,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -65945,7 +66198,9 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.overrides.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -66067,6 +66322,7 @@
 |`routes[].backends[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -66490,6 +66746,7 @@
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -66780,6 +67037,7 @@
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -67090,6 +67348,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -67406,6 +67665,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -67682,6 +67942,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -67958,6 +68219,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -68232,6 +68494,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -68544,6 +68807,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -68820,6 +69084,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -69094,6 +69359,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -69283,7 +69549,9 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`routes[].backends[].policies.ai.defaults.*`|any||
 |`routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`routes[].backends[].policies.ai.overrides.*`|any||
 |`routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`routes[].backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -69445,6 +69713,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -69654,7 +69923,9 @@
 |`llm.providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`llm.providers[].defaults`|object|defaults defines provider-level policy defaults. Model-level policy fields override these.|
 |`llm.providers[].defaults.defaults`|object|Request payload fields to set when not already present in the request.|
+|`llm.providers[].defaults.defaults.*`|any||
 |`llm.providers[].defaults.overrides`|object|Request payload fields to set, overriding any existing values in the request.|
+|`llm.providers[].defaults.overrides.*`|any||
 |`llm.providers[].defaults.transformation`|object|CEL expressions that compute request payload fields, overriding existing values.|
 |`llm.providers[].defaults.requestHeaders`|object|Headers to add, set, or remove on requests to the LLM provider.|
 |`llm.providers[].defaults.requestHeaders.add`|object|Headers to append without replacing existing values.|
@@ -69752,6 +70023,7 @@
 |`llm.providers[].defaults.auth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.providers[].defaults.auth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.providers[].defaults.auth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.providers[].defaults.auth.jwtSign.claims.*`|any||
 |`llm.providers[].defaults.auth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.providers[].defaults.auth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.providers[].defaults.auth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -70171,6 +70443,7 @@
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -70378,7 +70651,9 @@
 |`llm.models[].authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`llm.models[].authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
+|`llm.models[].defaults.*`|any||
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
+|`llm.models[].overrides.*`|any||
 |`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.|
 |`llm.models[].finalTransformation`|object|final_transformation allows setting values from CEL expressions for the request, overriding any existing values.<br>Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.|
 |`llm.models[].requestHeaders`|object|requestHeaders modifies headers in requests to the LLM provider.|
@@ -70477,6 +70752,7 @@
 |`llm.models[].auth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].auth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].auth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].auth.jwtSign.claims.*`|any||
 |`llm.models[].auth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].auth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].auth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -70896,6 +71172,7 @@
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -71185,6 +71462,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -71461,6 +71739,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -71737,6 +72016,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -72011,6 +72291,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -72323,6 +72604,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -72599,6 +72881,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -72873,6 +73156,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -73241,6 +73525,7 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -73539,6 +73824,7 @@
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -73840,6 +74126,7 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -74128,6 +74415,7 @@
 |`llm.policies.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -74513,6 +74801,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -74789,6 +75078,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -75065,6 +75355,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -75339,6 +75630,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -75651,6 +75943,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -75927,6 +76220,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -76201,6 +76495,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -76498,6 +76793,7 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.claims.*`|any||
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -76811,6 +77107,7 @@
 |`mcp.targets[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.targets[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.targets[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.targets[].policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.targets[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.targets[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.targets[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -77151,6 +77448,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -77348,6 +77646,7 @@
 |`mcp.policies.mcpAuthentication.provider.authentik`|object||
 |`mcp.policies.mcpAuthentication.provider.entra`|object||
 |`mcp.policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
+|`mcp.policies.mcpAuthentication.resourceMetadata.*`|any||
 |`mcp.policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`mcp.policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.mcpAuthentication.jwks.url`|string||
@@ -77490,6 +77789,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -77766,6 +78066,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -78042,6 +78343,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -78316,6 +78618,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -78628,6 +78931,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -78904,6 +79208,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -79178,6 +79483,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -79367,7 +79673,9 @@
 |`mcp.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`mcp.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`mcp.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
+|`mcp.policies.ai.defaults.*`|any||
 |`mcp.policies.ai.overrides`|object|Request body values that replace client-provided values.|
+|`mcp.policies.ai.overrides.*`|any||
 |`mcp.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
 |`mcp.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`mcp.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
@@ -79501,6 +79809,7 @@
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -79733,6 +80042,7 @@
 |`mcp.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -80157,6 +80467,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -80442,6 +80753,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -80809,6 +81121,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -81107,6 +81420,7 @@
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -81408,6 +81722,7 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -81696,6 +82011,7 @@
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.extProc.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -81985,6 +82301,7 @@
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -82269,6 +82586,7 @@
 |`mcp.policies.substrateEgress.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`mcp.policies.substrateEgress.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`mcp.policies.substrateEgress.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.substrateEgress.policies.backendAuth.jwtSign.claims.*`|any||
 |`mcp.policies.substrateEgress.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`mcp.policies.substrateEgress.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`mcp.policies.substrateEgress.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -82656,6 +82974,7 @@
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.claims.*`|any||
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
@@ -82954,6 +83273,7 @@
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`ui.policies.extAuthz.policies.backendAuth.jwtSign.claims.*`|any||
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|

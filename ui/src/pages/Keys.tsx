@@ -794,6 +794,11 @@ function KeyEditor(props: {
 					)
 				}
 			>
+				{!props.config?.config?.database ? (
+					<StatusBanner state="warn" title="Database required">
+						API key budgets require <code>config.database</code> to be configured.
+					</StatusBanner>
+				) : null}
 				<BudgetEditor budgets={budgets} apiKeyName={keyName(props.initial)} onChange={setBudgets} />
 				{submitted && invalidBudgets ? (
 					<StatusBanner state="bad" title="Invalid budgets">

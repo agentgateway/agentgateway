@@ -202,7 +202,7 @@ async function requireWritableRuntime(queryClient: ReturnType<typeof useQueryCli
 	const runtime =
 		queryClient.getQueryData<Awaited<ReturnType<typeof getRuntimeInfo>>>(['runtime']) ??
 		(await getRuntimeInfo());
-	if (runtime.ui.configStoreMode == 'readOnly') {
+	if (runtime.ui.configStoreMode === 'readOnly') {
 		throw new Error('The UI is configured as read-only.');
 	}
 	return runtime;
@@ -220,7 +220,7 @@ function invalidateConfigViews(queryClient: ReturnType<typeof useQueryClient>) {
 export function useUpdateConfig() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: async (updater: (config: GatewayConfig) => GatewayConfig | void) => {
+		mutationFn: async (updater: (config: GatewayConfig) => GatewayConfig | undefined) => {
 			const runtime = await requireWritableRuntime(queryClient);
 			const overrideHybridFileWrite = takeHybridFileWriteOverride();
 			if (runtime.ui.configStoreMode === 'hybrid' && !overrideHybridFileWrite) {

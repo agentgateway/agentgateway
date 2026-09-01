@@ -2251,6 +2251,8 @@ type BackendAI struct {
 	// key.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
+	// +listType=map
+	// +listMapKey=field
 	// +optional
 	Transformations []FieldTransformation `json:"transformations,omitempty"`
 
@@ -2261,6 +2263,8 @@ type BackendAI struct {
 	// Those transformations are applied after the request is converted to the provider's format, so they can be used to set provider-specific fields.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
+	// +listType=map
+	// +listMapKey=field
 	// +optional
 	FinalTransformations []FieldTransformation `json:"finalTransformations,omitempty"`
 

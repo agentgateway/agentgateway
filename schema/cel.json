@@ -148,6 +148,28 @@
         "null"
       ],
       "properties": {
+        "error": {
+          "description": "The final gateway error when the response was synthesized from a failed request.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "reason": {
+              "description": "Broad classification of the failure, such as `UpstreamFailure` or `Timeout`.",
+              "type": "string"
+            },
+            "message": {
+              "description": "Human-readable failure detail. Exact message is subject to change.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "reason",
+            "message"
+          ]
+        },
         "bind": {
           "description": "The bind that accepted the request.",
           "type": [
@@ -294,7 +316,7 @@
       "additionalProperties": true
     },
     "apiKey": {
-      "description": "`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.",
+      "description": "`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.\nIn addition to `key`, user-supplied metadata fields are flattened into this object; for example,\n`apiKey.group`. Metadata values are plain JSON and are not treated as secrets.",
       "type": [
         "object",
         "null"
@@ -928,7 +950,7 @@
       "additionalProperties": false
     },
     "mcp": {
-      "description": "`mcp` contains attributes about the MCP request.\nRequest-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.\nPost-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.",
+      "description": "`mcp` contains attributes about the MCP request.\nRequest-time CEL includes identity fields (`tool`, `prompt`, `resource`,\n`task`) plus `methodName`. Post-request CEL may also include fields like\n`sessionId` and tool payloads.",
       "type": [
         "object",
         "null"

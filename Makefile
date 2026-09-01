@@ -126,6 +126,10 @@ check-clean-repo:
 gen: generate-apis generate-schema format
 	@:
 
+.PHONY: refresh-model-catalog
+refresh-model-catalog:
+	go run ./controller/cmd/agctl catalog import --exclude-providers openrouter --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty
+
 .PHONY: generate-schema
 generate-schema:
 	@cargo xtask schema

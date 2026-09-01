@@ -65,6 +65,7 @@ COPY Makefile Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
 COPY crates ./crates
 COPY tools ./tools
+COPY catalog ./catalog
 COPY --from=node /app/dist ./ui/dist
 
 RUN \

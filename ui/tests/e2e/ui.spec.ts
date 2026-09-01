@@ -951,8 +951,10 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 			const kind = String(resource.kind);
 			if (!kind.endsWith('.policy')) continue;
 			const sectionName = kind.split('.')[0];
-			const section = (effective[sectionName] ??= {}) as Record<string, unknown>;
-			const policies = (section.policies ??= {}) as Record<string, unknown>;
+			effective[sectionName] ??= {};
+			const section = effective[sectionName] as Record<string, unknown>;
+			section.policies ??= {};
+			const policies = section.policies as Record<string, unknown>;
 			policies[String(resource.id)] = resource.value;
 		}
 		return route.fulfill({
@@ -1067,6 +1069,16 @@ test('reveals a virtual API key explicitly', async ({ page }) => {
 	await expect(page.getByText('agw_sk_testkey123456789')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Show full key' }).click();
 	await expect(page.getByText('agw_sk_testkey123456789')).toBeVisible();
+});
+
+test('warns that API key budgets require the primary database', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/keys');
+
+	await page.getByRole('button', { name: 'Edit key' }).click();
+	await page.getByRole('button', { name: /^Budgets/ }).click();
+	const warning = page.locator('.status-banner.warn').filter({ hasText: 'Database required' });
+	await expect(warning).toContainText('API key budgets require config.database to be configured.');
 });
 
 test('LLM playground sends selected virtual model name', async ({ page }) => {
