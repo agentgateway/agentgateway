@@ -1192,9 +1192,9 @@ impl Policy {
 		else {
 			return rejection.as_response();
 		};
-		let mut rejection = rejection.clone();
-		rejection.body = Bytes::from(body.to_owned());
-		rejection.as_response()
+		let mut response = rejection.as_response();
+		*response.body_mut() = http::Body::from(Bytes::from(body.to_owned()));
+		response
 	}
 
 	async fn evaluate_google_model_armor_request(
