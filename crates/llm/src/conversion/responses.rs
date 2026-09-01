@@ -19,6 +19,43 @@ enum StreamResponse {
 	Raw(detect::StreamResponse),
 }
 
+fn record_response(log: &StreamingUsageGuard, response: &types::responses::typed::Response) {
+	log.update(|r| {
+		r.response.provider_model = Some(strng::new(&response.model));
+		r.response.service_tier = response
+			.service_tier
+			.as_ref()
+			.and_then(types::serialize_str);
+		if let Some(usage) = &response.usage {
+			r.response.input_tokens = Some(usage.input_tokens as u64);
+			r.response.output_tokens = Some(usage.output_tokens as u64);
+			r.response.total_tokens = Some(usage.total_tokens as u64);
+			r.response.cached_input_tokens = Some(usage.input_tokens_details.cached_tokens as u64);
+			r.response.cache_creation_input_tokens = usage
+				.input_tokens_details
+				.cache_write_tokens
+				.map(|tokens| tokens as u64);
+			r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
+		}
+	});
+}
+
+fn record_terminal_response(
+	log: &StreamingUsageGuard,
+	response: &types::responses::typed::Response,
+	completion: &mut Option<String>,
+	tool_calls: &mut Option<BTreeMap<u32, OutputMessagePart>>,
+) {
+	record_response(log, response);
+	let finish_reason = types::serialize_str(&response.status);
+	log.update(|r| {
+		if let Some(c) = completion.take() {
+			r.response.completion = Some(vec![c]);
+		}
+		r.response.output_messages = take_output_messages(tool_calls, finish_reason.clone());
+	});
+}
+
 pub fn passthrough_stream(
 	b: Body,
 	buffer_limit: usize,
@@ -52,25 +89,7 @@ pub fn passthrough_stream(
 		};
 		match event {
 			types::responses::typed::ResponseStreamEvent::ResponseCreated(created) => {
-				log.update(|r| {
-					r.response.provider_model = Some(strng::new(&created.response.model));
-					r.response.service_tier = created
-						.response
-						.service_tier
-						.as_ref()
-						.and_then(types::serialize_str);
-					if let Some(usage) = &created.response.usage {
-						r.response.input_tokens = Some(usage.input_tokens as u64);
-						r.response.output_tokens = Some(usage.output_tokens as u64);
-						r.response.total_tokens = Some(usage.total_tokens as u64);
-						r.response.cached_input_tokens = Some(usage.input_tokens_details.cached_tokens as u64);
-						r.response.cache_creation_input_tokens = usage
-							.input_tokens_details
-							.cache_write_tokens
-							.map(|tokens| tokens as u64);
-						r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
-					}
-				});
+				record_response(&log, &created.response);
 			},
 			types::responses::typed::ResponseStreamEvent::ResponseOutputTextDelta(ref delta) => {
 				if !saw_token {
@@ -91,30 +110,10 @@ pub fn passthrough_stream(
 				}
 			},
 			types::responses::typed::ResponseStreamEvent::ResponseCompleted(completed) => {
-				let finish_reason = types::serialize_str(&completed.response.status);
-				log.update(|r| {
-					r.response.provider_model = Some(strng::new(&completed.response.model));
-					r.response.service_tier = completed
-						.response
-						.service_tier
-						.as_ref()
-						.and_then(types::serialize_str);
-					if let Some(usage) = &completed.response.usage {
-						r.response.input_tokens = Some(usage.input_tokens as u64);
-						r.response.output_tokens = Some(usage.output_tokens as u64);
-						r.response.total_tokens = Some(usage.total_tokens as u64);
-						r.response.cached_input_tokens = Some(usage.input_tokens_details.cached_tokens as u64);
-						r.response.cache_creation_input_tokens = usage
-							.input_tokens_details
-							.cache_write_tokens
-							.map(|tokens| tokens as u64);
-						r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
-					}
-					if let Some(c) = completion.take() {
-						r.response.completion = Some(vec![c]);
-					}
-					r.response.output_messages = take_output_messages(&mut tool_calls, finish_reason.clone());
-				});
+				record_terminal_response(&log, &completed.response, &mut completion, &mut tool_calls);
+			},
+			types::responses::typed::ResponseStreamEvent::ResponseIncomplete(incomplete) => {
+				record_terminal_response(&log, &incomplete.response, &mut completion, &mut tool_calls);
 			},
 			_ => {},
 		}

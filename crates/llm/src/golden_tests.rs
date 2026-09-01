@@ -1371,6 +1371,50 @@ data: {"type":"message_stop"}
 		assert_eq!(arguments, "{}");
 	}
 
+	#[tokio::test]
+	async fn responses_passthrough_records_incomplete_usage() {
+		let input = r#"data: {"type":"response.output_text.delta","sequence_number":1,"item_id":"item","output_index":0,"content_index":0,"delta":"partial"}
+
+data: {"type":"response.incomplete","sequence_number":2,"response":{"created_at":1,"id":"response","model":"gpt-5","object":"response","output":[],"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":4},"output_tokens":7,"output_tokens_details":{"reasoning_tokens":2},"total_tokens":17}}}
+
+data: [DONE]
+
+"#;
+		let info = Arc::new(Mutex::new(LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Responses,
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: strng::literal!("input-model"),
+				provider: Default::default(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse::default(),
+		)));
+		let reporter = TestStreamingReporter { info: info.clone() };
+
+		conversion::responses::passthrough_stream(
+			axum_core::body::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::new(Box::new(reporter)),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap();
+
+		let response = &info.lock().unwrap().response;
+		assert_eq!(response.input_tokens, Some(10));
+		assert_eq!(response.output_tokens, Some(7));
+		assert_eq!(response.total_tokens, Some(17));
+		assert_eq!(response.cached_input_tokens, Some(4));
+		assert_eq!(response.reasoning_tokens, Some(2));
+		assert!(response.first_token.is_some());
+	}
+
 	#[test]
 	fn responses_usage_allows_missing_cache_write_tokens() {
 		let event = serde_json::from_value::<types::responses::typed::ResponseStreamEvent>(json!({
