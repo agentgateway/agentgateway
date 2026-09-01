@@ -4568,6 +4568,13 @@
             "string",
             "null"
           ]
+        },
+        "maxConnectionDurationJitter": {
+          "description": "Maximum random reduction applied per-connection to `maxConnectionDuration`, so connections\nestablished together do not all redial at the same instant. Unset means no jitter.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -9996,6 +10003,14 @@
         },
         "maxConnectionDuration": {
           "description": "Maximum time a connection may stay open. After this duration, the connection is gracefully\nclosed after the current in-flight request completes. Useful for even traffic distribution\nbehind load balancers during scaling events.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "maxConnectionDurationJitter": {
+          "description": "Maximum random reduction applied per-connection to `maxConnectionDuration`, so connections\naccepted together do not all drain at the same instant. Unset means no jitter.",
           "type": [
             "string",
             "null"

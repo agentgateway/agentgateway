@@ -217,6 +217,7 @@ pub struct ConnectionConfig {
 	pub transport: Transport,
 	pub tcp: Option<types::backend::TCP>,
 	pub max_connection_duration: Option<Duration>,
+	pub max_connection_duration_jitter: Option<Duration>,
 }
 
 impl From<Transport> for ConnectionConfig {
@@ -225,8 +226,17 @@ impl From<Transport> for ConnectionConfig {
 			transport,
 			tcp: None,
 			max_connection_duration: None,
+			max_connection_duration_jitter: None,
 		}
 	}
+}
+
+pub(crate) fn jittered(d: Duration, jitter: Option<Duration>) -> Duration {
+	let jitter = jitter.unwrap_or(Duration::ZERO).min(d);
+	if jitter.is_zero() {
+		return d;
+	}
+	d - rand::random_range(Duration::ZERO..=jitter)
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -325,6 +335,7 @@ impl Connector {
 			transport,
 			tcp,
 			max_connection_duration,
+			max_connection_duration_jitter,
 		} = connection;
 		let connect_start = std::time::Instant::now();
 		let transport_name = transport.name();
@@ -452,6 +463,7 @@ impl Connector {
 		);
 
 		if let Some(max_age) = max_connection_duration {
+			let max_age = jittered(max_age, max_connection_duration_jitter);
 			socket
 				.ext_mut()
 				.insert(stream::ConnectionDeadline(connect_start + max_age));
@@ -852,6 +864,7 @@ mod tests {
 					transport: Transport::Plain(ApplicationTransport::Plaintext),
 					tcp: None,
 					max_connection_duration: Some(max_age),
+					max_connection_duration_jitter: None,
 				},
 			)
 			.await
@@ -861,6 +874,20 @@ mod tests {
 			.expect("deadline should be set");
 		assert!(deadline >= before + max_age);
 		assert!(deadline <= std::time::Instant::now() + max_age);
+	}
+
+	#[test]
+	fn jittered_reduces_within_bounds() {
+		let d = Duration::from_secs(60);
+		assert_eq!(jittered(d, None), d);
+		assert_eq!(jittered(d, Some(Duration::ZERO)), d);
+		for _ in 0..100 {
+			let j = jittered(d, Some(Duration::from_secs(30)));
+			assert!(j >= Duration::from_secs(30) && j <= d);
+		}
+		// Jitter larger than the duration is capped at the duration.
+		let j = jittered(d, Some(Duration::from_secs(600)));
+		assert!(j <= d);
 	}
 
 	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback

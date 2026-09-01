@@ -967,7 +967,16 @@ impl Gateway {
 		let max_connection_duration = policies
 			.http
 			.as_ref()
-			.and_then(|h| h.max_connection_duration);
+			.and_then(|h| h.max_connection_duration)
+			.map(|d| {
+				crate::client::jittered(
+					d,
+					policies
+						.http
+						.as_ref()
+						.and_then(|h| h.max_connection_duration_jitter),
+				)
+			});
 		let max_requests = policies
 			.http
 			.as_ref()
@@ -1746,8 +1755,9 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		http2_max_header_size,
 		http2_keepalive_interval,
 		http2_keepalive_timeout,
-		max_connection_duration: _, // Not handled here
-		max_concurrent_requests: _, // Not handled here
+		max_connection_duration: _,        // Not handled here
+		max_connection_duration_jitter: _, // Not handled here
+		max_concurrent_requests: _,        // Not handled here
 	} = c.unwrap_or(&def);
 
 	if let Some(m) = http1_max_headers {

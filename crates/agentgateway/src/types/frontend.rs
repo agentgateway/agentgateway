@@ -95,6 +95,13 @@ pub struct HTTP {
 	#[serde(default)]
 	pub max_connection_duration: Option<Duration>,
 
+	/// Maximum random reduction applied per-connection to `maxConnectionDuration`, so connections
+	/// accepted together do not all drain at the same instant. Unset means no jitter.
+	#[serde(with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	#[serde(default)]
+	pub max_connection_duration_jitter: Option<Duration>,
+
 	/// Maximum number of in-flight HTTP requests across this bind. This includes HTTP/1 requests
 	/// and HTTP/2 streams. Requests over the limit are rejected immediately.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -119,6 +126,7 @@ impl Default for HTTP {
 			http2_keepalive_timeout: None,
 
 			max_connection_duration: None,
+			max_connection_duration_jitter: None,
 			max_concurrent_requests: None,
 		}
 	}

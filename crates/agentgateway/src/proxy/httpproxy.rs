@@ -1258,6 +1258,7 @@ impl HTTPProxy {
 					transport,
 					tcp: backend_call.backend_policies.tcp.clone(),
 					max_connection_duration: None,
+					max_connection_duration_jitter: None,
 				},
 			)
 			.await?;
@@ -1799,6 +1800,7 @@ pub async fn build_transport(
 				transport,
 				tcp: call.backend_policies.tcp.clone(),
 				max_connection_duration: None,
+				max_connection_duration_jitter: None,
 			}),
 			target: call.target.clone(),
 			token,
@@ -2854,6 +2856,11 @@ async fn make_backend_call(
 				.http
 				.as_ref()
 				.and_then(|h| h.max_connection_duration),
+			max_connection_duration_jitter: backend_call
+				.backend_policies
+				.http
+				.as_ref()
+				.and_then(|h| h.max_connection_duration_jitter),
 		},
 	};
 	let span_target = backend_call.span_target;
