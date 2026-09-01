@@ -746,8 +746,9 @@ fn typed_input_file(file: responses::InputFileContent) -> Result<messages::Conte
 			"Responses input file IDs are unsupported"
 		)));
 	}
+	let filename = file.filename.filter(|name| !name.is_empty());
 	let source = match (file.file_data, file.file_url) {
-		(Some(data), None) => file_data_source(&data)?,
+		(Some(data), None) => file_data_source(&data, filename.as_deref())?,
 		(None, Some(url)) if is_absolute_http_url(&url) => {
 			serde_json::json!({"type": "url", "url": url})
 		},
@@ -768,7 +769,7 @@ fn typed_input_file(file: responses::InputFileContent) -> Result<messages::Conte
 			cache_control: None,
 			citations: None,
 			context: None,
-			title: file.filename.filter(|name| !name.is_empty()),
+			title: filename,
 		},
 	))
 }
@@ -915,10 +916,26 @@ fn is_absolute_http_url(url: &str) -> bool {
 		&& uri.host().is_some_and(|host| !host.is_empty())
 }
 
-fn file_data_source(file_data: &str) -> Result<serde_json::Value, AIError> {
-	let (media_type, data) = parse_base64_data_url(file_data).ok_or_else(|| {
-		AIError::UnsupportedConversion(strng::literal!("invalid Responses input file data"))
-	})?;
+fn file_data_source(file_data: &str, filename: Option<&str>) -> Result<serde_json::Value, AIError> {
+	let (media_type, data) = if file_data.starts_with("data:") {
+		parse_base64_data_url(file_data).ok_or_else(|| {
+			AIError::UnsupportedConversion(strng::literal!("invalid Responses input file data"))
+		})?
+	} else {
+		base64::engine::general_purpose::STANDARD
+			.decode(file_data)
+			.map_err(|_| {
+				AIError::UnsupportedConversion(strng::literal!("invalid Responses input file data"))
+			})?;
+		let media_type = filename
+			.and_then(|name| mime_guess::from_path(name).first_raw())
+			.ok_or_else(|| {
+				AIError::UnsupportedConversion(strng::literal!(
+					"Responses raw file data requires a recognized filename",
+				))
+			})?;
+		(media_type, file_data)
+	};
 	match media_type {
 		"application/pdf" => Ok(serde_json::json!({
 			"type": "base64",

@@ -462,7 +462,7 @@ fn fixture_path(relative_path: &str) -> PathBuf {
 fn copilot_claude_formats_prefer_messages() {
 	for model in ["claude-sonnet-4", "Claude-Sonnet-4"] {
 		assert_eq!(
-			copilot::Provider::supported_formats_for_model(Some(model)),
+			copilot::Provider::supported_formats_for_model(Some(model), None),
 			vec![ChatFormat::AnthropicMessages],
 			"{model}"
 		);
@@ -484,7 +484,7 @@ fn copilot_non_claude_formats_are_unchanged() {
 		("GPT-5", &[ChatFormat::OpenAIResponses][..]),
 	] {
 		assert_eq!(
-			copilot::Provider::supported_formats_for_model(Some(model)).as_slice(),
+			copilot::Provider::supported_formats_for_model(Some(model), None).as_slice(),
 			expected,
 			"{model}"
 		);
@@ -502,7 +502,10 @@ fn copilot_claude_surface_routes_stay_native() {
 		InputFormat::Completions,
 	] {
 		assert_eq!(
-			provider.chat_translation(input, model).unwrap().output,
+			provider
+				.chat_translation(input, model, None)
+				.unwrap()
+				.output,
 			ChatFormat::AnthropicMessages,
 			"{input:?}"
 		);
@@ -548,7 +551,7 @@ fn responses_to_messages_routing_follows_messages_capability() {
 	for (name, provider, model) in providers {
 		assert_eq!(
 			provider
-				.chat_translation(InputFormat::Responses, Some(model))
+				.chat_translation(InputFormat::Responses, Some(model), None)
 				.expect("Responses-to-Messages routing should be available")
 				.output,
 			ChatFormat::AnthropicMessages,
@@ -597,7 +600,7 @@ fn responses_routing_preserves_non_messages_formats() {
 	for (name, provider, model, expected) in providers {
 		assert_eq!(
 			provider
-				.chat_translation(InputFormat::Responses, Some(model))
+				.chat_translation(InputFormat::Responses, Some(model), None)
 				.expect("Responses routing should remain available")
 				.output,
 			expected,
@@ -672,7 +675,7 @@ async fn copilot_claude_responses_request_uses_messages_route() {
 			llm_request,
 			upstream_route_type,
 		} = provider
-			.process_responses_request(&backend_info, None, req, false, &mut None)
+			.process_responses_request(&backend_info, None, req, false, &mut None, None)
 			.await
 			.expect("Copilot Claude Responses request should process")
 		else {
@@ -720,6 +723,7 @@ fn cache_only_web_search_policy_is_copilot_only() {
 	let Err(error) = translation.render_request(
 		types::ChatRequest::Responses(request),
 		&ChatRequestContext {
+			catalog: None,
 			provider: &provider,
 			headers: &HeaderMap::new(),
 			prompt_caching: None,
@@ -762,8 +766,7 @@ async fn copilot_claude_error_responses_route_preserves_status_and_redacts_provi
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			LLMLogging::default(),
 			None,
 			upstream_response,
 		)
@@ -807,8 +810,7 @@ async fn copilot_claude_responses_stream_missing_or_wrong_state_returns_sanitize
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			LLMLogging::default(),
 			None,
 			response,
 		);
@@ -1772,6 +1774,7 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 	let buffered = BufferedResponse {
 		parts,
 		bytes: body.clone(),
+		buffer_limit: 1024 * 1024,
 	};
 
 	let resp = provider
