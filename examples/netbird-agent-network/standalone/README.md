@@ -1,8 +1,8 @@
 # Standalone NetBird Agent Network with agentgateway
 
-This example runs NetBird and agentgateway on one Docker host. It provides the
-same OpenAI and Anthropic integration as the parent Kubernetes example without
-requiring Kubernetes, Gateway API, or cert-manager.
+This example runs NetBird and agentgateway on one Docker host and routes OpenAI
+and Anthropic requests without requiring Kubernetes, Gateway API, or
+cert-manager.
 
 The stack uses two agentgateway instances for separate trust boundaries:
 
@@ -58,7 +58,7 @@ at `runtime/certs/ca.crt` before running `prepare.sh`.
 
 ## Temporary NetBird images
 
-The example shares the pinned development images in `../versions.env`. Replace
+The example uses the pinned development images in `versions.env`. Replace
 the NetBird server and proxy images with the first official release containing
 [netbirdio/netbird#6970](https://github.com/netbirdio/netbird/issues/6970), and
 replace the dashboard image with the first official release containing

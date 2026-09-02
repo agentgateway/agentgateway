@@ -23,7 +23,7 @@ fi
 
 set -a
 # shellcheck disable=SC1091
-source ../versions.env
+source versions.env
 if [[ -f runtime/generated.env ]]; then
   # shellcheck disable=SC1091
   source runtime/generated.env
