@@ -186,8 +186,7 @@ export function GuardrailsPage() {
 	const help = useSchemaHelp();
 	const guardrails = (policies.guardrails ?? null) as LlmGuardrail | null;
 	const fileOwned = Boolean(
-		rawConfig.data?.llm?.policies &&
-			Object.prototype.hasOwnProperty.call(rawConfig.data.llm.policies, 'guardrails')
+		rawConfig.data?.llm?.policies && Object.hasOwn(rawConfig.data.llm.policies, 'guardrails')
 	);
 	const saving = upsertPolicy.isPending || deleteResource.isPending;
 	const saveError = upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;

@@ -66,7 +66,7 @@ export function McpPlaygroundPage() {
 			: false;
 	const fileCorsOwned = Boolean(
 		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.prototype.hasOwnProperty.call(mcpData.rawConfig.data.mcp.policies, 'cors')
+			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
 	);
 
 	useEffect(() => {

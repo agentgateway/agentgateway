@@ -79,8 +79,7 @@ export function KeysPage() {
 	const help = useSchemaHelp();
 	const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
 	const filePolicyOwned = Boolean(
-		rawConfig.data?.llm?.policies &&
-			Object.prototype.hasOwnProperty.call(rawConfig.data.llm.policies, 'apiKey')
+		rawConfig.data?.llm?.policies && Object.hasOwn(rawConfig.data.llm.policies, 'apiKey')
 	);
 	const policyReadOnly = hybrid && filePolicyOwned;
 	const [editing, setEditing] = useState<{
