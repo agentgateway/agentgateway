@@ -34,6 +34,7 @@ use tracing::{Level, debug, trace};
 use value_bag::visit::Visit;
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
+use crate::http::substrate::ateattr;
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
@@ -1112,6 +1113,7 @@ impl RequestLog {
 			inference_pool: None,
 			ate_actor_id: None,
 			ate_atespace: None,
+			ate_router_resume: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -1289,6 +1291,7 @@ pub struct RequestLog {
 
 	pub ate_actor_id: Option<String>,
 	pub ate_atespace: Option<String>,
+	pub ate_router_resume: Option<&'static str>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1707,7 +1710,8 @@ impl Drop for DropOnLog {
 					log.inference_pool.display(),
 				),
 				("ate.actor.id", log.ate_actor_id.display()),
-				("ate.atespace", log.ate_atespace.display()),
+				(ateattr::ATE_ATESPACE, log.ate_atespace.display()),
+				(ateattr::ATE_ROUTER_RESUME, log.ate_router_resume.display()),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",

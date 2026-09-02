@@ -1,3 +1,6 @@
+//! OpenTelemetry semantic conventions. Conventions owned by another project belong with the
+//! policy that emits them, not here; see `http/substrate/ateattr.rs`.
+
 use http::Version;
 
 pub(crate) mod attribute {

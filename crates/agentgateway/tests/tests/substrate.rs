@@ -11,6 +11,7 @@ use crate::common::prelude::*;
 struct IngressHandler {
 	pod_ip: String,
 	calls: Arc<AtomicUsize>,
+	resumed: bool,
 }
 
 #[derive(Clone)]
@@ -67,6 +68,7 @@ impl ateapimock::Handler for IngressHandler {
 				}),
 				..Default::default()
 			}),
+			resumed: self.resumed,
 		})
 	}
 }
@@ -78,6 +80,7 @@ struct ParkingHandler {
 	failures_before_success: usize,
 	failure_code: tonic::Code,
 	entered: Option<Arc<Notify>>,
+	resumed: bool,
 }
 
 #[derive(Clone)]
@@ -87,6 +90,7 @@ struct SelectiveParkingHandler {
 	entered: Arc<Notify>,
 	release: Arc<Notify>,
 	calls: Arc<AtomicUsize>,
+	resumed: bool,
 }
 
 #[async_trait::async_trait]
@@ -111,6 +115,7 @@ impl ateapimock::Handler for SelectiveParkingHandler {
 				}),
 				..Default::default()
 			}),
+			resumed: self.resumed,
 		})
 	}
 }
@@ -144,6 +149,7 @@ impl ateapimock::Handler for ParkingHandler {
 				}),
 				..Default::default()
 			}),
+			resumed: self.resumed,
 		})
 	}
 }
@@ -158,6 +164,7 @@ async fn actor_ingress_resolves_the_dynamic_backend() {
 		move || IngressHandler {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
+			resumed: true,
 		}
 	})
 	.spawn()
@@ -206,6 +213,7 @@ async fn actor_ingress_parks_while_worker_capacity_recovers() {
 			failures_before_success: 2,
 			failure_code: tonic::Code::ResourceExhausted,
 			entered: None,
+			resumed: true,
 		}
 	})
 	.spawn()
@@ -257,6 +265,7 @@ async fn actor_ingress_sheds_when_request_parking_is_full() {
 			failures_before_success: 2,
 			failure_code: tonic::Code::FailedPrecondition,
 			entered: Some(entered.clone()),
+			resumed: true,
 		}
 	})
 	.spawn()
@@ -316,6 +325,7 @@ async fn actor_ingress_keeps_cached_actor_available_when_parking_is_full() {
 			entered: entered.clone(),
 			release: release.clone(),
 			calls: calls.clone(),
+			resumed: true,
 		}
 	})
 	.spawn()
@@ -367,6 +377,257 @@ async fn actor_ingress_keeps_cached_actor_available_when_parking_is_full() {
 	assert_eq!(cold.await.unwrap().status(), StatusCode::OK);
 }
 
+/// Asserts the access log emitted `ate.router.resume` for the request that used `path`. Every
+/// caller needs its own path: the capture buffer is process-global.
+async fn assert_logged_resume(path: &str, want: &str) {
+	agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", path),
+		("ate.router.resume", want),
+	])
+	.await
+	.unwrap();
+}
+
+fn actor_url(actor: &str, path: &str) -> String {
+	format!("http://{actor}.demo.actors.resources.substrate.ate.dev{path}")
+}
+
+async fn resume_disposition_gateway(
+	api_address: std::net::SocketAddr,
+	actor_port: u16,
+) -> agentgateway::test_helpers::proxymock::TestBind {
+	let dynamic = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(dynamic.into())
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/dynamic")));
+	gateway
+		.attach_route_policy(json!({
+			"substrateIngress": {
+				"host": api_address.to_string(),
+				"connectTargetPort": actor_port,
+			}
+		}))
+		.await;
+	gateway
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_a_triggered_resume_as_a_cold_start() {
+	const PATH: &str = "/resume-triggered";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || IngressHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			resumed: true,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let mut trace_rx = agentgateway::proxy::dtrace::track_expression(Some(
+		agentgateway::cel::Expression::new_strict(format!("request.path == '{PATH}'")).unwrap(),
+	));
+	let response = send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", PATH),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+	assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+	assert_logged_resume(PATH, "triggered").await;
+
+	let mut events = Vec::new();
+	while let Ok(Some(msg)) = tokio::time::timeout(Duration::from_millis(50), trace_rx.recv()).await {
+		events.push(serde_json::to_value(msg).unwrap())
+	}
+	let resumes: Vec<&serde_json::Value> = events
+		.iter()
+		.filter(|event| event["message"]["type"] == "policyEvent")
+		.filter(|event| event["message"]["kind"] == "substrate")
+		.map(|event| &event["message"]["details"]["resume"])
+		.collect();
+	assert_eq!(resumes, vec!["triggered"], "{events:#?}");
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_no_resume_when_the_actor_is_already_running() {
+	const PATH: &str = "/resume-already-running";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || IngressHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			resumed: false,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let response = send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", PATH),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+	assert_eq!(calls.load(Ordering::Relaxed), 1);
+	assert_logged_resume(PATH, "none").await;
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_no_resume_for_a_cache_hit_after_a_cold_start() {
+	const COLD_PATH: &str = "/resume-cache-cold";
+	const WARM_PATH: &str = "/resume-cache-warm";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || IngressHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			resumed: true,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	for path in [COLD_PATH, WARM_PATH] {
+		let response = send_request(
+			gateway.serve_http(BIND_KEY),
+			Method::GET,
+			&actor_url("my-actor", path),
+		)
+		.await;
+		assert_eq!(response.status(), StatusCode::OK);
+	}
+
+	assert_eq!(
+		calls.load(Ordering::Relaxed),
+		1,
+		"the second request must be served from the assignment cache"
+	);
+	assert_logged_resume(COLD_PATH, "triggered").await;
+	assert_logged_resume(WARM_PATH, "none").await;
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_a_joined_resume_for_a_follower_on_an_in_flight_resume() {
+	const LEADER_PATH: &str = "/resume-join-leader";
+	const FOLLOWER_PATH: &str = "/resume-join-follower";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let entered = Arc::new(Notify::new());
+	let release = Arc::new(Notify::new());
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let entered = entered.clone();
+		let release = release.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || SelectiveParkingHandler {
+			pod_ip: pod_ip.clone(),
+			parked_actor: "my-actor".to_string(),
+			entered: entered.clone(),
+			release: release.clone(),
+			calls: calls.clone(),
+			resumed: true,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let leader = tokio::spawn({
+		let io = gateway.serve_http(BIND_KEY);
+		let url = actor_url("my-actor", LEADER_PATH);
+		async move { send_request(io, Method::GET, &url).await }
+	});
+	// The leader is inside ResumeActor, so the singleflight placeholder exists and the follower
+	// cannot become a second leader or read a warm cache entry.
+	entered.notified().await;
+	let follower = tokio::spawn({
+		let io = gateway.serve_http(BIND_KEY);
+		let url = actor_url("my-actor", FOLLOWER_PATH);
+		async move { send_request(io, Method::GET, &url).await }
+	});
+	tokio::time::sleep(Duration::from_millis(200)).await;
+	release.notify_one();
+
+	assert_eq!(leader.await.unwrap().status(), StatusCode::OK);
+	assert_eq!(follower.await.unwrap().status(), StatusCode::OK);
+	assert_eq!(
+		calls.load(Ordering::Relaxed),
+		1,
+		"the follower must have joined the leader's resume, not started its own"
+	);
+
+	assert_logged_resume(LEADER_PATH, "triggered").await;
+	assert_logged_resume(FOLLOWER_PATH, "joined").await;
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_no_resume_when_the_resume_fails() {
+	const PATH: &str = "/resume-failed";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || ParkingHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			failures_before_success: 1,
+			failure_code: tonic::Code::NotFound,
+			entered: None,
+			resumed: true,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let mut trace_rx = agentgateway::proxy::dtrace::track_expression(Some(
+		agentgateway::cel::Expression::new_strict(format!("request.path == '{PATH}'")).unwrap(),
+	));
+	let response = send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", PATH),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::NOT_FOUND);
+	assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+	assert_logged_resume(PATH, "none").await;
+
+	let mut events = Vec::new();
+	while let Ok(Some(msg)) = tokio::time::timeout(Duration::from_millis(50), trace_rx.recv()).await {
+		events.push(serde_json::to_value(msg).unwrap())
+	}
+	let resumes: Vec<&serde_json::Value> = events
+		.iter()
+		.filter(|event| event["message"]["type"] == "policyEvent")
+		.filter(|event| event["message"]["kind"] == "substrate")
+		.map(|event| &event["message"]["details"]["resume"])
+		.collect();
+	assert_eq!(resumes, vec!["none"], "{events:#?}");
+}
+
 #[tokio::test]
 async fn actor_ingress_uses_the_original_connect_authority() {
 	let actor = simple_mock().await;
@@ -377,6 +638,7 @@ async fn actor_ingress_uses_the_original_connect_authority() {
 		move || IngressHandler {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
+			resumed: true,
 		}
 	})
 	.spawn()
@@ -490,6 +752,7 @@ async fn actor_ingress_uses_backend_tunnel_for_connect() {
 		move || IngressHandler {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
+			resumed: true,
 		}
 	})
 	.spawn()

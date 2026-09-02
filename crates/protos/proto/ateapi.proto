@@ -53,6 +53,9 @@ message ResumeActorRequest {
 
 message ResumeActorResponse {
   Actor actor = 1;
+  // True if a resume workflow was executed to activate the actor.
+  // False if the actor was already RUNNING.
+  bool resumed = 2;
 }
 
 message GetActorRequest {

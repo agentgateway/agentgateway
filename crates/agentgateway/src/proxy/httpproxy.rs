@@ -2298,7 +2298,17 @@ async fn make_backend_call(
 		},
 		_ => (backend, base_policies),
 	};
-	Box::pin(handle_substrate_backend_selection(&mut req, backend)).await?;
+	let substrate_selection = Box::pin(handle_substrate_backend_selection(&mut req, backend))
+		.await
+		.map(|_| ());
+	if let Some(state) = req
+		.extensions()
+		.get::<http::substrate::SubstrateRequestState>()
+	{
+		let resume = state.resume_disposition().as_str();
+		log.add(|l| l.ate_router_resume = Some(resume));
+	}
+	substrate_selection?;
 
 	log.add(|l| {
 		l.backend_info = Some(backend.backend_info());
