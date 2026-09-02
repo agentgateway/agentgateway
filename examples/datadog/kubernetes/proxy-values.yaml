@@ -67,6 +67,7 @@ podAnnotations:
             "collect_counters_with_distributions": true,
             "tags": [
               "service:agentgateway",
+              "env:datadog-dev",
               "component:proxy"
             ]
           }

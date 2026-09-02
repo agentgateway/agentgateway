@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datadog-collector
+  namespace: agentgateway-system
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 128
+        spike_limit_mib: 32
+      transform/gateway_errors:
+        error_mode: ignore
+        trace_statements:
+        - context: span
+          statements:
+          - set(span.status.code, STATUS_CODE_ERROR) where span.attributes["gen_ai.operation.name"] != nil and span.attributes["http.status"] >= 400
+          - set(span.attributes["error.type"], "http_error") where span.attributes["gen_ai.operation.name"] != nil and span.attributes["http.status"] >= 400 and span.attributes["error.type"] == nil
+      batch:
+        timeout: 1s
+        send_batch_size: 128
+
+    exporters:
+      otlp_http/datadog:
+        endpoint: http://datadog.datadog.svc.cluster.local:4318
+      otlp_http/capture:
+        endpoint: http://datadog-fixture.agentgateway-system.svc.cluster.local:8080
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, transform/gateway_errors, batch]
+          exporters: [otlp_http/datadog, otlp_http/capture]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datadog-collector
+  namespace: agentgateway-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: datadog-collector
+  template:
+    metadata:
+      labels:
+        app: datadog-collector
+    spec:
+      containers:
+      - name: collector
+        image: otel/opentelemetry-collector-contrib:0.146.0
+        args:
+        - --config=/etc/otelcol/config.yaml
+        ports:
+        - name: otlp-http
+          containerPort: 4318
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          periodSeconds: 2
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 192Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otelcol
+      volumes:
+      - name: config
+        configMap:
+          name: datadog-collector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: datadog-collector
+  namespace: agentgateway-system
+spec:
+  selector:
+    app: datadog-collector
+  ports:
+  - name: otlp-http
+    port: 4318
+    targetPort: otlp-http

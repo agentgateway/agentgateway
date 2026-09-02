@@ -1,10 +1,9 @@
 name: agentgateway-datadog
 services:
   fixture:
-    image: python:3.13.7-slim
-    command: [python, /example/fixture_server.py]
-    volumes:
-      - ./fixture_server.py:/example/fixture_server.py:ro
+    image: agentgateway-datadog-fixture:local
+    build:
+      context: ../fixture
     ports:
       - "127.0.0.1:18080:8080"
     healthcheck:

@@ -2,8 +2,13 @@ apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
 metadata:
   name: datadog-observability
-  namespace: default
+  namespace: agentgateway-system
 spec:
+  modelCatalog:
+    sources:
+    - configMap:
+        name: datadog-model-catalog
+        key: catalog.json
   deployment:
     spec:
       template:
@@ -77,6 +82,7 @@ spec:
                       "collect_counters_with_distributions": true,
                       "tags": [
                         "service:agentgateway",
+                        "env:datadog-dev",
                         "component:proxy"
                       ]
                     }
