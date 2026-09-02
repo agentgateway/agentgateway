@@ -171,6 +171,7 @@ export function RemoteRateLimitPolicyEditor(props: {
 				<div className="remote-descriptor-list">
 					{descriptors.map((descriptor, index) => (
 						<DescriptorEditor
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 							descriptor={descriptor}
 							help={props.help}
@@ -283,6 +284,7 @@ function DescriptorEditor(props: {
 			>
 				<div className="remote-entry-list">
 					{props.descriptor.entries.map((entry, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						<div className="remote-entry-row" key={index}>
 							<input
 								className="mono-input compact"

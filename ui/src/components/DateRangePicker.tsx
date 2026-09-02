@@ -49,7 +49,7 @@ export function DateRangePicker(props: {
 			</button>
 			{open ? (
 				<div className="date-range-popover">
-					<div className="date-range-presets" aria-label="Quick ranges">
+					<div className="date-range-presets">
 						{RANGE_PRESETS.map(preset => (
 							<button
 								className={draft.mode === 'preset' && draft.preset === preset.value ? 'active' : ''}
