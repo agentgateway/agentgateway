@@ -2140,6 +2140,10 @@ async fn apply_inference_routing(
 			),
 		inference_failed_open: inference_result.failed_open,
 		affinity_key,
+		health_scope: policies
+			.health
+			.as_ref()
+			.and_then(|health| health.scope_key(req)),
 	};
 
 	Ok((maybe_inference, service_override))
@@ -2313,8 +2317,12 @@ async fn make_backend_call(
 				.session_affinity
 				.as_ref()
 				.and_then(|policy| policy.affinity_key(&req));
+			let health_scope = policies
+				.health
+				.as_ref()
+				.and_then(|health| health.scope_key(&req));
 			let (provider, handle) = ai
-				.select_provider(affinity_key)
+				.select_provider(affinity_key, health_scope)
 				.ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
 			let sub_backend_name = BackendTargetRef::Backend {
@@ -3083,6 +3091,10 @@ fn build_connect_backend_call(
 					.session_affinity
 					.as_ref()
 					.and_then(|policy| policy.affinity_key(req)),
+				health_scope: policies
+					.health
+					.as_ref()
+					.and_then(|health| health.scope_key(req)),
 				..Default::default()
 			};
 			build_service_call(
@@ -3163,6 +3175,7 @@ pub fn build_service_call(
 			port,
 			service_override.destination,
 			service_override.affinity_key,
+			service_override.health_scope,
 		)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
@@ -4464,6 +4477,7 @@ pub struct ServiceCallOverride {
 	pub destination_passthrough: bool,
 	pub inference_failed_open: bool,
 	pub affinity_key: Option<u64>,
+	pub health_scope: Option<u64>,
 }
 
 #[derive(Debug, Default)]

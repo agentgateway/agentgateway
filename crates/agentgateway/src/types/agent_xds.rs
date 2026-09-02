@@ -2469,6 +2469,7 @@ fn convert_health(
 		health_threshold: ev.health_threshold,
 	});
 	health::Policy {
+		scope: None,
 		unhealthy_expression,
 		eviction,
 	}

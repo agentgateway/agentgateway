@@ -8,6 +8,47 @@ use serde_json::{Value, json};
 use super::*;
 use crate::http::x_headers::TRACEPARENT;
 
+fn scoped_test_provider(name: &str) -> NamedAIProvider {
+	NamedAIProvider {
+		name: name.into(),
+		provider: AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
+		provider_backend: None,
+		host_override: None,
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		inline_policies: vec![],
+	}
+}
+
+#[test]
+fn scoped_provider_eviction_fails_over_without_affecting_another_scope() {
+	let first = scoped_test_provider("first");
+	let second = scoped_test_provider("second");
+	let backend = AIBackend {
+		providers: crate::types::loadbalancer::EndpointSet::new(vec![
+			vec![(first.name.clone(), first)],
+			vec![(second.name.clone(), second)],
+		]),
+	};
+	let (selected, handle) = backend.select_provider(None, Some(1)).unwrap();
+	assert_eq!(selected.name.as_str(), "first");
+	handle.finish_request(
+		false,
+		std::time::Duration::ZERO,
+		Some(std::time::Duration::from_secs(30)),
+		None,
+	);
+
+	let (same_scope, _) = backend.select_provider(None, Some(1)).unwrap();
+	let (other_scope, _) = backend.select_provider(None, Some(2)).unwrap();
+	assert_eq!(same_scope.name.as_str(), "second");
+	assert_eq!(other_scope.name.as_str(), "first");
+}
+
 fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 	LLMRequest {
 		input_tokens,

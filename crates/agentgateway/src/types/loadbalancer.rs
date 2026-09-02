@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::future::pending;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 
@@ -29,6 +29,7 @@ type EndpointKey = Strng;
 // Keep these stable across replicas and releases: changing either value remaps affinity assignments.
 const AFFINITY_KEY_HASH_SEED: u64 = 0x9e37_79b1_85eb_ca87;
 const ENDPOINT_KEY_HASH_SEED: u64 = 0xc2b2_ae3d_27d4_eb4f;
+const MAX_SCOPED_HEALTH_ENTRIES: usize = 10_000;
 
 // Hash the arbitrary-length affinity value once per request. Endpoint selection then operates only
 // on this u64 and the cached endpoint hashes below.
@@ -40,11 +41,40 @@ fn hash_endpoint_key(value: &[u8]) -> u64 {
 	XxHash3_64::oneshot_with_seed(ENDPOINT_KEY_HASH_SEED, value)
 }
 
+fn scoped_info_is_empty(info: &Arc<Mutex<HashMap<u64, Arc<EndpointInfo>>>>) -> bool {
+	info.lock().is_ok_and(|info| info.is_empty())
+}
+
+fn serialize_scoped_info<S>(
+	info: &Arc<Mutex<HashMap<u64, Arc<EndpointInfo>>>>,
+	serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	let info = info
+		.lock()
+		.map_err(|_| serde::ser::Error::custom("scoped endpoint health mutex poisoned"))?;
+	let mut entries = info.iter().collect::<Vec<_>>();
+	entries.sort_unstable_by_key(|(scope, _)| **scope);
+	let mut seq = serializer.serialize_seq(Some(entries.len()))?;
+	for (_, info) in entries {
+		seq.serialize_element(info)?;
+	}
+	seq.end()
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct EndpointWithInfo<T> {
 	pub endpoint: Arc<T>,
 	pub info: Arc<EndpointInfo>,
 	pub capacity: u32,
+	/// Health state isolated by the request's hashed health scope.
+	#[serde(
+		skip_serializing_if = "scoped_info_is_empty",
+		serialize_with = "serialize_scoped_info"
+	)]
+	scoped_info: Arc<Mutex<HashMap<u64, Arc<EndpointInfo>>>>,
 	/// Hash of the endpoint's stable key, computed with the endpoint so there is no uninitialized
 	/// state. Affinity selection therefore needs only an integer mix per candidate.
 	#[serde(skip)]
@@ -63,8 +93,35 @@ impl<T> EndpointWithInfo<T> {
 			endpoint: Arc::new(ep),
 			info: Default::default(),
 			capacity,
+			scoped_info: Default::default(),
 			endpoint_hash: hash_endpoint_key(key.as_bytes()),
 		}
+	}
+
+	pub(crate) fn info_for_scope(&self, scope: Option<u64>) -> Arc<EndpointInfo> {
+		let Some(scope) = scope else {
+			return self.info.clone();
+		};
+		let mut entries = self
+			.scoped_info
+			.lock()
+			.expect("scoped endpoint health mutex poisoned");
+		if entries.len() >= MAX_SCOPED_HEALTH_ENTRIES
+			&& !entries.contains_key(&scope)
+			&& let Some(oldest) = entries.keys().next().copied()
+		{
+			// POC-quality cardinality bound. A follow-up can replace this arbitrary eviction with
+			// access-ordered TTL/LRU expiration without changing the health key semantics.
+			entries.remove(&oldest);
+		}
+		entries
+			.entry(scope)
+			.or_insert_with(|| Arc::new(EndpointInfo::default()))
+			.clone()
+	}
+
+	pub(crate) fn affinity_score(&self, affinity_key: u64) -> u64 {
+		rendezvous_hash(affinity_key, self.endpoint_hash)
 	}
 }
 
@@ -223,6 +280,12 @@ struct Candidate {
 	workload: Arc<Workload>,
 }
 
+struct ScopedCandidate {
+	candidate: Candidate,
+	capacity: u32,
+	endpoint_hash: u64,
+}
+
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint, dest_workload: &Workload, ranker: &LocalityRanker) {
 		let bucket = match ranker.bucket_for(dest_workload) {
@@ -241,7 +304,7 @@ impl EndpointSet<Endpoint> {
 		svc_port: u16,
 		override_dest: Option<SocketAddr>,
 	) -> Option<(Arc<Endpoint>, ActiveHandle, Arc<Workload>)> {
-		self.select_endpoint_with_affinity(workloads, svc, svc_port, override_dest, None)
+		self.select_endpoint_with_affinity(workloads, svc, svc_port, override_dest, None, None)
 	}
 
 	pub fn select_endpoint_with_affinity(
@@ -251,6 +314,7 @@ impl EndpointSet<Endpoint> {
 		svc_port: u16,
 		override_dest: Option<SocketAddr>,
 		affinity_key: Option<u64>,
+		health_scope: Option<u64>,
 	) -> Option<(Arc<Endpoint>, ActiveHandle, Arc<Workload>)> {
 		let Some(target_port) = svc.ports.get(&svc_port).copied() else {
 			debug!("service {} does not have port {}", svc.hostname, svc_port);
@@ -258,19 +322,128 @@ impl EndpointSet<Endpoint> {
 		};
 
 		let c = match override_dest {
-			Some(o) => self.select_override(workloads, o)?,
-			None => match affinity_key {
-				Some(key) => self.select_affinity(workloads, svc_port, target_port, key)?,
-				None => self
-					.select_p2c(workloads, svc, svc_port, target_port)
-					.or_else(|| self.select_fallback(workloads, svc_port, target_port))?,
+			Some(o) => self.select_override(workloads, o, health_scope)?,
+			None => {
+				if let Some(scope) = health_scope {
+					self.select_scoped(workloads, svc_port, target_port, affinity_key, scope)?
+				} else {
+					match affinity_key {
+						Some(key) => self.select_affinity(workloads, svc_port, target_port, key)?,
+						None => self
+							.select_p2c(workloads, svc, svc_port, target_port)
+							.or_else(|| self.select_fallback(workloads, svc_port, target_port))?,
+					}
+				}
 			},
 		};
 
-		let handle = svc
-			.endpoints
-			.start_request(c.endpoint.workload_uid.clone(), &c.info);
+		let handle = match health_scope {
+			Some(_) => svc
+				.endpoints
+				.start_scoped_request(c.endpoint.workload_uid.clone(), &c.info),
+			None => svc
+				.endpoints
+				.start_request(c.endpoint.workload_uid.clone(), &c.info),
+		};
 		Some((c.endpoint, handle, c.workload))
+	}
+
+	fn select_scoped(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc_port: u16,
+		target_port: u16,
+		affinity_key: Option<u64>,
+		health_scope: u64,
+	) -> Option<Candidate> {
+		let mut fallback = None;
+		for bucket in &self.buckets {
+			let group = bucket.load_full();
+			if group.sampler.is_drained() {
+				continue;
+			}
+			let mut candidates = group
+				.active
+				.values()
+				.chain(group.rejected.values())
+				.filter(|ewi| ewi.capacity > 0)
+				.filter_map(|ewi| {
+					let workload = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+					Some(ScopedCandidate {
+						candidate: Candidate {
+							endpoint: ewi.endpoint.clone(),
+							info: ewi.info_for_scope(Some(health_scope)),
+							workload: workload.clone(),
+						},
+						capacity: ewi.capacity,
+						endpoint_hash: ewi.endpoint_hash,
+					})
+				})
+				.collect::<Vec<_>>();
+			if candidates.is_empty() {
+				continue;
+			}
+			fallback.get_or_insert_with(|| Self::choose_scoped(&candidates, affinity_key));
+			candidates.retain(|candidate| !candidate.candidate.info.is_ejected());
+			if !candidates.is_empty() {
+				return Some(Self::choose_scoped(&candidates, affinity_key));
+			}
+		}
+		fallback
+	}
+
+	fn choose_scoped(candidates: &[ScopedCandidate], affinity_key: Option<u64>) -> Candidate {
+		let selected = if let Some(affinity_key) = affinity_key {
+			let unit_weights = candidates.iter().all(|candidate| candidate.capacity == 1);
+			candidates
+				.iter()
+				.max_by(|a, b| {
+					let score = |candidate: &ScopedCandidate| {
+						if unit_weights {
+							RendezvousScore::Unweighted(rendezvous_hash(affinity_key, candidate.endpoint_hash))
+						} else {
+							RendezvousScore::Weighted(weighted_rendezvous_score(
+								affinity_key,
+								candidate.endpoint_hash,
+								candidate.capacity,
+							))
+						}
+					};
+					score(a).total_cmp(score(b))
+				})
+				.expect("scoped candidates are not empty")
+		} else {
+			let mut rng = rand::rng();
+			let (a, b) = if candidates.iter().all(|candidate| candidate.capacity == 1) {
+				(
+					rng.random_range(0..candidates.len()),
+					rng.random_range(0..candidates.len()),
+				)
+			} else {
+				let distribution = WeightedIndex::new(
+					candidates
+						.iter()
+						.map(|candidate| u64::from(candidate.capacity)),
+				)
+				.expect("scoped candidates have nonzero capacity");
+				(distribution.sample(&mut rng), distribution.sample(&mut rng))
+			};
+			[a, b]
+				.into_iter()
+				.map(|index| &candidates[index])
+				.max_by(|a, b| {
+					a.candidate
+						.info
+						.score()
+						.total_cmp(&b.candidate.info.score())
+				})
+				.expect("scoped candidates are not empty")
+		};
+		Candidate {
+			endpoint: selected.candidate.endpoint.clone(),
+			info: selected.candidate.info.clone(),
+			workload: selected.candidate.workload.clone(),
+		}
 	}
 
 	/// Selects one endpoint using weighted rendezvous hashing. Locality and health semantics match
@@ -337,8 +510,14 @@ impl EndpointSet<Endpoint> {
 
 	/// Explicit destination bypasses bucketing and health — search every endpoint
 	/// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
-	fn select_override(&self, workloads: &store::WorkloadStore, o: SocketAddr) -> Option<Candidate> {
-		self.find_endpoint(|ep, info| {
+	fn select_override(
+		&self,
+		workloads: &store::WorkloadStore,
+		o: SocketAddr,
+		health_scope: Option<u64>,
+	) -> Option<Candidate> {
+		self.find_endpoint(|ewi| {
+			let ep = &ewi.endpoint;
 			if !contains_target_port(ep, o.port()) {
 				return None;
 			}
@@ -351,7 +530,7 @@ impl EndpointSet<Endpoint> {
 			}
 			Some(Candidate {
 				endpoint: ep.clone(),
-				info: info.clone(),
+				info: ewi.info_for_scope(health_scope),
 				workload: wl,
 			})
 		})
@@ -461,7 +640,7 @@ impl RendezvousScore {
 /// The hashes use separate seeds; with either fixed, XOR is a one-to-one translation of the other
 /// and loses no entropy. SplitMix64 then avalanches the combined value.
 #[inline]
-fn rendezvous_hash(affinity_key: u64, endpoint_hash: u64) -> u64 {
+pub(crate) fn rendezvous_hash(affinity_key: u64, endpoint_hash: u64) -> u64 {
 	let mut value = affinity_key ^ endpoint_hash;
 	// Constants and algorithm from https://rosettacode.org/wiki/Pseudo-random_numbers/Splitmix64
 	value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
@@ -713,6 +892,10 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		info.start_request(key, self.tx_eviction.clone(), self.eviction_worker.clone())
 	}
 
+	pub(crate) fn start_scoped_request(&self, key: Strng, info: &Arc<EndpointInfo>) -> ActiveHandle {
+		info.start_scoped_request(key)
+	}
+
 	fn find_bucket(&self, key: &EndpointKey) -> Option<Arc<EndpointGroup<T>>> {
 		self.buckets.iter().find_map(|x| {
 			let b = x.load_full();
@@ -775,19 +958,20 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		ActiveEndpointsIter(self.best_bucket())
 	}
 
-	/// Selects an unweighted rendezvous winner from the same highest-priority healthy bucket used by
-	/// normal iteration. If no active endpoint exists there, `iter` exposes its rejected fallback.
-	/// This generic form is used for AI providers, whose stable provider names are EndpointKeys.
-	pub(crate) fn select_by_affinity(
-		&self,
-		affinity_key: u64,
-	) -> Option<(Arc<T>, Arc<EndpointInfo>)> {
-		let iter = self.iter();
-		let endpoint = iter
-			.index()
-			.values()
-			.max_by_key(|endpoint| rendezvous_hash(affinity_key, endpoint.endpoint_hash))?;
-		Some((endpoint.endpoint.clone(), endpoint.info.clone()))
+	pub(crate) fn active_priority_groups(&self) -> Vec<Vec<EndpointWithInfo<T>>> {
+		self
+			.buckets
+			.iter()
+			.map(|bucket| bucket.load_full().active.values().cloned().collect())
+			.collect()
+	}
+
+	pub(crate) fn rejected_fallback(&self) -> Vec<EndpointWithInfo<T>> {
+		self
+			.buckets
+			.first()
+			.map(|bucket| bucket.load_full().rejected.values().cloned().collect())
+			.unwrap_or_default()
 	}
 
 	/// Visit every endpoint, returning the first `Some` produced by `f`. Active
@@ -802,7 +986,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 	/// not at all — safe for "pick one and stop", unsafe for counting.
 	pub fn find_endpoint<F, R>(&self, mut f: F) -> Option<R>
 	where
-		F: FnMut(&Arc<T>, &Arc<EndpointInfo>) -> Option<R>,
+		F: FnMut(&EndpointWithInfo<T>) -> Option<R>,
 	{
 		for active_phase in [true, false] {
 			for bucket in self.buckets.iter() {
@@ -813,7 +997,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					&group.rejected
 				};
 				for (_, ewi) in map {
-					if let Some(r) = f(&ewi.endpoint, &ewi.info) {
+					if let Some(r) = f(ewi) {
 						return Some(r);
 					}
 				}
@@ -1021,6 +1205,9 @@ pub struct EndpointInfo {
 	#[serde(with = "serde_instant_option")]
 	/// evicted_until is the time at which the endpoint will be evicted.
 	evicted_until: AtomicOption<Instant>,
+	/// Restore value used by scoped entries, which expire lazily instead of through the worker.
+	#[serde(skip)]
+	scoped_restore_health: Mutex<Option<f64>>,
 }
 
 impl Default for EndpointInfo {
@@ -1034,6 +1221,7 @@ impl Default for EndpointInfo {
 			consecutive_failures: Default::default(),
 			times_ejected: Default::default(),
 			evicted_until: Arc::new(Default::default()),
+			scoped_restore_health: Default::default(),
 		}
 	}
 }
@@ -1052,6 +1240,26 @@ impl EndpointInfo {
 	pub fn times_ejected(&self) -> u64 {
 		self.times_ejected.load(AtomicOrdering::Relaxed)
 	}
+	pub(crate) fn is_ejected(&self) -> bool {
+		let until = self.evicted_until.load();
+		let Some(until) = until.as_ref() else {
+			return false;
+		};
+		if **until > Instant::now() {
+			return true;
+		}
+		// Scoped entries do not use the global eviction worker; expire them lazily.
+		self.evicted_until.store(None);
+		if let Some(restore_health) = self
+			.scoped_restore_health
+			.lock()
+			.expect("scoped restore health mutex poisoned")
+			.take()
+		{
+			self.health.set(restore_health.clamp(0.0, 1.0));
+		}
+		false
+	}
 	// Todo: fine-tune the algorithm here
 	pub fn score(&self) -> f64 {
 		let latency_penalty =
@@ -1068,8 +1276,18 @@ impl EndpointInfo {
 		ActiveHandle {
 			info: self.clone(),
 			key,
-			tx: tx_sender,
-			eviction_starter,
+			tx: Some(tx_sender),
+			eviction_starter: Some(eviction_starter),
+			counter: self.pending_requests.0.clone(),
+		}
+	}
+	fn start_scoped_request(self: &Arc<Self>, key: Strng) -> ActiveHandle {
+		self.total_requests.fetch_add(1, AtomicOrdering::Relaxed);
+		ActiveHandle {
+			info: self.clone(),
+			key,
+			tx: None,
+			eviction_starter: None,
 			counter: self.pending_requests.0.clone(),
 		}
 	}
@@ -1118,8 +1336,8 @@ impl Serialize for ActiveCounter {
 pub struct ActiveHandle {
 	info: Arc<EndpointInfo>,
 	key: Strng,
-	tx: futures::channel::mpsc::Sender<EvictionEvent>,
-	eviction_starter: Arc<dyn EvictionStarter>,
+	tx: Option<futures::channel::mpsc::Sender<EvictionEvent>>,
+	eviction_starter: Option<Arc<dyn EvictionStarter>>,
 	#[allow(dead_code)]
 	counter: Arc<()>,
 }
@@ -1172,18 +1390,28 @@ impl ActiveHandle {
 					.info
 					.times_ejected
 					.fetch_add(1, AtomicOrdering::Relaxed);
-				self.eviction_starter.start();
-				let mut tx = self.tx.clone();
-				let key = self.key.clone();
-				tokio::spawn(async move {
-					let _ = tx
-						.send(EvictionEvent::Evict {
-							key,
-							until: time,
-							restore_health,
-						})
-						.await;
-				});
+				if self.tx.is_none() {
+					*self
+						.info
+						.scoped_restore_health
+						.lock()
+						.expect("scoped restore health mutex poisoned") = restore_health;
+				}
+				if let (Some(eviction_starter), Some(mut tx)) =
+					(self.eviction_starter.as_ref(), self.tx.clone())
+				{
+					eviction_starter.start();
+					let key = self.key.clone();
+					tokio::spawn(async move {
+						let _ = tx
+							.send(EvictionEvent::Evict {
+								key,
+								until: time,
+								restore_health,
+							})
+							.await;
+					});
+				}
 			}
 		}
 	}
@@ -1315,6 +1543,62 @@ mod benches {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn scoped_health_does_not_eject_another_scope() {
+		let endpoints = EndpointSet::new(vec![vec![("provider".into(), ())]]);
+		let provider = Strng::from("provider");
+		let endpoint = endpoints.active_priority_groups()[0][0].clone();
+		let first = endpoint.info_for_scope(Some(1));
+		endpoints
+			.start_scoped_request(provider.clone(), &first)
+			.finish_request(false, Duration::ZERO, Some(Duration::from_secs(30)), None);
+		let second = endpoint.info_for_scope(Some(2));
+
+		assert!(first.is_ejected());
+		assert!(!second.is_ejected());
+	}
+
+	#[test]
+	fn service_selection_records_scoped_health() {
+		let endpoints = EndpointSet::new_empty(1);
+		let mut discovery = store::DiscoveryStore::new();
+		let workload = Arc::new(Workload {
+			uid: "workload".into(),
+			capacity: 1,
+			..Default::default()
+		});
+		discovery.workloads.insert(workload.clone());
+		endpoints.insert(
+			Endpoint {
+				workload_uid: workload.uid.clone(),
+				port: HashMap::from([(80, 8080)]),
+				status: crate::types::discovery::HealthStatus::Healthy,
+			},
+			&workload,
+			&LocalityRanker::new(None, None),
+		);
+		let service = Service {
+			hostname: "example.test".into(),
+			ports: HashMap::from([(80, 8080)]),
+			endpoints: endpoints.clone(),
+			..Default::default()
+		};
+
+		let (_, handle, _) = endpoints
+			.select_endpoint_with_affinity(&discovery.workloads, &service, 80, None, None, Some(7))
+			.expect("service endpoint should be selected");
+		handle.finish_request(true, Duration::from_secs(2), None, None);
+
+		let endpoint = endpoints.active_priority_groups()[0][0].clone();
+		assert_eq!(
+			endpoint.info.total_requests.load(AtomicOrdering::Relaxed),
+			0
+		);
+		let scoped = endpoint.info_for_scope(Some(7));
+		assert_eq!(scoped.total_requests.load(AtomicOrdering::Relaxed), 1);
+		assert_eq!(scoped.request_latency.load(), 2.0);
+	}
 
 	#[test]
 	fn rendezvous_score_is_stable_and_respects_weight() {
@@ -1691,8 +1975,8 @@ mod tests {
 
 	fn collect_values(eps: &EndpointSet<&'static str>) -> Vec<&'static str> {
 		let mut out = Vec::new();
-		eps.find_endpoint(|ep, _| -> Option<()> {
-			out.push(**ep);
+		eps.find_endpoint(|ep| -> Option<()> {
+			out.push(*ep.endpoint);
 			None
 		});
 		out
