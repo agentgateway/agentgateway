@@ -207,10 +207,10 @@ export function PlaygroundPage() {
 		'';
 	const selectedKeyValue = apiKeyMode === 'saved' && rawVirtualKeys.length > 0 ? savedKey : apiKey;
 	const llmCors = policies.cors as CorsPolicy | null | undefined;
-	const fileCorsOwned = Object.prototype.hasOwnProperty.call(filePolicies, 'cors');
+	const fileCorsOwned = Object.hasOwn(filePolicies, 'cors');
 	const fileMcpCorsOwned = Boolean(
 		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.prototype.hasOwnProperty.call(mcpData.rawConfig.data.mcp.policies, 'cors')
+			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
 	);
 	const needsCors =
 		!configDataLoading && !configDataError && config.data && !llmEndpoint.sameOrigin
