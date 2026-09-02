@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-01T20:55:37Z"
+    "generatedAt": "2026-09-02T08:35:33Z"
   },
   "providers": {
     "anthropic": {
@@ -2952,9 +2952,9 @@
       "models": {
         "accounts/fireworks/models/deepseek-v4-flash-0731": {
           "rates": {
-            "input": "0.14",
-            "output": "0.28",
-            "cacheRead": "0.028"
+            "input": "0.22",
+            "output": "0.66",
+            "cacheRead": "0.007"
           }
         },
         "accounts/fireworks/models/deepseek-v4-pro-0813": {
