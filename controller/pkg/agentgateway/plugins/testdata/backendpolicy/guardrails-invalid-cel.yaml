@@ -80,4 +80,11 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached; requests that rely on invalid configuration
+          are rejected: mcpGuardrails metadata "tenant" is not a valid CEL expression:
+          foolen_{{jwt.sub}}'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway

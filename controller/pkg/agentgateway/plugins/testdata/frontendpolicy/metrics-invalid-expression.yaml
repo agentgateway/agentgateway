@@ -59,4 +59,11 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached; requests that rely on invalid configuration
+          are rejected: frontend metrics field "bad_field" is not a valid CEL expression:
+          invalid_{{expression}}'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway

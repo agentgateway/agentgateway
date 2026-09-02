@@ -299,7 +299,7 @@ func TestBuildCrossAppAccessPreservesAccessTokenScopePresence(t *testing.T) {
 	}
 }
 
-func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
+func TestBuildCrossAppAccessReturnsErrorOnlyConfigOnValidationFailure(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 	path := "token"
 
@@ -331,8 +331,35 @@ func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
 			t.Fatalf("BuildCrossAppAccess() error = %v, want containing %q", err, want)
 		}
 	}
-	if crossAppAccess.GetIdentityProvider().GetTokenEndpoint() == nil {
-		t.Fatal("identity provider token endpoint is nil, want partial config preserved")
+	want := &api.CrossAppAccessAuth{TranslationError: new(err.Error())}
+	if !proto.Equal(crossAppAccess, want) {
+		t.Fatalf("BuildCrossAppAccess() = %v, want error-only config %v", crossAppAccess, want)
+	}
+}
+
+func TestBuildCrossAppAccessMissingSecretReturnsErrorOnlyConfig(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	identityProvider := crossAppAccessEndpoint("idp")
+	identityProvider.ClientAuth = agentgateway.OAuthClientAuth{
+		ClientID: "gateway",
+		Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+		PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+			SigningKeyRef:     agentgateway.LocalSecretKeyRef{Name: "missing"},
+			AssertionAudience: "https://idp.example.com/oauth/token",
+		},
+	}
+
+	got, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+		IdentityProvider:            identityProvider,
+		ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+		Audience:                    "https://resource.example.com",
+	}, "default")
+	if err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("BuildCrossAppAccess() error = %v, want missing Secret error", err)
+	}
+	want := &api.CrossAppAccessAuth{TranslationError: new(err.Error())}
+	if !proto.Equal(got, want) {
+		t.Fatalf("BuildCrossAppAccess() = %v, want error-only config %v", got, want)
 	}
 }
 
@@ -398,12 +425,13 @@ func TestBuildOAuthTokenExchangeRejectsNilAuth(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("BuildOAuthTokenExchange() error = %v, want %q", err, want)
 	}
-	if oauth != nil {
-		t.Fatalf("BuildOAuthTokenExchange() oauth = %v, want nil", oauth)
+	wantOAuth := &api.OAuthTokenExchange{TranslationError: new(want)}
+	if !proto.Equal(oauth, wantOAuth) {
+		t.Fatalf("BuildOAuthTokenExchange() oauth = %v, want error-only config %v", oauth, wantOAuth)
 	}
 }
 
-func TestBuildOAuthTokenExchangeSuppliedTokenEndpointPreservesValidationErrors(t *testing.T) {
+func TestBuildOAuthTokenExchangeSuppliedTokenEndpointReturnsErrorOnlyConfigOnValidationFailure(t *testing.T) {
 	var calls int
 	ctx := oauthTestPolicyCtxWithBackend(t, func(krt.HandlerContext, string, schema.GroupKind, gwv1.ObjectName, *gwv1.Namespace, *gwv1.PortNumber) (*api.BackendReference, error) {
 		calls++
@@ -429,14 +457,28 @@ func TestBuildOAuthTokenExchangeSuppliedTokenEndpointPreservesValidationErrors(t
 	if calls != 0 {
 		t.Fatalf("backend ref resolution calls = %d, want 0", calls)
 	}
-	if oauth == nil {
-		t.Fatal("BuildOAuthTokenExchange() oauth = nil, want partial object")
+	wantOAuth := &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+	if !proto.Equal(oauth, wantOAuth) {
+		t.Fatalf("BuildOAuthTokenExchange() oauth = %v, want error-only config %v", oauth, wantOAuth)
 	}
-	if oauth.TokenEndpoint != tokenEndpoint {
-		t.Fatalf("token endpoint = %p, want supplied endpoint %p", oauth.TokenEndpoint, tokenEndpoint)
+}
+
+func TestBuildOAuthTokenExchangeMissingSecretReturnsErrorOnlyConfig(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+
+	got, err := BuildOAuthTokenExchange(ctx, &agentgateway.OAuthTokenExchange{
+		PolicyBackendEndpoint: oauthTokenEndpoint(),
+		ClientAuth: &agentgateway.OAuthClientAuth{
+			ClientID:  "gateway",
+			SecretRef: &agentgateway.LocalSecretKeyRef{Name: "missing"},
+		},
+	}, "default", nil)
+	if err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("BuildOAuthTokenExchange() error = %v, want missing Secret error", err)
 	}
-	if got := oauth.GetSubjectToken().GetSource().GetExpression(); got != "((" {
-		t.Fatalf("subject token expression = %q, want invalid expression preserved", got)
+	want := &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+	if !proto.Equal(got, want) {
+		t.Fatalf("BuildOAuthTokenExchange() = %v, want error-only config %v", got, want)
 	}
 }
 
@@ -472,7 +514,7 @@ func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 	}
 }
 
-func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretIntent(t *testing.T) {
+func TestOAuthTokenExchangeClientAuthMissingSecretKeyReturnsErrorOnlyConfig(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
 		Namespace: "default",
 		Name:      "oauth-client",
@@ -494,12 +536,9 @@ func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretInte
 		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want missing clientSecret error", err)
 	}
 
-	clientAuth := policy.GetOauthTokenExchange().GetClientAuth()
-	if clientAuth.ClientSecret == nil {
-		t.Fatal("client secret is nil, want explicit empty secret")
-	}
-	if got := clientAuth.GetClientSecret(); got != "" {
-		t.Fatalf("client secret = %q, want empty", got)
+	want := &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+	if !proto.Equal(policy.GetOauthTokenExchange(), want) {
+		t.Fatalf("OAuth config = %v, want error-only config %v", policy.GetOauthTokenExchange(), want)
 	}
 }
 

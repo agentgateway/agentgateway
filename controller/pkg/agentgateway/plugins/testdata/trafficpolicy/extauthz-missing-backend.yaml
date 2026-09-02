@@ -67,4 +67,10 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached; requests that rely on invalid configuration
+          are rejected: failed to build extAuth: unable to find the Service default/extauthz'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
