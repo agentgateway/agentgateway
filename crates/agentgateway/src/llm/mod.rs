@@ -406,27 +406,26 @@ fn render_anthropic_messages(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
-	let body = match req {
-		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(&req),
-		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
+	let caching = matches!(ctx.provider, AIProvider::Anthropic(_))
+		.then_some(ctx.prompt_caching)
+		.flatten();
+	match req {
+		types::ChatRequest::Completions(req) => {
+			conversion::messages::from_completions::translate_with_prompt_caching(&req, caching)
+		},
+		types::ChatRequest::Messages(mut req) => {
+			if let Some(caching) = caching {
+				conversion::messages::apply_prompt_caching(&mut req, caching);
+			}
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to messages"
 		))),
-	}?;
-
-	if !matches!(ctx.provider, AIProvider::Anthropic(_)) {
-		return Ok(body);
 	}
-	let Some(caching) = ctx.prompt_caching else {
-		return Ok(body);
-	};
-	let mut request: serde_json::Value =
-		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
-	conversion::messages::apply_prompt_caching(&mut request, caching);
-	serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
 }
 
 fn render_vertex_gemini(

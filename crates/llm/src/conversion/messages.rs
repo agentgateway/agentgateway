@@ -6,6 +6,7 @@ use axum_core::body::Body;
 use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
+use crate::types::messages as raw_messages;
 use crate::types::messages::typed as messages;
 use crate::{AIError, PromptCachingConfig, StreamingUsageGuard, parse};
 
@@ -21,65 +22,125 @@ fn cache_control_value() -> serde_json::Value {
 	serde_json::json!({"type": "ephemeral"})
 }
 
-fn system_prompt_tokens(system: &serde_json::Value) -> usize {
+fn insert_cache_control(value: &mut serde_json::Value) -> bool {
+	if value.is_null() {
+		*value = serde_json::Value::Object(Default::default());
+	}
+	let Some(object) = value.as_object_mut() else {
+		return false;
+	};
+	if object.contains_key("cache_control") {
+		return false;
+	}
+	object.insert("cache_control".to_string(), cache_control_value());
+	true
+}
+
+fn raw_text_part_has_cache_control(part: &raw_messages::TextPart) -> bool {
+	match part {
+		raw_messages::TextPart::Text { rest, .. } => has_cache_control(rest),
+		raw_messages::TextPart::Unknown(value) => has_cache_control(value),
+	}
+}
+
+fn raw_content_part_has_cache_control(part: &raw_messages::ContentPart) -> bool {
+	match part {
+		raw_messages::ContentPart::Text { rest, .. } => has_cache_control(rest),
+		raw_messages::ContentPart::Unknown(value) => has_cache_control(value),
+	}
+}
+
+fn raw_system_prompt_tokens(system: &raw_messages::TextBlock) -> usize {
 	let words = match system {
-		serde_json::Value::String(text) => text.split_whitespace().count(),
-		serde_json::Value::Array(blocks) => blocks
+		raw_messages::TextBlock::Text(text) => text.split_whitespace().count(),
+		raw_messages::TextBlock::Array(parts) => parts
 			.iter()
-			.filter_map(|block| block.get("text").and_then(serde_json::Value::as_str))
+			.filter_map(|part| match part {
+				raw_messages::TextPart::Text { text, .. } => Some(text.as_str()),
+				raw_messages::TextPart::Unknown(_) => None,
+			})
 			.map(|text| text.split_whitespace().count())
 			.sum(),
-		_ => 0,
 	};
 	(words * 13) / 10
 }
 
-fn add_cache_control_to_content(content: &mut serde_json::Value) -> bool {
-	if let serde_json::Value::String(text) = content {
-		let text = std::mem::take(text);
-		*content = serde_json::json!([{
-			"type": "text",
-			"text": text,
-			"cache_control": cache_control_value(),
-		}]);
-		return true;
+fn raw_add_cache_control_to_text_part(part: &mut raw_messages::TextPart) -> bool {
+	match part {
+		raw_messages::TextPart::Text { rest, .. } => insert_cache_control(rest),
+		raw_messages::TextPart::Unknown(value) => insert_cache_control(value),
 	}
-	let serde_json::Value::Array(blocks) = content else {
-		return false;
-	};
-	blocks
-		.iter_mut()
-		.rev()
-		.find_map(|block| {
-			let object = block.as_object_mut()?;
-			if object.contains_key("cache_control") {
-				return None;
-			}
-			object.insert("cache_control".to_string(), cache_control_value());
-			Some(())
-		})
-		.is_some()
 }
 
-fn cache_control_count(request: &serde_json::Value) -> usize {
+fn raw_add_cache_control_to_content_part(part: &mut raw_messages::ContentPart) -> bool {
+	match part {
+		raw_messages::ContentPart::Text { rest, .. } => insert_cache_control(rest),
+		raw_messages::ContentPart::Unknown(value) => insert_cache_control(value),
+	}
+}
+
+fn raw_add_cache_control_to_system(system: &mut raw_messages::TextBlock) -> bool {
+	match system {
+		raw_messages::TextBlock::Text(text) => {
+			let text = std::mem::take(text);
+			*system = raw_messages::TextBlock::Array(vec![raw_messages::TextPart::Text {
+				r#type: "text".to_string(),
+				text,
+				rest: serde_json::json!({"cache_control": cache_control_value()}),
+			}]);
+			true
+		},
+		raw_messages::TextBlock::Array(parts) => parts
+			.iter_mut()
+			.rev()
+			.find_map(|part| raw_add_cache_control_to_text_part(part).then_some(()))
+			.is_some(),
+	}
+}
+
+fn raw_add_cache_control_to_content(content: &mut raw_messages::ContentBlock) -> bool {
+	match content {
+		raw_messages::ContentBlock::Text(text) => {
+			let text = std::mem::take(text);
+			*content = raw_messages::ContentBlock::Array(vec![raw_messages::ContentPart::Text {
+				r#type: "text".to_string(),
+				text,
+				rest: serde_json::json!({"cache_control": cache_control_value()}),
+			}]);
+			true
+		},
+		raw_messages::ContentBlock::Array(parts) => parts
+			.iter_mut()
+			.rev()
+			.find_map(|part| raw_add_cache_control_to_content_part(part).then_some(()))
+			.is_some(),
+	}
+}
+
+fn raw_cache_control_count(request: &raw_messages::Request) -> usize {
 	let system = request
-		.get("system")
-		.and_then(serde_json::Value::as_array)
+		.system
+		.as_ref()
+		.and_then(|system| match system {
+			raw_messages::TextBlock::Array(parts) => Some(parts),
+			raw_messages::TextBlock::Text(_) => None,
+		})
 		.into_iter()
 		.flatten()
-		.filter(|block| has_cache_control(block))
+		.filter(|part| raw_text_part_has_cache_control(part))
 		.count();
 	let messages = request
-		.get("messages")
-		.and_then(serde_json::Value::as_array)
-		.into_iter()
+		.messages
+		.iter()
+		.filter_map(|message| match &message.content {
+			Some(raw_messages::ContentBlock::Array(parts)) => Some(parts),
+			Some(raw_messages::ContentBlock::Text(_)) | None => None,
+		})
 		.flatten()
-		.filter_map(|message| message.get("content"))
-		.filter_map(serde_json::Value::as_array)
-		.flatten()
-		.filter(|block| has_cache_control(block))
+		.filter(|part| raw_content_part_has_cache_control(part))
 		.count();
 	let tools = request
+		.rest
 		.get("tools")
 		.and_then(serde_json::Value::as_array)
 		.into_iter()
@@ -91,50 +152,39 @@ fn cache_control_count(request: &serde_json::Value) -> usize {
 
 /// Apply policy-driven prompt cache breakpoints to a native Anthropic Messages request.
 ///
-/// This operates on the JSON tree instead of the typed request so fields added by Anthropic
-/// remain intact on the native passthrough path.
-pub fn apply_prompt_caching(request: &mut serde_json::Value, caching: &PromptCachingConfig) {
-	let mut cache_points_used = cache_control_count(request);
+/// Mutate the request's existing representation so native Anthropic fields remain untouched and
+/// the request does not need to be serialized and parsed again before forwarding.
+pub fn apply_prompt_caching(request: &mut raw_messages::Request, caching: &PromptCachingConfig) {
+	let mut cache_points_used = raw_cache_control_count(request);
 
 	if caching.cache_system
 		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
-		&& let Some(system) = request.get_mut("system")
-		&& !system
-			.as_array()
-			.is_some_and(|blocks| blocks.iter().any(has_cache_control))
-		&& caching
-			.min_tokens
-			.is_none_or(|min_tokens| system_prompt_tokens(system) >= min_tokens)
+		&& let Some(system) = request.system.as_ref()
+		&& !matches!(
+			system,
+			raw_messages::TextBlock::Array(parts)
+				if parts.iter().any(raw_text_part_has_cache_control)
+		) && caching
+		.min_tokens
+		.is_none_or(|min_tokens| raw_system_prompt_tokens(system) >= min_tokens)
+		&& let Some(system) = request.system.as_mut()
+		&& raw_add_cache_control_to_system(system)
 	{
-		if let serde_json::Value::String(text) = system {
-			let text = std::mem::take(text);
-			*system = serde_json::json!([{
-				"type": "text",
-				"text": text,
-				"cache_control": cache_control_value(),
-			}]);
-		} else if let Some(block) = system.as_array_mut().and_then(|blocks| blocks.last_mut())
-			&& let Some(object) = block.as_object_mut()
-		{
-			object.insert("cache_control".to_string(), cache_control_value());
-		}
 		cache_points_used += 1;
 	}
 
 	if caching.cache_messages
 		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
-		&& let Some(messages) = request
-			.get_mut("messages")
-			.and_then(serde_json::Value::as_array_mut)
-		&& messages.len() >= 2
+		&& request.messages.len() >= 2
 	{
-		let target = (messages.len() - 2).saturating_sub(caching.cache_message_offset);
-		let content = messages[target].get_mut("content");
+		let target = (request.messages.len() - 2).saturating_sub(caching.cache_message_offset);
+		let content = request.messages[target].content.as_mut();
 		if let Some(content) = content
-			&& !content
-				.as_array()
-				.is_some_and(|blocks| blocks.iter().any(has_cache_control))
-			&& add_cache_control_to_content(content)
+			&& !matches!(
+				content,
+				raw_messages::ContentBlock::Array(parts)
+					if parts.iter().any(raw_content_part_has_cache_control)
+			) && raw_add_cache_control_to_content(content)
 		{
 			cache_points_used += 1;
 		}
@@ -143,14 +193,194 @@ pub fn apply_prompt_caching(request: &mut serde_json::Value, caching: &PromptCac
 	if caching.cache_tools
 		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
 		&& let Some(tools) = request
+			.rest
 			.get_mut("tools")
 			.and_then(serde_json::Value::as_array_mut)
 		&& !tools.is_empty()
 		&& !tools.iter().any(has_cache_control)
 		&& let Some(tool) = tools.last_mut()
-		&& let Some(object) = tool.as_object_mut()
 	{
-		object.insert("cache_control".to_string(), cache_control_value());
+		insert_cache_control(tool);
+	}
+}
+
+fn typed_cache_control_value() -> messages::CacheControlEphemeral {
+	messages::CacheControlEphemeral::Ephemeral { ttl: None }
+}
+
+fn typed_system_prompt_tokens(system: &messages::SystemPrompt) -> usize {
+	let words = match system {
+		messages::SystemPrompt::Text(text) => text.split_whitespace().count(),
+		messages::SystemPrompt::Blocks(blocks) => blocks
+			.iter()
+			.map(|block| match block {
+				messages::SystemContentBlock::Text { text, .. } => text.split_whitespace().count(),
+			})
+			.sum(),
+	};
+	(words * 13) / 10
+}
+
+fn typed_system_has_cache_control(system: &messages::SystemPrompt) -> bool {
+	matches!(
+		system,
+		messages::SystemPrompt::Blocks(blocks)
+			if blocks.iter().any(|block| match block {
+				messages::SystemContentBlock::Text { cache_control, .. } => cache_control.is_some(),
+			})
+	)
+}
+
+fn typed_add_cache_control_to_system(system: &mut messages::SystemPrompt) -> bool {
+	match system {
+		messages::SystemPrompt::Text(text) => {
+			let text = std::mem::take(text);
+			*system = messages::SystemPrompt::Blocks(vec![messages::SystemContentBlock::Text {
+				text,
+				cache_control: Some(typed_cache_control_value()),
+			}]);
+			true
+		},
+		messages::SystemPrompt::Blocks(blocks) => blocks
+			.iter_mut()
+			.rev()
+			.find_map(|block| match block {
+				messages::SystemContentBlock::Text { cache_control, .. } => {
+					if cache_control.is_some() {
+						None
+					} else {
+						*cache_control = Some(typed_cache_control_value());
+						Some(())
+					}
+				},
+			})
+			.is_some(),
+	}
+}
+
+fn typed_content_block_has_cache_control(block: &messages::ContentBlock) -> bool {
+	match block {
+		messages::ContentBlock::Text(block) => block.cache_control.is_some(),
+		messages::ContentBlock::Image(block) => block.cache_control.is_some(),
+		messages::ContentBlock::Document(block) => block.cache_control.is_some(),
+		messages::ContentBlock::SearchResult(block) => block.cache_control.is_some(),
+		messages::ContentBlock::ToolUse { cache_control, .. }
+		| messages::ContentBlock::ToolResult { cache_control, .. }
+		| messages::ContentBlock::ServerToolUse { cache_control, .. }
+		| messages::ContentBlock::WebSearchToolResult { cache_control, .. } => cache_control.is_some(),
+		messages::ContentBlock::Thinking { .. }
+		| messages::ContentBlock::RedactedThinking { .. }
+		| messages::ContentBlock::Unknown => false,
+	}
+}
+
+fn typed_add_cache_control_to_content_block(block: &mut messages::ContentBlock) -> bool {
+	let cache_control = match block {
+		messages::ContentBlock::Text(block) => &mut block.cache_control,
+		messages::ContentBlock::Image(block) => &mut block.cache_control,
+		messages::ContentBlock::Document(block) => &mut block.cache_control,
+		messages::ContentBlock::SearchResult(block) => &mut block.cache_control,
+		messages::ContentBlock::ToolUse { cache_control, .. }
+		| messages::ContentBlock::ToolResult { cache_control, .. }
+		| messages::ContentBlock::ServerToolUse { cache_control, .. }
+		| messages::ContentBlock::WebSearchToolResult { cache_control, .. } => cache_control,
+		messages::ContentBlock::Thinking { .. }
+		| messages::ContentBlock::RedactedThinking { .. }
+		| messages::ContentBlock::Unknown => return false,
+	};
+	if cache_control.is_some() {
+		return false;
+	}
+	*cache_control = Some(typed_cache_control_value());
+	true
+}
+
+fn typed_content_block_can_cache(block: &messages::ContentBlock) -> bool {
+	!matches!(
+		block,
+		messages::ContentBlock::Thinking { .. }
+			| messages::ContentBlock::RedactedThinking { .. }
+			| messages::ContentBlock::Unknown
+	)
+}
+
+fn typed_cache_control_count(request: &messages::Request) -> usize {
+	let system = request
+		.system
+		.as_ref()
+		.map(|system| match system {
+			messages::SystemPrompt::Text(_) => 0,
+			messages::SystemPrompt::Blocks(blocks) => blocks
+				.iter()
+				.filter(|block| match block {
+					messages::SystemContentBlock::Text { cache_control, .. } => cache_control.is_some(),
+				})
+				.count(),
+		})
+		.unwrap_or_default();
+	let messages = request
+		.messages
+		.iter()
+		.flat_map(|message| message.content.iter())
+		.filter(|block| typed_content_block_has_cache_control(block))
+		.count();
+	let tools = request
+		.tools
+		.as_ref()
+		.into_iter()
+		.flatten()
+		.filter(|tool| tool.cache_control().is_some())
+		.count();
+	system + messages + tools
+}
+
+pub(crate) fn apply_prompt_caching_typed(
+	request: &mut messages::Request,
+	caching: &PromptCachingConfig,
+) {
+	let mut cache_points_used = typed_cache_control_count(request);
+
+	if caching.cache_system
+		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
+		&& let Some(system) = request.system.as_ref()
+		&& !typed_system_has_cache_control(system)
+		&& caching
+			.min_tokens
+			.is_none_or(|min_tokens| typed_system_prompt_tokens(system) >= min_tokens)
+		&& let Some(system) = request.system.as_mut()
+		&& typed_add_cache_control_to_system(system)
+	{
+		cache_points_used += 1;
+	}
+
+	if caching.cache_messages
+		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
+		&& request.messages.len() >= 2
+	{
+		let target = (request.messages.len() - 2).saturating_sub(caching.cache_message_offset);
+		let content = &mut request.messages[target].content;
+		if !content.iter().any(typed_content_block_has_cache_control)
+			&& let Some(block) = content
+				.iter_mut()
+				.rev()
+				.find(|block| typed_content_block_can_cache(block))
+			&& typed_add_cache_control_to_content_block(block)
+		{
+			cache_points_used += 1;
+		}
+	}
+
+	if caching.cache_tools
+		&& cache_points_used < MAX_PROMPT_CACHE_BREAKPOINTS
+		&& let Some(tools) = request.tools.as_mut()
+		&& !tools.is_empty()
+		&& !tools.iter().any(|tool| tool.cache_control().is_some())
+		&& let Some(tool) = tools.last_mut()
+	{
+		match tool {
+			messages::Tool::Custom(tool) => tool.cache_control = Some(typed_cache_control_value()),
+			messages::Tool::Server(tool) => tool.cache_control = Some(typed_cache_control_value()),
+		}
 	}
 }
 
@@ -181,7 +411,7 @@ mod tests {
 
 	#[test]
 	fn prompt_caching_adds_native_anthropic_breakpoints() {
-		let mut request = json!({
+		let mut request: raw_messages::Request = serde_json::from_value(json!({
 			"model": "claude-sonnet-4-5",
 			"max_tokens": 128,
 			"system": "system prompt",
@@ -193,7 +423,8 @@ mod tests {
 				"name": "lookup",
 				"input_schema": {"type": "object"}
 			}]
-		});
+		}))
+		.unwrap();
 		let caching = PromptCachingConfig {
 			cache_system: true,
 			cache_messages: true,
@@ -203,7 +434,7 @@ mod tests {
 		};
 
 		apply_prompt_caching(&mut request, &caching);
-		let output = serde_json::to_value(request).unwrap();
+		let output = serde_json::to_value(&request).unwrap();
 		assert_eq!(output["system"][0]["cache_control"]["type"], "ephemeral");
 		assert_eq!(
 			output["messages"][0]["content"][0]["cache_control"]["type"],
@@ -214,7 +445,7 @@ mod tests {
 
 	#[test]
 	fn prompt_caching_respects_system_minimum_and_existing_breakpoints() {
-		let mut request = json!({
+		let mut request: messages::Request = serde_json::from_value(json!({
 			"model": "claude-sonnet-4-5",
 			"max_tokens": 128,
 			"system": "short",
@@ -222,7 +453,8 @@ mod tests {
 				{"role": "assistant", "content": [{"type": "text", "text": "previous", "cache_control": {"type": "ephemeral"}}]},
 				{"role": "user", "content": "current"}
 			]
-		});
+		}))
+		.unwrap();
 		let caching = PromptCachingConfig {
 			cache_system: true,
 			cache_messages: true,
@@ -231,8 +463,8 @@ mod tests {
 			cache_message_offset: 0,
 		};
 
-		apply_prompt_caching(&mut request, &caching);
-		let output = serde_json::to_value(request).unwrap();
+		apply_prompt_caching_typed(&mut request, &caching);
+		let output = serde_json::to_value(&request).unwrap();
 		assert!(output["system"].is_string());
 		assert_eq!(
 			output["messages"][0]["content"][0]["cache_control"]["type"],
@@ -298,7 +530,9 @@ pub mod from_completions {
 	use crate::types::completions::typed as completions;
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::types::messages::typed as messages;
-	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
+	use crate::{
+		AIError, PromptCachingConfig, StreamingUsageGuard, json, logged_response_parsing, parse, types,
+	};
 
 	fn cache_control(
 		breakpoint: &Option<completions::PromptCacheBreakpointParam>,
@@ -465,9 +699,19 @@ pub mod from_completions {
 
 	/// translate an OpenAI completions request to an anthropic messages request
 	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {
+		translate_with_prompt_caching(req, None)
+	}
+
+	pub fn translate_with_prompt_caching(
+		req: &types::completions::Request,
+		prompt_caching: Option<&PromptCachingConfig>,
+	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id);
+		let mut xlated = translate_internal(typed, model_id);
+		if let Some(caching) = prompt_caching {
+			super::apply_prompt_caching_typed(&mut xlated, caching);
+		}
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 

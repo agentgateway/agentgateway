@@ -60,7 +60,11 @@ fn native_anthropic_applies_prompt_caching_policy() {
 		"max_tokens": 128,
 		"system": "system prompt",
 		"messages": [
-			{"role": "assistant", "content": "previous answer"},
+			{"role": "assistant", "content": [{
+				"type": "text",
+				"text": "previous answer",
+				"future_content_field": "preserve-me"
+			}]},
 			{"role": "user", "content": "current question"}
 		],
 		"tools": [{"name": "lookup", "input_schema": {"type": "object"}}],
@@ -87,6 +91,10 @@ fn native_anthropic_applies_prompt_caching_policy() {
 		.unwrap();
 	let output: Value = serde_json::from_slice(&rendered.body).unwrap();
 	assert_eq!(output["future_anthropic_field"], true);
+	assert_eq!(
+		output["messages"][0]["content"][0]["future_content_field"],
+		"preserve-me"
+	);
 	assert_eq!(output["system"][0]["cache_control"]["type"], "ephemeral");
 	assert_eq!(
 		output["messages"][0]["content"][0]["cache_control"]["type"],
