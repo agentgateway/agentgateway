@@ -160,6 +160,7 @@ export function CostsPage() {
 							</thead>
 							<tbody>
 								{sources.map((source, index) => (
+									// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 									<tr key={index}>
 										<td>
 											<span className="badge">{source.storage}</span>
@@ -239,6 +240,7 @@ export function CostsPage() {
 						</thead>
 						<tbody>
 							{(editingCustom ? customDraft : customRows).map((row, index) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 								<tr key={index}>
 									<td>
 										{editingCustom ? (

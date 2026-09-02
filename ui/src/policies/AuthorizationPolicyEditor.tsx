@@ -142,6 +142,7 @@ export function AuthorizationPolicyEditor(props: {
 						return (
 							<section
 								className={errors[index] ? 'authz-rule-card invalid' : 'authz-rule-card'}
+								// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 								key={index}
 							>
 								<div className="authz-rule-header">

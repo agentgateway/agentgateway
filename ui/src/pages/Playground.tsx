@@ -697,7 +697,13 @@ export function PlaygroundPage() {
 							<div className="chat-empty">No messages yet.</div>
 						) : (
 							messages.map((message, index) => (
-								<ChatMessageView message={message} key={`${message.role}-${index}`} />
+								<ChatMessageView
+									message={message}
+									key={`${message.role}-${
+										// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+										index
+									}`}
+								/>
 							))
 						)}
 						{loading ? (
@@ -886,9 +892,15 @@ function MessageMetaChips(props: { meta: MessageMeta }) {
 
 function RunTimeline(props: { steps: RunStep[] }) {
 	return (
-		<div className="playground-run-timeline" aria-label="Request progress">
+		<div className="playground-run-timeline">
 			{props.steps.map((step, index) => (
-				<div className={`run-step ${step.state}`} key={`${index}-${step.label}`}>
+				<div
+					className={`run-step ${step.state}`}
+					key={`${
+						// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+						index
+					}-${step.label}`}
+				>
 					<span className="run-step-dot">
 						{step.state === 'active' ? <Loader2 className="spin" size={12} /> : null}
 					</span>

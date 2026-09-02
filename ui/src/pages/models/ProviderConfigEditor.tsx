@@ -84,6 +84,7 @@ export function ProviderConfigEditor(props: {
 		);
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		if (provider === 'azure' && !props.params?.azureResourceType) {
 			patchParams({ azureResourceType: 'openAI' });

@@ -55,7 +55,11 @@
 			"types": "recommended"
 		},
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			"style": {
+				"noDescendingSpecificity": "error",
+				"noNonNullAssertion": "error"
+			}
 		}
 	},
 	"overrides": [

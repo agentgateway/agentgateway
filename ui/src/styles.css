@@ -79,6 +79,7 @@ samp,
 	--shadow-drawer: -8px 0 18px rgb(0 0 0 / 0.22);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 * {
 	box-sizing: border-box;
 }
@@ -768,6 +769,7 @@ a {
 	gap: 5px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .field-label svg {
 	color: var(--muted);
 }
@@ -1109,6 +1111,7 @@ a {
 	border-radius: 6px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .client-svg-icon svg {
 	width: 22px;
 	height: 22px;
@@ -1132,6 +1135,7 @@ a {
 	height: 16px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .client-svg-icon .provider-icon {
 	width: 22px;
 	height: 22px;
@@ -1480,6 +1484,7 @@ a {
 	margin-bottom: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .policy-form-section {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -1588,6 +1593,7 @@ a {
 	gap: 8px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .guardrail-rule-title > svg {
 	color: var(--muted);
 	flex: 0 0 16px;
@@ -1640,6 +1646,7 @@ a {
 	white-space: nowrap;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .transform-section-toggle > svg {
 	color: var(--muted);
 }
@@ -1863,6 +1870,7 @@ a {
 	width: 118px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .authz-effect-select .custom-select-trigger {
 	min-height: 30px;
 	padding: 0 8px;
@@ -2144,6 +2152,7 @@ a {
 	margin-top: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .config-option-row {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
@@ -2362,6 +2371,7 @@ a {
 	min-width: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .surface-row-title svg {
 	color: var(--primary);
 }
@@ -2456,6 +2466,7 @@ a {
 	margin-top: 4px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .muted-copy {
 	color: var(--muted);
 	font-size: 13px;
@@ -2541,6 +2552,7 @@ a {
 	opacity: 1;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .startup-chip svg {
 	color: var(--muted);
 }
@@ -2589,7 +2601,9 @@ a {
 	margin-bottom: 22px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .onboarding-hero > svg,
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .onboarding-complete > svg {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -2799,6 +2813,7 @@ table {
 }
 
 th,
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 td {
 	border-bottom: 1px solid var(--line);
 	padding: 11px 10px;
@@ -2819,6 +2834,7 @@ tbody tr:hover {
 	background: var(--surface-2);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .expanded-row td {
 	background: var(--surface-2);
 	max-width: 0;
@@ -2989,6 +3005,7 @@ tbody tr:hover {
 	gap: 12px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-detail-title .provider-icon {
 	width: 26px;
 	height: 26px;
@@ -3378,6 +3395,7 @@ tbody tr:hover {
 	margin-top: 12px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-thread {
 	display: flex;
 	min-width: 0;
@@ -3765,6 +3783,7 @@ tbody tr:hover {
 	text-transform: uppercase;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-table thead th:first-child {
 	padding-left: 18px;
 }
@@ -3781,12 +3800,14 @@ tbody tr:hover {
 	cursor: pointer;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-row-summary td {
 	border-bottom: 1px solid var(--line);
 	padding: 9px 10px;
 	vertical-align: middle;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-row-summary td:first-child {
 	padding-left: 18px;
 }
@@ -3795,6 +3816,7 @@ tbody tr:hover {
 	box-shadow: inset 2.5px 0 0 var(--bad);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-row-summary:hover td {
 	background: var(--surface-2);
 }
@@ -3804,15 +3826,18 @@ tbody tr:hover {
 	outline-offset: -2px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-row.expanded .log-row-summary td {
 	border-bottom-color: transparent;
 	background: color-mix(in srgb, var(--surface-2) 42%, var(--surface));
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-table > tbody:last-child > tr:last-child > td {
 	border-bottom: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-row-detail td {
 	border-bottom: 1px solid var(--line);
 	background: color-mix(in srgb, var(--surface-2) 42%, var(--surface));
@@ -3853,6 +3878,7 @@ tbody tr:hover {
 	gap: 9px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-model-cell .provider-icon {
 	width: 16px;
 	height: 16px;
@@ -3896,6 +3922,7 @@ tbody tr:hover {
 	white-space: nowrap;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .log-meta-item svg {
 	flex: 0 0 auto;
 }
@@ -4061,6 +4088,7 @@ tbody tr:hover {
 }
 
 /* Copy button */
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .copy-button {
 	display: inline-flex;
 	align-items: center;
@@ -4090,6 +4118,7 @@ tbody tr:hover {
 	font-weight: 700;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .mono,
 .json-block,
 .mono-input {
@@ -4138,6 +4167,7 @@ tbody tr:hover {
 	color: var(--bad);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .form-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4189,6 +4219,7 @@ tbody tr:hover {
 	overflow: auto;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .field {
 	display: flex;
 	flex-direction: column;
@@ -4284,6 +4315,7 @@ tbody tr:hover {
 	font-family: var(--mono);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .mono-input.compact {
 	min-height: 74px;
 	resize: vertical;
@@ -4408,6 +4440,7 @@ textarea {
 	font-weight: 650;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .chat-avatar {
 	display: grid;
 	place-items: center;
@@ -4419,6 +4452,7 @@ textarea {
 	color: var(--muted);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .chat-bubble {
 	max-width: 100%;
 	border: 1px solid var(--line);
@@ -5087,6 +5121,7 @@ textarea {
 	padding-right: 42px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .freeform-combobox {
 	position: relative;
 	min-width: 0;
@@ -5204,6 +5239,7 @@ textarea {
 	gap: 7px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .provider-icon {
 	width: 18px;
 	height: 18px;
@@ -5263,6 +5299,7 @@ textarea {
 	position: relative;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .custom-select-trigger {
 	display: flex;
 	align-items: center;
@@ -5284,11 +5321,13 @@ textarea {
 	gap: 8px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .custom-select-value > svg,
 .custom-select-value > img {
 	flex: 0 0 auto;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .custom-select-value > svg {
 	color: var(--muted);
 }
@@ -5342,6 +5381,7 @@ textarea {
 	font-weight: 500;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .custom-select-menu {
 	position: absolute;
 	top: calc(100% + 6px);
@@ -5462,6 +5502,7 @@ textarea {
 	font-size: 13px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .traffic-policy-section {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -5671,6 +5712,7 @@ textarea {
 	width: 18%;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .keys-table td {
 	vertical-align: middle;
 }
@@ -5885,6 +5927,7 @@ textarea {
 	gap: 6px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .table-action {
 	display: inline-flex;
 	align-items: center;
@@ -5901,10 +5944,12 @@ textarea {
 	white-space: nowrap;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .table-action:hover {
 	background: var(--surface-2);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .table-action.copied {
 	border-color: color-mix(in srgb, var(--ok) 45%, var(--line-strong));
 	color: var(--ok);
@@ -6394,6 +6439,7 @@ textarea {
 	}
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 details summary {
 	cursor: pointer;
 	color: var(--muted);
@@ -6401,6 +6447,7 @@ details summary {
 	margin: 10px 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .empty-state {
 	display: grid;
 	place-items: center;
@@ -6413,6 +6460,7 @@ details summary {
 	margin-top: 14px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 .muted {
 	color: var(--muted);
 }
@@ -6512,6 +6560,7 @@ details summary {
 	.two-column.wide-left,
 	.playground-shell,
 	.client-setup-layout,
+	/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 	.form-grid,
 	.filter-bar,
 	.logs-filter-bar,
@@ -6576,6 +6625,7 @@ details summary {
 	.advanced-setting-header .button,
 	.authz-rule-toolbar .button,
 	.authz-rule-header .row-actions,
+	/* biome-ignore lint/style/noDescendingSpecificity: See ui/BIOME.md for why this exception exists and how to remove it. */
 	.kv-row .table-action,
 	.kv-add-row .button {
 		grid-column: 1 / -1;

@@ -127,6 +127,7 @@ export function LogsPage() {
 	const detailLoadingTimerRef = useRef<number | null>(null);
 	const filterOptionsSeqRef = useRef(0);
 	const logFiltersKey = analyticsFiltersKey(logFilters);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	const filters = useMemo(
 		() => ({
 			...analyticsLogFilters(logFilters),
@@ -161,10 +162,12 @@ export function LogsPage() {
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		void load();
 	}, [filters]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		const loadSeq = filterOptionsSeqRef.current + 1;
 		filterOptionsSeqRef.current = loadSeq;
@@ -242,6 +245,7 @@ export function LogsPage() {
 		});
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		if (!linkedLogId) {
 			setExpandedId(null);
@@ -385,7 +389,7 @@ export function LogsPage() {
 							onChange={event => setStream(event.target.checked)}
 						/>
 						Stream
-						{stream ? <span className="stream-live-dot" aria-label="streaming" /> : null}
+						{stream ? <span className="stream-live-dot" /> : null}
 					</label>
 					{hasAnalyticsFilters(logFilters) || status ? (
 						<button
@@ -720,6 +724,7 @@ export function AnalyticsPage() {
 	const selectedGroupBy: AnalyticsDimension[] = groupBy;
 	const groupByKey = selectedGroupBy.join(',');
 	const filtersKey = analyticsFiltersKey(filters);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	const analyticsState = useMemo(
 		() => ({
 			timeRange,
@@ -780,10 +785,12 @@ export function AnalyticsPage() {
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		void load();
 	}, [timeRange, groupByKey, filtersKey]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		setFilterOptionMap(emptyAnalyticsFilterOptions());
 	}, [timeRange, groupByKey]);
@@ -801,6 +808,7 @@ export function AnalyticsPage() {
 
 	const requestedRange = useMemo(() => logTimeRangeToApi(timeRange), [timeRange]);
 	const effectiveBucketSeconds = bucketSeconds ?? bucketSecondsForRange(timeRange);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	const timeline = useMemo(
 		() =>
 			analyticsTimelineData(
@@ -1138,7 +1146,9 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 		<Tooltip content={label}>
 			<span
 				className={`log-turn-badge ${common ? variant : 'other'}`}
+				role="img"
 				aria-label={label}
+				// biome-ignore lint/a11y/noNoninteractiveTabindex: See ui/BIOME.md for why this exception exists and how to remove it.
 				tabIndex={0}
 			>
 				{common ? (
@@ -1239,6 +1249,7 @@ function LogCallRow(props: {
 					: `log-row ${statusBad ? 'bad' : 'ok'}`
 			}
 		>
+			{/** biome-ignore lint/a11y/useSemanticElements: See ui/BIOME.md for why this exception exists and how to remove it. */}
 			<tr
 				className="log-row-summary"
 				tabIndex={0}
@@ -1408,6 +1419,7 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 		});
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		const anchorId = decodeURIComponent(window.location.hash.slice(1));
 		if (!trajectory.some(event => event.anchorId === anchorId)) return;
@@ -1524,7 +1536,10 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 							<LogMessageView
 								events={trajectory.filter(event => event.messageIndex === index)}
 								message={message}
-								key={`${message.role}-${index}`}
+								key={`${message.role}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+									index
+								}`}
 							/>
 						))}
 					</div>
@@ -1604,7 +1619,10 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 											aria-label={`Step ${index + 1}: ${event.label}`}
 											aria-pressed={selected === index}
 											className={`log-trajectory-bar ${lane}${event.system ? ' system' : ''}${selected === index ? ' selected' : ''}`}
-											key={`${lane}-${index}`}
+											key={`${lane}-${
+												// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+												index
+											}`}
 											title={`Step ${index + 1}: ${event.label}`}
 											type="button"
 											onClick={() => setSelected(current => (current === index ? null : index))}
@@ -1617,7 +1635,10 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 										<span
 											aria-hidden="true"
 											className="log-trajectory-gap"
-											key={`${lane}-${index}`}
+											key={`${lane}-${
+												// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+												index
+											}`}
 										/>
 									)
 								)}
@@ -1629,7 +1650,10 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 			<div className="log-trajectory-caption" aria-live="polite">
 				<span>
 					{selectedEvent
-						? `Step ${selected! + 1} ${selectedEvent.label}`
+						? `Step ${
+								// biome-ignore lint/style/noNonNullAssertion: See ui/BIOME.md for why this exception exists and how to remove it.
+								selected! + 1
+							} ${selectedEvent.label}`
 						: 'Width shows approximate tokens'}
 				</span>
 				{selectedEvent ? (
@@ -1909,7 +1933,9 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 						<div className="log-usage-bar-row">
 							<span className="log-usage-bar-label">Tokens</span>
 							<TokenBar
+								// biome-ignore lint/style/noNonNullAssertion: See ui/BIOME.md for why this exception exists and how to remove it.
 								input={usage.inputTokens!}
+								// biome-ignore lint/style/noNonNullAssertion: See ui/BIOME.md for why this exception exists and how to remove it.
 								output={usage.outputTokens!}
 								cacheRead={usage.cacheReadTokens ?? undefined}
 								cacheWrite={usage.cacheWriteTokens ?? undefined}
@@ -2016,7 +2042,10 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								anchorId={props.events.find(event => event.partIndex === index)?.anchorId}
 								part={part}
 								collapsed={part.type === 'text' && collapsed}
-								key={`${part.type}-${index}`}
+								key={`${part.type}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+									index
+								}`}
 							/>
 						))}
 						{collapsible ? (
@@ -2048,30 +2077,42 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 					</>
 				) : null}
 				{!message.parts && hasToolCalls
-					? message.toolCalls!.map((call, index) => (
+					? message.toolCalls?.map((call, index) => (
 							<LogToolBlock
 								anchorId={toolCallEvents[index]?.anchorId}
 								kind="call"
 								name={call.name}
 								value={call.arguments}
-								key={`${call.name}-${index}`}
+								key={`${call.name}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+									index
+								}`}
 							/>
 						))
 					: null}
 				{!message.parts && hasToolResults
-					? message.toolResults!.map((result, index) => (
+					? message.toolResults?.map((result, index) => (
 							<LogToolBlock
 								kind="result"
 								name={result.name ?? 'unknown'}
 								value={result.content}
 								isError={result.isError}
-								key={`${result.id ?? result.name ?? 'result'}-${index}`}
+								key={`${result.id ?? result.name ?? 'result'}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+									index
+								}`}
 							/>
 						))
 					: null}
 				{!message.parts && hasReasoning
-					? message.reasoning!.map((reasoning, index) => (
-							<LogReasoningBlock content={reasoning} key={`reasoning-${index}`} />
+					? message.reasoning?.map((reasoning, index) => (
+							<LogReasoningBlock
+								content={reasoning}
+								key={`reasoning-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+									index
+								}`}
+							/>
 						))
 					: null}
 				{!content && !hasToolCalls && !hasToolResults && !hasReasoning ? (
@@ -2244,6 +2285,7 @@ function LogMarkdown(props: { content: string; collapsed: boolean; anchorId?: st
 	return (
 		<div
 			className={`log-msg-content log-markdown${props.collapsed ? ' collapsed' : ''}`}
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: See ui/BIOME.md for why this exception exists and how to remove it.
 			dangerouslySetInnerHTML={{ __html: html }}
 			id={props.anchorId}
 		/>
@@ -2711,8 +2753,7 @@ function CostBar(props: { usage: LogUsageDetail }) {
 	const total = components.reduce((sum, [, cost]) => sum + Math.max(cost ?? 0, 0), 0);
 	if (!total) return null;
 	const title = components
-		.filter(([, cost]) => cost != null && cost > 0)
-		.map(([label, cost]) => `${label}: ${formatCost(cost!)}`)
+		.flatMap(([label, cost]) => (cost != null && cost > 0 ? [`${label}: ${formatCost(cost)}`] : []))
 		.join(' / ');
 	return (
 		<UsageBar

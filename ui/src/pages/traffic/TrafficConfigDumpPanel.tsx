@@ -337,6 +337,7 @@ function ListenerDumpDrawer(props: { row: DumpListenerRow; onClose: () => void }
 				</div>
 			</div>
 			<div className="drawer-yaml-section">
+				{/** biome-ignore lint/a11y/noLabelWithoutControl: See ui/BIOME.md for why this exception exists and how to remove it. */}
 				<label className="field-label">Listener YAML</label>
 				<YamlBlock value={listenerDumpForDisplay(listener)} />
 			</div>
@@ -381,11 +382,13 @@ function RouteDumpDrawer(props: {
 				</div>
 			</div>
 			<div className="drawer-yaml-section">
+				{/** biome-ignore lint/a11y/noLabelWithoutControl: See ui/BIOME.md for why this exception exists and how to remove it. */}
 				<label className="field-label">Route YAML</label>
 				<YamlBlock value={props.row.route} />
 			</div>
 			{resolvedBackends.length ? (
 				<div className="drawer-yaml-section">
+					{/** biome-ignore lint/a11y/noLabelWithoutControl: See ui/BIOME.md for why this exception exists and how to remove it. */}
 					<label className="field-label">Backend YAML</label>
 					<YamlBlock
 						value={resolvedBackends.length === 1 ? resolvedBackends[0] : resolvedBackends}

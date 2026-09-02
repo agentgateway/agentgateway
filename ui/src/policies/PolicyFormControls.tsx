@@ -105,7 +105,7 @@ export function KeyValueEditor(props: {
 				<div className="empty-inline">No values configured.</div>
 			)}
 			{props.quickKeys?.length ? (
-				<div className="kv-quick-row" aria-label={`${props.label ?? 'Metadata'} quick keys`}>
+				<div className="kv-quick-row">
 					{props.quickKeys.map(key => (
 						<button
 							className="choice-pill compact"
