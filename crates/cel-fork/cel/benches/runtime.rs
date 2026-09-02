@@ -6,9 +6,27 @@ use cel::context::{Context, MapResolver, VariableResolver};
 use cel::{Program, Value};
 use criterion::{BenchmarkId, Criterion, criterion_group};
 
-const EXPRESSIONS: [(&str, &str); 34] = [
+const EXPRESSIONS: [(&str, &str); 36] = [
 	("ternary_1", "(false || true) ? 1 : 2"),
 	("ternary_2", "(true ? false : true) ? 1 : 2"),
+	(
+		"match method dispatch",
+		r#"match request.method {
+			"GET" => "read",
+			"POST" => "write",
+			"PUT" => "replace",
+			"DELETE" => "delete",
+			_ => "unknown",
+		}"#,
+	),
+	(
+		"ternary method dispatch",
+		r#"request.method == "GET" ? "read" :
+		request.method == "POST" ? "write" :
+		request.method == "PUT" ? "replace" :
+		request.method == "DELETE" ? "delete" :
+		"unknown""#,
+	),
 	("or_1", "false || true"),
 	("and_1", "true && false"),
 	("and_2", "true && (false ? 2 : 3) > 2"),
@@ -48,6 +66,7 @@ const EXPRESSIONS: [(&str, &str); 34] = [
 
 struct Resolver<'a> {
 	foo: Value<'a>,
+	request: Value<'a>,
 	a: Value<'a>,
 }
 
@@ -62,6 +81,7 @@ impl<'a> VariableResolver<'a> for Resolver<'a> {
 			"banana" => Some(V),
 			"apple" => Some(V),
 			"foo" => Some(self.foo.clone()),
+			"request" => Some(self.request.clone()),
 			"a" => Some(self.a.clone()),
 			_ => None,
 		}
@@ -78,6 +98,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 			let ctx = Context::default();
 			let rv = Resolver {
 				foo: Value::Map(HashMap::from([("bar", 1)]).into()),
+				request: Value::Map(HashMap::from([("method", "PATCH")]).into()),
 				a: Value::Int(1),
 			};
 			b.iter(|| Value::resolve(program.expression(), &ctx, &rv).expect("Eval failed!"))
