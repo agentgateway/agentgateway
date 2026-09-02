@@ -675,7 +675,7 @@ function GatewayEditor(props: {
 function defaultGatewayTraffic(config: GatewayConfig | undefined) {
 	const traffic: string[] = [];
 	if (config?.llm) traffic.push('LLM');
-	if (config && Object.prototype.hasOwnProperty.call(config, 'ui')) {
+	if (config && Object.hasOwn(config, 'ui')) {
 		traffic.push('UI');
 	}
 	if (config?.mcp) traffic.push('MCP');
