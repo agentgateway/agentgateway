@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -75,16 +76,20 @@ func testInvalidJwtSign(t base.Test) {
 
 	assertions.EventuallyAgwPolicyStatus(t, "backendauth-invalid-jwt-sign", base.Namespace, func(status gwv1.PolicyStatus) error {
 		for _, ancestor := range status.Ancestors {
-			for _, condition := range ancestor.Conditions {
-				if condition.Type == agentgateway.PolicyConditionAccepted &&
-					condition.Status == metav1.ConditionTrue &&
-					condition.Reason == agentgateway.PolicyReasonPartiallyValid &&
-					strings.Contains(condition.Message, missingKeyRef) {
-					return nil
-				}
+			accepted := meta.FindStatusCondition(ancestor.Conditions, agentgateway.PolicyConditionAccepted)
+			attached := meta.FindStatusCondition(ancestor.Conditions, agentgateway.PolicyConditionAttached)
+			if accepted != nil &&
+				accepted.Status == metav1.ConditionFalse &&
+				accepted.Reason == agentgateway.PolicyReasonInvalid &&
+				strings.Contains(accepted.Message, missingKeyRef) &&
+				attached != nil &&
+				attached.Status == metav1.ConditionTrue &&
+				attached.Reason == agentgateway.PolicyReasonAttached &&
+				strings.Contains(attached.Message, "fail-closed") {
+				return nil
 			}
 		}
-		return fmt.Errorf("policy status does not report the missing jwtSign secret: %+v", status)
+		return fmt.Errorf("policy status does not report the missing jwtSign secret as invalid and attached fail-closed: %+v", status)
 	})
 
 	t.Send("invalid-jwt-sign.example.com", &testmatchers.HttpResponse{

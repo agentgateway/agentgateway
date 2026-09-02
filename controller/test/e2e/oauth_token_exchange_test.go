@@ -83,7 +83,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 			updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
 				*auth = *validAuth.DeepCopy()
 			})
-			waitForOAuthPolicyReason(t, policyKey, string(agentgateway.PolicyReasonValid), "")
+			waitForOAuthPolicyReason(t, policyKey, metav1.ConditionTrue, agentgateway.PolicyReasonValid, "")
 		})
 
 		tests := []struct {
@@ -112,7 +112,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 				updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
 					*auth = *validAuth.DeepCopy()
 				})
-				waitForOAuthPolicyReason(t, policyKey, string(agentgateway.PolicyReasonValid), "")
+				waitForOAuthPolicyReason(t, policyKey, metav1.ConditionTrue, agentgateway.PolicyReasonValid, "")
 				t.Send("oauth-token-exchange.com",
 					&testmatchers.HttpResponse{
 						StatusCode: http.StatusOK,
@@ -126,7 +126,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 				)
 
 				updateOAuthTokenExchange(t, policyKey, tt.mutate)
-				waitForOAuthPolicyReason(t, policyKey, string(agentgateway.PolicyReasonPartiallyValid), tt.wantMessage)
+				waitForOAuthPolicyReason(t, policyKey, metav1.ConditionFalse, agentgateway.PolicyReasonInvalid, tt.wantMessage)
 				t.Send("oauth-token-exchange.com",
 					&testmatchers.HttpResponse{
 						StatusCode: http.StatusInternalServerError,
@@ -142,27 +142,13 @@ func TestOAuthTokenExchange(tt *testing.T) {
 
 	t.Run("InvalidConfiguration", func(t base.Test) {
 		const wantMessage = "oauth subjectToken tokenType"
-		retry.UntilSuccessOrFail(t, func() error {
-			policy := &agentgateway.AgentgatewayPolicy{}
-			if err := t.E2EClusterContext().ControllerClient.Get(
-				t.E2EContext(),
-				types.NamespacedName{Name: "invalid-oauth-token-exchange", Namespace: base.Namespace},
-				policy,
-			); err != nil {
-				return err
-			}
-			for _, ancestor := range policy.Status.Ancestors {
-				for _, condition := range ancestor.Conditions {
-					if condition.Type == "Accepted" &&
-						condition.Status == metav1.ConditionTrue &&
-						condition.Reason == "PartiallyValid" &&
-						strings.Contains(condition.Message, wantMessage) {
-						return nil
-					}
-				}
-			}
-			return fmt.Errorf("policy status does not report Accepted=True/PartiallyValid for %s", wantMessage)
-		})
+		waitForOAuthPolicyReason(
+			t,
+			types.NamespacedName{Name: "invalid-oauth-token-exchange", Namespace: base.Namespace},
+			metav1.ConditionFalse,
+			agentgateway.PolicyReasonInvalid,
+			wantMessage,
+		)
 
 		t.Send("invalid-oauth-token-exchange.com",
 			&testmatchers.HttpResponse{
@@ -220,6 +206,7 @@ func updateOAuthTokenExchange(
 func waitForOAuthPolicyReason(
 	t base.Test,
 	policyKey types.NamespacedName,
+	status metav1.ConditionStatus,
 	reason string,
 	message string,
 ) {
@@ -231,14 +218,14 @@ func waitForOAuthPolicyReason(
 		}
 		for _, ancestor := range policy.Status.Ancestors {
 			for _, condition := range ancestor.Conditions {
-				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
-					condition.Status == metav1.ConditionTrue &&
+				if condition.Type == agentgateway.PolicyConditionAccepted &&
+					condition.Status == status &&
 					condition.Reason == reason &&
 					strings.Contains(condition.Message, message) {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("policy status does not report Accepted=True/%s containing %q", reason, message)
+		return fmt.Errorf("policy status does not report Accepted=%s/%s containing %q", status, reason, message)
 	})
 }

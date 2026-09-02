@@ -184,9 +184,15 @@ status:
       conditions:
       - lastTransitionTime: fake
         message: failed to resolve jwtSign signing secret default/jwt-sign-secret-missing
-        reason: PartiallyValid
-        status: "True"
+        reason: Invalid
+        status: "False"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached in a fail-closed state; requests using it will
+          be rejected: failed to resolve jwtSign signing secret default/jwt-sign-secret-missing'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
