@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::hash::Hash;
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
@@ -7,7 +8,7 @@ use agent_xds::{RejectedConfig, XdsUpdate};
 use anyhow::Context;
 use futures_core::Stream;
 use hashbrown::{Equivalent, HashMap as HbHashMap};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
@@ -975,33 +976,57 @@ impl Store {
 		tokio_stream::wrappers::UnboundedReceiverStream::new(sub)
 	}
 
+	/// Returns policies oldest first for consumers where the first policy wins.
+	fn policies_for_target_oldest_first<Q>(
+		&self,
+		target: &Q,
+	) -> impl DoubleEndedIterator<Item = &Arc<TargetedPolicy>> + use<'_, Q>
+	where
+		Q: Hash + Equivalent<PolicyTarget> + ?Sized,
+	{
+		let keys = self.policies_by_target.get(target);
+		if keys.is_none_or(|keys| keys.len() <= 1) {
+			return Either::Left(
+				keys
+					.into_iter()
+					.flatten()
+					.filter_map(|key| self.policies_by_key.get(key)),
+			);
+		}
+		let mut policies = keys
+			.into_iter()
+			.flatten()
+			.filter_map(|key| self.policies_by_key.get(key))
+			.collect_vec();
+		policies.sort_unstable_by(|a, b| {
+			a.creation_timestamp
+				.cmp(&b.creation_timestamp)
+				.then_with(|| a.key.cmp(&b.key))
+		});
+		Either::Right(policies.into_iter())
+	}
+
+	/// Returns policies newest first for route merging, where later policies overwrite earlier ones.
+	fn policies_for_target_newest_first<Q>(
+		&self,
+		target: &Q,
+	) -> impl DoubleEndedIterator<Item = &Arc<TargetedPolicy>> + use<'_, Q>
+	where
+		Q: Hash + Equivalent<PolicyTarget> + ?Sized,
+	{
+		self.policies_for_target_oldest_first(target).rev()
+	}
+
 	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
 		let listener_name = &path.listener;
-		let gateway = self
-			.policies_by_target
-			.get(&listener_name.as_gateway_target_ref());
-		let listener_set = listener_name
-			.as_listenerset_target_ref()
-			.and_then(|r| self.policies_by_target.get(&r));
-		let listener_set_section = listener_name
-			.as_listenerset_listener_target_ref()
-			.and_then(|r| self.policies_by_target.get(&r));
-		let listener = self
-			.policies_by_target
-			.get(&listener_name.as_listener_target_ref());
-		let service = path
-			.service
-			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
 
+		// Route policy fields are merged with last-writer-wins semantics. Visit policies at
+		// each attachment level newest first so the oldest policy is applied last and wins.
 		let mut route_rules = Vec::new();
 		for (idx, route) in path.routes.iter().enumerate() {
 			route_rules.extend(
 				self
-					.policies_by_target
-					.get(&route.as_route_target_ref())
-					.into_iter()
-					.flatten()
-					.filter_map(|n| self.policies_by_key.get(n))
+					.policies_for_target_newest_first(&route.as_route_target_ref())
 					.filter_map(|p| {
 						p.policy
 							.as_traffic_route_phase()
@@ -1010,11 +1035,7 @@ impl Store {
 			);
 			route_rules.extend(
 				self
-					.policies_by_target
-					.get(&route.as_route_rule_target_ref())
-					.into_iter()
-					.flatten()
-					.filter_map(|n| self.policies_by_key.get(n))
+					.policies_for_target_newest_first(&route.as_route_rule_target_ref())
 					.filter_map(|p| {
 						p.policy
 							.as_traffic_route_phase()
@@ -1026,20 +1047,30 @@ impl Store {
 			}
 		}
 
-		let shared_rules = gateway
-			.iter()
-			.copied()
-			.flatten()
-			.chain(listener_set.iter().copied().flatten())
-			.chain(listener_set_section.iter().copied().flatten())
-			.chain(listener.iter().copied().flatten())
-			.chain(service.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| {
-				p.policy
-					.as_traffic_route_phase()
-					.map(|inner| (p.inheritance, inner))
-			});
+		let shared_rules =
+			self
+				.policies_for_target_newest_first(&listener_name.as_gateway_target_ref())
+				.chain(
+					listener_name
+						.as_listenerset_target_ref()
+						.into_iter()
+						.flat_map(|target| self.policies_for_target_newest_first(&target)),
+				)
+				.chain(
+					listener_name
+						.as_listenerset_listener_target_ref()
+						.into_iter()
+						.flat_map(|target| self.policies_for_target_newest_first(&target)),
+				)
+				.chain(self.policies_for_target_newest_first(&listener_name.as_listener_target_ref()))
+				.chain(path.service.into_iter().flat_map(|service| {
+					self.policies_for_target_newest_first(&service.as_policy_target_ref())
+				}))
+				.filter_map(|p| {
+					p.policy
+						.as_traffic_route_phase()
+						.map(|inner| (p.inheritance, inner))
+				});
 
 		let rules = shared_rules.chain(route_rules);
 
@@ -1175,22 +1206,23 @@ impl Store {
 	}
 
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
-		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
-		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
-		let listener_set = name
-			.as_listenerset_target_ref()
-			.and_then(|r| self.policies_by_target.get(&r));
-		let listener_set_section = name
-			.as_listenerset_listener_target_ref()
-			.and_then(|r| self.policies_by_target.get(&r));
-		let rules = listener
-			.iter()
-			.copied()
-			.flatten()
-			.chain(listener_set_section.iter().copied().flatten())
-			.chain(listener_set.iter().copied().flatten())
-			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
+		// Gateway policy fields use first-writer-wins semantics. Visit policies at each
+		// attachment level oldest first so the oldest policy wins.
+		let rules = self
+			.policies_for_target_oldest_first(&name.as_listener_target_ref())
+			.chain(
+				name
+					.as_listenerset_listener_target_ref()
+					.into_iter()
+					.flat_map(|target| self.policies_for_target_oldest_first(&target)),
+			)
+			.chain(
+				name
+					.as_listenerset_target_ref()
+					.into_iter()
+					.flat_map(|target| self.policies_for_target_oldest_first(&target)),
+			)
+			.chain(self.policies_for_target_oldest_first(&name.as_gateway_target_ref()))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
 
 		let mut authz = Vec::new();
@@ -1318,40 +1350,34 @@ impl Store {
 		gateway: Option<&ListenerName>,
 		routes: &[&RouteName],
 	) -> BackendPolicies {
-		let backend_rules =
-			backend.and_then(|t| self.policies_by_target.get(&PolicyTargetRef::Backend(t)));
-		let sub_backend_rules =
-			sub_backend.and_then(|t| self.policies_by_target.get(&PolicyTargetRef::Backend(t)));
-		let listener_rules =
-			gateway.and_then(|t| self.policies_by_target.get(&t.as_listener_target_ref()));
-		let gateway_rules =
-			gateway.and_then(|t| self.policies_by_target.get(&t.as_gateway_target_ref()));
-
 		// Collect route policies across the full delegation chain, child (most specific) first.
 		// For each route: rule-level before route-level, matching route_policies() ordering.
-		let mut route_based_keys: Vec<&PolicyKey> = Vec::new();
+		let mut route_based_policies = Vec::new();
 		for route in routes.iter().rev() {
-			if let Some(keys) = self
-				.policies_by_target
-				.get(&route.as_route_rule_target_ref())
-			{
-				route_based_keys.extend(keys.iter());
-			}
-			if let Some(keys) = self.policies_by_target.get(&route.as_route_target_ref()) {
-				route_based_keys.extend(keys.iter());
-			}
+			route_based_policies
+				.extend(self.policies_for_target_oldest_first(&route.as_route_rule_target_ref()));
+			route_based_policies
+				.extend(self.policies_for_target_oldest_first(&route.as_route_target_ref()));
 		}
 
 		// Route chain (child->parent) > SubBackend > Backend/Service > Gateway
-		let rules = route_based_keys
-			.into_iter()
-			.chain(sub_backend_rules.iter().copied().flatten())
-			.chain(backend_rules.iter().copied().flatten())
-			.chain(listener_rules.iter().copied().flatten())
-			.chain(gateway_rules.iter().copied().flatten())
-			.unique()
-			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| p.policy.as_backend());
+		let rules =
+			route_based_policies
+				.into_iter()
+				.chain(sub_backend.into_iter().flat_map(|target| {
+					self.policies_for_target_oldest_first(&PolicyTargetRef::Backend(target))
+				}))
+				.chain(backend.into_iter().flat_map(|target| {
+					self.policies_for_target_oldest_first(&PolicyTargetRef::Backend(target))
+				}))
+				.chain(gateway.into_iter().flat_map(|target| {
+					self.policies_for_target_oldest_first(&target.as_listener_target_ref())
+				}))
+				.chain(gateway.into_iter().flat_map(|target| {
+					self.policies_for_target_oldest_first(&target.as_gateway_target_ref())
+				}))
+				.unique_by(|policy| policy.key.clone())
+				.filter_map(|p| p.policy.as_backend());
 		let rules = inline_policies
 			.iter()
 			.rev()
@@ -1497,14 +1523,13 @@ impl Store {
 	}
 
 	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
-		let gw_rules = self.policies_by_target.get(&gateway);
 		let parent_gateway = match gateway {
 			PolicyTargetRef::Gateway {
 				gateway_name,
 				gateway_namespace,
 				listener_name: None,
 				port: Some(_),
-			} => self.policies_by_target.get(&PolicyTargetRef::Gateway {
+			} => Some(PolicyTargetRef::Gateway {
 				gateway_name,
 				gateway_namespace,
 				listener_name: None,
@@ -1512,12 +1537,13 @@ impl Store {
 			}),
 			_ => None,
 		};
-		let rules = gw_rules
-			.iter()
-			.copied()
-			.flatten()
-			.chain(parent_gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
+		let rules = self
+			.policies_for_target_oldest_first(&gateway)
+			.chain(
+				parent_gateway
+					.into_iter()
+					.flat_map(|target| self.policies_for_target_oldest_first(&target)),
+			)
 			.filter_map(|p| p.policy.as_frontend());
 
 		let mut pol = FrontendPolices::default();
@@ -1535,33 +1561,34 @@ impl Store {
 		port: Option<u16>,
 		service: Option<PolicyTargetRef>,
 	) -> FrontendPolices {
-		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
-		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
-		let listener_set = name
-			.as_listenerset_target_ref()
-			.and_then(|r| self.policies_by_target.get(&r));
-		let listener_set_section = name
-			.as_listenerset_listener_target_ref()
-			.and_then(|r| self.policies_by_target.get(&r));
-		let svc = service.and_then(|s| self.policies_by_target.get(&s));
-		let gateway_port = port.and_then(|port| {
-			self.policies_by_target.get(&PolicyTargetRef::Gateway {
-				gateway_name: name.gateway_name.as_ref(),
-				gateway_namespace: name.gateway_namespace.as_ref(),
-				listener_name: None,
-				port: Some(port),
-			})
+		let gateway_port = port.map(|port| PolicyTargetRef::Gateway {
+			gateway_name: name.gateway_name.as_ref(),
+			gateway_namespace: name.gateway_namespace.as_ref(),
+			listener_name: None,
+			port: Some(port),
 		});
-		let rules = svc
-			.iter()
-			.copied()
-			.flatten()
-			.chain(listener.iter().copied().flatten())
-			.chain(listener_set_section.iter().copied().flatten())
-			.chain(listener_set.iter().copied().flatten())
-			.chain(gateway_port.iter().copied().flatten())
-			.chain(gateway.iter().copied().flatten())
-			.filter_map(|n| self.policies_by_key.get(n))
+		let rules = service
+			.into_iter()
+			.flat_map(|target| self.policies_for_target_oldest_first(&target))
+			.chain(self.policies_for_target_oldest_first(&name.as_listener_target_ref()))
+			.chain(
+				name
+					.as_listenerset_listener_target_ref()
+					.into_iter()
+					.flat_map(|target| self.policies_for_target_oldest_first(&target)),
+			)
+			.chain(
+				name
+					.as_listenerset_target_ref()
+					.into_iter()
+					.flat_map(|target| self.policies_for_target_oldest_first(&target)),
+			)
+			.chain(
+				gateway_port
+					.into_iter()
+					.flat_map(|target| self.policies_for_target_oldest_first(&target)),
+			)
+			.chain(self.policies_for_target_oldest_first(&name.as_gateway_target_ref()))
 			.filter_map(|p| p.policy.as_frontend());
 		let mut pol = FrontendPolices::default();
 		rules.for_each(|r| pol.set_if_empty(r));
@@ -2648,6 +2675,7 @@ mod tests {
 		insert_traffic_policy(
 			store,
 			key,
+			0,
 			PolicyTarget::Route(route_target),
 			Default::default(),
 			TrafficPolicy::Timeout(pol.clone()),
@@ -2658,6 +2686,7 @@ mod tests {
 	fn insert_traffic_policy(
 		store: &mut Store,
 		key: &str,
+		creation_timestamp: i64,
 		target: PolicyTarget,
 		inheritance: PolicyInheritance,
 		policy: TrafficPolicy,
@@ -2667,6 +2696,7 @@ mod tests {
 			key: policy_key.clone(),
 			name: None,
 			target: target.clone(),
+			creation_timestamp,
 			inheritance,
 			policy: policy.into(),
 		};
@@ -3385,6 +3415,7 @@ mod tests {
 					key: svc_policy_key.clone(),
 					name: None,
 					target: svc_policy_target.clone(),
+					creation_timestamp: 0,
 					inheritance: Default::default(),
 					policy: TrafficPolicy::Timeout(svc_timeout.clone()).into(),
 				}),
@@ -3444,6 +3475,7 @@ mod tests {
 			policy_name,
 			for_listener,
 			Default::default(),
+			0,
 			policy,
 			port,
 		);
@@ -3455,6 +3487,7 @@ mod tests {
 		policy_name: &str,
 		for_listener: bool,
 		inheritance: PolicyInheritance,
+		creation_timestamp: i64,
 		policy: FrontendPolicy,
 		port: Option<u16>,
 	) {
@@ -3474,6 +3507,7 @@ mod tests {
 			key: policy_key.clone(),
 			name: None,
 			target: target.clone(),
+			creation_timestamp,
 			inheritance,
 			policy: agent::PolicyType::Frontend(policy),
 		};
@@ -3580,9 +3614,19 @@ mod tests {
 		store: &mut Store,
 		listener: &ListenerName,
 		name: &str,
+		creation_timestamp: i64,
 		policy: FrontendPolicy,
 	) {
-		insert_policy_at_level(store, listener, name, false, policy, None);
+		insert_policy_at_level_with_inheritance(
+			store,
+			listener,
+			name,
+			false,
+			Default::default(),
+			creation_timestamp,
+			policy,
+			None,
+		);
 	}
 
 	fn resolve_two_gateway_access_log_policies(order_swapped: bool) -> FrontendPolices {
@@ -3593,13 +3637,13 @@ mod tests {
 		} else {
 			("policy-a", "policy-b")
 		};
-		let (first_pol, second_pol) = if order_swapped {
-			(otlp_access_log_policy(), stdout_access_log_policy())
+		let (first_pol, first_created, second_pol, second_created) = if order_swapped {
+			(otlp_access_log_policy(), 10, stdout_access_log_policy(), 20)
 		} else {
-			(stdout_access_log_policy(), otlp_access_log_policy())
+			(stdout_access_log_policy(), 20, otlp_access_log_policy(), 10)
 		};
-		insert_gateway_frontend_policy(&mut store, &listener, first, first_pol);
-		insert_gateway_frontend_policy(&mut store, &listener, second, second_pol);
+		insert_gateway_frontend_policy(&mut store, &listener, first, first_created, first_pol);
+		insert_gateway_frontend_policy(&mut store, &listener, second, second_created, second_pol);
 		store.listener_frontend_policies(&listener, None, None)
 	}
 
@@ -3652,28 +3696,18 @@ mod tests {
 		);
 	}
 
-	/// The stable policy key breaks ties between policies at the same attachment level, regardless
-	/// of insertion order. Conflicting policies select one winner rather than merge; the conflict
-	/// should surface through the controller's policy status. The core policy model does not carry
-	/// Kubernetes creation timestamps.
+	/// Conflicting policies at the same attachment level select the oldest policy as one unit,
+	/// regardless of key or insertion order.
 	#[test]
-	fn frontend_access_log_selection_is_deterministic() {
-		for attempt in 0..64 {
-			for order_swapped in [false, true] {
-				let pol = resolve_two_gateway_access_log_policies(order_swapped);
-				let access_log = pol
-					.access_log
-					.as_ref()
-					.expect("an access log policy should be selected");
-				assert!(
-					access_log.filter.is_some() && access_log.add.contains_key("request_body"),
-					"attempt {attempt}: policy-a should win independent of insertion order",
-				);
-				assert!(
-					!access_log.add.contains_key("probe.const"),
-					"attempt {attempt}: conflicting access log policies must not merge",
-				);
-			}
+	fn frontend_access_log_selection_prefers_oldest() {
+		for order_swapped in [false, true] {
+			let pol = resolve_two_gateway_access_log_policies(order_swapped);
+			let access_log = pol
+				.access_log
+				.as_ref()
+				.expect("an access log policy should be selected");
+			assert!(access_log.filter.is_none());
+			assert!(access_log.add.contains_key("probe.const"));
 		}
 	}
 
@@ -3720,6 +3754,50 @@ mod tests {
 	}
 
 	#[test]
+	fn same_level_route_policy_selects_oldest() {
+		let mut store = Store::default();
+		let listener = listener();
+		let route = route("r", "ns", Some("HTTPRoute"));
+		let newer = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let older = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(2)),
+			backend_request_timeout: None,
+		};
+		insert_traffic_policy(
+			&mut store,
+			"a-newer",
+			20,
+			PolicyTarget::Route(route.clone()),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(newer),
+		);
+		insert_traffic_policy(
+			&mut store,
+			"z-older",
+			10,
+			PolicyTarget::Route(route.clone()),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(older.clone()),
+		);
+
+		let selected = store
+			.route_policies(&RoutePath {
+				listener: &listener,
+				service: None,
+				routes: vec![&route],
+				route_inlines: vec![&[]],
+			})
+			.timeout
+			.select("timeout", &request_for_policy_selection())
+			.as_deref()
+			.cloned();
+		assert_eq!(selected, Some(older));
+	}
+
+	#[test]
 	fn route_policies_include_listenerset_targets() {
 		let mut store = Store::default();
 		let listener_set = ResourceName::new(strng::new("my-ls"), strng::new("default"));
@@ -3744,6 +3822,7 @@ mod tests {
 		insert_traffic_policy(
 			&mut store,
 			"listenerset-timeout",
+			0,
 			PolicyTarget::ListenerSet(ListenerSetTarget {
 				name: strng::new("my-ls"),
 				namespace: strng::new("default"),
@@ -3755,6 +3834,7 @@ mod tests {
 		insert_traffic_policy(
 			&mut store,
 			"listenerset-section-timeout",
+			0,
 			PolicyTarget::ListenerSet(ListenerSetTarget {
 				name: strng::new("my-ls"),
 				namespace: strng::new("default"),
@@ -3855,6 +3935,7 @@ mod tests {
 		insert_traffic_policy(
 			&mut store,
 			"gateway-timeout",
+			0,
 			PolicyTarget::Gateway(agent::ListenerTarget {
 				gateway_name: listener.gateway_name.clone(),
 				gateway_namespace: listener.gateway_namespace.clone(),
@@ -3867,6 +3948,7 @@ mod tests {
 		insert_traffic_policy(
 			&mut store,
 			"listener-override",
+			0,
 			PolicyTarget::Gateway(agent::ListenerTarget {
 				gateway_name: listener.gateway_name.clone(),
 				gateway_namespace: listener.gateway_namespace.clone(),
@@ -3880,6 +3962,7 @@ mod tests {
 		insert_traffic_policy(
 			&mut store,
 			"route-host-rewrite",
+			0,
 			PolicyTarget::Route(route.clone()),
 			PolicyInheritance::Default,
 			TrafficPolicy::HostRewrite(agent::HostRedirectOverride::Auto),
@@ -4115,6 +4198,7 @@ mod tests {
 		let backend_attached_policy = TargetedPolicy {
 			key: backend_attached_policy_key.clone(),
 			name: None,
+			creation_timestamp: 0,
 			target: PolicyTarget::Backend(BackendTarget::Backend {
 				name: strng::new("test-backend"),
 				namespace: strng::new("test-ns"),
@@ -4136,6 +4220,7 @@ mod tests {
 		let section_policy = TargetedPolicy {
 			key: section_policy_key.clone(),
 			name: None,
+			creation_timestamp: 0,
 			target: PolicyTarget::Backend(BackendTarget::Backend {
 				name: strng::new("test-backend"),
 				namespace: strng::new("test-ns"),
@@ -4410,6 +4495,7 @@ mod tests {
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
+			creation_timestamp: 0,
 			target: PolicyTarget::ListenerSet(ListenerSetTarget {
 				name: strng::new("my-ls"),
 				namespace: strng::new("default"),
@@ -4462,6 +4548,7 @@ mod tests {
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
+			creation_timestamp: 0,
 			target: PolicyTarget::ListenerSet(ListenerSetTarget {
 				name: strng::new("my-ls"),
 				namespace: strng::new("default"),

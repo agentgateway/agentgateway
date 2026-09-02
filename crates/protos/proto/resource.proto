@@ -167,6 +167,9 @@ message Policy {
   // Controls whether more-specific child policy levels can be included when
   // computing the effective policy.
   Inheritance inheritance = 8;
+  // Kubernetes creationTimestamp as Unix seconds. Older policies take
+  // precedence when multiple policies of the same kind target the same level.
+  int64 creation_timestamp = 9;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;

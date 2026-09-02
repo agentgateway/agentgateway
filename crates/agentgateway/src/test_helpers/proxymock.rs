@@ -974,6 +974,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Route(RouteName {
 					name: "route".into(),
 					namespace: "".into(),
@@ -1000,6 +1001,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
 					gateway_name: "default".into(),
 					gateway_namespace: "default".into(),
@@ -1025,6 +1027,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Backend(BackendTarget::Service {
 					hostname: strng::literal!("my-svc.default.svc.cluster.local"),
 					namespace: strng::literal!("default"),
@@ -1073,6 +1076,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key: strng::format!("pol/{}", self.policies),
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Backend(BackendTarget::Backend {
 					name: addr.to_string().into(),
 					namespace: Default::default(),
@@ -1104,6 +1108,7 @@ impl TestBind {
 		self.with_policy(TargetedPolicy {
 			key: strng::literal!("pol/frontend-connect"),
 			name: None,
+			creation_timestamp: 0,
 			inheritance: PolicyInheritance::default(),
 			target: PolicyTarget::Gateway(ListenerTarget {
 				gateway_name: strng::literal!("default"),

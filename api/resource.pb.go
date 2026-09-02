@@ -4128,6 +4128,9 @@ type Policy struct {
 	// Controls whether more-specific child policy levels can be included when
 	// computing the effective policy.
 	Inheritance Policy_Inheritance `protobuf:"varint,8,opt,name=inheritance,proto3,enum=agentgateway.dev.resource.Policy_Inheritance" json:"inheritance,omitempty"`
+	// Kubernetes creationTimestamp as Unix seconds. Older policies take
+	// precedence when multiple policies of the same kind target the same level.
+	CreationTimestamp int64 `protobuf:"varint,9,opt,name=creation_timestamp,json=creationTimestamp,proto3" json:"creation_timestamp,omitempty"`
 	// Types that are valid to be assigned to Kind:
 	//
 	//	*Policy_Traffic
@@ -4195,6 +4198,13 @@ func (x *Policy) GetInheritance() Policy_Inheritance {
 		return x.Inheritance
 	}
 	return Policy_DEFAULT
+}
+
+func (x *Policy) GetCreationTimestamp() int64 {
+	if x != nil {
+		return x.CreationTimestamp
+	}
+	return 0
 }
 
 func (x *Policy) GetKind() isPolicy_Kind {
@@ -18020,12 +18030,13 @@ const file_resource_proto_rawDesc = "" +
 	"\atraffic\x18\x02 \x01(\v2,.agentgateway.dev.resource.TrafficPolicySpecH\x00R\atrafficB\x06\n" +
 	"\x04kindB\f\n" +
 	"\n" +
-	"_condition\"\xd5\x04\n" +
+	"_condition\"\x84\x05\n" +
 	"\x06Policy\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12@\n" +
 	"\x04name\x18\x02 \x01(\v2,.agentgateway.dev.resource.TypedResourceNameR\x04name\x12?\n" +
 	"\x06target\x18\x03 \x01(\v2'.agentgateway.dev.resource.PolicyTargetR\x06target\x12O\n" +
-	"\vinheritance\x18\b \x01(\x0e2-.agentgateway.dev.resource.Policy.InheritanceR\vinheritance\x12H\n" +
+	"\vinheritance\x18\b \x01(\x0e2-.agentgateway.dev.resource.Policy.InheritanceR\vinheritance\x12-\n" +
+	"\x12creation_timestamp\x18\t \x01(\x03R\x11creationTimestamp\x12H\n" +
 	"\atraffic\x18\x04 \x01(\v2,.agentgateway.dev.resource.TrafficPolicySpecH\x00R\atraffic\x12H\n" +
 	"\abackend\x18\x05 \x01(\v2,.agentgateway.dev.resource.BackendPolicySpecH\x00R\abackend\x12K\n" +
 	"\bfrontend\x18\x06 \x01(\v2-.agentgateway.dev.resource.FrontendPolicySpecH\x00R\bfrontend\x12R\n" +

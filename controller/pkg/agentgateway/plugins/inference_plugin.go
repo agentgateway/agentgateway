@@ -84,9 +84,10 @@ func translatePoliciesForInferencePool(
 
 	// Create the inference routing policy
 	inferencePolicy := &api.Policy{
-		Key:    pool.Namespace + "/" + pool.Name + ":inference",
-		Name:   TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
-		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, hostname, nil)},
+		Key:               pool.Namespace + "/" + pool.Name + ":inference",
+		Name:              TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
+		Target:            &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, hostname, nil)},
+		CreationTimestamp: max(pool.CreationTimestamp.Unix(), 0),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_InferenceRouting_{
@@ -115,9 +116,10 @@ func translatePoliciesForInferencePool(
 	// Create the TLS policy for the endpoint picker
 	// TODO: we would want some way if they explicitly set a BackendTLSPolicy for the EPP to respect that
 	inferencePolicyTLS := &api.Policy{
-		Key:    pool.Namespace + "/" + pool.Name + ":inferencetls",
-		Name:   TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
-		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, new(strconv.Itoa(int(eppPort))))},
+		Key:               pool.Namespace + "/" + pool.Name + ":inferencetls",
+		Name:              TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
+		Target:            &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, new(strconv.Itoa(int(eppPort))))},
+		CreationTimestamp: max(pool.CreationTimestamp.Unix(), 0),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTls{

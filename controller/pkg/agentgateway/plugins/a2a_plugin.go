@@ -58,7 +58,8 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 			logger.Debug("found A2A service", "service", svc.Name, "namespace", svc.Namespace, "port", port.Port)
 			hostname := fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, clusterDomain)
 			policy := &api.Policy{
-				Key: fmt.Sprintf("a2a/%s/%s/%d", svc.Namespace, svc.Name, port.Port),
+				Key:               fmt.Sprintf("a2a/%s/%s/%d", svc.Namespace, svc.Name, port.Port),
+				CreationTimestamp: max(svc.CreationTimestamp.Unix(), 0),
 				// TODO: this is awkward since its doesn't include a Kind..
 				Name: TypedResourceName(wellknown.ServiceKind, svc),
 				Target: &api.PolicyTarget{Kind: &api.PolicyTarget_Service{Service: &api.PolicyTarget_ServiceTarget{

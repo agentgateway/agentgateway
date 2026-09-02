@@ -422,6 +422,11 @@ func TranslatePolicyToAgw(
 	if err != nil {
 		errs = append(errs, err)
 	}
+	for _, p := range agwPolicies {
+		if p != nil {
+			p.CreationTimestamp = max(policy.CreationTimestamp.Unix(), 0)
+		}
+	}
 
 	return agwPolicies, errors.Join(errs...)
 }

@@ -2431,6 +2431,8 @@ pub struct TargetedPolicy {
 	pub key: PolicyKey,
 	pub name: Option<TypedResourceName>,
 	pub target: PolicyTarget,
+	#[serde(default)]
+	pub creation_timestamp: i64,
 	#[serde(default, skip_serializing_if = "PolicyInheritance::is_default")]
 	pub inheritance: PolicyInheritance,
 	pub policy: PolicyType,
