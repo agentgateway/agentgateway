@@ -73,6 +73,8 @@ spec:
             path: /
             port: 13133
           periodSeconds: 2
+        # Development sizing for the synthetic smoke workload. Tune these
+        # values and the memory_limiter together for production traffic.
         resources:
           requests:
             cpu: 25m
