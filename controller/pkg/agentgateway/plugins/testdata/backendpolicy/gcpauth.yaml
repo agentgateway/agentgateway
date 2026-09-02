@@ -172,6 +172,13 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached; requests that rely on invalid configuration
+          are rejected: secret default/gcp-auth-secret-invalid missing credentials.json
+          value'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy

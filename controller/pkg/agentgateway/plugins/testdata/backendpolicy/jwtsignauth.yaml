@@ -187,6 +187,12 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached; requests that rely on invalid configuration
+          are rejected: failed to resolve jwtSign signing secret default/jwt-sign-secret-missing'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
