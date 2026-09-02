@@ -852,7 +852,7 @@ func createMockInferencePool(namespace, poolName string, port int32) *inf.Infere
 			TargetPorts: []inf.Port{
 				{Number: inf.PortNumber(port)},
 			},
-			EndpointPickerRef: inf.EndpointPickerRef{
+			EndpointPickerRef: &inf.EndpointPickerRef{
 				Name: "epp",
 				Port: &inf.Port{Number: 9002},
 			},
