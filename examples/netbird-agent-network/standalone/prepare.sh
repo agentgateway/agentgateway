@@ -8,6 +8,7 @@ if [[ ! -f .env ]]; then
   echo "copy env.example to .env and update it first" >&2
   exit 1
 fi
+chmod 600 .env
 
 for command in docker envsubst openssl; do
   if ! command -v "${command}" >/dev/null 2>&1; then
@@ -34,8 +35,13 @@ set +a
 
 for variable in NETBIRD_MANAGEMENT_DOMAIN NETBIRD_PROXY_DOMAIN \
   NETBIRD_ADMIN_EMAIL NETBIRD_ADMIN_PASSWORD OPENAI_API_KEY ANTHROPIC_API_KEY; do
-  if [[ -z "${!variable:-}" ]]; then
+  value=${!variable:-}
+  if [[ -z "${value}" ]]; then
     echo "required value is not set in .env: ${variable}" >&2
+    exit 1
+  fi
+  if [[ "${value}" == replace-with-* ]]; then
+    echo "replace the placeholder value in .env: ${variable}" >&2
     exit 1
   fi
 done

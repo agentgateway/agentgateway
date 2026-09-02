@@ -88,7 +88,9 @@ $EDITOR .env
 ```
 
 The populated `.env`, generated application secrets, certificates, and rendered
-NetBird configuration are ignored by Git. Keep the `runtime` directory private.
+NetBird configuration are ignored by Git. Keep `.env` and the `runtime`
+directory private. `prepare.sh` restricts `.env` permissions to the current
+user.
 
 `prepare.sh` reuses existing certificates and application secrets so restarts
 retain the same trust and encryption keys. Run `./cleanup.sh --volumes` before
@@ -161,8 +163,9 @@ streaming, and Anthropic Messages:
 RUN_LIVE_PROVIDER_TESTS=true ./verify.sh
 ```
 
-To make a manual request, obtain the generated endpoint and run `curl` in the
-test container, which shares the NetBird client's network namespace:
+To make manual requests, obtain the generated endpoint and define a helper that
+runs `curl` in the test container. The container shares the NetBird client's
+network namespace, so these requests use the NetBird tunnel:
 
 ```bash
 set -a
@@ -176,9 +179,45 @@ endpoint=$(curl --cacert runtime/certs/ca.crt -fsS \
   "https://${NETBIRD_MANAGEMENT_DOMAIN}/api/agent-network/settings" \
   | jq -r .endpoint)
 
-docker compose --env-file .env --env-file runtime/generated.env \
-  exec test-client curl -fsS "https://${endpoint}/v1/models" | jq
+client_curl() {
+  docker compose --env-file .env --env-file runtime/generated.env \
+    exec -T test-client curl -fsS "$@"
+}
+
+client_curl "https://${endpoint}/v1/models" | jq
 ```
+
+The model-discovery request is non-billable. The following requests reach the
+configured OpenAI and Anthropic providers and may incur charges:
+
+```bash
+client_curl "https://${endpoint}/v1/chat/completions" \
+  -H 'Content-Type: application/json' \
+  --data-binary '{
+    "model": "gpt-4o-mini",
+    "messages": [{
+      "role": "user",
+      "content": "Reply with the word connected."
+    }],
+    "max_tokens": 16
+  }' | jq
+
+client_curl "https://${endpoint}/v1/messages" \
+  -H 'Content-Type: application/json' \
+  --data-binary '{
+    "model": "claude-haiku-4-5",
+    "max_tokens": 16,
+    "messages": [{
+      "role": "user",
+      "content": "Reply with the word connected."
+    }]
+  }' | jq
+```
+
+Each live response should contain `connected`. The client does not supply an
+authorization header: the NetBird proxy authenticates the peer, adds the
+agentgateway virtual key, and forwards trusted NetBird identity headers. The
+calls also appear in **Agent Network > Usage & Logs** in the NetBird dashboard.
 
 ## Cleanup
 
