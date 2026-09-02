@@ -289,7 +289,12 @@ export function TrafficGatewaysPage() {
 											</thead>
 											<tbody>
 												{gateway.listeners.map((listener, listenerIndex) => (
-													<tr key={`${listener.name}-${listenerIndex}`}>
+													<tr
+														key={`${listener.name}-${
+															// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+															listenerIndex
+														}`}
+													>
 														<td className="strong">
 															{gatewayListenerName(listener, listenerIndex)}
 														</td>

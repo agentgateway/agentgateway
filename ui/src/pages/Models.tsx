@@ -1393,6 +1393,7 @@ function VirtualModelEditor(props: {
 				>
 					<div className="target-list">
 						{weightedTargets.map((target, index) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 							<div className="target-row weighted" key={index}>
 								<VirtualTargetSelector
 									label="Model"
@@ -1466,6 +1467,7 @@ function VirtualModelEditor(props: {
 				>
 					<div className="failover-group-list">
 						{failoverGroups.map((group, groupIndex) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 							<section className="match-card" key={groupIndex}>
 								<div className="match-card-header">
 									<strong>
@@ -1489,6 +1491,7 @@ function VirtualModelEditor(props: {
 								<div className="match-card-body">
 									<div className="target-list">
 										{group.map((target, targetIndex) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 											<div className="target-row failover" key={targetIndex}>
 												<VirtualTargetSelector
 													label="Model"
@@ -1579,6 +1582,7 @@ function VirtualModelEditor(props: {
 						{conditionalTargets.map((target, index) => {
 							const isFallback = !target.when?.trim();
 							return (
+								// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 								<div className="conditional-target-card" key={index}>
 									<div className="match-card-header">
 										<strong>{isFallback ? 'Fallback' : `Rule ${index + 1}`}</strong>

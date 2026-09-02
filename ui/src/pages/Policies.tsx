@@ -217,6 +217,7 @@ export function PolicyCatalogPage(props: {
 		};
 	}, [deleteResource, upsertPolicy]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useLayoutEffect(() => {
 		const scroll = pendingScrollRestore.current;
 		if (!scroll) return;

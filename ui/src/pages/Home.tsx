@@ -143,7 +143,10 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
+			// biome-ignore lint/a11y/noStaticElementInteractions: See ui/BIOME.md for why this exception exists and how to remove it.
+			// biome-ignore lint/a11y/useKeyWithClickEvents: See ui/BIOME.md for why this exception exists and how to remove it.
 			<div className="startup-shell" onClick={() => setStartupFlow(false)}>
+				{/** biome-ignore lint/a11y/useKeyWithClickEvents: See ui/BIOME.md for why this exception exists and how to remove it. */}
 				<section
 					className="startup-panel"
 					role="dialog"

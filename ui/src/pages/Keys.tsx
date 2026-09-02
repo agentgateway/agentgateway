@@ -648,13 +648,11 @@ function KeyEditor(props: {
 			...metadataValues,
 			...(name.trim() ? { name: name.trim() } : {})
 		};
-		const nextKey = isNew
-			? keyMode === 'auto'
-				? (generatedKey.current ??= `agw_sk_${randomKey(32)}`)
-				: key
-			: replaceKey
-				? key
-				: '';
+		let nextKey = isNew || replaceKey ? key : '';
+		if (isNew && keyMode === 'auto') {
+			generatedKey.current ??= `agw_sk_${randomKey(32)}`;
+			nextKey = generatedKey.current;
+		}
 		const value: VirtualApiKey =
 			isNew || replaceKey ? { key: nextKey, metadata } : { ...props.initial, metadata };
 		if (modelAccess === 'unrestricted') delete value.allowedModels;
@@ -937,6 +935,7 @@ function BudgetEditor(props: {
 							item => item.apiKeyName === props.apiKeyName && item.name === budget.name.trim()
 						);
 						return (
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 							<article className="api-key-budget-card" key={index}>
 								<header className="api-key-budget-card-header">
 									<div className="api-key-budget-card-title">
@@ -1277,7 +1276,10 @@ function BudgetSummary(props: {
 				const { used, fraction, level } = budgetProgress(budget, live);
 				return (
 					<Tooltip
-						key={`${budget.name}:${index}`}
+						key={`${budget.name}:${
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+							index
+						}`}
 						content={`${budgetAmountLabel(used, budget.limit.unit)} of ${budgetAmountLabel(
 							budget.limit.amount,
 							budget.limit.unit
