@@ -1606,7 +1606,6 @@ pub struct LLMContext {
 
 impl LLMContext {
 	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::catalog::ModelCatalog>) -> Self {
-		let legacy_token_semantics = *LEGACY_LLM_USAGE_TOKEN_SEMANTICS;
 		let projection = model_catalog.map(|catalog| catalog.project(&value));
 		let normalized_input_tokens = value.normalized_input_tokens();
 		let cache_convention = value.request.cache_convention;
@@ -1641,24 +1640,17 @@ impl LLMContext {
 			..LLMContext::from(value.request)
 		};
 
-		if legacy_token_semantics {
-			base.input_tokens = base.provider_input_tokens.or(base.input_tokens);
-			base.total_tokens = base.provider_total_tokens;
-		} else {
-			base.input_tokens = normalized_input_tokens;
-		}
-		if !legacy_token_semantics {
-			base.total_tokens = match (base.input_tokens, base.output_tokens) {
-				(Some(input), Some(output)) => Some(input.saturating_add(output)),
-				_ => resp.total_tokens.map(|total| {
-					cache_convention.include_cache_tokens(
-						total,
-						resp.cached_input_tokens,
-						resp.cache_creation_input_tokens,
-					)
-				}),
-			};
-		}
+		base.input_tokens = normalized_input_tokens;
+		base.total_tokens = match (base.input_tokens, base.output_tokens) {
+			(Some(input), Some(output)) => Some(input.saturating_add(output)),
+			_ => resp.total_tokens.map(|total| {
+				cache_convention.include_cache_tokens(
+					total,
+					resp.cached_input_tokens,
+					resp.cache_creation_input_tokens,
+				)
+			}),
+		};
 
 		if let Some(projection) = projection {
 			base.cost = projection.cost;
@@ -1739,11 +1731,6 @@ impl From<llm::LLMRequest> for LLMContext {
 		}
 	}
 }
-
-static LEGACY_LLM_USAGE_TOKEN_SEMANTICS: Lazy<bool> = Lazy::new(|| {
-	std::env::var("AGENTGATEWAY_LEGACY_LLM_USAGE_TOKEN_SEMANTICS")
-		.is_ok_and(|value| value.eq_ignore_ascii_case("true"))
-});
 
 fn to_value_str<'a, T: AsRef<str>>(c: &'a &'a T) -> Value<'a> {
 	Value::String(c.as_ref().into())
