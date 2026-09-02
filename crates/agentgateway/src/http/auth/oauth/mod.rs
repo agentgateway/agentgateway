@@ -292,8 +292,8 @@ impl OAuthTokenExchangeAuth {
 	) -> Result<&OAuthTokenExchangeConfig, ProxyError> {
 		match &self.0 {
 			OAuthTokenExchangeState::Valid(config) => Ok(config),
-			OAuthTokenExchangeState::Invalid { .. } => {
-				debug!("rejecting request: {config_kind} configuration is invalid");
+			OAuthTokenExchangeState::Invalid { reason } => {
+				debug!(%reason, "rejecting request: {config_kind} configuration is invalid");
 				Err(ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
 					"{config_kind} configuration is invalid"
 				)))

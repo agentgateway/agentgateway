@@ -155,4 +155,11 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: |-
+          Policy is attached; requests that rely on invalid configuration are rejected: ConfigMap default/ca-bundle not found
+          secret default/hello missing Authorization value
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
