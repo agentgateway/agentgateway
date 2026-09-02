@@ -9,7 +9,8 @@ span more than one agentgateway traffic type.
 
 * [netbird-agent-network](netbird-agent-network/README.md): authenticate and
   authorize OpenAI and Anthropic traffic with NetBird Agent Network before
-  routing it through a private agentgateway listener.
+  routing it through a private agentgateway listener. Includes Kubernetes and
+  standalone Docker Compose deployments.
 
 ### MCP
 

@@ -7,6 +7,10 @@ trusted values, and forwards the request to a private agentgateway listener.
 Agentgateway authenticates NetBird with a virtual API key and routes OpenAI
 and Anthropic requests to their respective providers.
 
+This document uses Kubernetes. See the
+[standalone Docker Compose example](standalone/README.md) for a self-contained
+deployment on one Docker host.
+
 ### Management traffic
 
 ```text

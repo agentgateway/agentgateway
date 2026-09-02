@@ -1,0 +1,194 @@
+name: netbird-agent-network
+
+services:
+  certificate-init:
+    image: busybox:1.37.0
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        cp /source/management/tls.crt /management/tls.crt
+        cp /source/management/tls.key /management/tls.key
+        chown -R 65532:65532 /management
+        chmod 0750 /management
+        chmod 0644 /management/tls.crt
+        chmod 0600 /management/tls.key
+        cp /source/proxy/tls.crt /proxy/tls.crt
+        cp /source/proxy/tls.key /proxy/tls.key
+        chown -R 1000:1000 /proxy
+        chmod 0750 /proxy
+        chmod 0644 /proxy/tls.crt
+        chmod 0600 /proxy/tls.key
+    volumes:
+      - ./runtime/certs:/source:ro
+      - management-certs:/management
+      - proxy-certs:/proxy
+
+  management-agentgateway:
+    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:-v1.5.0}
+    command: ["-f", "/etc/agentgateway/config.yaml"]
+    restart: unless-stopped
+    depends_on:
+      certificate-init:
+        condition: service_completed_successfully
+      netbird-server:
+        condition: service_started
+      netbird-dashboard:
+        condition: service_started
+    ports:
+      - "443:443"
+    cap_add:
+      - NET_BIND_SERVICE
+    volumes:
+      - ./management-agentgateway.yaml:/etc/agentgateway/config.yaml:ro
+      - management-certs:/certs:ro
+    networks:
+      management:
+        ipv4_address: 172.31.0.10
+
+  netbird-server:
+    image: ${NETBIRD_SERVER_IMAGE}
+    platform: linux/amd64
+    command: ["--config", "/etc/netbird/config.yaml"]
+    restart: unless-stopped
+    environment:
+      NB_SETUP_PAT_ENABLED: "true"
+    ports:
+      - "3478:3478/udp"
+    volumes:
+      - ./runtime/netbird-config.yaml:/etc/netbird/config.yaml:ro
+      - netbird-data:/var/lib/netbird
+    networks:
+      - management
+
+  netbird-dashboard:
+    image: ${NETBIRD_DASHBOARD_IMAGE}
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      NETBIRD_MGMT_API_ENDPOINT: https://${NETBIRD_MANAGEMENT_DOMAIN}
+      NETBIRD_MGMT_GRPC_API_ENDPOINT: https://${NETBIRD_MANAGEMENT_DOMAIN}
+      AUTH_AUDIENCE: netbird-dashboard
+      AUTH_CLIENT_ID: netbird-dashboard
+      AUTH_AUTHORITY: https://${NETBIRD_MANAGEMENT_DOMAIN}/oauth2
+      AUTH_SUPPORTED_SCOPES: openid profile email groups
+      AUTH_REDIRECT_URI: /nb-auth
+      AUTH_SILENT_REDIRECT_URI: /nb-silent-auth
+      USE_AUTH0: "false"
+      NETBIRD_AGENT_NETWORK_ENABLED: "true"
+    networks:
+      - management
+
+  agent-network-agentgateway:
+    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:-v1.5.0}
+    command: ["-f", "/etc/agentgateway/config.yaml"]
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      NETBIRD_VIRTUAL_KEY: ${NETBIRD_VIRTUAL_KEY}
+    volumes:
+      - ./agent-network-agentgateway.yaml:/etc/agentgateway/config.yaml:ro
+    networks:
+      - agent-network
+
+  netbird-proxy:
+    profiles: [configured]
+    image: ${NETBIRD_PROXY_IMAGE}
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      certificate-init:
+        condition: service_completed_successfully
+      agent-network-agentgateway:
+        condition: service_started
+      netbird-server:
+        condition: service_started
+    env_file:
+      - ./runtime/proxy.env
+    environment:
+      NB_PROXY_MANAGEMENT_ADDRESS: https://${NETBIRD_MANAGEMENT_DOMAIN}
+      NB_PROXY_DOMAIN: ${NETBIRD_PROXY_DOMAIN}
+      NB_PROXY_ADDRESS: :443
+      NB_PROXY_CERTIFICATE_DIRECTORY: /certs
+      NB_PROXY_CERTIFICATE_FILE: tls.crt
+      NB_PROXY_CERTIFICATE_KEY_FILE: tls.key
+      NB_PROXY_ACME_CERTIFICATES: "false"
+      NB_PROXY_HEALTH_ADDRESS: :8080
+      NB_PROXY_PRIVATE: "true"
+      NB_PROXY_DISABLE_GEOLOCATION: "true"
+      NB_RELAY_TRANSPORT: ws
+      SSL_CERT_FILE: /trust/ca.crt
+    cap_add:
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+      - SYS_ADMIN
+      - SYS_RESOURCE
+    ports:
+      - "51820:51820/udp"
+    volumes:
+      - proxy-certs:/certs:ro
+      - ./runtime/certs/ca.crt:/trust/ca.crt:ro
+    networks:
+      - management
+      - agent-network
+    extra_hosts:
+      - "${NETBIRD_MANAGEMENT_DOMAIN}:172.31.0.10"
+
+  netbird-example-client:
+    profiles: [configured]
+    image: ${NETBIRD_CLIENT_IMAGE:-netbirdio/netbird:0.77.0}
+    restart: unless-stopped
+    depends_on:
+      management-agentgateway:
+        condition: service_started
+    env_file:
+      - ./runtime/client.env
+    environment:
+      NB_MANAGEMENT_URL: https://${NETBIRD_MANAGEMENT_DOMAIN}
+      SSL_CERT_FILE: /trust/ca.crt
+    privileged: true
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - client-data:/var/lib/netbird
+      - ./runtime/certs/ca.crt:/trust/ca.crt:ro
+    networks:
+      - management
+    extra_hosts:
+      - "${NETBIRD_MANAGEMENT_DOMAIN}:172.31.0.10"
+
+  test-client:
+    profiles: [configured]
+    image: curlimages/curl:8.12.1
+    command: ["sleep", "infinity"]
+    depends_on:
+      netbird-example-client:
+        condition: service_started
+    environment:
+      CURL_CA_BUNDLE: /trust/ca.crt
+    network_mode: service:netbird-example-client
+    volumes:
+      - ./runtime/certs/ca.crt:/trust/ca.crt:ro
+
+  private-test-client:
+    profiles: [diagnostics]
+    image: curlimages/curl:8.12.1
+    command: ["sleep", "infinity"]
+    networks:
+      - agent-network
+
+volumes:
+  client-data:
+  management-certs:
+  netbird-data:
+  proxy-certs:
+
+networks:
+  management:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+  agent-network:
+    driver: bridge
