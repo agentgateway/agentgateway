@@ -31,12 +31,12 @@ Name|Version|License
 [go.uber.org/goleak](https://go.uber.org/goleak)|v1.3.0|MIT License
 [go.uber.org/zap](https://go.uber.org/zap)|v1.28.0|MIT License
 [x/clipboard](https://golang.design/x/clipboard)|v0.8.0|MIT License
-[x/net](https://golang.org/x/net)|v0.57.0|BSD 3-clause "New" or "Revised" License
+[x/net](https://golang.org/x/net)|v0.58.0|BSD 3-clause "New" or "Revised" License
 [x/sync](https://golang.org/x/sync)|v0.22.0|BSD 3-clause "New" or "Revised" License
 [x/time](https://golang.org/x/time)|v0.15.0|BSD 3-clause "New" or "Revised" License
 [x/tools](https://golang.org/x/tools)|v0.48.0|BSD 3-clause "New" or "Revised" License
 [googleapis/rpc](https://google.golang.org/genproto/googleapis/rpc)|v0.0.0-20260803160001-6ac0973c030d|Apache License 2.0
-[google.golang.org/grpc](https://google.golang.org/grpc)|v1.83.0|Apache License 2.0
+[google.golang.org/grpc](https://google.golang.org/grpc)|v1.83.2|Apache License 2.0
 [google.golang.org/protobuf](https://google.golang.org/protobuf)|v1.36.12-0.20260120151049-f2248ac996af|BSD 3-clause "New" or "Revised" License
 [helm/v4](https://helm.sh/helm/v4)|v4.2.3|Apache License 2.0
 [istio.io/api](https://istio.io/api)|v1.31.0-alpha.0.0.20260728150501-5b85aa417615|Apache License 2.0
