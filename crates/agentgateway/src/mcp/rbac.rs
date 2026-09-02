@@ -8,6 +8,7 @@ use vector_map::VecMap;
 
 use crate::cel::ContextBuilder;
 use crate::http::authorization::{RuleSet, RuleSets};
+use crate::mcp::direct_response::{DirectResponse, DirectResponseRule};
 use crate::*;
 
 #[apply(schema!)]
@@ -35,6 +36,7 @@ impl CelExecWrapper {
 		CelExecWrapper(Arc::new(req))
 	}
 }
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpAuthorizationSet(RuleSets);
@@ -62,6 +64,39 @@ impl McpAuthorizationSet {
 
 	pub fn register(&self, cel: &mut ContextBuilder) {
 		self.0.register(cel);
+	}
+}
+
+/// Direct-response rules, evaluated for `tools/call` before authorization and
+/// guardrails. The first matching rule short-circuits with its configured result.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(transparent)]
+pub struct McpDirectResponseSet(Vec<DirectResponseRule>);
+
+impl McpDirectResponseSet {
+	pub fn new(rules: Vec<DirectResponseRule>) -> Self {
+		Self(rules)
+	}
+
+	pub fn register(&self, cel: &mut ContextBuilder) {
+		for rule in &self.0 {
+			cel.register_expression(rule.when.as_ref());
+		}
+	}
+
+	/// The first matching rule's response, if any. Applies only to `tools/call`;
+	/// other resource types always return `None`.
+	pub fn respond_for(&self, res: &ResourceType, cel: &CelExecWrapper) -> Option<DirectResponse> {
+		if self.0.is_empty() || !matches!(res, ResourceType::Tool(_)) {
+			return None;
+		}
+		let mcp = crate::mcp::MCPInfo::from(res);
+		let exec = crate::cel::Executor::new_mcp_request(cel.0.as_ref(), &mcp);
+		self
+			.0
+			.iter()
+			.find(|rule| exec.eval_bool(rule.when.as_ref()))
+			.map(|rule| rule.respond.clone())
 	}
 }
 

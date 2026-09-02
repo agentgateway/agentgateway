@@ -345,6 +345,8 @@ async fn apply_backend_policies(
 		// Applied elsewhere
 		mcp_authorization: _,
 		// Applied elsewhere
+		mcp_direct_response: _,
+		// Applied elsewhere
 		mcp_authentication: _,
 		// Applied elsewhere (in mcp/handler.rs + mcp/session.rs)
 		mcp_guardrails: _,

@@ -13,6 +13,9 @@ use secrecy::SecretString;
 use crate::http::auth::BackendAuthKind;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
+use crate::mcp::direct_response::{
+	self as dr, ContentBlock, DirectResponse, DirectResponseRule, McpDirectResponse,
+};
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::{FailureMode, McpAuthorization, guardrails};
@@ -3573,6 +3576,106 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 			.and_then(|v| v.to_str().ok()),
 		Some("/.well-known/oauth-protected-resource/mcp")
 	);
+}
+
+/// Direct-response rule short-circuits a tool call: the configured CallToolResult
+/// is returned to the client instead of forwarding to the upstream.
+#[tokio::test]
+async fn direct_response_returns_synthetic_tool_result() {
+	let mock = mock_streamable_http_server(true).await;
+	let policy = McpDirectResponse {
+		rules: vec![DirectResponseRule {
+			when: Arc::new(cel::Expression::new_strict(r#"mcp.tool.name == "echo""#).unwrap()),
+			respond: DirectResponse::CallTool(dr::CallToolResult {
+				content: vec![ContentBlock::Text(dr::TextContent {
+					text: "Blocked by admin policy".to_string(),
+					annotations: Some(dr::Annotations {
+						audience: vec![dr::AnnotationRole::User],
+						priority: Some(0.9),
+						last_modified: None,
+					}),
+					meta: None,
+				})],
+				is_error: true,
+				structured_content: Some(serde_json::json!({ "reason": "policy" })),
+				meta: None,
+			}),
+		}],
+	};
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpDirectResponse(policy)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	let result = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("echo"))
+		.await
+		.expect("direct response should surface as a successful CallToolResult");
+
+	assert_eq!(result.is_error, Some(true));
+	let block = result.content[0].as_text().unwrap();
+	assert_eq!(block.text, "Blocked by admin policy");
+	assert_eq!(
+		block.annotations.as_ref().and_then(|a| a.audience.as_ref()),
+		Some(&vec![rmcp::model::Role::User])
+	);
+	assert_eq!(
+		result.structured_content,
+		Some(serde_json::json!({ "reason": "policy" }))
+	);
+}
+
+/// Direct-response rules only apply to tools/call; a denied resource read still
+/// surfaces the generic "Unknown resource" error rather than a synthetic result.
+#[tokio::test]
+async fn direct_response_does_not_apply_to_resources() {
+	let mock = mock_streamable_http_server(true).await;
+	let deny_all = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+		vec![],
+	)));
+	let direct_response = McpDirectResponse {
+		rules: vec![DirectResponseRule {
+			when: Arc::new(cel::Expression::new_strict("true").unwrap()),
+			respond: DirectResponse::CallTool(dr::CallToolResult {
+				content: vec![ContentBlock::Text(dr::TextContent {
+					text: "should not be used".to_string(),
+					annotations: None,
+					meta: None,
+				})],
+				is_error: true,
+				structured_content: None,
+				meta: None,
+			}),
+		}],
+	};
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![
+			BackendTrafficPolicy::McpAuthorization(deny_all),
+			BackendTrafficPolicy::McpDirectResponse(direct_response),
+		],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	let err = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"memo://insights",
+		))
+		.await
+		.expect_err("resource read should be denied, not direct-responded");
+	match &err {
+		rmcp::ServiceError::McpError(e) => assert_eq!(e.code.0, -32602),
+		other => panic!("expected McpError, got {other:?}"),
+	}
 }
 
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {
