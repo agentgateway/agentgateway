@@ -2076,6 +2076,19 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
+                                        acceptedTrustDomains:
+                                          description: |-
+                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
+                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
+                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
+                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
+                                            is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: set
                                         alpnProtocols:
                                           description: |-
                                             Application-Layer Protocol Negotiation (`ALPN`)
@@ -2235,6 +2248,11 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
+                                      - message: acceptedTrustDomains may only be
+                                          set when certificateSource is SPIFFE
+                                        rule: '!has(self.acceptedTrustDomains) ||
+                                          (has(self.certificateSource) && self.certificateSource
+                                          == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -2536,6 +2554,19 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
+                                        acceptedTrustDomains:
+                                          description: |-
+                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
+                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
+                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
+                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
+                                            is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: set
                                         alpnProtocols:
                                           description: |-
                                             Application-Layer Protocol Negotiation (`ALPN`)
@@ -2695,6 +2726,11 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
+                                      - message: acceptedTrustDomains may only be
+                                          set when certificateSource is SPIFFE
+                                        rule: '!has(self.acceptedTrustDomains) ||
+                                          (has(self.certificateSource) && self.certificateSource
+                                          == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -3015,6 +3051,19 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
+                                        acceptedTrustDomains:
+                                          description: |-
+                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
+                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
+                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
+                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
+                                            is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: set
                                         alpnProtocols:
                                           description: |-
                                             Application-Layer Protocol Negotiation (`ALPN`)
@@ -3174,6 +3223,11 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
+                                      - message: acceptedTrustDomains may only be
+                                          set when certificateSource is SPIFFE
+                                        rule: '!has(self.acceptedTrustDomains) ||
+                                          (has(self.certificateSource) && self.certificateSource
+                                          == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -3863,6 +3917,19 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
+                                        acceptedTrustDomains:
+                                          description: |-
+                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
+                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
+                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
+                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
+                                            is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: set
                                         alpnProtocols:
                                           description: |-
                                             Application-Layer Protocol Negotiation (`ALPN`)
@@ -4022,6 +4089,11 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
+                                      - message: acceptedTrustDomains may only be
+                                          set when certificateSource is SPIFFE
+                                        rule: '!has(self.acceptedTrustDomains) ||
+                                          (has(self.certificateSource) && self.certificateSource
+                                          == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -4323,6 +4395,19 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
+                                        acceptedTrustDomains:
+                                          description: |-
+                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
+                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
+                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
+                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
+                                            is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: set
                                         alpnProtocols:
                                           description: |-
                                             Application-Layer Protocol Negotiation (`ALPN`)
@@ -4482,6 +4567,11 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
+                                      - message: acceptedTrustDomains may only be
+                                          set when certificateSource is SPIFFE
+                                        rule: '!has(self.acceptedTrustDomains) ||
+                                          (has(self.certificateSource) && self.certificateSource
+                                          == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -4812,6 +4902,19 @@ spec:
                   tls:
                     description: TLS settings for connections to this model provider.
                     properties:
+                      acceptedTrustDomains:
+                        description: |-
+                          AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                          Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
+                          implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
+                          them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
+                          the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                          domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
+                          is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                        items:
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: set
                       alpnProtocols:
                         description: |-
                           Application-Layer Protocol Negotiation (`ALPN`)
@@ -4962,6 +5065,10 @@ spec:
                       rule: '!has(self.certificateSource) || self.certificateSource
                         != ''SPIFFE'' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs)
                         && !has(self.insecureSkipVerify))'
+                    - message: acceptedTrustDomains may only be set when certificateSource
+                        is SPIFFE
+                      rule: '!has(self.acceptedTrustDomains) || (has(self.certificateSource)
+                        && self.certificateSource == ''SPIFFE'')'
                     - message: at most one of the fields in [verifySubjectAltNames
                         insecureSkipVerify] may be set
                       rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()

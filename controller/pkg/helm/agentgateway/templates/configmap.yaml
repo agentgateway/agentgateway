@@ -32,7 +32,11 @@ data:
     {{- $spiffeSrc := ($gateway.spiffe).source | default dict }}
     {{- $spiffeMount := $spiffeSrc.mountPath | default "/spiffe-workload-api" }}
     {{- $spiffeSocketName := $spiffeSrc.socketName | default "spire-agent.sock" }}
-    {{- $spiffeConfig := dict "spiffe" (dict "endpoint" (printf "unix://%s/%s" $spiffeMount $spiffeSocketName)) }}
+    {{- $spiffeInner := dict "endpoint" (printf "unix://%s/%s" $spiffeMount $spiffeSocketName) }}
+    {{- with ($gateway.spiffe).federatedTrustDomains }}
+    {{- $_ := set $spiffeInner "federatedTrustDomains" . }}
+    {{- end }}
+    {{- $spiffeConfig := dict "spiffe" $spiffeInner }}
     {{- $typedConfig = merge $typedConfig (dict "config" $spiffeConfig) }}
     {{- end }}
     {{- /* Merge: typed config takes precedence over rawConfig */ -}}

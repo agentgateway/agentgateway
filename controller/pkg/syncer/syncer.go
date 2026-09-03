@@ -670,6 +670,7 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
 		} else if obj.TLSInfo.Spiffe {
 			tlsConfig.CertificateSource = api.TLSConfig_SPIFFE
+			tlsConfig.SpiffeAcceptedTrustDomains = obj.TLSInfo.SpiffeAcceptedTrustDomains
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert

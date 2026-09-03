@@ -13,7 +13,7 @@ pub use imp::Aes256Gcm;
 
 #[cfg(feature = "crypto-aws-lc")]
 mod imp {
-	use aws_lc_rs::aead::{AES_256_GCM, Aad, Nonce, RandomizedNonceKey};
+	use aws_lc_rs::aead::{Aad, Nonce, RandomizedNonceKey, AES_256_GCM};
 
 	use super::{AeadError, NONCE_LEN};
 

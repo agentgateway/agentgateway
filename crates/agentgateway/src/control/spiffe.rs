@@ -7,7 +7,7 @@
 //! From the current SVID (the cert chain + private key) it builds, on demand, both a
 //! [`ServerConfig`] for terminating TLS on listeners and a [`ClientConfig`] for outbound mTLS to
 //! upstream backends.
-use ::spiffe::{X509Context, X509Source, X509SourceUpdates, X509Svid};
+use ::spiffe::{TrustDomain, X509Context, X509Source, X509SourceUpdates, X509Svid};
 use rustls::client::danger::ServerCertVerifier;
 use rustls::server::danger::ClientCertVerifier;
 use rustls::{ClientConfig, ServerConfig};
@@ -21,6 +21,12 @@ use crate::*;
 pub struct Config {
 	/// Endpoint of the SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`)
 	pub endpoint: String,
+	/// Federated trust domains this gateway may accept, on top of its own (local) trust domain.
+	/// This is an advisory allow-list used to validate the per-listener/backend accepted lists; it
+	/// does NOT control which bundles are delivered (SPIRE decides that via `federatesWith`). When
+	/// empty, the allow-list guard is disabled and only runtime bundle availability is enforced.
+	#[serde(default)]
+	pub federated_trust_domains: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -41,17 +47,31 @@ pub enum Error {
 	NoSvid,
 	#[error("invalid SPIFFE verification SAN: {0}")]
 	InvalidSan(String),
+	// Fail closed: SPIRE has not delivered a bundle for this trust domain (not federated with the
+	// gateway's own trust domain, or not yet synced).
+	#[error(
+		"no SPIFFE trust bundle available for trust domain {0:?}; is it federated with this gateway?"
+	)]
+	MissingBundle(String),
+	#[error("SPIFFE trust domain {0:?} is not declared in spiffe.federatedTrustDomains")]
+	TrustDomainNotFederated(String),
+	#[error("invalid SPIFFE trust domain {0:?}: {1}")]
+	InvalidTrustDomain(String, String),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ServerConfigKey {
 	alpns: Vec<Vec<u8>>,
+	// Canonical (sorted, lowercased) accepted federated trust domain names.
+	accepted_trust_domains: Vec<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct ClientConfigCacheKey {
 	alpns: Vec<Vec<u8>>,
 	verify_sans: Vec<String>,
+	// Canonical (sorted, lowercased) accepted federated trust domain names.
+	accepted_trust_domains: Vec<String>,
 }
 
 /// A rotation-aware map with 2 methods, Get & Insert, both having a sequence number parameter.
@@ -103,6 +123,8 @@ pub struct SpiffeClient {
 	updates: X509SourceUpdates,
 	server_cache: Arc<Mutex<RotatingCache<ServerConfigKey, ServerConfig>>>,
 	client_cache: Arc<Mutex<RotatingCache<ClientConfigCacheKey, ClientConfig>>>,
+	/// Allow-list of federated trust domains (parsed once); see [`Config::federated_trust_domains`].
+	federated_trust_domains: Arc<[TrustDomain]>,
 }
 
 impl std::fmt::Debug for SpiffeClient {
@@ -113,8 +135,14 @@ impl std::fmt::Debug for SpiffeClient {
 
 impl SpiffeClient {
 	/// Connects to the SPIFFE Workload API and performs the initial SVID/bundle sync.
-	pub async fn new(endpoint: String) -> Result<Self, Error> {
+	pub async fn new(
+		endpoint: String,
+		federated_trust_domains: Vec<String>,
+	) -> Result<Self, Error> {
 		info!(endpoint = %endpoint, "connecting to SPIFFE workload API");
+		// Validate the declared federated trust domains up front so a typo fails at startup.
+		let federated_trust_domains: Arc<[TrustDomain]> =
+			normalize_trust_domains(&federated_trust_domains)?.into();
 		let source: X509Source = match X509Source::builder()
 			.endpoint(endpoint.clone())
 			.build()
@@ -132,6 +160,7 @@ impl SpiffeClient {
 			updates,
 			server_cache: Arc::new(Mutex::new(RotatingCache::default())),
 			client_cache: Arc::new(Mutex::new(RotatingCache::default())),
+			federated_trust_domains,
 		};
 		match client.spiffe_id() {
 			Some(id) => {
@@ -149,31 +178,43 @@ impl SpiffeClient {
 		self.source.try_svid().map(|s| s.spiffe_id().to_string())
 	}
 
-	/// Builds (or returns a cached) `rustls::ServerConfig` from the current SVID and trust bundle.
+	/// Builds (or returns a cached) `rustls::ServerConfig` from the current SVID and trust bundles.
 	///
-	/// Incoming connections must present a client SVID that chains to the gateway's own trust domain
-	/// bundle (mutual TLS is always required). Only the local trust domain is accepted; SPIFFE
-	/// federation across trust domains is not supported.
-	/// Use the `source.spiffeId` CEL field for applying further restrictions.
-	pub fn server_config(&self, alpns: Vec<Vec<u8>>) -> Result<Arc<ServerConfig>, Error> {
+	/// Incoming connections must present a client SVID (mutual TLS is always required). The SVID is
+	/// verified against the bundle for its own trust domain: the gateway's local trust domain (always
+	/// implicit) plus any `accepted_trust_domains` (federated). Each SVID is checked against only its
+	/// own trust domain's bundle (SPIFFE Federation spec §7.3). Use the `source.spiffeId` CEL field to
+	/// apply further restrictions.
+	pub fn server_config(
+		&self,
+		alpns: Vec<Vec<u8>>,
+		accepted_trust_domains: Vec<String>,
+	) -> Result<Arc<ServerConfig>, Error> {
+		let accepted = normalize_trust_domains(&accepted_trust_domains)?;
 		let seq = self.updates.last();
 		let key = ServerConfigKey {
 			alpns: alpns.clone(),
+			accepted_trust_domains: trust_domain_names(&accepted),
 		};
 
 		if let Some(cfg) = self.server_cache.lock().unwrap().get(seq, &key) {
 			return Ok(cfg);
 		}
 
-		let cfg = Arc::new(self.build_server_config(alpns)?);
+		let cfg = Arc::new(self.build_server_config(alpns, &accepted)?);
 		Ok(self.server_cache.lock().unwrap().insert(seq, key, cfg))
 	}
 
-	fn build_server_config(&self, alpns: Vec<Vec<u8>>) -> Result<ServerConfig, Error> {
+	fn build_server_config(
+		&self,
+		alpns: Vec<Vec<u8>>,
+		accepted: &[TrustDomain],
+	) -> Result<ServerConfig, Error> {
 		let ctx = self.source.x509_context()?;
 		let provider = transport::tls::provider();
-		// Verify inbound client SVIDs against the gateway's local trust domain bundle.
-		let verifier = build_client_verifier(&ctx, provider.clone())?;
+		// Verify inbound client SVIDs against the accepted trust domains' bundles (local + federated).
+		let verifier =
+			build_client_verifier(&ctx, accepted, &self.federated_trust_domains, provider.clone())?;
 		let (chain, key, spiffe_id) = svid_identity(&ctx)?;
 
 		let mut config = ServerConfig::builder_with_provider(provider)
@@ -194,26 +235,30 @@ impl SpiffeClient {
 
 	/// Builds (or returns a cached) `rustls::ClientConfig` for outbound mTLS to a SPIFFE-backed
 	/// upstream. The gateway presents its current SVID as the client certificate. The upstream's
-	/// certificate is verified against the gateway's local trust domain bundle; when `verify_sans` is
-	/// empty any SVID chaining to the bundle is accepted (DNS hostname checks do not apply to SPIFFE
-	/// SVIDs), otherwise the upstream's SPIFFE ID must match one of the provided `spiffe://` URIs.
+	/// certificate is verified against the bundle for its own trust domain (local, always implicit,
+	/// plus any `accepted_trust_domains`); when `verify_sans` is empty any SVID chaining to that
+	/// bundle is accepted (DNS hostname checks do not apply to SPIFFE SVIDs), otherwise the upstream's
+	/// SPIFFE ID must match one of the provided `spiffe://` URIs.
 	pub fn client_config(
 		&self,
 		alpns: Vec<Vec<u8>>,
 		verify_sans: Vec<String>,
+		accepted_trust_domains: Vec<String>,
 	) -> Result<Arc<ClientConfig>, Error> {
+		let accepted = normalize_trust_domains(&accepted_trust_domains)?;
 		// Sequence sampled before the SVID read; see server_config.
 		let seq = self.updates.last();
 		let key = ClientConfigCacheKey {
 			alpns: alpns.clone(),
 			verify_sans: verify_sans.clone(),
+			accepted_trust_domains: trust_domain_names(&accepted),
 		};
 
 		if let Some(cfg) = self.client_cache.lock().unwrap().get(seq, &key) {
 			return Ok(cfg);
 		}
 
-		let cfg = Arc::new(self.build_client_config(alpns, verify_sans)?);
+		let cfg = Arc::new(self.build_client_config(alpns, verify_sans, &accepted)?);
 		Ok(self.client_cache.lock().unwrap().insert(seq, key, cfg))
 	}
 
@@ -221,11 +266,13 @@ impl SpiffeClient {
 		&self,
 		alpns: Vec<Vec<u8>>,
 		verify_sans: Vec<String>,
+		accepted: &[TrustDomain],
 	) -> Result<ClientConfig, Error> {
 		let ctx = self.source.x509_context()?;
 		let provider = transport::tls::provider();
 		let sans_count = verify_sans.len();
-		let verifier = build_server_verifier(&ctx, verify_sans)?;
+		let verifier =
+			build_server_verifier(&ctx, verify_sans, accepted, &self.federated_trust_domains)?;
 		let (chain, key, spiffe_id) = svid_identity(&ctx)?;
 		let mut config = ClientConfig::builder_with_provider(provider)
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
@@ -253,65 +300,315 @@ fn snapshot_svid(ctx: &X509Context) -> Result<&Arc<X509Svid>, Error> {
 	ctx.default_svid().ok_or(Error::NoSvid)
 }
 
-/// Builds a `RootCertStore` from the gateway's own trust domain bundle, federated bundles are ignored
-fn local_roots(ctx: &X509Context, purpose: &str) -> Result<Arc<rustls::RootCertStore>, Error> {
-	let svid = snapshot_svid(ctx)?;
-	let td = svid.spiffe_id().trust_domain();
-	let bundle = ctx.bundle_set().get(td).ok_or(Error::EmptyBundle)?;
-	let mut roots = rustls::RootCertStore::empty();
-	for authority in bundle.authorities() {
-		roots
-			.add(CertificateDer::from(authority.as_bytes().to_vec()))
-			.map_err(Error::Rustls)?;
+/// Parse, validate, de-duplicate and canonically order trust domain names. `TrustDomain` lowercases
+/// names, so the result is a stable cache key regardless of input case or order.
+fn normalize_trust_domains(names: &[String]) -> Result<Vec<TrustDomain>, Error> {
+	let mut tds: Vec<TrustDomain> = Vec::with_capacity(names.len());
+	for name in names {
+		let td = TrustDomain::new(name)
+			.map_err(|e| Error::InvalidTrustDomain(name.clone(), e.to_string()))?;
+		if !tds.contains(&td) {
+			tds.push(td);
+		}
 	}
-	if roots.is_empty() {
-		return Err(Error::EmptyBundle);
-	}
-	debug!(trust_domain = %td, purpose, "loaded SPIFFE trust bundle");
-	Ok(Arc::new(roots))
+	tds.sort();
+	Ok(tds)
 }
 
+fn trust_domain_names(tds: &[TrustDomain]) -> Vec<String> {
+	tds.iter().map(|td| td.to_string()).collect()
+}
+
+/// Per-trust-domain root stores used to verify peer SVIDs. Always includes the gateway's own
+/// (local) trust domain; each federated trust domain named in `accepted` must be present in the
+/// bundle set delivered by the Workload API, otherwise we fail closed.
+///
+/// Bundles are kept per trust domain and never pooled: SPIFFE Federation spec §7.3 requires an SVID
+/// to be validated against only the bundle for the trust domain named in its own SPIFFE ID; pooling
+/// would let one accepted trust domain mint SVIDs impersonating another.
+fn roots_by_trust_domain(
+	ctx: &X509Context,
+	accepted: &[TrustDomain],
+	federated: &[TrustDomain],
+	purpose: &str,
+) -> Result<HashMap<TrustDomain, Arc<rustls::RootCertStore>>, Error> {
+	let svid = snapshot_svid(ctx)?;
+	let local_td = svid.spiffe_id().trust_domain().clone();
+
+	// The local trust domain is always accepted implicitly.
+	let mut wanted: Vec<TrustDomain> = vec![local_td.clone()];
+	for td in accepted {
+		if *td == local_td || wanted.contains(td) {
+			continue;
+		}
+		// When federatedTrustDomains is configured, an accepted domain must be declared in it.
+		// TODO(jaellio): also enforce this subset relationship in the controller once the translator
+		// has access to the gateway's AgentgatewayParameters SpiffeSpec.
+		if !federated.is_empty() && !federated.contains(td) {
+			return Err(Error::TrustDomainNotFederated(td.to_string()));
+		}
+		wanted.push(td.clone());
+	}
+
+	let bundles = ctx.bundle_set();
+	let mut by_td = HashMap::with_capacity(wanted.len());
+	for td in wanted {
+		// Fail closed: without a delivered bundle we cannot verify this trust domain's SVIDs.
+		let bundle = bundles
+			.get(&td)
+			.ok_or_else(|| Error::MissingBundle(td.to_string()))?;
+		let mut roots = rustls::RootCertStore::empty();
+		for authority in bundle.authorities() {
+			roots
+				.add(CertificateDer::from(authority.as_bytes().to_vec()))
+				.map_err(Error::Rustls)?;
+		}
+		if roots.is_empty() {
+			return Err(Error::EmptyBundle);
+		}
+		by_td.insert(td, Arc::new(roots));
+	}
+	debug!(purpose, trust_domains = by_td.len(), "loaded SPIFFE trust bundles");
+	Ok(by_td)
+}
+
+/// Inbound: one `WebPkiClientVerifier` per accepted trust domain, wrapped in a dispatcher that
+/// selects the verifier by the peer's own trust domain before validating the chain.
 fn build_client_verifier(
 	ctx: &X509Context,
+	accepted: &[TrustDomain],
+	federated: &[TrustDomain],
 	provider: Arc<rustls::crypto::CryptoProvider>,
 ) -> Result<Arc<dyn ClientCertVerifier>, Error> {
-	let roots = local_roots(ctx, "client certificate verification")?;
-	let verifier =
-		rustls::server::WebPkiClientVerifier::builder_with_provider(roots, provider).build()?;
-	Ok(verifier)
+	let roots = roots_by_trust_domain(ctx, accepted, federated, "client certificate verification")?;
+	let mut by_td: HashMap<TrustDomain, Arc<dyn ClientCertVerifier>> =
+		HashMap::with_capacity(roots.len());
+	for (td, store) in roots {
+		let verifier =
+			rustls::server::WebPkiClientVerifier::builder_with_provider(store, provider.clone())
+				.build()?;
+		by_td.insert(td, verifier);
+	}
+	Ok(Arc::new(verify::SpiffeClientCertVerifier::new(by_td)))
 }
 
+/// Outbound: one server verifier per accepted trust domain (each applying the optional SPIFFE-ID
+/// pin), wrapped in a dispatcher that selects by the upstream's own trust domain. SPIFFE SVIDs carry
+/// a `spiffe://` URI SAN and no DNS SAN, so standard WebPKI hostname verification does not apply.
 fn build_server_verifier(
 	ctx: &X509Context,
 	verify_sans: Vec<String>,
+	accepted: &[TrustDomain],
+	federated: &[TrustDomain],
 ) -> Result<Arc<dyn ServerCertVerifier>, Error> {
-	// Verify the upstream SVID against the gateway's local trust domain bundle, then optionally
-	// pin its SPIFFE ID. Note that SPIFFE SVIDs carry a `spiffe://` URI SAN and no DNS SAN, so
-	// standard WebPKI hostname verification does not apply.
+	let roots = roots_by_trust_domain(ctx, accepted, federated, "upstream server verification")?;
+	let provider = transport::tls::provider();
+	let mut by_td: HashMap<TrustDomain, Arc<dyn ServerCertVerifier>> =
+		HashMap::with_capacity(roots.len());
+	for (td, store) in roots {
+		let verifier: Arc<dyn ServerCertVerifier> = if verify_sans.is_empty() {
+			// No SPIFFE ID pinned: accept any SVID that chains to this trust domain's bundle.
+			let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(
+				store,
+				provider.clone(),
+			)
+			.build()?;
+			Arc::new(transport::tls::insecure::NoServerNameVerification::new(
+				inner,
+			))
+		} else {
+			// Rebuilt per trust domain because `ExtendedServerName` is not `Clone`.
+			let alt_names = verify_sans
+				.iter()
+				.cloned()
+				.map(transport::tls::ExtendedServerName::try_from)
+				.collect::<Result<Box<[_]>, _>>()
+				.map_err(|e| Error::InvalidSan(e.to_string()))?;
+			Arc::new(transport::tls::insecure::AltHostnameVerifier::new(
+				store, alt_names,
+			))
+		};
+		by_td.insert(td, verifier);
+	}
+	Ok(Arc::new(verify::SpiffeServerCertVerifier::new(by_td)))
+}
 
-	let roots = local_roots(ctx, "upstream server verification")?;
-	let verifier: Arc<dyn ServerCertVerifier> = if verify_sans.is_empty() {
-		// No SPIFFE ID pinned: accept any SVID that chains to the bundle.
-		let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(
-			roots,
-			transport::tls::provider(),
-		)
-		.build()?;
-		Arc::new(transport::tls::insecure::NoServerNameVerification::new(
-			inner,
-		))
-	} else {
-		let alt_names = verify_sans
-			.iter()
-			.cloned()
-			.map(transport::tls::ExtendedServerName::try_from)
-			.collect::<Result<Box<[_]>, _>>()
-			.map_err(|e| Error::InvalidSan(e.to_string()))?;
-		Arc::new(transport::tls::insecure::AltHostnameVerifier::new(
-			roots, alt_names,
-		))
+/// Custom rustls verifiers that preserve the SPIFFE `<trust domain, bundle>` binding (SPIFFE
+/// Federation spec §7.3): each peer SVID is validated against only the bundle for the trust domain
+/// named in its own SPIFFE ID. We dispatch to the matching per-trust-domain verifier built above.
+mod verify {
+	use std::collections::HashMap;
+	use std::sync::Arc;
+
+	use ::spiffe::TrustDomain;
+	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+	use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
+	use rustls::{
+		CertificateError, DigitallySignedStruct, DistinguishedName, OtherError, SignatureScheme,
 	};
-	Ok(verifier)
+
+	#[derive(Debug, thiserror::Error)]
+	enum VerifyError {
+		#[error("peer certificate has no valid SPIFFE ID: {0}")]
+		PeerSpiffeId(String),
+		#[error("peer trust domain {0:?} is not accepted by this listener/backend")]
+		NotAccepted(String),
+	}
+
+	fn other(err: VerifyError) -> rustls::Error {
+		rustls::Error::InvalidCertificate(CertificateError::Other(OtherError(Arc::new(err))))
+	}
+
+	/// The peer certificate's trust domain, taken from its single `spiffe://` URI SAN.
+	fn peer_trust_domain(cert: &CertificateDer<'_>) -> Result<TrustDomain, rustls::Error> {
+		let id = ::spiffe::cert::spiffe_id_from_der(cert.as_ref())
+			.map_err(|e| other(VerifyError::PeerSpiffeId(e.to_string())))?;
+		Ok(id.trust_domain().clone())
+	}
+
+	/// Inbound: dispatch a client SVID to the verifier owning its trust domain's bundle.
+	#[derive(Debug)]
+	pub(super) struct SpiffeClientCertVerifier {
+		by_td: HashMap<TrustDomain, Arc<dyn ClientCertVerifier>>,
+		root_hint_subjects: Vec<DistinguishedName>,
+	}
+
+	impl SpiffeClientCertVerifier {
+		pub(super) fn new(by_td: HashMap<TrustDomain, Arc<dyn ClientCertVerifier>>) -> Self {
+			// Advertise the union of accepted CAs so clients can select a client certificate.
+			let root_hint_subjects = by_td
+				.values()
+				.flat_map(|v| v.root_hint_subjects().to_vec())
+				.collect();
+			Self {
+				by_td,
+				root_hint_subjects,
+			}
+		}
+	}
+
+	impl ClientCertVerifier for SpiffeClientCertVerifier {
+		fn offer_client_auth(&self) -> bool {
+			true
+		}
+
+		fn client_auth_mandatory(&self) -> bool {
+			true
+		}
+
+		fn root_hint_subjects(&self) -> &[DistinguishedName] {
+			&self.root_hint_subjects
+		}
+
+		fn verify_client_cert(
+			&self,
+			end_entity: &CertificateDer<'_>,
+			intermediates: &[CertificateDer<'_>],
+			now: UnixTime,
+		) -> Result<ClientCertVerified, rustls::Error> {
+			let td = peer_trust_domain(end_entity)?;
+			let inner = self
+				.by_td
+				.get(&td)
+				.ok_or_else(|| other(VerifyError::NotAccepted(td.to_string())))?;
+			inner.verify_client_cert(end_entity, intermediates, now)
+		}
+
+		fn verify_tls12_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			rustls::crypto::verify_tls12_signature(
+				message,
+				cert,
+				dss,
+				&crate::crypto::tls::signature_verification_algorithms(),
+			)
+		}
+
+		fn verify_tls13_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			rustls::crypto::verify_tls13_signature(
+				message,
+				cert,
+				dss,
+				&crate::crypto::tls::signature_verification_algorithms(),
+			)
+		}
+
+		fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+			crate::crypto::tls::signature_verification_algorithms().supported_schemes()
+		}
+	}
+
+	/// Outbound: dispatch an upstream SVID to the verifier owning its trust domain's bundle.
+	#[derive(Debug)]
+	pub(super) struct SpiffeServerCertVerifier {
+		by_td: HashMap<TrustDomain, Arc<dyn ServerCertVerifier>>,
+	}
+
+	impl SpiffeServerCertVerifier {
+		pub(super) fn new(by_td: HashMap<TrustDomain, Arc<dyn ServerCertVerifier>>) -> Self {
+			Self { by_td }
+		}
+	}
+
+	impl ServerCertVerifier for SpiffeServerCertVerifier {
+		fn verify_server_cert(
+			&self,
+			end_entity: &CertificateDer<'_>,
+			intermediates: &[CertificateDer<'_>],
+			server_name: &ServerName<'_>,
+			ocsp_response: &[u8],
+			now: UnixTime,
+		) -> Result<ServerCertVerified, rustls::Error> {
+			let td = peer_trust_domain(end_entity)?;
+			let inner = self
+				.by_td
+				.get(&td)
+				.ok_or_else(|| other(VerifyError::NotAccepted(td.to_string())))?;
+			inner.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
+		}
+
+		fn verify_tls12_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			rustls::crypto::verify_tls12_signature(
+				message,
+				cert,
+				dss,
+				&crate::crypto::tls::signature_verification_algorithms(),
+			)
+		}
+
+		fn verify_tls13_signature(
+			&self,
+			message: &[u8],
+			cert: &CertificateDer<'_>,
+			dss: &DigitallySignedStruct,
+		) -> Result<HandshakeSignatureValid, rustls::Error> {
+			rustls::crypto::verify_tls13_signature(
+				message,
+				cert,
+				dss,
+				&crate::crypto::tls::signature_verification_algorithms(),
+			)
+		}
+
+		fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+			crate::crypto::tls::signature_verification_algorithms().supported_schemes()
+		}
+	}
 }
 
 /// Extracts the certificate chain, private key, and SPIFFE ID string from the X%09Context
@@ -613,17 +910,17 @@ mod tests {
 		)
 		.await;
 
-		let client = SpiffeClient::new(endpoint)
+		let client = SpiffeClient::new(endpoint, vec![])
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
 		assert_eq!(client.spiffe_id().as_deref(), Some(spiffe_id));
 		let alpns = vec![b"h2".to_vec()];
 		client
-			.server_config(alpns.clone())
+			.server_config(alpns.clone(), vec![])
 			.expect("server config should build from the streamed SVID");
 		client
-			.client_config(alpns, vec![spiffe_id.to_string()])
+			.client_config(alpns, vec![spiffe_id.to_string()], vec![])
 			.expect("client config should build from the streamed SVID");
 
 		handle.abort();
@@ -642,14 +939,14 @@ mod tests {
 			None,
 		)
 		.await;
-		let client = SpiffeClient::new(endpoint)
+		let client = SpiffeClient::new(endpoint, vec![])
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
 		let provider = transport::tls::provider();
 		let ctx = client.source.x509_context().unwrap();
-		let client_verifier = build_client_verifier(&ctx, provider).unwrap();
-		let server_verifier = build_server_verifier(&ctx, vec![]).unwrap();
+		let client_verifier = build_client_verifier(&ctx, &[], &[], provider).unwrap();
+		let server_verifier = build_server_verifier(&ctx, vec![], &[], &[]).unwrap();
 		let now = UnixTime::now();
 		let sni = ServerName::try_from("example.org").unwrap();
 
@@ -685,6 +982,8 @@ mod tests {
 		let pinned = build_server_verifier(
 			&ctx,
 			vec!["spiffe://example.org/ns/default/sa/peer".to_string()],
+			&[],
+			&[],
 		)
 		.unwrap();
 		assert!(
@@ -725,10 +1024,10 @@ mod tests {
 				key: LISTENER_KEY,
 				name: Default::default(),
 				hostname: strng::new("*.example.com"),
-				protocol: ListenerProtocol::HTTPS(crate::types::agent::ServerTLSConfig::spiffe(vec![
-					b"h2".to_vec(),
-					b"http/1.1".to_vec(),
-				])),
+				protocol: ListenerProtocol::HTTPS(crate::types::agent::ServerTLSConfig::spiffe(
+					vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+					vec![],
+				)),
 			}])),
 		}
 	}
@@ -762,7 +1061,7 @@ mod tests {
 		)
 		.await;
 		let spiffe = Arc::new(
-			SpiffeClient::new(endpoint)
+			SpiffeClient::new(endpoint, vec![])
 				.await
 				.expect("SpiffeClient should connect to the fake Workload API"),
 		);
@@ -835,7 +1134,7 @@ mod tests {
 		)
 		.await;
 		let spiffe = Arc::new(
-			SpiffeClient::new(endpoint)
+			SpiffeClient::new(endpoint, vec![])
 				.await
 				.expect("SpiffeClient should connect to the fake Workload API"),
 		);
@@ -889,16 +1188,16 @@ mod tests {
 		)
 		.await;
 
-		let client = SpiffeClient::new(endpoint)
+		let client = SpiffeClient::new(endpoint, vec![])
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
 		let alpns = vec![b"h2".to_vec()];
 		let seq_before = client.source.updated().last();
-		let cfg_before = client.server_config(alpns.clone()).unwrap();
+		let cfg_before = client.server_config(alpns.clone(), vec![]).unwrap();
 		// While the SVID is unchanged, the same key returns the cached config (same allocation).
 		assert!(
-			Arc::ptr_eq(&cfg_before, &client.server_config(alpns.clone()).unwrap()),
+			Arc::ptr_eq(&cfg_before, &client.server_config(alpns.clone(), vec![]).unwrap()),
 			"an unchanged SVID should serve the cached config"
 		);
 
@@ -926,7 +1225,7 @@ mod tests {
 		.await
 		.expect("the source should observe the rotation within the timeout");
 
-		let cfg_after = client.server_config(alpns).unwrap();
+		let cfg_after = client.server_config(alpns, vec![]).unwrap();
 		assert!(
 			!Arc::ptr_eq(&cfg_before, &cfg_after),
 			"server_config should rebuild from the rotated SVID rather than serve the stale cache"

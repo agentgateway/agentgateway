@@ -1228,7 +1228,25 @@ var dummyTls = &TLSInfo{
 const (
 	gatewayTLSTerminateModeKey          = "gateway.istio.io/tls-terminate-mode"
 	agentgatewayTLSCertificateSourceKey = "agentgateway.dev/tls-certificate-source"
+	// Comma-separated federated trust domains accepted for inbound client SVIDs. Only valid on a
+	// listener whose certificate source is SPIFFE; the local trust domain is always implicit.
+	agentgatewaySpiffeAcceptedTrustDomainsKey = "agentgateway.dev/spiffe-accepted-trust-domains"
 )
+
+// parseAcceptedTrustDomains splits a comma-separated trust-domain list, trimming whitespace and
+// dropping empty entries. Order is preserved; the dataplane tolerates duplicates.
+func parseAcceptedTrustDomains(csv string) []string {
+	if csv == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(csv, ",") {
+		if td := strings.TrimSpace(part); td != "" {
+			out = append(out, td)
+		}
+	}
+	return out
+}
 
 func validateTLS(certInfo *TLSInfo) *ConfigError {
 	if certInfo.IstioWorkloadCert || certInfo.Spiffe {
@@ -1347,7 +1365,17 @@ func buildTLS(
 						Message: "certificateRefs cannot be configured with SPIFFE TLS certificate source",
 					}
 				}
-				return &TLSInfo{Spiffe: true}, nil
+				return &TLSInfo{
+					Spiffe:                     true,
+					SpiffeAcceptedTrustDomains: parseAcceptedTrustDomains(string(tls.Options[agentgatewaySpiffeAcceptedTrustDomainsKey])),
+				}, nil
+			}
+			// Accepted trust domains only make sense when the identity is SPIFFE-sourced.
+			if tls.Options[agentgatewaySpiffeAcceptedTrustDomainsKey] != "" {
+				return dummyTls, &ConfigError{
+					Reason:  InvalidTLS,
+					Message: fmt.Sprintf("%s is only valid when %s is SPIFFE", agentgatewaySpiffeAcceptedTrustDomainsKey, agentgatewayTLSCertificateSourceKey),
+				}
 			}
 			switch terminateMode {
 			case "ISTIO_SIMPLE":

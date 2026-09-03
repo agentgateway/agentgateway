@@ -531,6 +531,11 @@ pub struct RawLoggingFields {
 pub struct RawSpiffeConfig {
 	/// SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).
 	endpoint: Option<String>,
+	/// Federated trust domains this gateway may accept on top of its own (local) trust domain.
+	/// Advisory allow-list used to validate per-listener/backend accepted trust domains; it does not
+	/// control which bundles SPIRE delivers.
+	#[serde(default)]
+	federated_trust_domains: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
