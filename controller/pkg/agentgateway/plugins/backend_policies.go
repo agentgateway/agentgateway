@@ -114,7 +114,7 @@ func validateExtractionAuthorizationLocation(loc *agentgateway.AuthorizationExtr
 	if loc == nil || loc.Expression == nil || isCEL(*loc.Expression) {
 		return nil
 	}
-	return fmt.Errorf("%s expression is not a valid CEL expression: %s", context, *loc.Expression)
+	return fmt.Errorf("%s expression is not a valid CEL expression", context)
 }
 
 func TranslateInlineBackendPolicy(
@@ -1089,9 +1089,12 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 	}, err
 }
 
+// BuildCrossAppAccess lowers cross-app access configuration into its xDS representation.
+// It always returns a non-nil object; validation failures return an error-only representation.
 func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.CrossAppAccessAuth, error) {
 	if auth == nil {
-		return nil, errors.New("crossAppAccess must not be nil")
+		err := errors.New("crossAppAccess must not be nil")
+		return invalidCrossAppAccess(err.Error()), err
 	}
 
 	var errs []error
@@ -1118,7 +1121,7 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 	}
 	cache := translateOAuthTokenCache(auth.Cache)
 
-	return &api.CrossAppAccessAuth{
+	result := &api.CrossAppAccessAuth{
 		IdentityProvider:            identityProvider,
 		ResourceAuthorizationServer: resourceAuthorizationServer,
 		Audience:                    auth.Audience,
@@ -1127,7 +1130,34 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		AccessTokenScopes:           translateCrossAppAccessScopes(auth.AccessTokenScopes),
 		SubjectToken:                translateCrossAppAccessSubjectToken(auth.SubjectToken),
 		Cache:                       cache,
-	}, errors.Join(errs...)
+	}
+	if err := errors.Join(errs...); err != nil {
+		return invalidCrossAppAccess(err.Error()), err
+	}
+	return result, nil
+}
+
+func invalidCrossAppAccess(translationError string) *api.CrossAppAccessAuth {
+	// Older proxies ignore translation_error, so provide the minimum configuration that passes
+	// their load validation. Both endpoints and their token endpoints are required. A non-empty
+	// client ID with CLIENT_SECRET_POST is the only client auth that needs no secret, a non-empty
+	// audience is required, and an omitted subject token selects the valid ID-token default. The
+	// empty backend references then preserve fail-closed behavior at runtime.
+	invalidEndpoint := func() *api.CrossAppAccessAuth_Endpoint {
+		return &api.CrossAppAccessAuth_Endpoint{
+			TokenEndpoint: &api.BackendReference{},
+			ClientAuth: &api.OAuthClientAuth{
+				ClientId: "invalid",
+				Method:   api.OAuthClientAuth_CLIENT_SECRET_POST,
+			},
+		}
+	}
+	return &api.CrossAppAccessAuth{
+		IdentityProvider:            invalidEndpoint(),
+		ResourceAuthorizationServer: invalidEndpoint(),
+		Audience:                    "invalid",
+		TranslationError:            new(translationError),
+	}
 }
 
 func translateCrossAppAccessScopes(scopes *[]string) *api.CrossAppAccessAuth_ScopeOverride {
@@ -1189,9 +1219,11 @@ func buildCrossAppAccessEndpoint(ctx PolicyCtx, endpoint *agentgateway.CrossAppA
 }
 
 // BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.
+// It always returns a non-nil object; validation failures return an error-only representation.
 func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
 	if auth == nil {
-		return nil, errors.New("oauthTokenExchange must not be nil")
+		err := errors.New("oauthTokenExchange must not be nil")
+		return invalidOAuthTokenExchange(err.Error()), err
 	}
 
 	var errs []error
@@ -1211,8 +1243,8 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		}
 	}
 
-	additionalParams := castCELMap(auth.AdditionalParams, func(key string, expr agentgateway.CELExpression) {
-		errs = append(errs, fmt.Errorf("oauth additionalParams %q is not a valid CEL expression: %s", key, expr))
+	additionalParams := castCELMap(auth.AdditionalParams, func(key string, _ agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("oauth additionalParams %q is not a valid CEL expression", key))
 	})
 	for key := range auth.AdditionalParams {
 		if isOAuthReservedAdditionalParam(key) {
@@ -1277,7 +1309,17 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
 	}
 
-	return oauth, errors.Join(errs...)
+	if err := errors.Join(errs...); err != nil {
+		return invalidOAuthTokenExchange(err.Error()), err
+	}
+	return oauth, nil
+}
+
+func invalidOAuthTokenExchange(translationError string) *api.OAuthTokenExchange {
+	// Older proxies ignore translation_error and resolve a missing token endpoint as runtime-invalid.
+	return &api.OAuthTokenExchange{
+		TranslationError: new(translationError),
+	}
 }
 
 func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {
@@ -1431,7 +1473,7 @@ func validateOAuthTokenType(tokenType agentgateway.OAuthTokenType, field string)
 	}
 	parsed, err := url.Parse(string(tokenType))
 	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" {
-		return fmt.Errorf("%s %q must be a built-in token type or an absolute URI without a fragment", field, tokenType)
+		return fmt.Errorf("%s must be a built-in token type or an absolute URI without a fragment", field)
 	}
 	return nil
 }

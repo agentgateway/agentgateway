@@ -77,4 +77,10 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached with invalid configuration: secret default/mtls
+          not found'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway

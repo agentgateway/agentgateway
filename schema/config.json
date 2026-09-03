@@ -4090,7 +4090,7 @@
               "$ref": "#/$defs/FileOrInline"
             },
             "certificate": {
-              "description": "PEM-encoded X.509 certificate chain, leaf first. The leaf public key must\ncorrespond to `signing_key` for token endpoints to validate assertions.\nA mismatch or comparison failure is logged and does not prevent loading.",
+              "description": "PEM-encoded X.509 certificate chain, leaf first. The leaf public key must\ncorrespond to `signing_key` for token endpoints to validate assertions.\nA mismatch or comparison failure is reported as a load warning and does\nnot prevent loading.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/FileOrInline"

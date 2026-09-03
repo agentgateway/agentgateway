@@ -6,7 +6,7 @@ use std::time::Duration;
 use secrecy::{ExposeSecret, SecretString};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 
 use super::AuthorizationLocation;
 use crate::http::Request;
@@ -34,8 +34,74 @@ pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt};
 pub use cross_app_access::CrossAppAccessAuth;
 pub(super) use transport::FetchError;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum OAuthConfigWarning {
+	CertificateKeyMismatch,
+	CertificateKeyComparisonFailed(String),
+	InvalidResource {
+		context: &'static str,
+		resource: String,
+	},
+	InvalidScope {
+		context: &'static str,
+		scope: String,
+	},
+	QueryParameterBearerToken,
+	UnreachableAccessTokenScopes(Vec<String>),
+}
+
+impl std::fmt::Display for OAuthConfigWarning {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::CertificateKeyMismatch => {
+				f.write_str("privateKeyJwt: certificate does not match signingKey")
+			},
+			Self::CertificateKeyComparisonFailed(error) => write!(
+				f,
+				"privateKeyJwt: cannot compare certificate with signingKey: {error}"
+			),
+			Self::InvalidResource { context, resource } => write!(
+				f,
+				"{context}: resource {resource:?} must be an absolute URI without a fragment"
+			),
+			Self::InvalidScope { context, scope } => write!(
+				f,
+				"{context}: scope {scope:?} must be non-empty ASCII without spaces, quotes, backslashes, or controls"
+			),
+			Self::QueryParameterBearerToken => f.write_str(
+				"oauth token exchange: query-parameter bearer tokens are omitted from OAuth 2.1",
+			),
+			Self::UnreachableAccessTokenScopes(scopes) => write!(
+				f,
+				"crossAppAccess: accessTokenScopes {scopes:?} are not in scopes; chained exchange may return invalid_scope"
+			),
+		}
+	}
+}
+
+pub(crate) fn log_config_warnings(warnings: impl IntoIterator<Item = OAuthConfigWarning>) {
+	for warning in warnings {
+		tracing::warn!(warning = %warning, "OAuth configuration warning");
+	}
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(untagged)]
+enum OAuthTokenExchangeState {
+	Valid(Box<OAuthTokenExchangeConfig>),
+	Invalid {
+		#[serde(rename = "translationError")]
+		reason: String,
+	},
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(transparent)]
+pub struct OAuthTokenExchangeAuth(OAuthTokenExchangeState);
+
 #[apply(schema!)]
-pub struct OAuthTokenExchangeAuth {
+#[cfg_attr(feature = "schema", schemars(rename = "OAuthTokenExchangeAuth"))]
+struct OAuthTokenExchangeConfig {
 	// ----- Token endpoint -----
 	/// Backend serving the RFC 8693 token endpoint and policies used when connecting to it.
 	#[serde(flatten)]
@@ -104,6 +170,32 @@ pub struct OAuthTokenExchangeAuth {
 	chained_exchange: Option<ChainedExchange>,
 }
 
+impl<'de> serde::Deserialize<'de> for OAuthTokenExchangeAuth {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		OAuthTokenExchangeConfig::deserialize(deserializer).map(Into::into)
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for OAuthTokenExchangeAuth {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"OAuthTokenExchangeAuth".into()
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		OAuthTokenExchangeConfig::json_schema(generator)
+	}
+}
+
+impl From<OAuthTokenExchangeConfig> for OAuthTokenExchangeAuth {
+	fn from(config: OAuthTokenExchangeConfig) -> Self {
+		Self(OAuthTokenExchangeState::Valid(Box::new(config)))
+	}
+}
+
 #[serde_with::serde_as]
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,10 +235,13 @@ impl ChainedExchange {
 		if let Some(client_auth) = &self.client_auth {
 			client_auth.validate_load()?;
 		}
-		warn_on_invalid_resources("chained oauth token exchange", &self.resources);
-		warn_on_invalid_scopes("chained oauth token exchange scopes", &self.scopes);
 		validate_additional_params(&self.additional_params)?;
 		Ok(())
+	}
+
+	fn collect_load_warnings(&self, warnings: &mut Vec<OAuthConfigWarning>) {
+		collect_invalid_resource_warnings("chained oauth token exchange", &self.resources, warnings);
+		collect_invalid_scope_warnings("chained oauth token exchange", &self.scopes, warnings);
 	}
 
 	fn evaluate_additional_params(&self, req: &Request) -> anyhow::Result<Vec<(String, String)>> {
@@ -173,76 +268,62 @@ const RESERVED_FORM_PARAMS: &[&str] = &[
 ];
 
 impl OAuthTokenExchangeAuth {
-	pub(crate) fn validate_load(&self) -> Result<(), String> {
-		if !self.path.is_empty() && !self.path.starts_with('/') {
-			return Err(format!("path {:?} must start with /", self.path));
-		}
-		if self.grant_type == OAuthGrantType::JwtBearer {
-			if self.requested_token_type.is_some() {
-				return Err("requested_token_type is only valid with the token-exchange grant".into());
-			}
-			if self.actor_token.is_some() {
-				return Err("actor_token is only valid with the token-exchange grant".into());
-			}
-		}
-		if let Some(actor_token) = &self.actor_token {
-			actor_token.validate_load()?;
-		}
-		if let Some(client_auth) = &self.client_auth {
-			client_auth.validate_load()?;
-		}
-		if let Some(OAuthTokenType::Custom(token_type)) = &self.requested_token_type {
-			return Err(format!(
-				"unsupported requested_token_type {token_type:?}; custom token types are only supported for subject_token and actor_token"
-			));
-		}
+	pub(crate) fn new_invalid(error: String) -> Self {
+		Self(OAuthTokenExchangeState::Invalid { reason: error })
+	}
 
-		warn_on_invalid_resources("oauth token exchange", &self.resources);
-		warn_on_invalid_scopes("oauth token exchange scopes", &self.scopes);
-		validate_additional_params(&self.additional_params)?;
+	fn invalid_reason(&self) -> Option<&str> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(_) => None,
+			OAuthTokenExchangeState::Invalid { reason } => Some(reason),
+		}
+	}
 
-		if let Some(chained_exchange) = &self.chained_exchange {
-			chained_exchange.validate_load()?;
-			if self.grant_type != OAuthGrantType::TokenExchange {
-				return Err("chained_exchange is only valid with the token-exchange grant".into());
-			}
-			if self.requested_token_type != Some(OAuthTokenType::IdJag) {
-				return Err("chained_exchange currently requires requested_token_type id-jag".into());
-			}
+	fn config(&self) -> Option<&OAuthTokenExchangeConfig> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(config) => Some(config),
+			OAuthTokenExchangeState::Invalid { .. } => None,
 		}
-		if self.requested_token_type == Some(OAuthTokenType::IdJag) {
-			if self.chained_exchange.is_none() {
-				return Err(
-					"requested_token_type id-jag is only supported by backendAuth.crossAppAccess".into(),
-				);
-			}
-			if self.audiences.is_empty() {
-				return Err("requested_token_type id-jag requires at least one audience".into());
-			}
-		}
+	}
 
-		if matches!(
-			self.authorization_location,
-			AuthorizationLocation::Expression { .. }
-		) {
-			return Err("expression auth location is only supported for credential extraction".into());
+	fn require_config(
+		&self,
+		config_kind: &'static str,
+	) -> Result<&OAuthTokenExchangeConfig, ProxyError> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(config) => Ok(config),
+			OAuthTokenExchangeState::Invalid { reason } => {
+				debug!(%reason, "rejecting request: {config_kind} configuration is invalid");
+				Err(ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
+					"{config_kind} configuration is invalid"
+				)))
+			},
 		}
-		if matches!(
-			self.authorization_location,
-			AuthorizationLocation::QueryParameter { .. }
-		) {
-			warn!(
-				"oauth token exchange is configured to forward the exchanged bearer token in a URI query parameter; OAuth 2.1 omits this bearer-token usage and future versions may reject it"
-			);
+	}
+
+	pub(crate) fn check_load(&self) -> Result<Vec<OAuthConfigWarning>, String> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(config) => config.check_load(),
+			OAuthTokenExchangeState::Invalid { .. } => {
+				Err("OAuth token exchange configuration is invalid".into())
+			},
 		}
-		Ok(())
 	}
 
 	pub(crate) fn from_proto(
-		t: proto::OAuthTokenExchange,
+		mut t: proto::OAuthTokenExchange,
 		diagnostics: &mut Diagnostics,
 	) -> Result<Self, ProtoError> {
 		use proto::o_auth_token_exchange::GrantType;
+
+		if let Some(error) = t.translation_error.take() {
+			let error = if error.trim().is_empty() {
+				"OAuth token exchange configuration is invalid".to_string()
+			} else {
+				error
+			};
+			return Err(ProtoError::Generic(error));
+		}
 
 		let target = resolve_simple_reference(t.token_endpoint.as_ref());
 		let policies =
@@ -279,7 +360,12 @@ impl OAuthTokenExchangeAuth {
 			));
 		}
 
-		let client_auth = t.client_auth.map(OAuthClientAuth::try_from).transpose()?;
+		let (client_auth, mut warnings) = if let Some(client_auth) = t.client_auth {
+			let (client_auth, warnings) = OAuthClientAuth::from_proto(client_auth)?;
+			(Some(client_auth), warnings)
+		} else {
+			(None, Vec::new())
+		};
 
 		let authorization_location =
 			optional_authorization_location(t.authorization_location.as_ref())?.unwrap_or_default();
@@ -299,7 +385,7 @@ impl OAuthTokenExchangeAuth {
 
 		let cache = token_cache_from_proto(t.cache)?;
 
-		let auth = Self {
+		let config = OAuthTokenExchangeConfig {
 			target: SimpleBackendReferenceWithPolicies {
 				target: Arc::new(target),
 				policies,
@@ -318,8 +404,87 @@ impl OAuthTokenExchangeAuth {
 			authorization_location,
 			cache,
 		};
-		auth.validate_load().map_err(ProtoError::Generic)?;
-		Ok(auth)
+		warnings.extend(config.check_load().map_err(ProtoError::Generic)?);
+		log_config_warnings(warnings);
+		Ok(config.into())
+	}
+}
+
+impl OAuthTokenExchangeConfig {
+	fn check_load(&self) -> Result<Vec<OAuthConfigWarning>, String> {
+		self.validate_load()?;
+		let mut warnings = Vec::new();
+		self.collect_load_warnings(&mut warnings);
+		Ok(warnings)
+	}
+
+	pub(crate) fn validate_load(&self) -> Result<(), String> {
+		if !self.path.is_empty() && !self.path.starts_with('/') {
+			return Err(format!("path {:?} must start with /", self.path));
+		}
+		if self.grant_type == OAuthGrantType::JwtBearer {
+			if self.requested_token_type.is_some() {
+				return Err("requested_token_type is only valid with the token-exchange grant".into());
+			}
+			if self.actor_token.is_some() {
+				return Err("actor_token is only valid with the token-exchange grant".into());
+			}
+		}
+		if let Some(actor_token) = &self.actor_token {
+			actor_token.validate_load()?;
+		}
+		if let Some(client_auth) = &self.client_auth {
+			client_auth.validate_load()?;
+		}
+		if let Some(OAuthTokenType::Custom(token_type)) = &self.requested_token_type {
+			return Err(format!(
+				"unsupported requested_token_type {token_type:?}; custom token types are only supported for subject_token and actor_token"
+			));
+		}
+
+		validate_additional_params(&self.additional_params)?;
+
+		if let Some(chained_exchange) = &self.chained_exchange {
+			chained_exchange.validate_load()?;
+			if self.grant_type != OAuthGrantType::TokenExchange {
+				return Err("chained_exchange is only valid with the token-exchange grant".into());
+			}
+			if self.requested_token_type != Some(OAuthTokenType::IdJag) {
+				return Err("chained_exchange currently requires requested_token_type id-jag".into());
+			}
+		}
+		if self.requested_token_type == Some(OAuthTokenType::IdJag) {
+			if self.chained_exchange.is_none() {
+				return Err(
+					"requested_token_type id-jag is only supported by backendAuth.crossAppAccess".into(),
+				);
+			}
+			if self.audiences.is_empty() {
+				return Err("requested_token_type id-jag requires at least one audience".into());
+			}
+		}
+
+		if matches!(
+			self.authorization_location,
+			AuthorizationLocation::Expression { .. }
+		) {
+			return Err("expression auth location is only supported for credential extraction".into());
+		}
+		Ok(())
+	}
+
+	fn collect_load_warnings(&self, warnings: &mut Vec<OAuthConfigWarning>) {
+		collect_invalid_resource_warnings("oauth token exchange", &self.resources, warnings);
+		collect_invalid_scope_warnings("oauth token exchange", &self.scopes, warnings);
+		if matches!(
+			self.authorization_location,
+			AuthorizationLocation::QueryParameter { .. }
+		) {
+			warnings.push(OAuthConfigWarning::QueryParameterBearerToken);
+		}
+		if let Some(chained_exchange) = &self.chained_exchange {
+			chained_exchange.collect_load_warnings(warnings);
+		}
 	}
 
 	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
@@ -640,15 +805,20 @@ fn validate_additional_params(
 	Ok(())
 }
 
-fn warn_on_invalid_resources(context: &str, resources: &[String]) {
-	for resource in resources {
-		if !is_oauth_absolute_uri(resource) {
-			warn!(
-				resource,
-				"{context} resource is not an absolute URI without a fragment; future OAuth 2.1 compliance enforcement may reject it"
-			);
-		}
-	}
+fn collect_invalid_resource_warnings(
+	context: &'static str,
+	resources: &[String],
+	warnings: &mut Vec<OAuthConfigWarning>,
+) {
+	warnings.extend(
+		resources
+			.iter()
+			.filter(|resource| !is_oauth_absolute_uri(resource))
+			.map(|resource| OAuthConfigWarning::InvalidResource {
+				context,
+				resource: resource.clone(),
+			}),
+	);
 }
 
 // RFC 8707 resource identifiers and RFC 8693 token type identifiers must both be
@@ -659,15 +829,20 @@ fn is_oauth_absolute_uri(value: &str) -> bool {
 		.unwrap_or(false)
 }
 
-fn warn_on_invalid_scopes(context: &str, scopes: &[String]) {
-	for scope in scopes {
-		if !is_valid_scope_token(scope) {
-			warn!(
-				scope,
-				"{context} contains an invalid OAuth scope-token; scopes must be non-empty and free of spaces, quotes, backslashes, control characters, and non-ASCII characters; future OAuth 2.1 compliance enforcement may reject it"
-			);
-		}
-	}
+fn collect_invalid_scope_warnings(
+	context: &'static str,
+	scopes: &[String],
+	warnings: &mut Vec<OAuthConfigWarning>,
+) {
+	warnings.extend(
+		scopes
+			.iter()
+			.filter(|scope| !is_valid_scope_token(scope))
+			.map(|scope| OAuthConfigWarning::InvalidScope {
+				context,
+				scope: scope.clone(),
+			}),
+	);
 }
 
 fn is_valid_scope_token(scope: &str) -> bool {
@@ -726,6 +901,8 @@ pub(super) async fn apply_token_exchange(
 	auth: &OAuthTokenExchangeAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
+	let auth = auth.require_config("OAuth token exchange")?;
+
 	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	let access_token = fetch_token(&client, auth, auth.build_exchange_request(req)?)
@@ -742,7 +919,9 @@ pub(super) async fn apply_identity_assertion(
 	auth: &CrossAppAccessAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
-	let oauth = auth.oauth_token_exchange();
+	let oauth = auth
+		.oauth_token_exchange()
+		.require_config("crossAppAccess")?;
 	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	trace!(audience = %auth.audience(), "performing ID-JAG identity assertion exchange");
@@ -858,7 +1037,7 @@ fn proto_requested_token_type(field: &str, token_type: &str) -> Result<OAuthToke
 
 async fn fetch_token(
 	client: &PolicyClient,
-	auth: &OAuthTokenExchangeAuth,
+	auth: &OAuthTokenExchangeConfig,
 	req: ExchangeRequest,
 ) -> Result<SecretString, FetchError> {
 	let result = match auth.cache.as_ref() {
@@ -884,7 +1063,7 @@ async fn fetch_token(
 
 async fn fetch_token_uncached(
 	client: &PolicyClient,
-	auth: &OAuthTokenExchangeAuth,
+	auth: &OAuthTokenExchangeConfig,
 	req: &ExchangeRequest,
 ) -> Result<transport::TokenEndpointResponse, FetchError> {
 	let first =

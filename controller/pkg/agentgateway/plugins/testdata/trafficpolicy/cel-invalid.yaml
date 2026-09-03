@@ -62,4 +62,10 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached with invalid configuration: header value is not
+          a valid CEL expression: foolen_{{header("content-length")}}'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway

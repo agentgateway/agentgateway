@@ -1,11 +1,75 @@
 package plugins
 
 import (
+	"errors"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
+
+func TestPolicyConditionMapAlwaysReportsAcceptedAndAttached(t *testing.T) {
+	errInvalid := errors.New("invalid policy configuration")
+	tests := []struct {
+		name                  string
+		err                   error
+		hasTranslatedPolicies bool
+		acceptedStatus        metav1.ConditionStatus
+		acceptedReason        agentgateway.PolicyConditionReason
+		attachedStatus        metav1.ConditionStatus
+		attachedReason        agentgateway.PolicyConditionReason
+		attachedMessage       string
+	}{
+		{
+			name:                  "partially valid",
+			err:                   errInvalid,
+			hasTranslatedPolicies: true,
+			acceptedStatus:        metav1.ConditionTrue,
+			acceptedReason:        agentgateway.PolicyReasonPartiallyValid,
+			attachedStatus:        metav1.ConditionTrue,
+			attachedReason:        agentgateway.PolicyReasonAttached,
+			attachedMessage:       "Policy is attached with invalid configuration: " + errInvalid.Error(),
+		},
+		{
+			name:           "invalid",
+			err:            errInvalid,
+			acceptedStatus: metav1.ConditionFalse,
+			acceptedReason: agentgateway.PolicyReasonInvalid,
+			attachedStatus: metav1.ConditionFalse,
+			attachedReason: agentgateway.PolicyReasonPending,
+		},
+		{
+			name:                  "valid",
+			hasTranslatedPolicies: true,
+			acceptedStatus:        metav1.ConditionTrue,
+			acceptedReason:        agentgateway.PolicyReasonValid,
+			attachedStatus:        metav1.ConditionTrue,
+			attachedReason:        agentgateway.PolicyReasonAttached,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PolicyConditionMap(tt.err, tt.hasTranslatedPolicies)
+			if len(got) != 2 {
+				t.Fatalf("PolicyConditionMap() returned %d conditions, want 2", len(got))
+			}
+			accepted := got[agentgateway.PolicyConditionAccepted]
+			if accepted == nil || accepted.Status != tt.acceptedStatus || accepted.Reason != tt.acceptedReason {
+				t.Fatalf("Accepted condition = %#v, want status %q and reason %q", accepted, tt.acceptedStatus, tt.acceptedReason)
+			}
+			attached := got[agentgateway.PolicyConditionAttached]
+			if attached == nil || attached.Status != tt.attachedStatus || attached.Reason != tt.attachedReason {
+				t.Fatalf("Attached condition = %#v, want status %q and reason %q", attached, tt.attachedStatus, tt.attachedReason)
+			}
+			if tt.attachedMessage != "" && attached.Message != tt.attachedMessage {
+				t.Fatalf("Attached message = %q, want %q", attached.Message, tt.attachedMessage)
+			}
+		})
+	}
+}
 
 func TestMergeAncestorsSummarizesWhenOwnedAncestorFitsInFirst16(t *testing.T) {
 	const controllerName = "agentgateway.dev/controller"

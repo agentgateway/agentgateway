@@ -82,4 +82,11 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: |-
+          Policy is attached with invalid configuration: rate limit descriptor entry "user-agent" is not a valid CEL expression: foolen_{{request.headers["user-agent"]}}
+          rate limit descriptor limit override is not a valid CEL expression: {{not valid CEL}}
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway

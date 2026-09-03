@@ -328,6 +328,12 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 				Reason:  agentgateway.PolicyReasonPartiallyValid,
 				Message: err.Error(),
 			}
+			conds[agentgateway.PolicyConditionAttached] = &Condition{
+				Status: metav1.ConditionTrue,
+				Reason: agentgateway.PolicyReasonAttached,
+				Message: "Policy is attached with invalid configuration: " +
+					err.Error(),
+			}
 		} else {
 			// No policies produced and error present -> invalid
 			conds[agentgateway.PolicyConditionAccepted] = &Condition{

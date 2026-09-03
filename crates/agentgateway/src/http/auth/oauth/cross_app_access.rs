@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 
-use tracing::warn;
-
 #[cfg(feature = "schema")]
 use super::TokenCacheConfig;
 use super::cache::InMemoryTokenCache;
 use super::{
-	ChainedExchange, OAuthClientAuth, OAuthGrantType, OAuthTokenExchangeAuth, OAuthTokenType,
-	TokenSpec, default_token_cache, deserialize_token_cache, proto_token_type,
-	token_cache_from_proto,
+	ChainedExchange, OAuthClientAuth, OAuthConfigWarning, OAuthGrantType, OAuthTokenExchangeAuth,
+	OAuthTokenExchangeConfig, OAuthTokenType, TokenSpec, collect_invalid_resource_warnings,
+	collect_invalid_scope_warnings, default_token_cache, deserialize_token_cache,
+	log_config_warnings, proto_token_type, token_cache_from_proto,
 };
 use crate::http::auth::AuthorizationLocation;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
@@ -38,6 +37,9 @@ impl serde::Serialize for CrossAppAccessAuth {
 	where
 		S: serde::Serializer,
 	{
+		if self.oauth.invalid_reason().is_some() {
+			return serde::Serialize::serialize(&self.oauth, serializer);
+		}
 		serde::Serialize::serialize(
 			&self
 				.config_for_serialize()
@@ -134,7 +136,7 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 		let CrossAppAccessSubjectToken { source, token_type } = subject_token.unwrap_or_default();
 		let chained_scopes = access_token_scopes.unwrap_or_else(|| scopes.clone());
 		let chained_exchange = resource_authorization_server.into_chained_exchange(chained_scopes);
-		let oauth = OAuthTokenExchangeAuth {
+		let oauth = OAuthTokenExchangeConfig {
 			target,
 			path,
 			grant_type: OAuthGrantType::TokenExchange,
@@ -149,54 +151,79 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			chained_exchange: Some(chained_exchange),
 			authorization_location: AuthorizationLocation::default(),
 			cache,
-		};
+		}
+		.into();
 		Self { oauth }
 	}
 }
 
+// Warn rather than reject: the IdP may grant the ID-JAG broader scopes than requested
+fn unreachable_access_token_scopes_warning(
+	oauth: &OAuthTokenExchangeConfig,
+) -> Option<OAuthConfigWarning> {
+	let chained_exchange = oauth.chained_exchange.as_ref()?;
+	if oauth.scopes.is_empty() {
+		return None;
+	}
+	let unreachable = chained_exchange
+		.scopes
+		.iter()
+		.filter(|scope| !oauth.scopes.contains(scope))
+		.map(String::as_str)
+		.collect::<Vec<_>>();
+	if unreachable.is_empty() {
+		return None;
+	}
+	Some(OAuthConfigWarning::UnreachableAccessTokenScopes(
+		unreachable.into_iter().map(str::to_owned).collect(),
+	))
+}
+
 impl CrossAppAccessAuth {
-	pub(crate) fn validate_load(&self) -> Result<(), String> {
-		if self.audience().is_empty() {
-			return Err("crossAppAccess audience must not be empty".into());
+	pub(crate) fn new_invalid(error: String) -> Self {
+		Self {
+			oauth: OAuthTokenExchangeAuth::new_invalid(error),
 		}
-		if self.oauth.subject_token.token_type == OAuthTokenType::IdJag {
-			return Err("crossAppAccess subjectToken tokenType id-jag is not supported".into());
-		}
-		self.validate_endpoint_paths()?;
-		self.warn_on_unreachable_access_token_scopes();
-		self.oauth.validate_load()
 	}
 
-	// The ID-JAG's `scope` claim is the ceiling for the chained leg; asking for more invites
-	// `invalid_scope`. Warn only: the IdP may grant broader scopes than requested.
-	// TODO(mk): report via `Diagnostics` so the control plane can map this back to the source
-	// resource, alongside the rest of the oauth validation.
-	fn warn_on_unreachable_access_token_scopes(&self) {
-		let Some(chained_exchange) = &self.oauth.chained_exchange else {
-			return;
-		};
-		if self.oauth.scopes.is_empty() {
-			return;
+	fn validate_config(&self, oauth: &OAuthTokenExchangeConfig) -> Result<(), String> {
+		if oauth.audiences.first().is_none_or(String::is_empty) {
+			return Err("crossAppAccess audience must not be empty".into());
 		}
-		let unreachable = chained_exchange
-			.scopes
-			.iter()
-			.filter(|scope| !self.oauth.scopes.contains(scope))
-			.map(String::as_str)
-			.collect::<Vec<_>>();
-		if !unreachable.is_empty() {
-			warn!(
-				scopes = unreachable.join(" "),
-				"crossAppAccess accessTokenScopes requests scopes absent from scopes; the ID-JAG is granted only scopes, so the resource authorization server is likely to reject the exchange with invalid_scope"
+		if oauth.subject_token.token_type == OAuthTokenType::IdJag {
+			return Err("crossAppAccess subjectToken tokenType id-jag is not supported".into());
+		}
+		self.validate_endpoint_paths(oauth)?;
+		oauth.validate_load()
+	}
+
+	pub(crate) fn check_load(&self) -> Result<Vec<OAuthConfigWarning>, String> {
+		let oauth = self
+			.oauth
+			.config()
+			.ok_or_else(|| "crossAppAccess configuration is invalid".to_string())?;
+		self.validate_config(oauth)?;
+		let mut warnings = Vec::new();
+		warnings.extend(unreachable_access_token_scopes_warning(oauth));
+		collect_invalid_resource_warnings("crossAppAccess.resources", &oauth.resources, &mut warnings);
+		collect_invalid_scope_warnings("crossAppAccess.scopes", &oauth.scopes, &mut warnings);
+		if let Some(chained_exchange) = &oauth.chained_exchange
+			&& chained_exchange.scopes != oauth.scopes
+		{
+			collect_invalid_scope_warnings(
+				"crossAppAccess.accessTokenScopes",
+				&chained_exchange.scopes,
+				&mut warnings,
 			);
 		}
+		Ok(warnings)
 	}
 
 	pub(super) fn audience(&self) -> &str {
 		self
 			.oauth
-			.audiences
-			.first()
+			.config()
+			.and_then(|oauth| oauth.audiences.first())
 			.map(String::as_str)
 			.unwrap_or_default()
 	}
@@ -206,20 +233,22 @@ impl CrossAppAccessAuth {
 	}
 
 	fn config_for_serialize(&self) -> Result<CrossAppAccessAuthConfig, String> {
-		let chained_exchange = self
+		let oauth = self
 			.oauth
+			.config()
+			.ok_or_else(|| "cross app access auth is invalid".to_string())?;
+		let chained_exchange = oauth
 			.chained_exchange
 			.as_ref()
 			.ok_or_else(|| "cross app access auth must have a chained token exchange".to_string())?;
-		let client_auth = self
-			.oauth
+		let client_auth = oauth
 			.client_auth
 			.as_ref()
 			.ok_or_else(|| "cross app access identity provider must have client auth".to_string())?;
 		let chained_client_auth = chained_exchange.client_auth.as_ref().ok_or_else(|| {
 			"cross app access resource authorization server must have client auth".to_string()
 		})?;
-		let audience = match self.oauth.audiences.as_slice() {
+		let audience = match oauth.audiences.as_slice() {
 			[audience] => audience.clone(),
 			audiences => {
 				return Err(format!(
@@ -231,8 +260,8 @@ impl CrossAppAccessAuth {
 
 		Ok(CrossAppAccessAuthConfig {
 			identity_provider: CrossAppAccessEndpoint {
-				target: self.oauth.target.clone(),
-				path: self.oauth.path.clone(),
+				target: oauth.target.clone(),
+				path: oauth.path.clone(),
 				client_auth: client_auth.clone(),
 			},
 			resource_authorization_server: CrossAppAccessEndpoint {
@@ -242,25 +271,25 @@ impl CrossAppAccessAuth {
 			},
 			audience,
 			subject_token: Some(CrossAppAccessSubjectToken {
-				source: self.oauth.subject_token.source.clone(),
-				token_type: self.oauth.subject_token.token_type.clone(),
+				source: oauth.subject_token.source.clone(),
+				token_type: oauth.subject_token.token_type.clone(),
 			}),
-			resources: self.oauth.resources.clone(),
-			scopes: self.oauth.scopes.clone(),
-			access_token_scopes: (chained_exchange.scopes != self.oauth.scopes)
+			resources: oauth.resources.clone(),
+			scopes: oauth.scopes.clone(),
+			access_token_scopes: (chained_exchange.scopes != oauth.scopes)
 				.then(|| chained_exchange.scopes.clone()),
-			cache: self.oauth.cache.clone(),
+			cache: oauth.cache.clone(),
 		})
 	}
 
-	fn validate_endpoint_paths(&self) -> Result<(), String> {
-		if !self.oauth.path.is_empty() && !self.oauth.path.starts_with('/') {
+	fn validate_endpoint_paths(&self, oauth: &OAuthTokenExchangeConfig) -> Result<(), String> {
+		if !oauth.path.is_empty() && !oauth.path.starts_with('/') {
 			return Err(format!(
 				"crossAppAccess.identityProvider.path {:?} must start with /",
-				self.oauth.path
+				oauth.path
 			));
 		}
-		match &self.oauth.chained_exchange {
+		match &oauth.chained_exchange {
 			Some(chained_exchange)
 				if !chained_exchange.path.is_empty() && !chained_exchange.path.starts_with('/') =>
 			{
@@ -275,9 +304,18 @@ impl CrossAppAccessAuth {
 	}
 
 	pub(crate) fn from_proto(
-		t: agent::CrossAppAccessAuth,
+		mut t: agent::CrossAppAccessAuth,
 		diagnostics: &mut Diagnostics,
 	) -> Result<Self, ProtoError> {
+		if let Some(error) = t.translation_error.take() {
+			let error = if error.trim().is_empty() {
+				"crossAppAccess configuration is invalid".to_string()
+			} else {
+				error
+			};
+			return Err(ProtoError::Generic(error));
+		}
+
 		let subject_token = match t.subject_token.as_ref() {
 			Some(subject_token) => Some(CrossAppAccessSubjectToken {
 				source: authorization_location(
@@ -297,12 +335,14 @@ impl CrossAppAccessAuth {
 			}),
 			None => None,
 		};
+		let (identity_provider, mut warnings) =
+			CrossAppAccessEndpoint::from_proto(t.identity_provider, diagnostics)?;
+		let (resource_authorization_server, endpoint_warnings) =
+			CrossAppAccessEndpoint::from_proto(t.resource_authorization_server, diagnostics)?;
+		warnings.extend(endpoint_warnings);
 		let config = CrossAppAccessAuthConfig {
-			identity_provider: CrossAppAccessEndpoint::from_proto(t.identity_provider, diagnostics)?,
-			resource_authorization_server: CrossAppAccessEndpoint::from_proto(
-				t.resource_authorization_server,
-				diagnostics,
-			)?,
+			identity_provider,
+			resource_authorization_server,
 			audience: t.audience,
 			resources: t.resources,
 			scopes: t.scopes,
@@ -311,7 +351,8 @@ impl CrossAppAccessAuth {
 			cache: token_cache_from_proto(t.cache)?,
 		};
 		let auth = Self::from(config);
-		auth.validate_load().map_err(ProtoError::Generic)?;
+		warnings.extend(auth.check_load().map_err(ProtoError::Generic)?);
+		log_config_warnings(warnings);
 		Ok(auth)
 	}
 }
@@ -335,26 +376,27 @@ impl CrossAppAccessEndpoint {
 	fn from_proto(
 		t: Option<agent::cross_app_access_auth::Endpoint>,
 		diagnostics: &mut Diagnostics,
-	) -> Result<Self, ProtoError> {
+	) -> Result<(Self, Vec<OAuthConfigWarning>), ProtoError> {
 		let t = t.ok_or(ProtoError::MissingRequiredField)?;
 		let token_endpoint = t
 			.token_endpoint
 			.as_ref()
 			.ok_or(ProtoError::MissingRequiredField)?;
-		let client_auth = t
-			.client_auth
-			.ok_or(ProtoError::MissingRequiredField)?
-			.try_into()?;
+		let client_auth = t.client_auth.ok_or(ProtoError::MissingRequiredField)?;
+		let (client_auth, warnings) = OAuthClientAuth::from_proto(client_auth)?;
 		let policies =
 			crate::types::agent_xds::backend_policies_from_proto(&t.inline_policies, diagnostics)?;
-		Ok(Self {
-			target: SimpleBackendReferenceWithPolicies {
-				target: std::sync::Arc::new(resolve_simple_reference(Some(token_endpoint))),
-				policies,
+		Ok((
+			Self {
+				target: SimpleBackendReferenceWithPolicies {
+					target: std::sync::Arc::new(resolve_simple_reference(Some(token_endpoint))),
+					policies,
+				},
+				path: t.token_endpoint_path.unwrap_or_default(),
+				client_auth,
 			},
-			path: t.token_endpoint_path.unwrap_or_default(),
-			client_auth,
-		})
+			warnings,
+		))
 	}
 
 	// The root ID-JAG exchange sends configured resources to the IdP; the resulting

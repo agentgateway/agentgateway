@@ -2163,6 +2163,10 @@ message OAuthTokenExchange {
   }
   // Response cache configuration. When unset uses InMemory cache with defaults
   TokenCache cache = 14;
+
+  // Control-plane-only: set when this configuration cannot be translated.
+  // When present, the data plane rejects every request using this policy.
+  optional string translation_error = 16;
 }
 
 // Cross App Access / ID-JAG backend authentication.
@@ -2206,6 +2210,9 @@ message CrossAppAccessAuth {
   // Scope values requested when exchanging the ID-JAG for an access token.
   // When unset, inherits scopes. When present and empty, omits scope.
   ScopeOverride access_token_scopes = 8;
+  // Control-plane-only: set when this configuration cannot be translated.
+  // When present, the data plane rejects every request using this policy.
+  optional string translation_error = 9;
 }
 
 message ModelRoute {

@@ -76,4 +76,10 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is attached with invalid configuration: frontend tracing
+          attribute "trace.id" is not a valid CEL expression: foolen_{{request.id}}'
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
