@@ -1081,7 +1081,7 @@ async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
 		llm_request,
 		..
 	} = provider
-		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None)
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None, None)
 		.await
 		.expect("count_tokens request should process")
 	else {
@@ -1139,7 +1139,7 @@ async fn count_tokens_uses_native_endpoint_after_model_alias() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None)
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None, None)
 		.await
 		.expect("count_tokens request should process")
 	else {

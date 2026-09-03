@@ -1544,16 +1544,18 @@ impl AIProvider {
 				req.extensions.insert(bedrock::AwsRegion {
 					region: provider.region.as_str().to_string(),
 				});
-				// Mantle serves the Messages route via the Anthropic-native API, which needs this header.
-				if matches!(route_type, RouteType::Messages)
-					&& matches!(
-						provider.resolve_endpoint(
-							route_type,
-							llm_request.map(|r| r.request_model.as_str()),
-							catalog
-						),
-						bedrock::BedrockEndpoint::Mantle
-					) {
+				// Mantle serves the Messages and count-tokens routes via the Anthropic-native API
+				if matches!(
+					route_type,
+					RouteType::Messages | RouteType::AnthropicTokenCount
+				) && matches!(
+					provider.resolve_endpoint(
+						route_type,
+						llm_request.map(|r| r.request_model.as_str()),
+						catalog
+					),
+					bedrock::BedrockEndpoint::Mantle
+				) {
 					req
 						.headers
 						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
@@ -1798,6 +1800,7 @@ impl AIProvider {
 		req: Request,
 		policies: Option<&Policy>,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, mut req) = self
 			.read_body_and_default_model::<types::count_tokens::Request>(policies, req, log)
@@ -1837,8 +1840,8 @@ impl AIProvider {
 				parts,
 				false,
 				log,
-				|provider, req, parts, request_model| {
-					provider.render_count_tokens_request(req, &parts.headers, request_model)
+				move |provider, req, parts, request_model| {
+					provider.render_count_tokens_request(req, &parts.headers, request_model, catalog)
 				},
 			)
 			.await
@@ -1933,9 +1936,20 @@ impl AIProvider {
 		req: &types::count_tokens::Request,
 		headers: &HeaderMap,
 		request_model: &str,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		match self {
 			AIProvider::Anthropic(_) | AIProvider::Custom(_) => {
+				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+			},
+			// Mantle serves Anthropic's native count_tokens (passthrough); Runtime uses the Bedrock
+			// CountTokens API. This must match the endpoint `get_path_for_route` resolves for the path.
+			AIProvider::Bedrock(p)
+				if matches!(
+					p.resolve_endpoint(RouteType::AnthropicTokenCount, Some(request_model), catalog),
+					bedrock::BedrockEndpoint::Mantle
+				) =>
+			{
 				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
 			},
 			AIProvider::Bedrock(_) => {

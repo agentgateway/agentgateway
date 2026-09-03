@@ -61,7 +61,7 @@ impl Provider {
 		model.contains("anthropic.claude")
 	}
 
-	/// Resolves the endpoint for a route: non-chat routes are Runtime-only; chat routes honor the preference (and the catalog tags for `RuntimePreferred`).
+	/// Resolves the endpoint for a route when the chat routes are correct
 	pub fn resolve_endpoint(
 		&self,
 		route_type: super::RouteType,
@@ -71,17 +71,16 @@ impl Provider {
 		use super::RouteType as RT;
 		match route_type {
 			// These routes are only served by the Runtime endpoint.
-			RT::Embeddings
-			| RT::AnthropicTokenCount
-			| RT::GeminiCountTokens
-			| RT::Rerank
-			| RT::Realtime => BedrockEndpoint::Runtime,
+			RT::Embeddings | RT::GeminiCountTokens | RT::Rerank | RT::Realtime => BedrockEndpoint::Runtime,
 			// Model listing is a Mantle-native route.
 			RT::Models => BedrockEndpoint::Mantle,
 			// Passthrough/detect stay on Runtime; we cannot reason about the wire format.
 			RT::Detect | RT::Passthrough | RT::GenerateContent => BedrockEndpoint::Runtime,
-			// Chat routes all resolve identically, from the preference + catalog tags.
-			RT::Completions | RT::Messages | RT::Responses => self.chat_endpoint(model_id, catalog),
+			// Chat, and Anthropic count-tokens, follow the model's endpoint: Runtime's Converse /
+			// CountTokens APIs, or Mantle's native OpenAI/Anthropic APIs.
+			RT::Completions | RT::Messages | RT::Responses | RT::AnthropicTokenCount => {
+				self.chat_endpoint(model_id, catalog)
+			},
 		}
 	}
 
@@ -163,6 +162,9 @@ impl Provider {
 			return match route_type {
 				super::RouteType::Responses => strng::literal!("/v1/responses"),
 				super::RouteType::Messages => strng::literal!("/anthropic/v1/messages"),
+				super::RouteType::AnthropicTokenCount => {
+					strng::literal!("/anthropic/v1/messages/count_tokens")
+				},
 				super::RouteType::Models => strng::literal!("/v1/models"),
 				_ => strng::literal!("/v1/chat/completions"),
 			};
@@ -239,10 +241,6 @@ mod tests {
 		);
 		assert_eq!(
 			p.resolve_endpoint(RouteType::Rerank, None, None),
-			BedrockEndpoint::Runtime
-		);
-		assert_eq!(
-			p.resolve_endpoint(RouteType::AnthropicTokenCount, None, None),
 			BedrockEndpoint::Runtime
 		);
 		assert_eq!(
@@ -402,7 +400,6 @@ mod tests {
 		for rt in [
 			RouteType::Embeddings,
 			RouteType::Rerank,
-			RouteType::AnthropicTokenCount,
 			RouteType::Realtime,
 			// Gemini-native routes are not served by Bedrock (Mantle has no generateContent /
 			// count-tokens API), so they must not be forced onto Mantle either.
@@ -424,6 +421,42 @@ mod tests {
 			p.get_path_for_route(RouteType::Embeddings, false, "m", None)
 				.as_str(),
 			"/model/m/invoke"
+		);
+	}
+
+	#[test]
+	fn anthropic_count_tokens_follows_the_endpoint() {
+		// Runtime uses the Bedrock CountTokens API; Mantle uses Anthropic's native count_tokens.
+		let runtime = provider(BedrockEndpointPreference::RuntimeOnly);
+		assert_eq!(
+			runtime.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None),
+			BedrockEndpoint::Runtime
+		);
+		assert_eq!(
+			runtime
+				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", None)
+				.as_str(),
+			"/model/m/count-tokens"
+		);
+
+		let mantle = provider(BedrockEndpointPreference::MantleOnly);
+		assert_eq!(
+			mantle.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None),
+			BedrockEndpoint::Mantle
+		);
+		assert_eq!(
+			mantle.get_host(RouteType::AnthropicTokenCount, Some("m"), None).as_str(),
+			"bedrock-mantle.us-east-1.api.aws"
+		);
+		assert_eq!(
+			mantle.signing_service_name(RouteType::AnthropicTokenCount, Some("m"), None),
+			Some("bedrock-mantle")
+		);
+		assert_eq!(
+			mantle
+				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", None)
+				.as_str(),
+			"/anthropic/v1/messages/count_tokens"
 		);
 	}
 }

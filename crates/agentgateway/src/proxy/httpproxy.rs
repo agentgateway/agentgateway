@@ -2630,6 +2630,7 @@ async fn make_backend_call(
 							req,
 							llm_request_policies.llm.as_deref(),
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
