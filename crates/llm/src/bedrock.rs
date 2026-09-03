@@ -71,7 +71,9 @@ impl Provider {
 		use super::RouteType as RT;
 		match route_type {
 			// These routes are only served by the Runtime endpoint.
-			RT::Embeddings | RT::GeminiCountTokens | RT::Rerank | RT::Realtime => BedrockEndpoint::Runtime,
+			RT::Embeddings | RT::GeminiCountTokens | RT::Rerank | RT::Realtime => {
+				BedrockEndpoint::Runtime
+			},
 			// Model listing is a Mantle-native route.
 			RT::Models => BedrockEndpoint::Mantle,
 			// Passthrough/detect stay on Runtime; we cannot reason about the wire format.
@@ -445,7 +447,9 @@ mod tests {
 			BedrockEndpoint::Mantle
 		);
 		assert_eq!(
-			mantle.get_host(RouteType::AnthropicTokenCount, Some("m"), None).as_str(),
+			mantle
+				.get_host(RouteType::AnthropicTokenCount, Some("m"), None)
+				.as_str(),
 			"bedrock-mantle.us-east-1.api.aws"
 		);
 		assert_eq!(
