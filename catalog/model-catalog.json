@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-02T08:35:33Z"
+    "generatedAt": "2026-09-03T08:35:48Z"
   },
   "providers": {
     "anthropic": {
@@ -1664,8 +1664,8 @@
         },
         "gpt-5.6-sol": {
           "rates": {
-            "input": "5",
-            "output": "30",
+            "input": "4",
+            "output": "20",
             "cacheRead": "0.5",
             "cacheWrite": "6.25"
           },
@@ -2957,6 +2957,13 @@
             "cacheRead": "0.007"
           }
         },
+        "accounts/fireworks/models/deepseek-v4-flash-vision-exp": {
+          "rates": {
+            "input": "0.22",
+            "output": "0.66",
+            "cacheRead": "0.007"
+          }
+        },
         "accounts/fireworks/models/deepseek-v4-pro-0813": {
           "rates": {
             "input": "1.32",
@@ -2982,7 +2989,7 @@
           "rates": {
             "input": "0.15",
             "output": "0.5",
-            "cacheRead": "0.029"
+            "cacheRead": "0.03"
           }
         },
         "accounts/fireworks/models/gpt-oss-120b": {
@@ -3307,6 +3314,14 @@
           }
         },
         "gemini-3.7-flash": {
+          "rates": {
+            "input": "0.75",
+            "output": "3.75",
+            "cacheRead": "0.075",
+            "inputAudio": "0.75"
+          }
+        },
+        "gemini-3.8-flash": {
           "rates": {
             "input": "0.75",
             "output": "3.75",
@@ -3670,6 +3685,14 @@
           }
         },
         "gemini-3.7-flash": {
+          "rates": {
+            "input": "0.75",
+            "output": "3.75",
+            "cacheRead": "0.075",
+            "inputAudio": "0.75"
+          }
+        },
+        "gemini-3.8-flash": {
           "rates": {
             "input": "0.75",
             "output": "3.75",
@@ -4459,24 +4482,10 @@
             "cacheRead": "0.175"
           }
         },
-        "gpt-5.2-chat-latest": {
-          "rates": {
-            "input": "1.75",
-            "output": "14",
-            "cacheRead": "0.175"
-          }
-        },
         "gpt-5.2-pro": {
           "rates": {
             "input": "21",
             "output": "168"
-          }
-        },
-        "gpt-5.3-chat-latest": {
-          "rates": {
-            "input": "1.75",
-            "output": "14",
-            "cacheRead": "0.175"
           }
         },
         "gpt-5.3-codex": {
