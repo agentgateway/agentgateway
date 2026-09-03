@@ -115,8 +115,7 @@ pub fn trace_span_data(
 		span_context: SpanContext::new(
 			TraceId::from(span.trace_id),
 			SpanId::from(span.span_id),
-			// `span.flags` is the value propagated upstream, which may be an unsampled parent's `-00`
-			TraceFlags::SAMPLED,
+			TraceFlags::new(span.flags),
 			false,
 			TraceState::default(),
 		),
@@ -285,12 +284,12 @@ impl Tracer {
 			.filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
 			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(v)))
 			.collect_vec();
-		if !request.trace_sampled {
-			return;
-		}
 		let Some(out_span) = request.outgoing_span.as_ref() else {
 			return;
 		};
+		if !out_span.is_sampled() {
+			return;
+		}
 		if !should_export_span(self.filter.as_deref(), &cel_exec.executor) {
 			return;
 		}
@@ -710,6 +709,14 @@ mod traceparent {
 		pub fn is_sampled(&self) -> bool {
 			(self.flags & 0x01) == 0x01
 		}
+		/// Only touches the sampled bit, so any other flags from the parent survive.
+		pub fn set_sampled(&mut self, sampled: bool) {
+			if sampled {
+				self.flags |= 0x01;
+			} else {
+				self.flags &= !0x01;
+			}
+		}
 	}
 
 	impl fmt::Debug for TraceParent {
@@ -865,7 +872,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		));
-		let mut log = RequestLog::new(
+		RequestLog::new(
 			cel,
 			metrics,
 			ModelCatalog::empty(),
@@ -876,9 +883,7 @@ mod tests {
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
-		);
-		log.trace_sampled = true;
-		log
+		)
 	}
 
 	#[test]
@@ -925,8 +930,8 @@ mod tests {
 		assert!(span.links.iter().next().is_none());
 	}
 
-	/// A forced span keeps the unsampled parent's `-00` in `outgoing_span` (that is the value
-	/// propagated upstream) but is still exported, and is marked sampled in its own SpanContext.
+	/// A span forced by `parentNotSampled` reflects that decision in its own flags, and stays a
+	/// child of the unsampled remote parent.
 	#[test]
 	fn send_exports_forced_span_from_unsampled_parent() {
 		let (tracer, exporter) = test_tracer();
@@ -935,9 +940,9 @@ mod tests {
 		request.path_match = Some(strng::new("/trace"));
 
 		let incoming = TraceParent::new();
-		let outgoing = incoming.new_span();
+		let mut outgoing = incoming.new_span();
+		outgoing.set_sampled(true);
 		assert!(!incoming.is_sampled());
-		assert!(!outgoing.is_sampled());
 		request.incoming_span = Some(incoming.clone());
 		request.outgoing_span = Some(outgoing.clone());
 
@@ -974,8 +979,9 @@ mod tests {
 	fn send_skips_export_when_not_sampled() {
 		let (tracer, exporter) = test_tracer();
 		let mut request = test_request_log();
-		request.trace_sampled = false;
-		request.outgoing_span = Some(TraceParent::new());
+		let outgoing = TraceParent::new();
+		assert!(!outgoing.is_sampled());
+		request.outgoing_span = Some(outgoing);
 
 		let filter = None;
 		let fields = LoggingFields::default();

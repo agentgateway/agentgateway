@@ -10515,7 +10515,7 @@
           "default": null
         },
         "parentNotSampled": {
-          "description": "Sampling for requests whose incoming `traceparent` has the sampled flag cleared (`-00`); the\n`remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased` sampler. Spans are\nexported, but the `traceparent` sent upstream keeps the client's `-00`. If unspecified, an\nincoming `-00` is honored and nothing is exported.",
+          "description": "Sampling for requests whose incoming `traceparent` has the sampled flag cleared (`-00`); the\n`remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased` sampler. Overriding the\nclient's opt-out is a recording decision, so the `traceparent` sent upstream is `-01` and\ndownstream services trace too. If unspecified, an incoming `-00` is honored and nothing is\nexported.",
           "anyOf": [
             {
               "$ref": "#/$defs/StringBoolFloat"

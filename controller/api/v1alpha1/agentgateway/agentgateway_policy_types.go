@@ -3541,10 +3541,11 @@ type Tracing struct {
 	// Expression that determines sampling for requests whose incoming
 	// `traceparent` has the sampled flag cleared (`-00`); the
 	// `remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased`
-	// sampler. Spans are exported, but the `traceparent` sent upstream keeps
-	// the client's `-00`. This should evaluate to a float between `0.0` and
-	// `1.0`, or a boolean (`true` or `false`). If unspecified, an incoming
-	// `-00` is honored and nothing is exported.
+	// sampler. Overriding the client's opt-out is a recording decision, so the
+	// `traceparent` sent upstream is `-01` and downstream services trace too.
+	// This should evaluate to a float between `0.0` and `1.0`, or a boolean
+	// (`true` or `false`). If unspecified, an incoming `-00` is honored and
+	// nothing is exported.
 	// +optional
 	ParentNotSampled *CELExpression `json:"parentNotSampled,omitempty"`
 

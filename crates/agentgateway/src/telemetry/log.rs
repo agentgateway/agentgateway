@@ -1146,7 +1146,6 @@ impl RequestLog {
 			mcp_status: Default::default(),
 			incoming_span: None,
 			outgoing_span: None,
-			trace_sampled: false,
 			llm_request: None,
 			llm_response: Default::default(),
 			guardrails: Default::default(),
@@ -1180,7 +1179,7 @@ impl RequestLog {
 		// Early return if there is no tracer enabled at all
 		self.tracer.as_ref()?;
 		let tp = self.outgoing_span.clone()?;
-		if !self.trace_sampled {
+		if !tp.is_sampled() {
 			return None;
 		}
 
@@ -1321,10 +1320,6 @@ pub struct RequestLog {
 
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
-	/// Whether to export spans. Distinct from `outgoing_span.flags`, which is only the value
-	/// propagated upstream: an unsampled parent can be exported locally while still forwarding
-	/// `-00`.
-	pub trace_sampled: bool,
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
@@ -1943,7 +1938,11 @@ impl Drop for DropOnLog {
 					Some(crate::types::frontend::AccessLogPreset::Otel)
 				);
 
-			let trace_needs_otel = enable_trace && log.trace_sampled && log.outgoing_span.is_some();
+			let trace_needs_otel = enable_trace
+				&& log
+					.outgoing_span
+					.as_ref()
+					.is_some_and(|span| span.is_sampled());
 
 			let needs_otel = trace_needs_otel || otlp_log_enabled || use_otel_stdout;
 			let http_semconv = (needs_otel && !is_tcp).then(|| HttpSemconvAttributes::new(&log));
@@ -1980,7 +1979,7 @@ impl Drop for DropOnLog {
 				otel_kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
-				if log.trace_sampled
+				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
 					&& trc::should_export_span(t.filter.as_deref(), &cel_exec.executor)
 					&& let Ok(mut spans) = log.trace_spans.lock()
 				{
@@ -2789,7 +2788,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		));
-		let mut log = RequestLog::new(
+		RequestLog::new(
 			cel,
 			metrics,
 			ModelCatalog::empty(),
@@ -2800,9 +2799,7 @@ mod tests {
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
-		);
-		log.trace_sampled = true;
-		log
+		)
 	}
 
 	fn sampler_request() -> crate::http::Request {
@@ -3154,11 +3151,10 @@ mod tests {
 	}
 
 	#[test]
-	fn span_writer_noops_when_not_sampled() {
+	fn span_writer_noops_for_unsampled_outgoing_span() {
 		let (tracer, exporter) = test_tracer();
 		let mut request = test_request_log();
 		request.tracer = Some(tracer.clone());
-		request.trace_sampled = false;
 
 		let mut outgoing = trc::TraceParent::new();
 		outgoing.flags = 0;

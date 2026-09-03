@@ -11015,9 +11015,10 @@ type FrontendPolicySpec_Tracing struct {
 	ClientSampling *string `protobuf:"bytes,5,opt,name=client_sampling,json=clientSampling,proto3,oneof" json:"client_sampling,omitempty"`
 	// parent_not_sampled is a CEL expression for requests whose incoming traceparent has the
 	// sampled flag cleared (-00); the `remoteParentNotSampled` delegate of the OpenTelemetry
-	// `ParentBased` sampler. Spans are exported, but the traceparent sent upstream keeps the
-	// client's -00. This should evaluate to a float between 0.0-1.0, or a boolean (true/false).
-	// If unspecified, an incoming -00 is honored and nothing is exported.
+	// `ParentBased` sampler. Overriding the client's opt-out is a recording decision, so the
+	// traceparent sent upstream is -01 and downstream services trace too. This should evaluate to
+	// a float between 0.0-1.0, or a boolean (true/false). If unspecified, an incoming -00 is
+	// honored and nothing is exported.
 	ParentNotSampled *string `protobuf:"bytes,11,opt,name=parent_not_sampled,json=parentNotSampled,proto3,oneof" json:"parent_not_sampled,omitempty"`
 	// OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
 	Path *string `protobuf:"bytes,6,opt,name=path,proto3,oneof" json:"path,omitempty"`

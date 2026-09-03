@@ -2480,9 +2480,10 @@ pub struct TracingConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
 	pub client_sampling: Option<Arc<cel::Expression>>,
 	/// Sampling for requests whose incoming `traceparent` has the sampled flag cleared (`-00`); the
-	/// `remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased` sampler. Spans are
-	/// exported, but the `traceparent` sent upstream keeps the client's `-00`. If unspecified, an
-	/// incoming `-00` is honored and nothing is exported.
+	/// `remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased` sampler. Overriding the
+	/// client's opt-out is a recording decision, so the `traceparent` sent upstream is `-01` and
+	/// downstream services trace too. If unspecified, an incoming `-00` is honored and nothing is
+	/// exported.
 	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
 	pub parent_not_sampled: Option<Arc<cel::Expression>>,

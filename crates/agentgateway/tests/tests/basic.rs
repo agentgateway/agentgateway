@@ -295,10 +295,10 @@ async fn tracing_exports_to_otel_trace_mock() {
 	assert_eq!(ext_authz.parent_span_id, request.span_id);
 }
 
-/// `parentNotSampled` exports spans for a request whose incoming `traceparent` is `-00`, while
-/// still forwarding `-00` upstream so downstream services are not made to trace.
+/// `parentNotSampled` exports spans for a request whose incoming `traceparent` is `-00`, and
+/// reflects that recording decision by forwarding `-01` upstream.
 #[tokio::test]
-async fn tracing_parent_not_sampled_exports_without_propagating_sampled_flag() {
+async fn tracing_parent_not_sampled_exports_and_propagates_sampled_flag() {
 	unsafe {
 		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
 		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
@@ -370,8 +370,8 @@ async fn tracing_parent_not_sampled_exports_without_propagating_sampled_flag() {
 		.unwrap()
 		.to_string();
 	assert!(
-		forwarded.ends_with("-00"),
-		"upstream traceparent must keep the client's unsampled flag, got {forwarded}"
+		forwarded.ends_with("-01"),
+		"upstream traceparent must reflect the gateway's recording decision, got {forwarded}"
 	);
 	assert!(
 		forwarded.starts_with(&format!("00-{TRACE_ID}-")),
@@ -382,9 +382,9 @@ async fn tracing_parent_not_sampled_exports_without_propagating_sampled_flag() {
 		"upstream traceparent must carry the gateway's own span id, got {forwarded}"
 	);
 
-	tokio::time::timeout(Duration::from_secs(2), async {
+	tokio::time::timeout(Duration::from_secs(10), async {
 		while spans.lock().unwrap().is_empty() {
-			tokio::task::yield_now().await;
+			tokio::time::sleep(Duration::from_millis(5)).await;
 		}
 	})
 	.await
@@ -462,6 +462,19 @@ async fn tracing_honors_unsampled_parent_by_default() {
 	)
 	.await;
 	assert_eq!(res.status(), 200);
+
+	let upstream = read_body(res.into_body()).await;
+	let forwarded = upstream
+		.headers
+		.get("traceparent")
+		.expect("traceparent should be forwarded upstream")
+		.to_str()
+		.unwrap()
+		.to_string();
+	assert!(
+		forwarded.ends_with("-00"),
+		"upstream traceparent must keep the client's opt-out, got {forwarded}"
+	);
 
 	tokio::time::sleep(Duration::from_millis(200)).await;
 	assert!(spans.lock().unwrap().is_empty());

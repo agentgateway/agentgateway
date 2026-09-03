@@ -1331,7 +1331,6 @@ impl HTTPProxy {
 		let trace_parent = trc::TraceParent::from_request(req);
 		let decision = sampler.decide(req, trace_parent.as_ref());
 		dtrace::trace(|trace| trace.trace_sampling(decision.reason));
-		log.trace_sampled = decision.export;
 
 		if decision.participate {
 			// Use dynamic tracer from frontend policy if available, otherwise use static tracer
@@ -1359,7 +1358,7 @@ impl HTTPProxy {
 			}
 
 			// Now create outgoing span with the correct tracer already set
-			let ns = match trace_parent {
+			let mut ns = match trace_parent {
 				Some(tp) => {
 					// Build a new span off the existing trace
 					let ns = tp.new_span();
@@ -1368,11 +1367,10 @@ impl HTTPProxy {
 				},
 				None => {
 					// Build an entirely new trace
-					let mut ns = TraceParent::new();
-					ns.flags = 1;
-					ns
+					TraceParent::new()
 				},
 			};
+			ns.set_sampled(decision.export);
 			ns.insert_header(req);
 			log.outgoing_span = Some(ns);
 			log.insert_span_writer(req.extensions_mut());
