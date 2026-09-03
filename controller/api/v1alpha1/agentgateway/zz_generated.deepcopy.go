@@ -1782,6 +1782,11 @@ func (in *BackendTLS) DeepCopyInto(out *BackendTLS) {
 		*out = new(BackendTLSCertificateSource)
 		**out = **in
 	}
+	if in.AdditionalTrustDomains != nil {
+		in, out := &in.AdditionalTrustDomains, &out.AdditionalTrustDomains
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.MtlsCertificateRef != nil {
 		in, out := &in.MtlsCertificateRef, &out.MtlsCertificateRef
 		*out = make([]LocalSecretObjectRef, len(*in))
@@ -5633,6 +5638,11 @@ func (in *SpiffeSpec) DeepCopyInto(out *SpiffeSpec) {
 	*out = *in
 	if in.Enabled != nil {
 		in, out := &in.Enabled, &out.Enabled
+		*out = new(bool)
+		**out = **in
+	}
+	if in.AllowAdditionalTrustDomains != nil {
+		in, out := &in.AllowAdditionalTrustDomains, &out.AllowAdditionalTrustDomains
 		*out = new(bool)
 		**out = **in
 	}

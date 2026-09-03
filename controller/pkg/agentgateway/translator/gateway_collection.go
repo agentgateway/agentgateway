@@ -152,6 +152,9 @@ type TLSInfo struct {
 	IstioMutual         bool
 	DynamicCA           bool
 	Spiffe              bool
+	// Federated trust domains accepted for inbound client SVIDs (SPIFFE only). The local
+	// trust domain is always implicit; sourced from the listener TLS option.
+	SpiffeAdditionalTrustDomains []string
 }
 
 // PortBindings is a wrapper type that contains the listener on the gateway, as well as the status for the listener.
@@ -202,6 +205,9 @@ func (g *GatewayListener) Equals(other *GatewayListener) bool {
 			g.TLSInfo.IstioMutual != other.TLSInfo.IstioMutual ||
 			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA ||
 			g.TLSInfo.Spiffe != other.TLSInfo.Spiffe {
+			return false
+		}
+		if !slices.Equal(g.TLSInfo.SpiffeAdditionalTrustDomains, other.TLSInfo.SpiffeAdditionalTrustDomains) {
 			return false
 		}
 	}

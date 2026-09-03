@@ -1660,7 +1660,20 @@
     },
     "LocalSpiffeBackendTLS": {
       "type": "object",
-      "additionalProperties": false
+      "properties": {
+        "additionalTrustDomains": {
+          "description": "Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the\nlocal trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "additionalTrustDomains"
+      ]
     },
     "BackendAuthCompat": {
       "anyOf": [
