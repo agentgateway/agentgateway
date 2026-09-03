@@ -112,10 +112,22 @@
     {
       "definition": {
         "type": "timeseries",
-        "title": "MCP requests per second",
+        "title": "MCP HTTP requests per second by status",
         "requests": [
           {
             "q": "sum:agentgateway.requests.count{$env,component:proxy,protocol:mcp} by {status}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "MCP operations per second by method and resource type",
+        "requests": [
+          {
+            "q": "sum:agentgateway.mcp.requests.count{$env,component:proxy} by {method,resource_type}.as_rate()",
             "display_type": "line"
           }
         ]
