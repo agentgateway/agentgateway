@@ -2123,7 +2123,7 @@ fn certificate_warning_is_returned_separately_from_private_key() {
 }
 
 #[test]
-fn certificate_warning_does_not_reach_proto_diagnostics() {
+fn certificate_warning_reaches_proto_diagnostics() {
 	let proto = proto::OAuthTokenExchange {
 		client_auth: Some(proto::OAuthClientAuth {
 			client_id: "gateway-client".into(),
@@ -2145,7 +2145,9 @@ fn certificate_warning_does_not_reach_proto_diagnostics() {
 	OAuthTokenExchangeAuth::from_proto(proto.clone(), &mut diagnostics)
 		.expect("a certificate mismatch must remain non-fatal");
 
-	assert!(diagnostics.is_empty());
+	let warnings = diagnostics.into_warnings();
+	assert_eq!(warnings.len(), 1, "{warnings:?}");
+	assert!(warnings[0].contains("does not match"), "{warnings:?}");
 
 	let mut invalid_proto = proto;
 	invalid_proto.token_endpoint_path = Some("relative".into());
@@ -2728,7 +2730,15 @@ fn query_parameter_authorization_location_from_proto() {
 	};
 	let mut diagnostics = Diagnostics::default();
 	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut diagnostics).unwrap();
-	assert!(diagnostics.is_empty());
+	let warnings = diagnostics.into_warnings();
+	assert_eq!(warnings.len(), 3, "{warnings:?}");
+	assert!(warnings.iter().any(|warning| warning.contains("resource")));
+	assert!(warnings.iter().any(|warning| warning.contains("scope")));
+	assert!(
+		warnings
+			.iter()
+			.any(|warning| warning.contains("query-parameter"))
+	);
 	let auth = ready(&auth);
 	assert!(matches!(
 		auth.authorization_location,

@@ -6,8 +6,8 @@ use super::cache::InMemoryTokenCache;
 use super::{
 	ChainedExchange, OAuthClientAuth, OAuthConfigWarning, OAuthGrantType, OAuthTokenExchangeAuth,
 	OAuthTokenExchangeConfig, OAuthTokenType, TokenSpec, collect_invalid_resource_warnings,
-	collect_invalid_scope_warnings, default_token_cache, deserialize_token_cache,
-	log_config_warnings, proto_token_type, token_cache_from_proto,
+	collect_invalid_scope_warnings, default_token_cache, deserialize_token_cache, proto_token_type,
+	report_config_warnings, token_cache_from_proto,
 };
 use crate::http::auth::AuthorizationLocation;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
@@ -352,7 +352,7 @@ impl CrossAppAccessAuth {
 		};
 		let auth = Self::from(config);
 		warnings.extend(auth.check_load().map_err(ProtoError::Generic)?);
-		log_config_warnings(warnings);
+		report_config_warnings(warnings, diagnostics);
 		Ok(auth)
 	}
 }
