@@ -536,8 +536,9 @@ fn original_model_from_metadata<'a>(
 		.and_then(Value::as_str)
 }
 
-/// `random_sampling` is the `root` delegate of the OpenTelemetry `ParentBased` sampler,
-/// `client_sampling` is `remoteParentSampled`, `parent_not_sampled` is `remoteParentNotSampled`.
+/// The incoming trace context picks which setting applies: `random_sampling` when the request has
+/// no trace, `client_sampling` when it has one that is sampled, `parent_not_sampled` when it has
+/// one that is not.
 #[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
@@ -545,23 +546,15 @@ pub struct TraceSampler {
 	pub parent_not_sampled: Option<Arc<cel::Expression>>,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct SamplingDecision {
-	/// Mint a gateway span id and propagate it, so access logs carry `trace.id`/`span.id`.
-	pub participate: bool,
-	/// Export spans to OTLP. Independent of the flags propagated upstream.
-	pub export: bool,
-	pub reason: &'static str,
-}
-
 impl TraceSampler {
-	pub fn decide(&self, req: &Request, tp: Option<&TraceParent>) -> SamplingDecision {
+	/// Exactly one of the three settings applies to any given request.
+	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> (bool, &'static str) {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
 			parent_not_sampled,
 		} = &self;
-		// Built at most once, and not at all when every delegate is defaulted
+		// Built at most once, and not at all when the setting that applies is unset
 		let exec = OnceCell::new();
 		let eval = |expr: &Option<Arc<cel::Expression>>, default: bool| match expr {
 			Some(e) => exec
@@ -571,42 +564,17 @@ impl TraceSampler {
 		};
 
 		match tp {
-			None => {
-				let sampled = eval(random_sampling, false);
-				SamplingDecision {
-					participate: sampled,
-					export: sampled,
-					reason: if sampled {
-						"sample (random)"
-					} else {
-						"not sampled (random)"
-					},
-				}
+			None => match eval(random_sampling, false) {
+				true => (true, "sample (random)"),
+				false => (false, "not sampled (random)"),
 			},
-			Some(tp) if tp.is_sampled() => {
-				let sampled = eval(client_sampling, true);
-				SamplingDecision {
-					participate: sampled,
-					export: sampled,
-					reason: if sampled {
-						"sample (client)"
-					} else {
-						"not sampled (client)"
-					},
-				}
+			Some(tp) if tp.is_sampled() => match eval(client_sampling, true) {
+				true => (true, "sample (client)"),
+				false => (false, "not sampled (client)"),
 			},
-			Some(_) => {
-				let forced = eval(parent_not_sampled, false);
-				SamplingDecision {
-					// `forced ||` so parent_not_sampled is not silently defeated by client_sampling
-					participate: forced || eval(client_sampling, true),
-					export: forced,
-					reason: if forced {
-						"sample (unsampled parent)"
-					} else {
-						"not sampled (unsampled parent)"
-					},
-				}
+			Some(_) => match eval(parent_not_sampled, false) {
+				true => (true, "sample (unsampled parent)"),
+				false => (false, "not sampled (unsampled parent)"),
 			},
 		}
 	}
@@ -1583,7 +1551,13 @@ impl Drop for DropOnLog {
 				None
 			};
 
-			let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
+			// Falls back to the incoming trace so unsampled requests stay correlatable. There is no
+			// span id to report when nothing was recorded.
+			let trace_id = log
+				.outgoing_span
+				.as_ref()
+				.or(log.incoming_span.as_ref())
+				.map(|id| id.trace_id());
 			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
 			let fields = cel_exec.fields;
 			let reason = log.reason.and_then(|r| match r {
@@ -2820,69 +2794,65 @@ mod tests {
 		tp
 	}
 
-	/// The full sampling matrix. `parent_not_sampled` is the only new capability: every other cell
+	/// The full sampling matrix. `parentNotSampled` is the only new capability: every other cell
 	/// pins pre-existing behavior. `incoming` is `None` for a request with no `traceparent`,
 	/// otherwise the parent's sampled flag.
 	#[test]
-	fn decide_sampling_matrix() {
-		// (random, client, parent_not_sampled, incoming, participate, export)
+	fn trace_sampled_matrix() {
+		// (random, client, parent_not_sampled, incoming, sampled)
 		let cases = [
-			// No incoming traceparent: the `root` delegate, default off.
-			(None, None, None, None, false, false),
-			(Some("true"), None, None, None, true, true),
-			(Some("false"), None, None, None, false, false),
-			// Incoming `-01`: the `remoteParentSampled` delegate, default on.
-			(None, None, None, Some(true), true, true),
-			(None, Some("true"), None, Some(true), true, true),
-			(None, Some("false"), None, Some(true), false, false),
-			// Incoming `-00`: the `remoteParentNotSampled` delegate, default off.
-			(None, None, None, Some(false), true, false),
-			(None, Some("true"), None, Some(false), true, false),
-			(None, Some("false"), None, Some(false), false, false),
-			(None, None, Some("false"), Some(false), true, false),
-			// Forced: exports despite the client's opt-out.
-			(None, None, Some("true"), Some(false), true, true),
-			(None, Some("true"), Some("true"), Some(false), true, true),
-			// Forced participation is not defeated by `clientSampling: false`.
-			(None, Some("false"), Some("true"), Some(false), true, true),
-			// `parentNotSampled` does not apply to an already-sampled parent.
-			(None, Some("false"), Some("true"), Some(true), false, false),
-			// `randomSampling` does not apply when a traceparent is present.
-			(Some("false"), None, None, Some(true), true, true),
-			(Some("true"), None, None, Some(false), true, false),
+			// No incoming traceparent: `randomSampling` applies, default off.
+			(None, None, None, None, false),
+			(Some("true"), None, None, None, true),
+			(Some("false"), None, None, None, false),
+			// Incoming `-01`: `clientSampling` applies, default on.
+			(None, None, None, Some(true), true),
+			(None, Some("true"), None, Some(true), true),
+			(None, Some("false"), None, Some(true), false),
+			// Incoming `-00`: `parentNotSampled` applies, default off.
+			(None, None, None, Some(false), false),
+			(None, None, Some("false"), Some(false), false),
+			(None, None, Some("true"), Some(false), true),
+			// `clientSampling` has no say over an unsampled parent, in either direction.
+			(None, Some("true"), None, Some(false), false),
+			(None, Some("false"), Some("true"), Some(false), true),
+			(None, Some("true"), Some("false"), Some(false), false),
+			// `parentNotSampled` has no say over an already-sampled parent.
+			(None, Some("false"), Some("true"), Some(true), false),
+			// `randomSampling` has no say once a traceparent is present.
+			(Some("false"), None, None, Some(true), true),
+			(Some("true"), None, None, Some(false), false),
 		];
 
-		for (random, client, parent_not_sampled, incoming, participate, export) in cases {
+		for (random, client, parent_not_sampled, incoming, want) in cases {
 			let sampler = TraceSampler {
 				random_sampling: random.and_then(sampling_expr),
 				client_sampling: client.and_then(sampling_expr),
 				parent_not_sampled: parent_not_sampled.and_then(sampling_expr),
 			};
 			let tp = incoming.map(traceparent);
-			let got = sampler.decide(&sampler_request(), tp.as_ref());
+			let (got, reason) = sampler.trace_sampled(&sampler_request(), tp.as_ref());
 			assert_eq!(
-				(got.participate, got.export),
-				(participate, export),
-				"random={random:?} client={client:?} parentNotSampled={parent_not_sampled:?} incoming={incoming:?} reason={}",
-				got.reason
+				got, want,
+				"random={random:?} client={client:?} parentNotSampled={parent_not_sampled:?} incoming={incoming:?} reason={reason}"
 			);
 		}
 	}
 
 	#[test]
-	fn decide_reports_unsampled_parent_reason() {
+	fn trace_sampled_reports_unsampled_parent_reason() {
 		let req = sampler_request();
 		let unsampled = traceparent(false);
 
-		let honored = TraceSampler::default().decide(&req, Some(&unsampled));
-		assert_eq!(honored.reason, "not sampled (unsampled parent)");
+		let (_, honored) = TraceSampler::default().trace_sampled(&req, Some(&unsampled));
+		assert_eq!(honored, "not sampled (unsampled parent)");
 
-		let forced = TraceSampler {
+		let (_, forced) = TraceSampler {
 			parent_not_sampled: sampling_expr("true"),
 			..Default::default()
 		}
-		.decide(&req, Some(&unsampled));
-		assert_eq!(forced.reason, "sample (unsampled parent)");
+		.trace_sampled(&req, Some(&unsampled));
+		assert_eq!(forced, "sample (unsampled parent)");
 	}
 
 	fn llm_context_with_content() -> LLMContext {

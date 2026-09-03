@@ -10503,7 +10503,7 @@
           "default": null
         },
         "clientSampling": {
-          "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy.",
+          "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy. Only applies to requests arriving with a sampled\n`traceparent` (`-01`); use `parentNotSampled` for requests whose trace is not sampled.",
           "anyOf": [
             {
               "$ref": "#/$defs/StringBoolFloat"
@@ -10515,7 +10515,7 @@
           "default": null
         },
         "parentNotSampled": {
-          "description": "Sampling for requests whose incoming `traceparent` has the sampled flag cleared (`-00`); the\n`remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased` sampler. Overriding the\nclient's opt-out is a recording decision, so the `traceparent` sent upstream is `-01` and\ndownstream services trace too. If unspecified, an incoming `-00` is honored and nothing is\nexported.",
+          "description": "Whether to trace a request that arrives with a `traceparent` whose sampled flag is unset\n(`-00`), meaning the client asked for it not to be traced. When this is `true` the request\nis traced anyway, and `-01` is sent upstream so downstream services trace it too. If\nunspecified, the client's choice is honored and the request is not traced.\n\nOnly one of `randomSampling`, `clientSampling` and `parentNotSampled` applies to any given\nrequest; the incoming `traceparent` decides which.",
           "anyOf": [
             {
               "$ref": "#/$defs/StringBoolFloat"

@@ -1329,48 +1329,42 @@ impl HTTPProxy {
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
 		let trace_parent = trc::TraceParent::from_request(req);
-		let decision = sampler.decide(req, trace_parent.as_ref());
-		dtrace::trace(|trace| trace.trace_sampling(decision.reason));
+		let (trace_sampled, trace_decision) = sampler.trace_sampled(req, trace_parent.as_ref());
+		dtrace::trace(|trace| trace.trace_sampling(trace_decision));
+		// Recorded even when unsampled so the access log can still correlate by trace id
+		log.incoming_span = trace_parent.clone();
 
-		if decision.participate {
-			// Use dynamic tracer from frontend policy if available, otherwise use static tracer
-			if decision.export {
-				log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
-					debug!(
-						resources_count=%tp.config.resources.len(),
-						attrs_count=%tp.config.attributes.len(),
-						"Using dynamic tracer from frontend policy"
-					);
+		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
+		if trace_sampled {
+			log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
+				debug!(
+					resources_count=%tp.config.resources.len(),
+					attrs_count=%tp.config.attributes.len(),
+					"Using dynamic tracer from frontend policy"
+				);
 
-					tp.get_or_init(self.policy_client())
-						.map(|t| Some(t.clone()))
-						.unwrap_or_else(|e| {
-							warn!("ignoring invalid tracing policy: {e}");
-							None
-						})
-				} else {
-					None
-				};
-				// Register CEL expressions from the tracer
-				if let Some(tracer) = &log.tracer {
-					log.cel.register(tracer.fields.as_ref());
-				}
+				tp.get_or_init(self.policy_client())
+					.map(|t| Some(t.clone()))
+					.unwrap_or_else(|e| {
+						warn!("ignoring invalid tracing policy: {e}");
+						None
+					})
+			} else {
+				None
+			};
+			// Register CEL expressions from the tracer
+			if let Some(tracer) = &log.tracer {
+				log.cel.register(tracer.fields.as_ref());
 			}
 
 			// Now create outgoing span with the correct tracer already set
-			let mut ns = match trace_parent {
-				Some(tp) => {
-					// Build a new span off the existing trace
-					let ns = tp.new_span();
-					log.incoming_span = Some(tp);
-					ns
-				},
-				None => {
-					// Build an entirely new trace
-					TraceParent::new()
-				},
+			let mut ns = match &trace_parent {
+				// Build a new span off the existing trace
+				Some(tp) => tp.new_span(),
+				// Build an entirely new trace
+				None => TraceParent::new(),
 			};
-			ns.set_sampled(decision.export);
+			ns.set_sampled(true);
 			ns.insert_header(req);
 			log.outgoing_span = Some(ns);
 			log.insert_span_writer(req.extensions_mut());

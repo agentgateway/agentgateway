@@ -11010,15 +11010,19 @@ type FrontendPolicySpec_Tracing struct {
 	RandomSampling *string `protobuf:"bytes,4,opt,name=random_sampling,json=randomSampling,proto3,oneof" json:"random_sampling,omitempty"`
 	// client_sampling is a CEL expression to determine the amount of client sampling.
 	// Client sampling determines whether to initiate a new trace span if the incoming
-	// request already has a trace. This should evaluate to a float between 0.0-1.0,
-	// or a boolean (true/false). If unspecified, client sampling is 100% enabled.
+	// request already has a trace. This only applies when that trace is sampled (-01);
+	// use parent_not_sampled for requests whose trace is not. This should evaluate to a
+	// float between 0.0-1.0, or a boolean (true/false). If unspecified, client sampling
+	// is 100% enabled.
 	ClientSampling *string `protobuf:"bytes,5,opt,name=client_sampling,json=clientSampling,proto3,oneof" json:"client_sampling,omitempty"`
-	// parent_not_sampled is a CEL expression for requests whose incoming traceparent has the
-	// sampled flag cleared (-00); the `remoteParentNotSampled` delegate of the OpenTelemetry
-	// `ParentBased` sampler. Overriding the client's opt-out is a recording decision, so the
-	// traceparent sent upstream is -01 and downstream services trace too. This should evaluate to
-	// a float between 0.0-1.0, or a boolean (true/false). If unspecified, an incoming -00 is
-	// honored and nothing is exported.
+	// parent_not_sampled is a CEL expression deciding whether to trace a request that arrives
+	// with a traceparent whose sampled flag is unset (-00), meaning the client asked for it not
+	// to be traced. When true the request is traced anyway, and -01 is sent upstream so
+	// downstream services trace it too. This should evaluate to a float between 0.0-1.0, or a
+	// boolean (true/false). If unspecified, the client's choice is honored.
+	//
+	// Only one of random_sampling, client_sampling and parent_not_sampled applies to any given
+	// request; the incoming traceparent decides which.
 	ParentNotSampled *string `protobuf:"bytes,11,opt,name=parent_not_sampled,json=parentNotSampled,proto3,oneof" json:"parent_not_sampled,omitempty"`
 	// OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
 	Path *string `protobuf:"bytes,6,opt,name=path,proto3,oneof" json:"path,omitempty"`

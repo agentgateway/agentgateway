@@ -471,9 +471,10 @@ async fn tracing_honors_unsampled_parent_by_default() {
 		.to_str()
 		.unwrap()
 		.to_string();
-	assert!(
-		forwarded.ends_with("-00"),
-		"upstream traceparent must keep the client's opt-out, got {forwarded}"
+	assert_eq!(
+		forwarded, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00",
+		"an unsampled request must pass the client's traceparent through untouched, so downstream \
+		 does not parent onto a span the gateway never recorded"
 	);
 
 	tokio::time::sleep(Duration::from_millis(200)).await;
