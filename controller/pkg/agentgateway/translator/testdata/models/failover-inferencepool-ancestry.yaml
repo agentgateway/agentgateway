@@ -1,0 +1,497 @@
+# This test reproduces the bug described in issue #3050
+# A virtual model with failover references a concrete model that targets an InferencePool
+# The bug: the virtual model's Gateway is not recorded as an ancestor of the InferencePool
+
+# Public Gateway - will use virtual model with failover
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: public-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+# Internal Gateway - will use concrete model directly
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: internal-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+# InferencePool endpoint picker service
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-pool-endpoint-picker
+  namespace: default
+spec:
+  ports:
+  - name: grpc
+    port: 9002
+    targetPort: 9002
+  selector:
+    app: llama
+---
+# InferencePool - the backend that both gateways should reach
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: llama-pool
+  namespace: default
+spec:
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: llama-pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: llama
+  targetPorts:
+  - number: 8000
+---
+# Concrete Custom-provider model - attached ONLY to internal-gateway
+# This model has a backendRef to the InferencePool
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: local-llama
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: internal-gateway
+    sectionName: llm
+  provider: Custom
+  custom:
+    providerOverride: team-a
+    backendRef:
+      group: inference.networking.k8s.io
+      kind: InferencePool
+      name: llama-pool
+    formats:
+    - type: Completions
+---
+# Virtual model with failover - attached ONLY to public-gateway
+# This model references the concrete model as a failover target
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: resilient-model
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: public-gateway
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: local-llama
+        priority: 0
+
+---
+# Output
+output:
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - custom:
+              formats:
+              - format: COMPLETIONS
+              providerOverride: team-a
+            name: backend
+            providerBackend:
+              port: 8000
+              service:
+                hostname: llama-pool.default.inference.cluster.local
+                namespace: default
+      key: default/local-llama/backend.llm
+      name:
+        name: local-llama
+        namespace: default
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/internal-gateway
+      port: 80
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/internal-gateway
+      key: default/internal-gateway.llm
+      name:
+        gatewayName: internal-gateway
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/local-llama/backend.llm
+      key: default/local-llama.llm
+      listenerKey: default/internal-gateway.llm
+      match:
+        model: local-llama
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: llama-pool-endpoint-picker.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/llama-pool:inference
+      name:
+        kind: InferencePool
+        name: llama-pool
+        namespace: default
+      target:
+        service:
+          hostname: llama-pool.default.inference.cluster.local
+          namespace: default
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/llama-pool:inferencetls
+      name:
+        kind: InferencePool
+        name: llama-pool
+        namespace: default
+      target:
+        service:
+          hostname: llama-pool-endpoint-picker.default.svc.cluster.local
+          namespace: default
+          port: 9002
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - custom:
+              formats:
+              - format: COMPLETIONS
+              model: local-llama
+              providerOverride: team-a
+            name: local-llama
+            providerBackend:
+              port: 8000
+              service:
+                hostname: llama-pool.default.inference.cluster.local
+                namespace: default
+      key: default/resilient-model/failover.llm
+      name:
+        name: resilient-model
+        namespace: default
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/public-gateway
+      port: 80
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/public-gateway
+      key: default/public-gateway.llm
+      name:
+        gatewayName: public-gateway
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/resilient-model.llm
+      listenerKey: default/public-gateway.llm
+      match:
+        model: resilient-model
+      virtualModel:
+        failover:
+          backend:
+            backend: default/resilient-model/failover.llm
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: llama-pool-endpoint-picker.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/llama-pool:inference
+      name:
+        kind: InferencePool
+        name: llama-pool
+        namespace: default
+      target:
+        service:
+          hostname: llama-pool.default.inference.cluster.local
+          namespace: default
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/llama-pool:inferencetls
+      name:
+        kind: InferencePool
+        name: llama-pool
+        namespace: default
+      target:
+        service:
+          hostname: llama-pool-endpoint-picker.default.svc.cluster.local
+          namespace: default
+          port: 9002
+status:
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: llama-pool
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: internal-gateway
+        namespace: default
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: public-gateway
+        namespace: default
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: local-llama
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: internal-gateway
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: resilient-model
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: public-gateway
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: internal-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: public-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
