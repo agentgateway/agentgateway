@@ -556,6 +556,9 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                        - message: managedIdentity supports exactly one scope
+                          rule: '!has(self.managedIdentity) || !has(self.scopes) ||
+                            self.scopes.size() == 1'
                         - message: at most one of the fields in [secretRef managedIdentity
                             workloadIdentity] may be set
                           rule: (has(self.secretRef)?1:0)+(has(self.managedIdentity)?1:0)+(has(self.workloadIdentity)?1:0)
