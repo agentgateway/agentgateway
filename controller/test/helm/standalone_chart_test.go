@@ -111,6 +111,7 @@ func TestStandaloneChartGoldenTemplate(t *testing.T) {
 		{
 			name: "workload-overrides",
 			valuesYAML: `revisionHistoryLimit: 3
+restartOnConfigChange: false
 resources:
   requests:
     cpu: 250m

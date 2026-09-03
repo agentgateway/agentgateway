@@ -51,6 +51,13 @@ podAnnotations:
   prometheus.io/port: "15020"
   prometheus.io/scrape: "true"
 
+# -- Restart the agentgateway proxy pods when the configuration changes, by stamping a
+# checksum of the ConfigMap onto the pod template. agentgateway watches its config file
+# and applies changes without a restart, so setting this to false lets a configuration
+# change take effect in place. A configuration that fails to load leaves the previous one
+# running and sets the 'config_synchronized' metric to 0, rather than restarting the pod.
+restartOnConfigChange: true
+
 # -- Labels to add to the agentgateway proxy pod.
 podLabels: {}
 
