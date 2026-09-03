@@ -20,9 +20,7 @@ spec:
   template:
     metadata:
       annotations:
-        {{- if .Values.restartOnConfigChange }}
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- end }}
+        checksum/config: {{ include "agentgateway-standalone.startupConfig" . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

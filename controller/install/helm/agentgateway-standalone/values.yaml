@@ -51,13 +51,6 @@ podAnnotations:
   prometheus.io/port: "15020"
   prometheus.io/scrape: "true"
 
-# -- Restart the agentgateway proxy pods when the configuration changes, by stamping a
-# checksum of the ConfigMap onto the pod template. agentgateway watches its config file
-# and applies changes without a restart, so setting this to false lets a configuration
-# change take effect in place. A configuration that fails to load leaves the previous one
-# running and sets the 'config_synchronized' metric to 0, rather than restarting the pod.
-restartOnConfigChange: true
-
 # -- Labels to add to the agentgateway proxy pod.
 podLabels: {}
 
@@ -159,7 +152,7 @@ monitoring:
     # -- How often Prometheus scrapes the agentgateway proxy's metrics.
     interval: 15s
 
-# -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
+# -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. Changes outside the nested 'config' section, plus 'config.modelCatalog', are applied without restarting the pods. Changes to other nested 'config' settings restart the pods because agentgateway reads them only at startup. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
 config: {}
 
 # Postgres connection used by database mode.
