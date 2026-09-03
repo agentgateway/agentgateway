@@ -878,6 +878,21 @@ impl ExtProcInstance {
 
 	pub async fn mutate_request(
 		&mut self,
+		req: http::Request,
+	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
+		let rebuffer = req.extensions().get::<cel::BufferedBody>().is_some();
+		let (mut req, response) = self.mutate_request_inner(req).await?;
+		if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
+			let body = http::inspect_body(&mut req)
+				.await
+				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+			req.extensions_mut().insert(cel::BufferedBody::from(body));
+		}
+		Ok((req, response))
+	}
+
+	async fn mutate_request_inner(
+		&mut self,
 		mut req: http::Request,
 	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
 		let headers = req_to_header_map(&req);
@@ -1397,6 +1412,27 @@ impl ExtProcInstance {
 	}
 
 	pub async fn mutate_response(
+		&mut self,
+		response: http::Response,
+		request: Option<&RequestSnapshot>,
+		resolved_destination_metadata: Option<SocketAddr>,
+	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
+		let rebuffer = response.extensions().get::<cel::BufferedBody>().is_some();
+		let (mut response, policy_response) = self
+			.mutate_response_inner(response, request, resolved_destination_metadata)
+			.await?;
+		if rebuffer && self.mode_state.response_body_mode != BodySendMode::None {
+			let body = http::inspect_response_body(&mut response)
+				.await
+				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+			response
+				.extensions_mut()
+				.insert(cel::BufferedBody::from(body));
+		}
+		Ok((response, policy_response))
+	}
+
+	async fn mutate_response_inner(
 		&mut self,
 		response: http::Response,
 		request: Option<&RequestSnapshot>,

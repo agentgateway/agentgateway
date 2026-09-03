@@ -1703,6 +1703,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 		return &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Azure{
 				Azure: &api.Azure{
+					Scopes: auth.Scopes,
 					Kind: &api.Azure_ExplicitConfig{
 						ExplicitConfig: &api.AzureExplicitConfig{
 							CredentialSource: &api.AzureExplicitConfig_ManagedIdentityCredential{
@@ -1719,6 +1720,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 		return &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Azure{
 				Azure: &api.Azure{
+					Scopes: auth.Scopes,
 					Kind: &api.Azure_ExplicitConfig{
 						ExplicitConfig: &api.AzureExplicitConfig{
 							CredentialSource: &api.AzureExplicitConfig_WorkloadIdentityCredential{
@@ -1735,6 +1737,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_Azure{
 			Azure: &api.Azure{
+				Scopes: auth.Scopes,
 				Kind: &api.Azure_Implicit{
 					Implicit: &api.AzureImplicit{},
 				},
@@ -1775,6 +1778,7 @@ func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespa
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_Azure{
 			Azure: &api.Azure{
+				Scopes: auth.Scopes,
 				Kind: &api.Azure_ExplicitConfig{
 					ExplicitConfig: &api.AzureExplicitConfig{
 						CredentialSource: &api.AzureExplicitConfig_ClientSecret{

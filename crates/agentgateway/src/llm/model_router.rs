@@ -558,9 +558,7 @@ fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Route
 			"request_body_rewrite_failed",
 		))
 	})?;
-	*req.body_mut() = http::Body::from(body);
-	req.headers_mut().remove(::http::header::CONTENT_LENGTH);
-	req.extensions_mut().remove::<cel::BufferedBody>();
+	http::replace_body_bytes(req, body.into());
 	Ok(())
 }
 
@@ -674,10 +672,8 @@ pub(crate) async fn rewrite_multipart_request_model(
 	let Some(body) = rewrite_multipart_body_model(&body, &boundary, target).await? else {
 		return Ok(());
 	};
-	*req.body_mut() = http::Body::from(body);
-	req.headers_mut().remove(::http::header::CONTENT_LENGTH);
 	req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
-	req.extensions_mut().remove::<cel::BufferedBody>();
+	http::replace_body_bytes(req, body);
 	Ok(())
 }
 
@@ -1279,7 +1275,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn rewrite_multipart_request_model_clears_stale_body_metadata() {
+	async fn rewrite_multipart_request_model_refreshes_buffered_body() {
 		let body = Bytes::from_static(
 			concat!(
 				"--quoted-boundary\r\n",
@@ -1314,10 +1310,16 @@ mod tests {
 				.headers()
 				.contains_key(::http::header::TRANSFER_ENCODING)
 		);
-		assert!(req.extensions().get::<cel::BufferedBody>().is_none());
+		let buffered = req
+			.extensions()
+			.get::<cel::BufferedBody>()
+			.and_then(cel::BufferedBody::bytes)
+			.expect("rewritten request body remains buffered")
+			.clone();
 		let rewritten = http::read_body_with_limit(req.into_body(), 1024)
 			.await
 			.expect("rewritten request body");
+		assert_eq!(rewritten, buffered);
 		assert!(
 			rewritten
 				.windows(b"a-much-longer-model".len())

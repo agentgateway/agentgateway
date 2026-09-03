@@ -132,7 +132,8 @@ impl StreamableHttpService {
 			Ok(b) => b,
 			Err(e) => return mcp::Error::Deserialize(e).into(),
 		};
-		let message = match serde_json::from_slice::<ClientJsonRpcMessage>(&bytes) {
+		let cached = part.extensions.remove::<mcp::CachedRequest>();
+		let message = match mcp::CachedRequest::parse_body(cached, &bytes) {
 			Ok(m) => m,
 			Err(e) => {
 				return match unknown_method_error(&part.headers, &bytes) {
@@ -396,7 +397,7 @@ pub(crate) fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
 	}
 }
 
-fn message_method(message: &ClientJsonRpcMessage) -> Option<&str> {
+pub(crate) fn message_method(message: &ClientJsonRpcMessage) -> Option<&str> {
 	match message {
 		ClientJsonRpcMessage::Request(req) => Some(req.request.method()),
 		ClientJsonRpcMessage::Notification(notification) => Some(match &notification.notification {

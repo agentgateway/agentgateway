@@ -6280,16 +6280,20 @@ async fn mcp_local_ratelimit() {
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));
 
-	// Attach local rate limit policy
-	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
-	// Allow 5 total: overhead (3) + tool calls (2), then rate limit the 6th
+	// Only tool calls consume this limit; MCP initialization traffic does not match.
 	t.attach_route_policy(serde_json::json!({
-		"localRateLimit": [{
-			"maxTokens": 5,
-			"tokensPerFill": 1,
-			"fillInterval": "10s",
-			"type": "requests"
-		}]
+		"localRateLimit": {
+			"conditional": [{
+				"condition": format!(
+					"backend.name == '/{}' && backend.type == 'mcp' && mcp.tool.name == 'echo' && mcp.tool.arguments.n > 0",
+					mock.addr,
+				),
+				"maxTokens": 2,
+				"tokensPerFill": 1,
+				"fillInterval": "10s",
+				"type": "requests"
+			}]
+		}
 	}))
 	.await;
 
@@ -6329,8 +6333,57 @@ async fn mcp_local_ratelimit() {
 		"rate limit should map to RESOURCE_EXHAUSTED"
 	);
 	let data = e.data.as_ref().expect("error should carry retry data");
-	assert_eq!(data["limit"], 5);
+	assert_eq!(data["limit"], 2);
 	assert!(data.get("retryAfterSeconds").is_some());
+}
+
+#[tokio::test]
+async fn mcp_cached_request_reparsed_after_body_transformation() {
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+
+	t.attach_route_policy(serde_json::json!({
+		"transformations": {
+			"conditional": [{
+				"condition": "mcp.tool.name == 'echo'",
+				"request": {
+					"body": r#"{
+						"jsonrpc": "2.0",
+						"id": json(request.body).id,
+						"method": "tools/call",
+						"params": {
+							"name": mcp.tool.name,
+							"arguments": {"after": true}
+						}
+					}"#
+				}
+			}]
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"before": true})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("transformed tool call should succeed");
+
+	assert_eq!(
+		&result.content[0].as_text().unwrap().text,
+		r#"{"after":true}"#
+	);
 }
 
 #[tokio::test]

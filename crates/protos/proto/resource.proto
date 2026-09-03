@@ -486,6 +486,9 @@ message Azure {
     AzureDeveloperImplicit developer_implicit = 2;
     AzureImplicit implicit = 3;
   }
+  // Scopes requested for the Azure access token. If unset, the scope is
+  // inferred from the backend hostname.
+  repeated string scopes = 4;
 }
 
 // Explicit AWS credentials configuration

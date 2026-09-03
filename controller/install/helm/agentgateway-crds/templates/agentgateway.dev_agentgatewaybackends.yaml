@@ -836,8 +836,8 @@ spec:
                                                                       in [sessionName
                                                                       sessionNameExpression]
                                                                       may be set
-                                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
-                                                                      <= 1'
+                                                                    rule: (has(self.sessionName)?1:0)+(has(self.sessionNameExpression)?1:0)
+                                                                      <= 1
                                                                 region:
                                                                   description: |-
                                                                     AWS SigV4 signing region, for example `us-east-1`. Set this when the
@@ -966,8 +966,8 @@ spec:
                                                                   [header queryParameter
                                                                   cookie] must be
                                                                   set
-                                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                                  == 1'
+                                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                                  == 1
                                                             secretRef:
                                                               description: |-
                                                                 Credential source for the API key, defaulting to a Kubernetes `Secret`.
@@ -1032,8 +1032,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef
                                                               aws] must be set
-                                                            rule: '[has(self.key),has(self.secretRef),has(self.aws)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.aws)?1:0)
+                                                              == 1
                                                         http:
                                                           description: Settings for
                                                             managing HTTP requests
@@ -1341,8 +1341,8 @@ spec:
                                                               the fields in [verifySubjectAltNames
                                                               insecureSkipVerify]
                                                               may be set
-                                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                                              <= 1'
+                                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                                              <= 1
                                                         tunnel:
                                                           description: Settings for
                                                             managing tunnel connections
@@ -1442,8 +1442,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [backendRef
                                                               url] must be set
-                                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                                              == 1
                                                           - message: url must not
                                                               include a path for backend
                                                               tunnel
@@ -1600,8 +1600,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [gcp]
                                                               must be set
-                                                            rule: '[has(self.gcp)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.gcp)?1:0)
+                                                              == 1
                                                         http:
                                                           description: Settings for
                                                             managing HTTP requests
@@ -1909,8 +1909,8 @@ spec:
                                                               the fields in [verifySubjectAltNames
                                                               insecureSkipVerify]
                                                               may be set
-                                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                                              <= 1'
+                                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                                              <= 1
                                                         tunnel:
                                                           description: Settings for
                                                             managing tunnel connections
@@ -2010,8 +2010,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [backendRef
                                                               url] must be set
-                                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                                              == 1
                                                           - message: url must not
                                                               include a path for backend
                                                               tunnel
@@ -2127,8 +2127,8 @@ spec:
                                                                   [header queryParameter
                                                                   cookie] must be
                                                                   set
-                                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                                  == 1'
+                                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                                  == 1
                                                             secretRef:
                                                               description: |-
                                                                 Credential source for the authorization value, defaulting to a Kubernetes
@@ -2187,8 +2187,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef]
                                                               must be set
-                                                            rule: '[has(self.key),has(self.secretRef)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)
+                                                              == 1
                                                         http:
                                                           description: Settings for
                                                             managing HTTP requests
@@ -2496,8 +2496,8 @@ spec:
                                                               the fields in [verifySubjectAltNames
                                                               insecureSkipVerify]
                                                               may be set
-                                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                                              <= 1'
+                                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                                              <= 1
                                                         tunnel:
                                                           description: Settings for
                                                             managing tunnel connections
@@ -2597,8 +2597,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [backendRef
                                                               url] must be set
-                                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                                              == 1
                                                           - message: url must not
                                                               include a path for backend
                                                               tunnel
@@ -2865,8 +2865,8 @@ spec:
                                                   in [regex webhook openAIModeration
                                                   bedrockGuardrails googleModelArmor]
                                                   must be set
-                                                rule: '[has(self.regex),has(self.webhook),has(self.openAIModeration),has(self.bedrockGuardrails),has(self.googleModelArmor)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.regex)?1:0)+(has(self.webhook)?1:0)+(has(self.openAIModeration)?1:0)+(has(self.bedrockGuardrails)?1:0)+(has(self.googleModelArmor)?1:0)
+                                                  == 1
                                             maxItems: 8
                                             minItems: 1
                                             type: array
@@ -3002,8 +3002,8 @@ spec:
                                                                       in [sessionName
                                                                       sessionNameExpression]
                                                                       may be set
-                                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
-                                                                      <= 1'
+                                                                    rule: (has(self.sessionName)?1:0)+(has(self.sessionNameExpression)?1:0)
+                                                                      <= 1
                                                                 region:
                                                                   description: |-
                                                                     AWS SigV4 signing region, for example `us-east-1`. Set this when the
@@ -3132,8 +3132,8 @@ spec:
                                                                   [header queryParameter
                                                                   cookie] must be
                                                                   set
-                                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                                  == 1'
+                                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                                  == 1
                                                             secretRef:
                                                               description: |-
                                                                 Credential source for the API key, defaulting to a Kubernetes `Secret`.
@@ -3198,8 +3198,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef
                                                               aws] must be set
-                                                            rule: '[has(self.key),has(self.secretRef),has(self.aws)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.aws)?1:0)
+                                                              == 1
                                                         http:
                                                           description: Settings for
                                                             managing HTTP requests
@@ -3507,8 +3507,8 @@ spec:
                                                               the fields in [verifySubjectAltNames
                                                               insecureSkipVerify]
                                                               may be set
-                                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                                              <= 1'
+                                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                                              <= 1
                                                         tunnel:
                                                           description: Settings for
                                                             managing tunnel connections
@@ -3608,8 +3608,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [backendRef
                                                               url] must be set
-                                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                                              == 1
                                                           - message: url must not
                                                               include a path for backend
                                                               tunnel
@@ -3766,8 +3766,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [gcp]
                                                               must be set
-                                                            rule: '[has(self.gcp)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.gcp)?1:0)
+                                                              == 1
                                                         http:
                                                           description: Settings for
                                                             managing HTTP requests
@@ -4075,8 +4075,8 @@ spec:
                                                               the fields in [verifySubjectAltNames
                                                               insecureSkipVerify]
                                                               may be set
-                                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                                              <= 1'
+                                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                                              <= 1
                                                         tunnel:
                                                           description: Settings for
                                                             managing tunnel connections
@@ -4176,8 +4176,8 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [backendRef
                                                               url] must be set
-                                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                                              == 1'
+                                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                                              == 1
                                                           - message: url must not
                                                               include a path for backend
                                                               tunnel
@@ -4427,8 +4427,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [regex webhook bedrockGuardrails
                                                   googleModelArmor] must be set
-                                                rule: '[has(self.regex),has(self.webhook),has(self.bedrockGuardrails),has(self.googleModelArmor)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.regex)?1:0)+(has(self.webhook)?1:0)+(has(self.bedrockGuardrails)?1:0)+(has(self.googleModelArmor)?1:0)
+                                                  == 1
                                             maxItems: 8
                                             minItems: 1
                                             type: array
@@ -4593,8 +4593,8 @@ spec:
                                             - message: at most one of the fields in
                                                 [sessionName sessionNameExpression]
                                                 may be set
-                                              rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
-                                                <= 1'
+                                              rule: (has(self.sessionName)?1:0)+(has(self.sessionNameExpression)?1:0)
+                                                <= 1
                                           region:
                                             description: |-
                                               AWS SigV4 signing region, for example `us-east-1`. Set this when the
@@ -4677,8 +4677,18 @@ spec:
                                             - message: at most one of the fields in
                                                 [clientId objectId resourceId] may
                                                 be set
-                                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
-                                                <= 1'
+                                              rule: (has(self.clientId)?1:0)+(has(self.objectId)?1:0)+(has(self.resourceId)?1:0)
+                                                <= 1
+                                          scopes:
+                                            description: |-
+                                              Scopes requested for the Azure access token. When omitted, the scope is
+                                              inferred from the backend hostname. Managed Identity supports exactly one
+                                              scope.
+                                            items:
+                                              type: string
+                                            maxItems: 64
+                                            minItems: 1
+                                            type: array
                                           secretRef:
                                             description: |-
                                               Credential source for Azure credentials, defaulting to a Kubernetes
@@ -4720,11 +4730,15 @@ spec:
                                             type: object
                                         type: object
                                         x-kubernetes-validations:
+                                        - message: managedIdentity supports exactly
+                                            one scope
+                                          rule: '!has(self.managedIdentity) || !has(self.scopes)
+                                            || self.scopes.size() == 1'
                                         - message: at most one of the fields in [secretRef
                                             managedIdentity workloadIdentity] may
                                             be set
-                                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
-                                            <= 1'
+                                          rule: (has(self.secretRef)?1:0)+(has(self.managedIdentity)?1:0)+(has(self.workloadIdentity)?1:0)
+                                            <= 1
                                       credentials:
                                         description: |-
                                           Credentials is a list of additional credentials to inject on the
@@ -4782,8 +4796,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [header queryParameter cookie]
                                                   must be set
-                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                  == 1
                                             secretRef:
                                               description: |-
                                                 SecretRef references a Kubernetes Secret holding the credential value, and
@@ -5177,8 +5191,8 @@ spec:
                                                 : true'
                                             - message: exactly one of the fields in
                                                 [backendRef url] must be set
-                                              rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                                == 1'
+                                              rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                                == 1
                                           resourceAuthorizationServer:
                                             description: Resource authorization server,
                                               used for the RFC 7523 jwt-bearer exchange.
@@ -5480,8 +5494,8 @@ spec:
                                                 : true'
                                             - message: exactly one of the fields in
                                                 [backendRef url] must be set
-                                              rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                                == 1'
+                                              rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                                == 1
                                           resources:
                                             description: Resources sent to the token
                                               endpoint.
@@ -5556,8 +5570,8 @@ spec:
                                                 - message: exactly one of the fields
                                                     in [header queryParameter cookie
                                                     expression] must be set
-                                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                                    == 1'
+                                                  rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                                    == 1
                                               tokenType:
                                                 description: OAuth RFC 8693 subject
                                                   token type. Defaults to IdToken
@@ -5717,8 +5731,8 @@ spec:
                                             - message: exactly one of the fields in
                                                 [header queryParameter cookie] must
                                                 be set
-                                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                == 1'
+                                              rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                == 1
                                           signingKeyRef:
                                             description: Secret providing the `signingKey`
                                               key with a PEM-encoded RSA or EC private
@@ -5815,8 +5829,8 @@ spec:
                                         x-kubernetes-validations:
                                         - message: exactly one of the fields in [header
                                             queryParameter cookie] must be set
-                                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                            == 1'
+                                          rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                            == 1
                                       oauthTokenExchange:
                                         description: OAuth 2.0 token exchange (RFC
                                           8693) / jwt-bearer (RFC 7523) authentication.
@@ -5885,8 +5899,8 @@ spec:
                                                 - message: exactly one of the fields
                                                     in [header queryParameter cookie
                                                     expression] must be set
-                                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                                    == 1'
+                                                  rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                                    == 1
                                               tokenType:
                                                 description: |-
                                                   OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
@@ -6259,8 +6273,8 @@ spec:
                                             - message: exactly one of the fields in
                                                 [header queryParameter cookie] must
                                                 be set
-                                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                == 1'
+                                              rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                == 1
                                           path:
                                             description: Token endpoint path; defaults
                                               to "/". Must start with "/".
@@ -6350,8 +6364,8 @@ spec:
                                                 - message: exactly one of the fields
                                                     in [header queryParameter cookie
                                                     expression] must be set
-                                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                                    == 1'
+                                                  rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                                    == 1
                                               tokenType:
                                                 description: |-
                                                   OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
@@ -6390,8 +6404,8 @@ spec:
                                             true'
                                         - message: exactly one of the fields in [backendRef
                                             url] must be set
-                                          rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                            == 1'
+                                          rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                            == 1
                                       passthrough:
                                         description: |-
                                           Reuses a client token already validated by another policy. Those policies
@@ -6456,8 +6470,8 @@ spec:
                                     - message: at most one of the fields in [key secretRef
                                         passthrough aws azure gcp oauthTokenExchange
                                         crossAppAccess jwtSign] may be set
-                                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess),has(self.jwtSign)].filter(x,x==true).size()
-                                        <= 1'
+                                      rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.passthrough)?1:0)+(has(self.aws)?1:0)+(has(self.azure)?1:0)+(has(self.gcp)?1:0)+(has(self.oauthTokenExchange)?1:0)+(has(self.crossAppAccess)?1:0)+(has(self.jwtSign)?1:0)
+                                        <= 1
                                   health:
                                     description: Settings for passive and active health
                                       checking.
@@ -6785,8 +6799,8 @@ spec:
                                         && self.certificateSource == ''SPIFFE'')'
                                     - message: at most one of the fields in [verifySubjectAltNames
                                         insecureSkipVerify] may be set
-                                      rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                        <= 1'
+                                      rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                        <= 1
                                   transformation:
                                     description: Mutates and transforms requests and
                                       responses sent to and from the backend.
@@ -7126,8 +7140,8 @@ spec:
                                     x-kubernetes-validations:
                                     - message: exactly one of the fields in [backendRef
                                         url] must be set
-                                      rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                        == 1'
+                                      rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                        == 1
                                     - message: url must not include a path for backend
                                         tunnel
                                       rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
@@ -7195,8 +7209,8 @@ spec:
                             - message: exactly one of the fields in [openai azureopenai
                                 azure anthropic gemini vertexai bedrock custom] must
                                 be set
-                              rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock),has(self.custom)].filter(x,x==true).size()
-                                == 1'
+                              rule: (has(self.openai)?1:0)+(has(self.azureopenai)?1:0)+(has(self.azure)?1:0)+(has(self.anthropic)?1:0)+(has(self.gemini)?1:0)+(has(self.vertexai)?1:0)+(has(self.bedrock)?1:0)+(has(self.custom)?1:0)
+                                == 1
                           maxItems: 16
                           minItems: 1
                           type: array
@@ -7612,14 +7626,13 @@ spec:
                       rule: 'has(self.pathPrefix) ? has(self.host) : true'
                     - message: exactly one of the fields in [openai azureopenai azure
                         anthropic gemini vertexai bedrock custom] must be set
-                      rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock),has(self.custom)].filter(x,x==true).size()
-                        == 1'
+                      rule: (has(self.openai)?1:0)+(has(self.azureopenai)?1:0)+(has(self.azure)?1:0)+(has(self.anthropic)?1:0)+(has(self.gemini)?1:0)+(has(self.vertexai)?1:0)+(has(self.bedrock)?1:0)+(has(self.custom)?1:0)
+                        == 1
                 type: object
                 x-kubernetes-validations:
                 - message: exactly one of the fields in [provider groups] must be
                     set
-                  rule: '[has(self.provider),has(self.groups)].filter(x,x==true).size()
-                    == 1'
+                  rule: (has(self.provider)?1:0)+(has(self.groups)?1:0) == 1
               aws:
                 description: AWS service backend, such as AgentCore.
                 properties:
@@ -7638,7 +7651,7 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: exactly one of the fields in [agentCore] must be set
-                  rule: '[has(self.agentCore)].filter(x,x==true).size() == 1'
+                  rule: (has(self.agentCore)?1:0) == 1
               dynamicForwardProxy:
                 description: |-
                   Dynamically sends requests to the destination based on the incoming
@@ -7924,8 +7937,8 @@ spec:
                                           - message: at most one of the fields in
                                               [sessionName sessionNameExpression]
                                               may be set
-                                            rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
-                                              <= 1'
+                                            rule: (has(self.sessionName)?1:0)+(has(self.sessionNameExpression)?1:0)
+                                              <= 1
                                         region:
                                           description: |-
                                             AWS SigV4 signing region, for example `us-east-1`. Set this when the
@@ -8007,8 +8020,18 @@ spec:
                                           - message: at most one of the fields in
                                               [clientId objectId resourceId] may be
                                               set
-                                            rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
-                                              <= 1'
+                                            rule: (has(self.clientId)?1:0)+(has(self.objectId)?1:0)+(has(self.resourceId)?1:0)
+                                              <= 1
+                                        scopes:
+                                          description: |-
+                                            Scopes requested for the Azure access token. When omitted, the scope is
+                                            inferred from the backend hostname. Managed Identity supports exactly one
+                                            scope.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
                                         secretRef:
                                           description: |-
                                             Credential source for Azure credentials, defaulting to a Kubernetes
@@ -8049,11 +8072,15 @@ spec:
                                           type: object
                                       type: object
                                       x-kubernetes-validations:
+                                      - message: managedIdentity supports exactly
+                                          one scope
+                                        rule: '!has(self.managedIdentity) || !has(self.scopes)
+                                          || self.scopes.size() == 1'
                                       - message: at most one of the fields in [secretRef
                                           managedIdentity workloadIdentity] may be
                                           set
-                                        rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
-                                          <= 1'
+                                        rule: (has(self.secretRef)?1:0)+(has(self.managedIdentity)?1:0)+(has(self.workloadIdentity)?1:0)
+                                          <= 1
                                     credentials:
                                       description: |-
                                         Credentials is a list of additional credentials to inject on the
@@ -8111,8 +8138,8 @@ spec:
                                             - message: exactly one of the fields in
                                                 [header queryParameter cookie] must
                                                 be set
-                                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                == 1'
+                                              rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                == 1
                                           secretRef:
                                             description: |-
                                               SecretRef references a Kubernetes Secret holding the credential value, and
@@ -8496,8 +8523,8 @@ spec:
                                               : true'
                                           - message: exactly one of the fields in
                                               [backendRef url] must be set
-                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                              == 1
                                         resourceAuthorizationServer:
                                           description: Resource authorization server,
                                             used for the RFC 7523 jwt-bearer exchange.
@@ -8791,8 +8818,8 @@ spec:
                                               : true'
                                           - message: exactly one of the fields in
                                               [backendRef url] must be set
-                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                              == 1
                                         resources:
                                           description: Resources sent to the token
                                             endpoint.
@@ -8867,8 +8894,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [header queryParameter cookie
                                                   expression] must be set
-                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                                  == 1
                                             tokenType:
                                               description: OAuth RFC 8693 subject
                                                 token type. Defaults to IdToken
@@ -9025,8 +9052,8 @@ spec:
                                           - message: exactly one of the fields in
                                               [header queryParameter cookie] must
                                               be set
-                                            rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                              == 1
                                         signingKeyRef:
                                           description: Secret providing the `signingKey`
                                             key with a PEM-encoded RSA or EC private
@@ -9122,8 +9149,8 @@ spec:
                                       x-kubernetes-validations:
                                       - message: exactly one of the fields in [header
                                           queryParameter cookie] must be set
-                                        rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                          == 1'
+                                        rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                          == 1
                                     oauthTokenExchange:
                                       description: OAuth 2.0 token exchange (RFC 8693)
                                         / jwt-bearer (RFC 7523) authentication.
@@ -9192,8 +9219,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [header queryParameter cookie
                                                   expression] must be set
-                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                                  == 1
                                             tokenType:
                                               description: |-
                                                 OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
@@ -9556,8 +9583,8 @@ spec:
                                           - message: exactly one of the fields in
                                               [header queryParameter cookie] must
                                               be set
-                                            rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                              == 1
                                         path:
                                           description: Token endpoint path; defaults
                                             to "/". Must start with "/".
@@ -9646,8 +9673,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [header queryParameter cookie
                                                   expression] must be set
-                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                                  == 1
                                             tokenType:
                                               description: |-
                                                 OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
@@ -9683,8 +9710,8 @@ spec:
                                         rule: 'has(self.url) ? !has(self.path) : true'
                                       - message: exactly one of the fields in [backendRef
                                           url] must be set
-                                        rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                          == 1'
+                                        rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                          == 1
                                     passthrough:
                                       description: |-
                                         Reuses a client token already validated by another policy. Those policies
@@ -9748,8 +9775,8 @@ spec:
                                   - message: at most one of the fields in [key secretRef
                                       passthrough aws azure gcp oauthTokenExchange
                                       crossAppAccess jwtSign] may be set
-                                    rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess),has(self.jwtSign)].filter(x,x==true).size()
-                                      <= 1'
+                                    rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.passthrough)?1:0)+(has(self.aws)?1:0)+(has(self.azure)?1:0)+(has(self.gcp)?1:0)+(has(self.oauthTokenExchange)?1:0)+(has(self.crossAppAccess)?1:0)+(has(self.jwtSign)?1:0)
+                                      <= 1
                                 http:
                                   description: Settings for managing HTTP requests
                                     to the backend
@@ -10006,8 +10033,8 @@ spec:
                                       && self.certificateSource == ''SPIFFE'')'
                                   - message: at most one of the fields in [verifySubjectAltNames
                                       insecureSkipVerify] may be set
-                                    rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                      <= 1'
+                                    rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                      <= 1
                                 tunnel:
                                   description: Settings for managing tunnel connections
                                     to the backend, like `HTTPS_PROXY`
@@ -10086,8 +10113,8 @@ spec:
                                   x-kubernetes-validations:
                                   - message: exactly one of the fields in [backendRef
                                       url] must be set
-                                    rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                      == 1'
+                                    rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                      == 1
                                   - message: url must not include a path for backend
                                       tunnel
                                     rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
@@ -10114,16 +10141,15 @@ spec:
                             rule: '!has(self.backendRef) || !has(self.policies)'
                           - message: exactly one of the fields in [host backendRef]
                               must be set
-                            rule: '[has(self.host),has(self.backendRef)].filter(x,x==true).size()
-                              == 1'
+                            rule: (has(self.host)?1:0)+(has(self.backendRef)?1:0)
+                              == 1
                       required:
                       - name
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of the fields in [selector static] must
                           be set
-                        rule: '[has(self.selector),has(self.static)].filter(x,x==true).size()
-                          == 1'
+                        rule: (has(self.selector)?1:0)+(has(self.static)?1:0) == 1
                     maxItems: 128
                     minItems: 1
                     type: array
@@ -10478,8 +10504,8 @@ spec:
                                                   - message: at most one of the fields
                                                       in [sessionName sessionNameExpression]
                                                       may be set
-                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
-                                                      <= 1'
+                                                    rule: (has(self.sessionName)?1:0)+(has(self.sessionNameExpression)?1:0)
+                                                      <= 1
                                                 region:
                                                   description: |-
                                                     AWS SigV4 signing region, for example `us-east-1`. Set this when the
@@ -10588,8 +10614,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [header queryParameter cookie]
                                                   must be set
-                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                  == 1
                                             secretRef:
                                               description: |-
                                                 Credential source for the API key, defaulting to a Kubernetes `Secret`.
@@ -10640,8 +10666,8 @@ spec:
                                               || has(self.secretRef) : true'
                                           - message: exactly one of the fields in
                                               [key secretRef aws] must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.aws)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.aws)?1:0)
+                                              == 1
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -10908,8 +10934,8 @@ spec:
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
-                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                              <= 1'
+                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                              <= 1
                                         tunnel:
                                           description: Settings for managing tunnel
                                             connections to the backend, like `HTTPS_PROXY`
@@ -10993,8 +11019,8 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [backendRef url] must be set
-                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                              == 1
                                           - message: url must not include a path for
                                               backend tunnel
                                             rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
@@ -11126,8 +11152,7 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [gcp] must be set
-                                            rule: '[has(self.gcp)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.gcp)?1:0) == 1
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -11394,8 +11419,8 @@ spec:
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
-                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                              <= 1'
+                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                              <= 1
                                         tunnel:
                                           description: Settings for managing tunnel
                                             connections to the backend, like `HTTPS_PROXY`
@@ -11479,8 +11504,8 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [backendRef url] must be set
-                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                              == 1
                                           - message: url must not include a path for
                                               backend tunnel
                                             rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
@@ -11586,8 +11611,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [header queryParameter cookie]
                                                   must be set
-                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                  == 1
                                             secretRef:
                                               description: |-
                                                 Credential source for the authorization value, defaulting to a Kubernetes
@@ -11634,8 +11659,8 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [key secretRef] must be set
-                                            rule: '[has(self.key),has(self.secretRef)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)
+                                              == 1
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -11902,8 +11927,8 @@ spec:
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
-                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                              <= 1'
+                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                              <= 1
                                         tunnel:
                                           description: Settings for managing tunnel
                                             connections to the backend, like `HTTPS_PROXY`
@@ -11987,8 +12012,8 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [backendRef url] must be set
-                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                              == 1
                                           - message: url must not include a path for
                                               backend tunnel
                                             rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
@@ -12230,8 +12255,8 @@ spec:
                               - message: exactly one of the fields in [regex webhook
                                   openAIModeration bedrockGuardrails googleModelArmor]
                                   must be set
-                                rule: '[has(self.regex),has(self.webhook),has(self.openAIModeration),has(self.bedrockGuardrails),has(self.googleModelArmor)].filter(x,x==true).size()
-                                  == 1'
+                                rule: (has(self.regex)?1:0)+(has(self.webhook)?1:0)+(has(self.openAIModeration)?1:0)+(has(self.bedrockGuardrails)?1:0)+(has(self.googleModelArmor)?1:0)
+                                  == 1
                             maxItems: 8
                             minItems: 1
                             type: array
@@ -12354,8 +12379,8 @@ spec:
                                                   - message: at most one of the fields
                                                       in [sessionName sessionNameExpression]
                                                       may be set
-                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
-                                                      <= 1'
+                                                    rule: (has(self.sessionName)?1:0)+(has(self.sessionNameExpression)?1:0)
+                                                      <= 1
                                                 region:
                                                   description: |-
                                                     AWS SigV4 signing region, for example `us-east-1`. Set this when the
@@ -12464,8 +12489,8 @@ spec:
                                               - message: exactly one of the fields
                                                   in [header queryParameter cookie]
                                                   must be set
-                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                  == 1'
+                                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                                  == 1
                                             secretRef:
                                               description: |-
                                                 Credential source for the API key, defaulting to a Kubernetes `Secret`.
@@ -12516,8 +12541,8 @@ spec:
                                               || has(self.secretRef) : true'
                                           - message: exactly one of the fields in
                                               [key secretRef aws] must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.aws)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.aws)?1:0)
+                                              == 1
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -12784,8 +12809,8 @@ spec:
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
-                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                              <= 1'
+                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                              <= 1
                                         tunnel:
                                           description: Settings for managing tunnel
                                             connections to the backend, like `HTTPS_PROXY`
@@ -12869,8 +12894,8 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [backendRef url] must be set
-                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                              == 1
                                           - message: url must not include a path for
                                               backend tunnel
                                             rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
@@ -13002,8 +13027,7 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [gcp] must be set
-                                            rule: '[has(self.gcp)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.gcp)?1:0) == 1
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -13270,8 +13294,8 @@ spec:
                                           - message: at most one of the fields in
                                               [verifySubjectAltNames insecureSkipVerify]
                                               may be set
-                                            rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                                              <= 1'
+                                            rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                                              <= 1
                                         tunnel:
                                           description: Settings for managing tunnel
                                             connections to the backend, like `HTTPS_PROXY`
@@ -13355,8 +13379,8 @@ spec:
                                           x-kubernetes-validations:
                                           - message: exactly one of the fields in
                                               [backendRef url] must be set
-                                            rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                              == 1'
+                                            rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                              == 1
                                           - message: url must not include a path for
                                               backend tunnel
                                             rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
@@ -13582,8 +13606,8 @@ spec:
                               x-kubernetes-validations:
                               - message: exactly one of the fields in [regex webhook
                                   bedrockGuardrails googleModelArmor] must be set
-                                rule: '[has(self.regex),has(self.webhook),has(self.bedrockGuardrails),has(self.googleModelArmor)].filter(x,x==true).size()
-                                  == 1'
+                                rule: (has(self.regex)?1:0)+(has(self.webhook)?1:0)+(has(self.bedrockGuardrails)?1:0)+(has(self.googleModelArmor)?1:0)
+                                  == 1
                             maxItems: 8
                             minItems: 1
                             type: array
@@ -13743,8 +13767,8 @@ spec:
                             x-kubernetes-validations:
                             - message: at most one of the fields in [sessionName sessionNameExpression]
                                 may be set
-                              rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
-                                <= 1'
+                              rule: (has(self.sessionName)?1:0)+(has(self.sessionNameExpression)?1:0)
+                                <= 1
                           region:
                             description: |-
                               AWS SigV4 signing region, for example `us-east-1`. Set this when the
@@ -13821,8 +13845,18 @@ spec:
                             x-kubernetes-validations:
                             - message: at most one of the fields in [clientId objectId
                                 resourceId] may be set
-                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
-                                <= 1'
+                              rule: (has(self.clientId)?1:0)+(has(self.objectId)?1:0)+(has(self.resourceId)?1:0)
+                                <= 1
+                          scopes:
+                            description: |-
+                              Scopes requested for the Azure access token. When omitted, the scope is
+                              inferred from the backend hostname. Managed Identity supports exactly one
+                              scope.
+                            items:
+                              type: string
+                            maxItems: 64
+                            minItems: 1
+                            type: array
                           secretRef:
                             description: |-
                               Credential source for Azure credentials, defaulting to a Kubernetes
@@ -13861,10 +13895,13 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                        - message: managedIdentity supports exactly one scope
+                          rule: '!has(self.managedIdentity) || !has(self.scopes) ||
+                            self.scopes.size() == 1'
                         - message: at most one of the fields in [secretRef managedIdentity
                             workloadIdentity] may be set
-                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
-                            <= 1'
+                          rule: (has(self.secretRef)?1:0)+(has(self.managedIdentity)?1:0)+(has(self.workloadIdentity)?1:0)
+                            <= 1
                       credentials:
                         description: |-
                           Credentials is a list of additional credentials to inject on the
@@ -13920,8 +13957,8 @@ spec:
                               x-kubernetes-validations:
                               - message: exactly one of the fields in [header queryParameter
                                   cookie] must be set
-                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                  == 1'
+                                rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                  == 1
                             secretRef:
                               description: |-
                                 SecretRef references a Kubernetes Secret holding the credential value, and
@@ -14259,8 +14296,8 @@ spec:
                               rule: 'has(self.url) ? !has(self.path) : true'
                             - message: exactly one of the fields in [backendRef url]
                                 must be set
-                              rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                == 1'
+                              rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                == 1
                           resourceAuthorizationServer:
                             description: Resource authorization server, used for the
                               RFC 7523 jwt-bearer exchange.
@@ -14516,8 +14553,8 @@ spec:
                               rule: 'has(self.url) ? !has(self.path) : true'
                             - message: exactly one of the fields in [backendRef url]
                                 must be set
-                              rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                == 1'
+                              rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                == 1
                           resources:
                             description: Resources sent to the token endpoint.
                             items:
@@ -14587,8 +14624,8 @@ spec:
                                 x-kubernetes-validations:
                                 - message: exactly one of the fields in [header queryParameter
                                     cookie expression] must be set
-                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                    == 1'
+                                  rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                    == 1
                               tokenType:
                                 description: OAuth RFC 8693 subject token type. Defaults
                                   to IdToken
@@ -14737,8 +14774,8 @@ spec:
                             x-kubernetes-validations:
                             - message: exactly one of the fields in [header queryParameter
                                 cookie] must be set
-                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                == 1'
+                              rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                == 1
                           signingKeyRef:
                             description: Secret providing the `signingKey` key with
                               a PEM-encoded RSA or EC private key.
@@ -14830,8 +14867,8 @@ spec:
                         x-kubernetes-validations:
                         - message: exactly one of the fields in [header queryParameter
                             cookie] must be set
-                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                            == 1'
+                          rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                            == 1
                       oauthTokenExchange:
                         description: OAuth 2.0 token exchange (RFC 8693) / jwt-bearer
                           (RFC 7523) authentication.
@@ -14895,8 +14932,8 @@ spec:
                                 x-kubernetes-validations:
                                 - message: exactly one of the fields in [header queryParameter
                                     cookie expression] must be set
-                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                    == 1'
+                                  rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                    == 1
                               tokenType:
                                 description: |-
                                   OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
@@ -15222,8 +15259,8 @@ spec:
                             x-kubernetes-validations:
                             - message: exactly one of the fields in [header queryParameter
                                 cookie] must be set
-                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                == 1'
+                              rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
+                                == 1
                           path:
                             description: Token endpoint path; defaults to "/". Must
                               start with "/".
@@ -15308,8 +15345,8 @@ spec:
                                 x-kubernetes-validations:
                                 - message: exactly one of the fields in [header queryParameter
                                     cookie expression] must be set
-                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                    == 1'
+                                  rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)+(has(self.expression)?1:0)
+                                    == 1
                               tokenType:
                                 description: |-
                                   OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
@@ -15343,8 +15380,8 @@ spec:
                           rule: 'has(self.url) ? !has(self.path) : true'
                         - message: exactly one of the fields in [backendRef url] must
                             be set
-                          rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                            == 1'
+                          rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0) ==
+                            1
                       passthrough:
                         description: |-
                           Reuses a client token already validated by another policy. Those policies
@@ -15402,8 +15439,8 @@ spec:
                     - message: at most one of the fields in [key secretRef passthrough
                         aws azure gcp oauthTokenExchange crossAppAccess jwtSign] may
                         be set
-                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess),has(self.jwtSign)].filter(x,x==true).size()
-                        <= 1'
+                      rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.passthrough)?1:0)+(has(self.aws)?1:0)+(has(self.azure)?1:0)+(has(self.gcp)?1:0)+(has(self.oauthTokenExchange)?1:0)+(has(self.crossAppAccess)?1:0)+(has(self.jwtSign)?1:0)
+                        <= 1
                   extAuth:
                     description: |-
                       External authentication configuration for requests
@@ -15919,8 +15956,8 @@ spec:
                               rule: 'has(self.url) ? !has(self.jwksPath) : true'
                             - message: exactly one of the fields in [backendRef url]
                                 must be set
-                              rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                == 1'
+                              rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                == 1
                           mode:
                             default: Strict
                             description: Validation mode for JWT authentication.
@@ -16174,16 +16211,15 @@ spec:
                                     rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                   - message: exactly one of the fields in [backendRef
                                       url] must be set
-                                    rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                                      == 1'
+                                    rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
+                                      == 1
                               required:
                               - methods
                               type: object
                               x-kubernetes-validations:
                               - message: exactly one of the fields in [remote] must
                                   be set
-                                rule: '[has(self.remote)].filter(x,x==true).size()
-                                  == 1'
+                                rule: (has(self.remote)?1:0) == 1
                             maxItems: 16
                             minItems: 1
                             type: array
@@ -16436,8 +16472,8 @@ spec:
                         && self.certificateSource == ''SPIFFE'')'
                     - message: at most one of the fields in [verifySubjectAltNames
                         insecureSkipVerify] may be set
-                      rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
-                        <= 1'
+                      rule: (has(self.verifySubjectAltNames)?1:0)+(has(self.insecureSkipVerify)?1:0)
+                        <= 1
                   transformation:
                     description: Mutates and transforms requests and responses sent
                       to and from the backend.
@@ -16749,8 +16785,7 @@ spec:
                     x-kubernetes-validations:
                     - message: exactly one of the fields in [backendRef url] must
                         be set
-                      rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
-                        == 1'
+                      rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0) == 1
                     - message: url must not include a path for backend tunnel
                       rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                 type: object
@@ -16796,8 +16831,8 @@ spec:
                 : true'
             - message: exactly one of the fields in [ai static dynamicForwardProxy
                 mcp aws a2a] must be set
-              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws),has(self.a2a)].filter(x,x==true).size()
-                == 1'
+              rule: (has(self.ai)?1:0)+(has(self.static)?1:0)+(has(self.dynamicForwardProxy)?1:0)+(has(self.mcp)?1:0)+(has(self.aws)?1:0)+(has(self.a2a)?1:0)
+                == 1
           status:
             description: Current backend status.
             properties:

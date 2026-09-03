@@ -20,7 +20,7 @@ env:
   CI: true
   RUST_VERSION: "1.98.0"
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.27.0"
+  GO_VERSION: "1.27.1"
 
 jobs:
   #### Proxy jobs ####
