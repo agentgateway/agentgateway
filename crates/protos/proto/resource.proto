@@ -315,6 +315,9 @@ message TLSConfig {
   // If empty, defaults are used.
   repeated KeyExchangeGroup key_exchange_groups = 8;
   CertificateSource certificate_source = 9;
+  // Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted.
+  // The local trust domain is always implicit. Only applicable when certificate_source is SPIFFE.
+  repeated string spiffe_accepted_trust_domains = 10;
 }
 
 enum Protocol {
@@ -1628,6 +1631,9 @@ message BackendPolicySpec {
     // If empty, defaults are used.
     repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 8;
     CertificateSource certificate_source = 9;
+    // Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted.
+    // The local trust domain is always implicit. Only applicable when certificate_source is SPIFFE.
+    repeated string spiffe_accepted_trust_domains = 10;
   }
   message BackendHTTP {
     enum HttpVersion {
