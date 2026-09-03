@@ -3843,8 +3843,8 @@
 |`binds[].listeners[].routes[].policies.oidc.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -16168,8 +16168,8 @@
 |`binds[].listeners[].policies.oidc.jwks.url`|string||
 |`binds[].listeners[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`binds[].listeners[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -22670,8 +22670,8 @@
 |`policies[].policy.oidc.jwks.url`|string||
 |`policies[].policy.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`policies[].policy.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`policies[].policy.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -38382,8 +38382,8 @@
 |`routeGroups[].routes[].policies.oidc.jwks.url`|string||
 |`routeGroups[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`routeGroups[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`routeGroups[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`routeGroups[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`routeGroups[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`routeGroups[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`routeGroups[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -50415,8 +50415,8 @@
 |`gateways.*.listeners[].oidc.jwks.url`|string||
 |`gateways.*.listeners[].oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`gateways.*.listeners[].oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`gateways.*.listeners[].oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`gateways.*.listeners[].oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`gateways.*.listeners[].oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`gateways.*.listeners[].oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`gateways.*.listeners[].jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.listeners[].jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -51732,8 +51732,8 @@
 |`gateways.*.oidc.jwks.url`|string||
 |`gateways.*.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`gateways.*.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`gateways.*.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`gateways.*.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`gateways.*.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`gateways.*.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`gateways.*.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -56736,8 +56736,8 @@
 |`routes[].policies.oidc.jwks.url`|string||
 |`routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -72554,8 +72554,8 @@
 |`llm.policies.oidc.jwks.url`|string||
 |`llm.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`llm.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -80144,8 +80144,8 @@
 |`mcp.policies.oidc.jwks.url`|string||
 |`mcp.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`mcp.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`mcp.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -81725,8 +81725,8 @@
 |`ui.policies.oidc.jwks.url`|string||
 |`ui.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`ui.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
-|`ui.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
-|`ui.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
+|`ui.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>Unauthenticated document navigations are redirected back through this login flow.|
+|`ui.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when<br>the provider requires it to issue a refresh token; returned refresh tokens are used<br>automatically.|
 |`ui.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`ui.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|

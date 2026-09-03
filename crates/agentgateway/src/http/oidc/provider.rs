@@ -1,3 +1,4 @@
+use std::fmt;
 use std::time::Duration;
 
 use ::http::{Method, StatusCode, header};
@@ -11,10 +12,24 @@ use crate::http::oauth::{encode_client_secret_basic, format_token_endpoint_error
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub(crate) struct TokenResponse {
 	#[serde(default)]
 	pub id_token: Option<String>,
+	#[serde(default)]
+	pub refresh_token: Option<String>,
+}
+
+impl fmt::Debug for TokenResponse {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("TokenResponse")
+			.field("id_token", &self.id_token.as_ref().map(|_| "[redacted]"))
+			.field(
+				"refresh_token",
+				&self.refresh_token.as_ref().map(|_| "[redacted]"),
+			)
+			.finish()
+	}
 }
 
 const DEFAULT_TOKEN_EXCHANGE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -49,12 +64,42 @@ pub(crate) async fn exchange_code_with_timeout(
 	pkce_verifier: &SecretString,
 	timeout: Duration,
 ) -> Result<TokenResponse, Error> {
-	let mut form = vec![
+	let form = vec![
 		("grant_type", "authorization_code".to_string()),
 		("code", code.to_string()),
 		("redirect_uri", redirect_uri.to_string()),
 		("code_verifier", pkce_verifier.expose_secret().to_string()),
 	];
+	exchange_token_with_timeout(client, provider, client_config, form, timeout).await
+}
+
+pub(crate) async fn refresh_token(
+	client: PolicyClient,
+	provider: &Provider,
+	client_config: &super::ClientConfig,
+	refresh_token: &SecretString,
+) -> Result<TokenResponse, Error> {
+	let form = vec![
+		("grant_type", "refresh_token".to_string()),
+		("refresh_token", refresh_token.expose_secret().to_string()),
+	];
+	exchange_token_with_timeout(
+		client,
+		provider,
+		client_config,
+		form,
+		DEFAULT_TOKEN_EXCHANGE_TIMEOUT,
+	)
+	.await
+}
+
+async fn exchange_token_with_timeout(
+	client: PolicyClient,
+	provider: &Provider,
+	client_config: &super::ClientConfig,
+	mut form: Vec<(&'static str, String)>,
+	timeout: Duration,
+) -> Result<TokenResponse, Error> {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri(provider.token_endpoint.as_str())

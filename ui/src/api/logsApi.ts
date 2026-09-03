@@ -1,4 +1,4 @@
-import { apiBase, requestJson } from '@/api/base';
+import { requestApi, requestJson } from '@/api/base';
 import type {
 	AnalyticsSummaryRequest,
 	AnalyticsSummaryResponse,
@@ -33,9 +33,8 @@ export async function* streamLogs(
 	request: SearchLogsRequest,
 	signal: AbortSignal
 ): AsyncGenerator<TailEvent> {
-	const response = await fetch(`${apiBase}/api/logs/tail`, {
+	const response = await requestApi('/api/logs/tail', {
 		method: 'POST',
-		credentials: 'include',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ ...request, includeAttributes: true }),
 		signal

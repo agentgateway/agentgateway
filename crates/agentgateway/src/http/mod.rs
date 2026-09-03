@@ -845,9 +845,22 @@ impl PolicyResponse {
 
 pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut HeaderMap) {
 	if let Some(rh) = additional_headers {
+		// HeaderMap::into_iter reports the name only for the first value in a repeated field.
+		let mut previous_name = None;
 		for (k, v) in rh.into_iter() {
-			let Some(k) = k else { continue };
-			dest.insert(k, v);
+			if let Some(k) = k {
+				previous_name = Some(k.clone());
+				// Most response mutations replace an existing header. Set-Cookie is not list-valued,
+				// so each policy and upstream cookie must remain a separate appended field.
+				if k == header::SET_COOKIE {
+					dest.append(k, v);
+				} else {
+					dest.insert(k, v);
+				}
+			// Preserve subsequent Set-Cookie values whose repeated field name was omitted above.
+			} else if previous_name.as_ref() == Some(&header::SET_COOKIE) {
+				dest.append(header::SET_COOKIE, v);
+			}
 		}
 	}
 }
@@ -977,6 +990,24 @@ impl Debug for DebugExtensions<'_> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn merge_headers_preserves_set_cookies() {
+		let mut dest = HeaderMap::new();
+		dest.append(header::SET_COOKIE, "upstream=1".parse().unwrap());
+		let mut additional = HeaderMap::new();
+		additional.append(header::SET_COOKIE, "oidc=1".parse().unwrap());
+		additional.append(header::SET_COOKIE, "transaction=1".parse().unwrap());
+
+		merge_in_headers(Some(additional), &mut dest);
+
+		let cookies: Vec<_> = dest
+			.get_all(header::SET_COOKIE)
+			.iter()
+			.map(|value| value.to_str().unwrap())
+			.collect();
+		assert_eq!(cookies, ["upstream=1", "oidc=1", "transaction=1"]);
+	}
 
 	#[test]
 	fn test_modify_query_parameters_for_relative_uri() {

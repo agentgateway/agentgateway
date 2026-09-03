@@ -6356,7 +6356,7 @@
       ]
     },
     "LocalOidcConfig": {
-      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated non-callback requests always redirect to the provider login flow. Routes that\nneed non-redirect authentication behavior should use a different auth policy.",
+      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated document navigations redirect to the provider login flow. Browser requests\npositively identified as non-navigation requests return 401 so the caller can initiate a\ndocument navigation.",
       "type": "object",
       "properties": {
         "issuer": {
@@ -6422,11 +6422,11 @@
           "type": "string"
         },
         "redirectURI": {
-          "description": "Absolute callback URI handled by the gateway.\nThis policy always redirects unauthenticated non-callback requests back through this login\nflow.",
+          "description": "Absolute callback URI handled by the gateway.\nUnauthenticated document navigations are redirected back through this login flow.",
           "type": "string"
         },
         "scopes": {
-          "description": "Additional OAuth2 scopes to request. `openid` is always included.",
+          "description": "Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when\nthe provider requires it to issue a refresh token; returned refresh tokens are used\nautomatically.",
           "type": "array",
           "items": {
             "type": "string"

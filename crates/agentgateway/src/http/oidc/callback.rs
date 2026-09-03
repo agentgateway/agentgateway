@@ -6,8 +6,8 @@ use serde_json::Value;
 use tracing::debug;
 
 use super::session::{
-	BrowserSession, TransactionState, generate_nonce, generate_pkce_verifier, generate_state,
-	generate_transaction_id, normalize_original_uri,
+	BrowserSession, RefreshSession, TransactionState, generate_nonce, generate_pkce_verifier,
+	generate_state, generate_transaction_id, normalize_original_uri,
 };
 use super::{Error, OidcPolicy, build_redirect_response, cap_session_expiry, now_unix, provider};
 use crate::http::Request;
@@ -145,11 +145,14 @@ pub(super) async fn handle_callback(
 		return Err(Error::NonceMismatch);
 	}
 
-	// TODO: Revisit whether browser sessions should persist access_token / refresh_token.
-	// The current stateless cookie only stores the validated id_token because that is what
-	// the runtime uses today, and larger token payloads can exceed browser cookie limits.
+	let subject = claims
+		.inner
+		.get("sub")
+		.and_then(Value::as_str)
+		.map(str::to_owned);
 	let session = BrowserSession {
 		policy_id: policy.policy_id.clone(),
+		subject: subject.clone(),
 		raw_id_token: SecretString::new(id_token.into_boxed_str()),
 		expires_at_unix: Some(cap_session_expiry(
 			now_unix(),
@@ -164,11 +167,45 @@ pub(super) async fn handle_callback(
 		policy.redirect_uri.https,
 		policy.session.ttl,
 	);
+	let refresh_cookie = if let Some(refresh_token) = token.refresh_token {
+		let refresh_session = RefreshSession {
+			policy_id: policy.policy_id.clone(),
+			subject,
+			refresh_token: SecretString::new(refresh_token.into_boxed_str()),
+			expires_at_unix: now_unix().saturating_add(policy.session.ttl.as_secs()),
+		};
+		match policy.session.encode_refresh_session(&refresh_session) {
+			Ok(encoded) => policy.session.set_cookie(
+				&policy.session.refresh_cookie_name,
+				&encoded,
+				policy.redirect_uri.https,
+				policy.session.ttl,
+			),
+			// A provider-controlled refresh token must not make an otherwise successful login fail.
+			// Clear any older refresh credential and let this session reauthenticate when it expires.
+			Err(Error::SessionCookieTooLarge) => {
+				debug!("oidc refresh token exceeds cookie size budget; refresh disabled for session");
+				policy.session.clear_cookie(
+					&policy.session.refresh_cookie_name,
+					policy.redirect_uri.https,
+				)
+			},
+			Err(err) => return Err(err),
+		}
+	} else {
+		policy.session.clear_cookie(
+			&policy.session.refresh_cookie_name,
+			policy.redirect_uri.https,
+		)
+	};
 	let clear_transaction = policy
 		.session
 		.clear_cookie(&context.transaction_cookie_name, policy.redirect_uri.https);
 	let location = transaction.original_uri;
-	let response = build_redirect_response(&location, &[session_cookie, clear_transaction])?;
+	let response = build_redirect_response(
+		&location,
+		&[session_cookie, refresh_cookie, clear_transaction],
+	)?;
 	Ok(crate::http::PolicyResponse::default().with_response(response))
 }
 

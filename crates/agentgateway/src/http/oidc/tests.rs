@@ -96,6 +96,7 @@ fn provider_endpoint(value: impl AsRef<str>) -> ProviderEndpoint {
 fn test_policy() -> OidcPolicy {
 	let session = SessionConfig {
 		cookie_name: "agw_oidc_s_test".into(),
+		refresh_cookie_name: "agw_oidc_r_test".into(),
 		transaction_cookie_prefix: "agw_oidc_t_test".into(),
 		same_site: SameSiteMode::Lax,
 		secure: CookieSecureMode::Never,
@@ -319,6 +320,7 @@ async fn apply_derives_claims_from_stored_id_token() {
 		.session
 		.encode_browser_session(&BrowserSession {
 			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
 			raw_id_token: SecretString::new(id_token.clone().into()),
 			expires_at_unix: Some(now_unix() + 300),
 		})
@@ -343,6 +345,103 @@ async fn apply_derives_claims_from_stored_id_token() {
 		.expect("claims extension");
 	assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")));
 	assert_eq!(claims.jwt.expose_secret(), id_token);
+}
+
+#[tokio::test]
+async fn apply_refreshes_expired_browser_session() {
+	let mock = MockServer::start().await;
+	let refreshed_id_token = signed_id_token(TEST_NONCE);
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"id_token": refreshed_id_token,
+			"refresh_token": "rotated-refresh-token"
+		})))
+		.mount(&mock)
+		.await;
+
+	let policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
+	let encoded_session = policy
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
+			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			expires_at_unix: Some(now_unix().saturating_sub(1)),
+		})
+		.expect("encode expired session");
+	let encoded_refresh = policy
+		.session
+		.encode_refresh_session(&RefreshSession {
+			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
+			refresh_token: SecretString::new("refresh-token".into()),
+			expires_at_unix: now_unix() + 300,
+		})
+		.expect("encode refresh session");
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/protected",
+		Some("text/html"),
+	);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded_session}", policy.session.cookie_name),
+	);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded_refresh}", policy.session.refresh_cookie_name),
+	);
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("refresh browser session");
+	assert!(response.direct_response.is_none());
+	let claims = req.extensions().get::<jwt::Claims>().expect("claims");
+	assert_eq!(claims.jwt.expose_secret(), refreshed_id_token);
+
+	let set_cookies: Vec<_> = response
+		.response_headers
+		.as_ref()
+		.expect("refreshed session cookies")
+		.get_all(header::SET_COOKIE)
+		.iter()
+		.map(|value| value.to_str().expect("set-cookie utf8"))
+		.collect();
+	let set_cookie = set_cookies
+		.iter()
+		.find(|cookie| cookie.starts_with(&policy.session.cookie_name))
+		.expect("refreshed browser session cookie");
+	let refreshed_session = policy
+		.session
+		.decode_browser_session(parse_set_cookie(set_cookie).value())
+		.expect("decode refreshed session");
+	assert_eq!(refreshed_session.subject.as_deref(), Some("user-1"));
+	let refresh_cookie = set_cookies
+		.iter()
+		.find(|cookie| cookie.starts_with(&policy.session.refresh_cookie_name))
+		.expect("refreshed refresh session cookie");
+	let refreshed_refresh_session = policy
+		.session
+		.decode_refresh_session(parse_set_cookie(refresh_cookie).value())
+		.expect("decode refreshed refresh session");
+	assert_eq!(
+		refreshed_refresh_session.refresh_token.expose_secret(),
+		"rotated-refresh-token"
+	);
+
+	let requests = mock.received_requests().await.expect("requests");
+	let form: std::collections::HashMap<_, _> = url::form_urlencoded::parse(&requests[0].body)
+		.into_owned()
+		.collect();
+	assert_eq!(
+		form.get("grant_type").map(String::as_str),
+		Some("refresh_token")
+	);
+	assert_eq!(
+		form.get("refresh_token").map(String::as_str),
+		Some("refresh-token")
+	);
 }
 
 #[tokio::test]
@@ -415,6 +514,28 @@ async fn apply_redirects_unauthenticated_requests_to_login() {
 			.expect("set-cookie utf8");
 		assert_eq!(cookie.contains("Secure"), expect_secure_cookie, "{name}");
 	}
+}
+
+#[tokio::test]
+async fn apply_returns_unauthorized_for_fetch_requests() {
+	let policy = test_policy();
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	req
+		.headers_mut()
+		.insert("sec-fetch-mode", "cors".parse().unwrap());
+
+	let err = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect_err("fetch request should not redirect")
+		.downcast();
+	assert!(matches!(
+		&err,
+		ProxyError::OidcFailure(Error::AuthenticationRequired)
+	));
+	assert_eq!(
+		err.into_response_with_grpc(false).status(),
+		::http::StatusCode::UNAUTHORIZED
+	);
 }
 
 #[tokio::test]
@@ -675,7 +796,8 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 	Mock::given(method("POST"))
 		.and(path("/token"))
 		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
-			"id_token": id_token
+			"id_token": id_token,
+			"refresh_token": "refresh-token"
 		})))
 		.mount(&mock)
 		.await;
@@ -722,6 +844,27 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		cookies
 			.iter()
 			.any(|cookie| cookie.starts_with(&policy.session.cookie_name))
+	);
+	let session_cookie = cookies
+		.iter()
+		.find(|cookie| cookie.starts_with(&policy.session.cookie_name))
+		.expect("session cookie");
+	let session = policy
+		.session
+		.decode_browser_session(parse_set_cookie(session_cookie).value())
+		.expect("decode session");
+	assert_eq!(session.subject.as_deref(), Some("user-1"));
+	let refresh_cookie = cookies
+		.iter()
+		.find(|cookie| cookie.starts_with(&policy.session.refresh_cookie_name))
+		.expect("refresh cookie");
+	let refresh_session = policy
+		.session
+		.decode_refresh_session(parse_set_cookie(refresh_cookie).value())
+		.expect("decode refresh session");
+	assert_eq!(
+		refresh_session.refresh_token.expose_secret(),
+		"refresh-token"
 	);
 	assert!(cookies.iter().all(|cookie| cookie.contains("Secure")));
 	assert!(cookies.iter().any(|cookie| {
