@@ -4574,6 +4574,16 @@ spec:
                                                 be set
                                               rule: (has(self.clientId)?1:0)+(has(self.objectId)?1:0)+(has(self.resourceId)?1:0)
                                                 <= 1
+                                          scopes:
+                                            description: |-
+                                              Scopes requested for the Azure access token. When omitted, the scope is
+                                              inferred from the backend hostname. Managed Identity supports exactly one
+                                              scope.
+                                            items:
+                                              type: string
+                                            maxItems: 64
+                                            minItems: 1
+                                            type: array
                                           secretRef:
                                             description: |-
                                               Credential source for Azure credentials, defaulting to a Kubernetes
@@ -7886,6 +7896,16 @@ spec:
                                               set
                                             rule: (has(self.clientId)?1:0)+(has(self.objectId)?1:0)+(has(self.resourceId)?1:0)
                                               <= 1
+                                        scopes:
+                                          description: |-
+                                            Scopes requested for the Azure access token. When omitted, the scope is
+                                            inferred from the backend hostname. Managed Identity supports exactly one
+                                            scope.
+                                          items:
+                                            type: string
+                                          maxItems: 64
+                                          minItems: 1
+                                          type: array
                                         secretRef:
                                           description: |-
                                             Credential source for Azure credentials, defaulting to a Kubernetes
@@ -13590,6 +13610,16 @@ spec:
                                 resourceId] may be set
                               rule: (has(self.clientId)?1:0)+(has(self.objectId)?1:0)+(has(self.resourceId)?1:0)
                                 <= 1
+                          scopes:
+                            description: |-
+                              Scopes requested for the Azure access token. When omitted, the scope is
+                              inferred from the backend hostname. Managed Identity supports exactly one
+                              scope.
+                            items:
+                              type: string
+                            maxItems: 64
+                            minItems: 1
+                            type: array
                           secretRef:
                             description: |-
                               Credential source for Azure credentials, defaulting to a Kubernetes

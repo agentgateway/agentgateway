@@ -1361,7 +1361,7 @@ fn backend_auth_kind_from_proto(
 			BackendAuthKind::Aws(aws_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Azure(a)) => {
-			let azure_auth = match a.kind {
+			let kind = match a.kind {
 				Some(proto::agent::azure::Kind::ExplicitConfig(config)) => {
 					let src = match config.credential_source {
 						Some(azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
@@ -1395,22 +1395,25 @@ fn backend_auth_kind_from_proto(
 							return Err(ProtoError::MissingRequiredField);
 						},
 					};
-					auth::azure::AzureAuth::ExplicitConfig {
+					auth::azure::AzureAuthKind::ExplicitConfig {
 						credential_source: src,
 						cached_cred: Default::default(),
 					}
 				},
 				Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
-					auth::azure::AzureAuth::DeveloperImplicit {
+					auth::azure::AzureAuthKind::DeveloperImplicit {
 						cached_cred: Default::default(),
 					}
 				},
-				Some(proto::agent::azure::Kind::Implicit(_)) => auth::azure::AzureAuth::Implicit {
+				Some(proto::agent::azure::Kind::Implicit(_)) => auth::azure::AzureAuthKind::Implicit {
 					cached_cred: Default::default(),
 				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
-			BackendAuthKind::Azure(azure_auth)
+			BackendAuthKind::Azure(auth::azure::AzureAuth {
+				kind,
+				scopes: a.scopes,
+			})
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
 			BackendAuthKind::OAuthTokenExchange(Box::new(
@@ -5181,6 +5184,29 @@ mod tests {
 		};
 		assert_eq!(service_name.as_deref(), Some("bedrock-agentcore"));
 		assert_eq!(region.as_deref(), Some("us-east-1"));
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_auth_azure_scope_conversion() -> Result<(), ProtoError> {
+		let auth = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(proto::agent::backend_auth_policy::Kind::Azure(
+					proto::agent::Azure {
+						kind: Some(proto::agent::azure::Kind::Implicit(
+							proto::agent::AzureImplicit {},
+						)),
+						scopes: vec!["https://graph.microsoft.com/.default".to_string()],
+					},
+				)),
+				credentials: vec![],
+			},
+			&mut Diagnostics::default(),
+		)?;
+		let Some(BackendAuthKind::Azure(auth::azure::AzureAuth { scopes, .. })) = auth else {
+			panic!("Expected Azure auth, got {auth:?}");
+		};
+		assert_eq!(scopes, ["https://graph.microsoft.com/.default"]);
 		Ok(())
 	}
 

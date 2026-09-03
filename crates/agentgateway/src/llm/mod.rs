@@ -1111,11 +1111,12 @@ impl AIProvider {
 				..btls
 			},
 			AIProvider::Azure(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(
-					AzureAuth::Implicit {
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(AzureAuth {
+					kind: crate::http::auth::azure::AzureAuthKind::Implicit {
 						cached_cred: p.cached_cred.clone(),
 					},
-				))),
+					scopes: Vec::new(),
+				}))),
 				..btls
 			},
 			AIProvider::Custom(_) => return None,

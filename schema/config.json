@@ -3568,6 +3568,17 @@
       ]
     },
     "AzureAuth": {
+      "type": "object",
+      "properties": {
+        "scopes": {
+          "description": "Scopes requested for the Azure access token. When unset, the scope is\ninferred from the backend hostname.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false,
       "oneOf": [
         {
           "description": "Use explicit Azure credentials",
@@ -3646,8 +3657,7 @@
           },
           "required": [
             "explicitConfig"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
@@ -3660,8 +3670,7 @@
           },
           "required": [
             "developerImplicit"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "description": "Automatically detect authentication method based on environment.\nUses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.",
@@ -3674,8 +3683,7 @@
           },
           "required": [
             "implicit"
-          ],
-          "additionalProperties": false
+          ]
         }
       ]
     },

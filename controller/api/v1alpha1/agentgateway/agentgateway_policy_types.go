@@ -2188,6 +2188,15 @@ type AwsSessionTag struct {
 //
 // +kubebuilder:validation:AtMostOneOf=secretRef;managedIdentity;workloadIdentity
 type AzureAuth struct {
+	// Scopes requested for the Azure access token. When omitted, the scope is
+	// inferred from the backend hostname. Managed Identity supports exactly one
+	// scope.
+	//
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
+
 	// Credential source for Azure credentials, defaulting to a Kubernetes
 	// `Secret`. The default Secret resolver expects `clientID`, `tenantID`, and
 	// `clientSecret` keys.

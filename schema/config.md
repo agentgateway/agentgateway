@@ -309,6 +309,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -650,6 +651,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -927,6 +929,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -1204,6 +1207,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -1479,6 +1483,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -1792,6 +1797,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -2069,6 +2075,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -2344,6 +2351,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -2670,6 +2678,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -2903,6 +2912,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -3328,6 +3338,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -3614,6 +3625,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -3982,6 +3994,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -4281,6 +4294,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -4583,6 +4597,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -4872,6 +4887,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -5162,6 +5178,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -5533,6 +5550,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -5852,6 +5870,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -6276,6 +6295,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -6567,6 +6587,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -6878,6 +6899,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -7195,6 +7217,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -7472,6 +7495,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -7749,6 +7773,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -8024,6 +8049,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -8337,6 +8363,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -8614,6 +8641,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -8889,6 +8917,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -9240,6 +9269,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -9664,6 +9694,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -9955,6 +9986,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -10266,6 +10298,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -10583,6 +10616,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -10860,6 +10894,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -11137,6 +11172,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -11412,6 +11448,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -11725,6 +11762,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -12002,6 +12040,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -12277,6 +12316,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -12591,6 +12631,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -13015,6 +13056,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -13306,6 +13348,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -13617,6 +13660,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -13934,6 +13978,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -14211,6 +14256,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -14488,6 +14534,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -14763,6 +14810,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -15076,6 +15124,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -15353,6 +15402,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -15628,6 +15678,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -15981,6 +16032,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -16301,6 +16353,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -16600,6 +16653,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -16902,6 +16956,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -17191,6 +17246,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -17592,6 +17648,7 @@
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.networkExtAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -17892,6 +17949,7 @@
 |`frontendPolicies.substrateEgress.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.substrateEgress.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.substrateEgress.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.substrateEgress.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`frontendPolicies.substrateEgress.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`frontendPolicies.substrateEgress.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`frontendPolicies.substrateEgress.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -18183,6 +18241,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -18475,6 +18534,7 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`frontendPolicies.logging.otlp.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -18762,6 +18822,7 @@
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.tracing.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.tracing.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.tracing.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`frontendPolicies.tracing.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -19136,6 +19197,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -19477,6 +19539,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -19754,6 +19817,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -20031,6 +20095,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -20306,6 +20371,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -20619,6 +20685,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -20896,6 +20963,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -21171,6 +21239,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -21497,6 +21566,7 @@
 |`policies[].policy.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -21730,6 +21800,7 @@
 |`policies[].policy.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -22155,6 +22226,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -22441,6 +22513,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -22809,6 +22882,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -23108,6 +23182,7 @@
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -23410,6 +23485,7 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -23699,6 +23775,7 @@
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -23989,6 +24066,7 @@
 |`policies[].policy.substrateIngress.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.substrateIngress.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.substrateIngress.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.substrateIngress.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`policies[].policy.substrateIngress.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -24360,6 +24438,7 @@
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].mcp.targets[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -24679,6 +24758,7 @@
 |`backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -25103,6 +25183,7 @@
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -25394,6 +25475,7 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -25705,6 +25787,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -26022,6 +26105,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -26299,6 +26383,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -26576,6 +26661,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -26851,6 +26937,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -27164,6 +27251,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -27441,6 +27529,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -27716,6 +27805,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -28067,6 +28157,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -28491,6 +28582,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -28782,6 +28874,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -29093,6 +29186,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -29410,6 +29504,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -29687,6 +29782,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -29964,6 +30060,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -30239,6 +30336,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -30552,6 +30650,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -30829,6 +30928,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -31104,6 +31204,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -31416,6 +31517,7 @@
 |`backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -31840,6 +31942,7 @@
 |`backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -32131,6 +32234,7 @@
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -32442,6 +32546,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -32759,6 +32864,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -33036,6 +33142,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -33313,6 +33420,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -33588,6 +33696,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -33901,6 +34010,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -34178,6 +34288,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -34453,6 +34564,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -34848,6 +34960,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -35189,6 +35302,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -35466,6 +35580,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -35743,6 +35858,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -36018,6 +36134,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -36331,6 +36448,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -36608,6 +36726,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -36883,6 +37002,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -37209,6 +37329,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -37442,6 +37563,7 @@
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -37867,6 +37989,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -38153,6 +38276,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -38521,6 +38645,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -38820,6 +38945,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -39122,6 +39248,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -39411,6 +39538,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -39701,6 +39829,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -40072,6 +40201,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -40391,6 +40521,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -40815,6 +40946,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -41106,6 +41238,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -41417,6 +41550,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -41734,6 +41868,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -42011,6 +42146,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -42288,6 +42424,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -42563,6 +42700,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -42876,6 +43014,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -43153,6 +43292,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -43428,6 +43568,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -43779,6 +43920,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -44203,6 +44345,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -44494,6 +44637,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -44805,6 +44949,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -45122,6 +45267,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -45399,6 +45545,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -45676,6 +45823,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -45951,6 +46099,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -46264,6 +46413,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -46541,6 +46691,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -46816,6 +46967,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -47130,6 +47282,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -47554,6 +47707,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -47845,6 +47999,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -48156,6 +48311,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -48473,6 +48629,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -48750,6 +48907,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -49027,6 +49185,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -49302,6 +49461,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -49615,6 +49775,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -49892,6 +50053,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -50167,6 +50329,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -50548,6 +50711,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -50847,6 +51011,7 @@
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.listeners[].extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -51149,6 +51314,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -51438,6 +51604,7 @@
 |`gateways.*.listeners[].extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.listeners[].extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.listeners[].extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.listeners[].extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.listeners[].extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -51865,6 +52032,7 @@
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -52164,6 +52332,7 @@
 |`gateways.*.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -52466,6 +52635,7 @@
 |`gateways.*.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -52755,6 +52925,7 @@
 |`gateways.*.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`gateways.*.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`gateways.*.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`gateways.*.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`gateways.*.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`gateways.*.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -53202,6 +53373,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -53543,6 +53715,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -53820,6 +53993,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -54097,6 +54271,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -54372,6 +54547,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -54685,6 +54861,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -54962,6 +55139,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -55237,6 +55415,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -55563,6 +55742,7 @@
 |`routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -55796,6 +55976,7 @@
 |`routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -56221,6 +56402,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -56507,6 +56689,7 @@
 |`routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.remoteRateLimit.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -56875,6 +57058,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -57174,6 +57358,7 @@
 |`routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -57476,6 +57661,7 @@
 |`routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -57765,6 +57951,7 @@
 |`routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -58055,6 +58242,7 @@
 |`routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].policies.substrateIngress.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].policies.substrateIngress.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.substrateIngress.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].policies.substrateIngress.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -58426,6 +58614,7 @@
 |`routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].mcp.targets[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -58745,6 +58934,7 @@
 |`routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -59169,6 +59359,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -59460,6 +59651,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -59771,6 +59963,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -60088,6 +60281,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -60365,6 +60559,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -60642,6 +60837,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -60917,6 +61113,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -61230,6 +61427,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -61507,6 +61705,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -61782,6 +61981,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -62133,6 +62333,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -62557,6 +62758,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -62848,6 +63050,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -63159,6 +63362,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -63476,6 +63680,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -63753,6 +63958,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -64030,6 +64236,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -64305,6 +64512,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -64618,6 +64826,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -64895,6 +65104,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -65170,6 +65380,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -65484,6 +65695,7 @@
 |`routes[].backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -65908,6 +66120,7 @@
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -66199,6 +66412,7 @@
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -66510,6 +66724,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -66827,6 +67042,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -67104,6 +67320,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -67381,6 +67598,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -67656,6 +67874,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -67969,6 +68188,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -68246,6 +68466,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -68521,6 +68742,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -68875,6 +69097,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -69185,6 +69408,7 @@
 |`llm.providers[].defaults.auth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.providers[].defaults.auth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.providers[].defaults.auth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.providers[].defaults.auth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.providers[].defaults.auth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.providers[].defaults.auth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.providers[].defaults.auth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -69605,6 +69829,7 @@
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.providers[].defaults.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -69914,6 +70139,7 @@
 |`llm.models[].auth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].auth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].auth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].auth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].auth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].auth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].auth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -70334,6 +70560,7 @@
 |`llm.models[].backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -70624,6 +70851,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -70901,6 +71129,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -71178,6 +71407,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -71453,6 +71683,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -71766,6 +71997,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -72043,6 +72275,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -72318,6 +72551,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -72687,6 +72921,7 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -72986,6 +73221,7 @@
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -73288,6 +73524,7 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -73577,6 +73814,7 @@
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -73963,6 +74201,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -74240,6 +74479,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -74517,6 +74757,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -74792,6 +75033,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -75105,6 +75347,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -75382,6 +75625,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -75657,6 +75901,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -75955,6 +76200,7 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`llm.policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -76269,6 +76515,7 @@
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.targets[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.targets[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.targets[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.targets[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -76610,6 +76857,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -76951,6 +77199,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -77228,6 +77477,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -77505,6 +77755,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -77780,6 +78031,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -78093,6 +78345,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -78370,6 +78623,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -78645,6 +78899,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -78971,6 +79226,7 @@
 |`mcp.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -79204,6 +79460,7 @@
 |`mcp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -79629,6 +79886,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -79915,6 +80173,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -80283,6 +80542,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -80582,6 +80842,7 @@
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -80884,6 +81145,7 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -81173,6 +81435,7 @@
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extProc.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.extProc.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.extProc.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -81463,6 +81726,7 @@
 |`mcp.policies.substrateIngress.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.substrateIngress.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.substrateIngress.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.substrateIngress.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`mcp.policies.substrateIngress.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -81858,6 +82122,7 @@
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`ui.policies.extAuthz.conditional[].policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
@@ -82157,6 +82422,7 @@
 |`ui.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`ui.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`ui.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`ui.policies.extAuthz.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
 |`ui.policies.extAuthz.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
