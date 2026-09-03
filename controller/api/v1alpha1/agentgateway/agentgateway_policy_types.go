@@ -3329,12 +3329,28 @@ type HostnameRewrite struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Timeouts struct {
-	// Timeout for an individual request from the gateway to a backend. This covers the time from when
-	// the request first starts being sent from the gateway to when the full response has been received from the backend.
+	// Maximum time allowed from the start of downstream request processing until response headers
+	// are received. The response body is not included; use ResponseIdle to bound gaps between body frames.
 	//
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="request must be at least 1ms"
 	// +optional
 	Request *Duration `json:"request,omitempty"`
+
+	// Maximum time the response body may go without producing data. The window restarts on every
+	// body frame, so this bounds the gap between frames rather than the total time a response may
+	// take. It is what terminates a backend that stops producing data mid-stream without capping
+	// how long a legitimately long response may run.
+	//
+	// This complements Request rather than overlapping it: Request stops applying once the response
+	// headers arrive, so it places no bound on how long the response body may take, and it cannot
+	// distinguish a stalled stream from a slow one.
+	//
+	// This does not apply to responses that switch protocols, so upgraded WebSocket connections and
+	// CONNECT tunnels are never terminated by it.
+	//
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="responseIdle must be at least 1ms"
+	// +optional
+	ResponseIdle *Duration `json:"responseIdle,omitempty"`
 }
 
 // Artificial latency injection for fault-injection testing.

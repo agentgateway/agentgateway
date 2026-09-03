@@ -7824,7 +7824,7 @@
       "type": "object",
       "properties": {
         "requestTimeout": {
-          "description": "Maximum time allowed for the full downstream request and response.",
+          "description": "Maximum time allowed from the start of downstream request processing until response headers\nare received. The response body is not included; use `responseIdleTimeout` to bound gaps\nbetween body frames.",
           "type": [
             "string",
             "null"
@@ -7832,6 +7832,13 @@
         },
         "backendRequestTimeout": {
           "description": "Maximum time allowed for the upstream backend request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseIdleTimeout": {
+          "description": "Maximum time the response body may go without producing data.\n\nThe window restarts on every body frame, so this bounds the gap between frames rather than\nthe total time a response may take. It is what terminates a backend that stops producing\ndata mid-stream without capping how long a legitimately long response may run.\n\nThis complements the other two rather than overlapping them: both `requestTimeout` and\n`backendRequestTimeout` stop applying once the response headers arrive, so neither places\nany bound on how long the response body may take, and neither can distinguish a stalled\nstream from a slow one.\n\nThe timeout is disabled when this field is unset or set to zero. It does not apply to\nresponses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never\nterminated by it.",
           "type": [
             "string",
             "null"

@@ -5391,8 +5391,9 @@
 |`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`binds[].listeners[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
-|`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`binds[].listeners[].routes[].policies.timeout.responseIdleTimeout`|string|Maximum time the response body may go without producing data.<br><br>The window restarts on every body frame, so this bounds the gap between frames rather than<br>the total time a response may take. It is what terminates a backend that stops producing<br>data mid-stream without capping how long a legitimately long response may run.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`binds[].listeners[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
 |`binds[].listeners[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`binds[].listeners[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
@@ -24218,8 +24219,9 @@
 |`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`policies[].policy.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.timeout`|object|Set request timeout limits.|
-|`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`policies[].policy.timeout.responseIdleTimeout`|string|Maximum time the response body may go without producing data.<br><br>The window restarts on every body frame, so this bounds the gap between frames rather than<br>the total time a response may take. It is what terminates a backend that stops producing<br>data mid-stream without capping how long a legitimately long response may run.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`policies[].policy.retry`|object|Retry matching failed upstream requests.|
 |`policies[].policy.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`policies[].policy.retry.backoff`|string|Delay between retry attempts.|
@@ -39930,8 +39932,9 @@
 |`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routeGroups[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
-|`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`routeGroups[].routes[].policies.timeout.responseIdleTimeout`|string|Maximum time the response body may go without producing data.<br><br>The window restarts on every body frame, so this bounds the gap between frames rather than<br>the total time a response may take. It is what terminates a backend that stops producing<br>data mid-stream without capping how long a legitimately long response may run.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`routeGroups[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
 |`routeGroups[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`routeGroups[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
@@ -58284,8 +58287,9 @@
 |`routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.timeout`|object|Set request timeout limits.|
-|`routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`routes[].policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`routes[].policies.timeout.responseIdleTimeout`|string|Maximum time the response body may go without producing data.<br><br>The window restarts on every body frame, so this bounds the gap between frames rather than<br>the total time a response may take. It is what terminates a backend that stops producing<br>data mid-stream without capping how long a legitimately long response may run.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`routes[].policies.retry`|object|Retry matching failed upstream requests.|
 |`routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`routes[].policies.retry.backoff`|string|Delay between retry attempts.|
@@ -81692,8 +81696,9 @@
 |`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`mcp.policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.timeout`|object|Set request timeout limits.|
-|`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed from the start of downstream request processing until response headers<br>are received. The response body is not included; use `responseIdleTimeout` to bound gaps<br>between body frames.|
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`mcp.policies.timeout.responseIdleTimeout`|string|Maximum time the response body may go without producing data.<br><br>The window restarts on every body frame, so this bounds the gap between frames rather than<br>the total time a response may take. It is what terminates a backend that stops producing<br>data mid-stream without capping how long a legitimately long response may run.<br><br>This complements the other two rather than overlapping them: both `requestTimeout` and<br>`backendRequestTimeout` stop applying once the response headers arrive, so neither places<br>any bound on how long the response body may take, and neither can distinguish a stalled<br>stream from a slow one.<br><br>The timeout is disabled when this field is unset or set to zero. It does not apply to<br>responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never<br>terminated by it.|
 |`mcp.policies.retry`|object|Retry matching failed upstream requests.|
 |`mcp.policies.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`mcp.policies.retry.backoff`|string|Delay between retry attempts.|

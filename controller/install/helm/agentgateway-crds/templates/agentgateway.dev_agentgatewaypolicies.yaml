@@ -10425,18 +10425,39 @@ spec:
                     properties:
                       request:
                         description: |-
-                          Timeout for an individual request from the gateway to a backend. This covers the time from when
-                          the request first starts being sent from the gateway to when the full response has been received from the backend.
+                          Maximum time allowed from the start of downstream request processing until response headers
+                          are received. The response body is not included; use ResponseIdle to bound gaps between body frames.
                         maxLength: 32
                         pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
                         - message: request must be at least 1ms
                           rule: duration(self) >= duration('1ms')
+                      responseIdle:
+                        description: |-
+                          Maximum time the response body may go without producing data. The window restarts on every
+                          body frame, so this bounds the gap between frames rather than the total time a response may
+                          take. It is what terminates a backend that stops producing data mid-stream without capping
+                          how long a legitimately long response may run.
+
+                          This complements Request rather than overlapping it: Request stops applying once the response
+                          headers arrive, so it places no bound on how long the response body may take, and it cannot
+                          distinguish a stalled stream from a slow one.
+
+                          This does not apply to responses that switch protocols, so upgraded WebSocket connections and
+                          CONNECT tunnels are never terminated by it.
+                        maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                        type: string
+                        x-kubernetes-validations:
+                        - message: responseIdle must be at least 1ms
+                          rule: duration(self) >= duration('1ms')
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [request] must be set
-                      rule: '[has(self.request)].filter(x,x==true).size() >= 1'
+                    - message: at least one of the fields in [request responseIdle]
+                        must be set
+                      rule: '[has(self.request),has(self.responseIdle)].filter(x,x==true).size()
+                        >= 1'
                   transformation:
                     description: |-
                       Mutates and transforms requests and responses

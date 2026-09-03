@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -2137,6 +2137,7 @@ impl<B> LogBody<B> {
 impl<B: Body + Debug> Body for LogBody<B>
 where
 	B::Data: Debug,
+	B::Error: Display,
 {
 	type Data = B::Data;
 	type Error = B::Error;
@@ -2162,7 +2163,18 @@ where
 				}
 				Poll::Ready(Some(Ok(frame)))
 			},
-			res => Poll::Ready(res),
+			Some(Err(e)) => {
+				// The head is long gone by the time the body fails, so nothing else records this:
+				// without it a stream torn down mid-flight is logged as whatever status we already
+				// sent, indistinguishable from one the client read to completion.
+				if let Some(log) = this.log.as_mut()
+					&& log.error.is_none()
+				{
+					log.error = Some(format!("response body failed: {e}"));
+				}
+				Poll::Ready(Some(Err(e)))
+			},
+			None => Poll::Ready(None),
 		}
 	}
 

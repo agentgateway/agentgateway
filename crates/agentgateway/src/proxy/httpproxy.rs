@@ -694,6 +694,27 @@ impl HTTPProxy {
 				});
 			}
 		}
+		// `Upstream` is every `Ok` result from `proxy_internal`, so this covers gateway-generated
+		// streams (MCP SSE and friends) as well as proxied ones -- both are produced frame by frame
+		// and can stall. What it excludes is the error and direct-response paths, which are already
+		// complete in memory and can never go idle.
+		//
+		// Upgrades are excluded explicitly: past the switch the body is no longer how bytes flow,
+		// and the handlers below hand the connection off to a tunnel instead of reading it.
+		let is_upgrade = resp.status() == StatusCode::SWITCHING_PROTOCOLS
+			|| resp.extensions().get::<ConnectTunnel>().is_some();
+		if reason == ProxyResponseReason::Upstream
+			&& !is_upgrade
+			&& let Some(idle_timeout) = response_policies
+				.timeout
+				.as_ref()
+				.and_then(|t| t.response_idle_timeout)
+				// A zero duration disables the timeout, matching the Gateway API convention that the
+				// HTTPRoute translation already applies to `request`/`backendRequest`.
+				.filter(|d| !d.is_zero())
+		{
+			resp = http::timeout::apply_response_idle_timeout(resp, idle_timeout);
+		}
 
 		if let Some(l) = log.as_mut() {
 			l.cel.ctx().maybe_buffer_response_body(&mut resp).await;

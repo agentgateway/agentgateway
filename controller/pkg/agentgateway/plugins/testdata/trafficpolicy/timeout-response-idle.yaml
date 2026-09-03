@@ -12,7 +12,6 @@ spec:
     inheritance: Override
   traffic:
     timeouts:
-      request: 30s
       responseIdle: 5s
 ---
 # Output
@@ -34,7 +33,6 @@ output:
           namespace: default
       traffic:
         timeout:
-          request: 30s
           responseIdle: 5s
 status:
 - apiVersion: agentgateway.dev/v1alpha1

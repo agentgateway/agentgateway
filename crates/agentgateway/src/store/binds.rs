@@ -2644,6 +2644,7 @@ mod tests {
 		let pol = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(request_timeout_secs)),
 			backend_request_timeout: None,
+			response_idle_timeout: None,
 		};
 		insert_traffic_policy(
 			store,
@@ -3354,6 +3355,7 @@ mod tests {
 		let svc_timeout = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(7)),
 			backend_request_timeout: None,
+			response_idle_timeout: None,
 		};
 
 		let xds_route = XdsRoute {
@@ -3736,10 +3738,12 @@ mod tests {
 		let set_timeout = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(1)),
 			backend_request_timeout: None,
+			response_idle_timeout: None,
 		};
 		let section_timeout = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(2)),
 			backend_request_timeout: None,
+			response_idle_timeout: None,
 		};
 		insert_traffic_policy(
 			&mut store,
@@ -3821,6 +3825,7 @@ mod tests {
 		let parent_timeout = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(1)),
 			backend_request_timeout: None,
+			response_idle_timeout: None,
 		};
 		let child_timeout = insert_route_timeout_policy(&mut store, "p-child", child_route.clone(), 2);
 		let parent_inline = [TrafficPolicy::Timeout(parent_timeout.clone())];
@@ -3851,6 +3856,7 @@ mod tests {
 		let gateway_timeout = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(1)),
 			backend_request_timeout: None,
+			response_idle_timeout: None,
 		};
 		insert_traffic_policy(
 			&mut store,
