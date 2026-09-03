@@ -178,6 +178,11 @@ mod requests {
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_replay", &[BEDROCK]),
 		("tool_history_without_tools", &[BEDROCK]),
+		("tool_reference", &[COMPLETIONS, BEDROCK, RESPONSES]),
+		(
+			"tool_result_unknown_part",
+			&[COMPLETIONS, BEDROCK, RESPONSES],
+		),
 		("responses_agent_subset", &[RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[

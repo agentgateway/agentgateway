@@ -795,6 +795,14 @@ pub mod typed {
 			#[serde(skip_serializing_if = "Option::is_none")]
 			cache_control: Option<CacheControlEphemeral>,
 		},
+		ToolReference {
+			tool_name: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+		// Same tolerance as ContentBlock: an unrecognized part must not reject the whole request
+		#[serde(other)]
+		Unknown,
 	}
 
 	#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -1420,6 +1428,23 @@ pub mod typed {
 mod tests {
 	use super::*;
 	use crate::types::ResponseType;
+
+	#[test]
+	fn tool_result_parts_accept_tool_reference_and_unknown_types() {
+		let parsed: typed::ToolResultContent = serde_json::from_value(serde_json::json!([
+			{"type": "tool_reference", "tool_name": "mcp__example__list_widgets"},
+			{"type": "future_block", "foo": 1}
+		]))
+		.expect("unrecognized tool_result parts must not fail parsing");
+		let typed::ToolResultContent::Array(parts) = parsed else {
+			panic!("expected array content");
+		};
+		assert!(matches!(
+			&parts[0],
+			typed::ToolResultContentPart::ToolReference { tool_name, .. } if tool_name == "mcp__example__list_widgets"
+		));
+		assert!(matches!(parts[1], typed::ToolResultContentPart::Unknown));
+	}
 
 	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
 		typed::MessagesResponse {

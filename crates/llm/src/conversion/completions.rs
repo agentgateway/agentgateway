@@ -841,6 +841,10 @@ pub mod from_messages {
 													text,
 													cache_control,
 													..
+												}
+												| ToolResultContentPart::ToolReference {
+													tool_name: text,
+													cache_control,
 												} => tool_parts.push(completions::RequestToolMessageContentPart::Text(
 													completions::RequestMessageContentPartText {
 														text,
@@ -854,6 +858,7 @@ pub mod from_messages {
 														trailing_cache_control = trailing_cache_control.or(cache_control);
 													}
 												},
+												ToolResultContentPart::Unknown => {},
 											}
 										}
 										if let Some(cache_control) = trailing_cache_control {

@@ -676,24 +676,17 @@ pub mod from_messages {
 				let mut text_values = Vec::new();
 				let has_cache_control = cache_control.is_some();
 				for part in parts {
-					match part {
+					let (text, citations, cache_control) = match part {
 						messages::ToolResultContentPart::Text {
 							text,
 							citations,
 							cache_control,
-						} => {
-							reject_option(
-								&citations,
-								"messages tool_result citations cannot be represented by responses",
-							)?;
-							let mut value = json!({
-								"type": "input_text",
-								"text": &text,
-							});
-							add_prompt_cache_breakpoint(&mut value, cache_control);
-							text_parts.push(text);
-							text_values.push(value);
-						},
+						} => (text, citations, cache_control),
+						messages::ToolResultContentPart::ToolReference {
+							tool_name,
+							cache_control,
+						} => (tool_name, None, cache_control),
+						messages::ToolResultContentPart::Unknown => continue,
 						messages::ToolResultContentPart::Image { .. }
 						| messages::ToolResultContentPart::Document { .. }
 						| messages::ToolResultContentPart::SearchResult { .. } => {
@@ -701,7 +694,18 @@ pub mod from_messages {
 								"messages non-text tool_result content cannot be represented by responses",
 							);
 						},
-					}
+					};
+					reject_option(
+						&citations,
+						"messages tool_result citations cannot be represented by responses",
+					)?;
+					let mut value = json!({
+						"type": "input_text",
+						"text": &text,
+					});
+					add_prompt_cache_breakpoint(&mut value, cache_control);
+					text_parts.push(text);
+					text_values.push(value);
 				}
 				if let Some(cache_control) = cache_control {
 					if let Some(last) = text_values.last_mut() {

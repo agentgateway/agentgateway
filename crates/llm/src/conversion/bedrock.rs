@@ -1732,8 +1732,16 @@ pub mod from_messages {
 											None
 										}
 									},
+									messages::ToolResultContentPart::ToolReference {
+										tool_name,
+										cache_control,
+									} => {
+										has_cache_control |= cache_control.is_some();
+										Some(bedrock::ToolResultContentBlock::Text(tool_name))
+									},
 									messages::ToolResultContentPart::Document { .. }
-									| messages::ToolResultContentPart::SearchResult { .. } => None,
+									| messages::ToolResultContentPart::SearchResult { .. }
+									| messages::ToolResultContentPart::Unknown => None,
 								})
 								.collect(),
 						};
