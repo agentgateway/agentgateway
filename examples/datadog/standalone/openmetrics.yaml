@@ -6,6 +6,7 @@ instances:
   raw_metric_prefix: agentgateway_
   metrics:
   - requests: requests
+    mcp_requests: mcp.requests
     request_duration_seconds: request.duration
     request_processing_seconds: request.processing
     response_bytes: response.bytes
@@ -21,14 +22,15 @@ instances:
     gen_ai_server_time_to_first_token: gen_ai.time_to_first_token
     gen_ai_server_time_per_output_token: gen_ai.time_per_output_token
   - .*
-  exclude_metrics:
-  - mcp_requests
   include_labels:
   - gateway
   - listener
   - route
   - backend
   - method
+  - resource_type
+  - server
+  - resource
   - status
   - reason
   - protocol

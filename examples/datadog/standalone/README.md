@@ -342,10 +342,9 @@ docker compose -f compose.openai.yaml -f compose.datadog.yaml down
 
 Use [`openmetrics.yaml`](openmetrics.yaml) with a stock Datadog Agent outside
 Docker Compose, changing `gateway:15020` and the tags for the deployment. The
-file collects all proxy and runtime metric families except the per-resource MCP
-request counter. Explicit mappings preserve the names used by the dashboard.
-`raw_metric_prefix` removes the source `agentgateway_` prefix before the
-wildcard collects the remaining families.
+file collects all proxy and runtime metric families. Explicit mappings preserve
+the names used by the dashboard. `raw_metric_prefix` removes the source
+`agentgateway_` prefix before the wildcard collects the remaining families.
 
 Keep `use_latest_spec: true` for the v1.5.0 proxy. It serves OpenMetrics counter
 type names with a `text/plain` content type; Datadog's default Prometheus parser
@@ -360,13 +359,14 @@ limit.
 ### Key mapped metrics
 
 The wildcard also collects runtime and transport metrics. The table below lists
-the stable mappings used by the dashboard. See agentgateway's
+key stable mappings, including the names used by the dashboard. See agentgateway's
 [source metric catalog](../../../schema/metrics.md) for the source families.
 
 <!-- markdownlint-disable MD013 -->
 | Datadog metric | Meaning |
 | --- | --- |
 | `agentgateway.requests.count` | HTTP request counter; use `status` and `reason` for errors and `protocol:mcp` for MCP transport traffic |
+| `agentgateway.mcp.requests.count` | MCP operation counter, separated by method, resource type, server, and resource |
 | `agentgateway.request.duration` | HTTP latency distribution, in seconds |
 | `agentgateway.gen_ai.request.duration` | LLM request latency distribution, in seconds |
 | `agentgateway.gen_ai.time_to_first_token` | Time-to-first-token distribution, in seconds |
@@ -391,27 +391,16 @@ metric labels. If custom dimensions distinguish independent counters, add every
 bounded identity label or aggregate before scraping; dropping one can merge
 independent series incorrectly.
 
-The per-resource `mcp_requests` counter is excluded by default because its
-`resource` label can contain unbounded or sensitive tool names and URIs. HTTP
-MCP traffic remains available through `agentgateway.requests.count`. To opt in,
-remove `mcp_requests` from `exclude_metrics`, map it to `mcp.requests`, and add
-its identity labels:
+The `agentgateway.mcp.requests.count` metric preserves the source counter's
+`resource`, `resource_type`, and `server` labels. The `resource` value can
+contain tool names or resource URIs, so review its possible values and resulting
+custom-metric cardinality before production use. To prevent collection of this
+metric, add the source name to `exclude_metrics`:
 
 ```yaml
-metrics:
-  - mcp_requests: mcp.requests
-  - .*
-exclude_metrics: []
-include_labels:
-  - resource
-  - resource_type
-  - server
+exclude_metrics:
+  - mcp_requests
 ```
-
-Merge this fragment into the existing configuration rather than replacing the
-other mappings or labels. Review the possible `resource` values before enabling
-collection. Do not collect the counter while dropping `resource` because that
-can merge independent series.
 
 ## agentgateway v1.5.0 error-status compatibility
 

@@ -208,6 +208,13 @@ All OpenMetrics series are Datadog custom metrics. This example collects proxy
 and controller runtime families with a wildcard. Review custom-metric usage and
 label cardinality before using the configuration in production.
 
+The proxy configuration maps the dedicated MCP operation counter to
+`agentgateway.mcp.requests.count` and preserves its `resource`, `resource_type`,
+and `server` tags. The `resource` value can contain tool names or resource URIs.
+If those values or their custom-metric cardinality are unsuitable for your
+environment, add `"exclude_metrics": ["mcp_requests"]` to the OpenMetrics
+instance in `proxy-parameters.yaml` or `proxy-values.yaml`.
+
 ## Troubleshooting
 
 ### An OpenMetrics check is missing
