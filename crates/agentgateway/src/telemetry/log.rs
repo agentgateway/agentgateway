@@ -41,8 +41,8 @@ use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
-	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
-	OutboundCallLabels, RouteIdentifier,
+	CostCatalogLookupLabels, ErrorTypeLabel, GenAILabels, GenAILabelsTokenUsage,
+	GenAIRequestDurationLabels, HTTPLabels, MCPCall, Metrics, OutboundCallLabels, RouteIdentifier,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, semconv, trc};
@@ -885,15 +885,41 @@ impl DropOnLog {
 		llm_response: Option<&LLMContext>,
 		custom_metric_fields: &CustomField,
 	) {
+		let request = log.llm_request.as_ref();
+		let Some(provider) = llm_response
+			.map(|response| response.provider.clone())
+			.or_else(|| request.map(|request| request.provider.clone()))
+		else {
+			return;
+		};
+		let request_model = llm_response
+			.map(|response| response.request_model.clone())
+			.or_else(|| request.map(|request| request.request_model.clone()));
+		let gen_ai_labels = Arc::new(GenAILabels {
+			gen_ai_operation_name: strng::literal!("chat").into(),
+			gen_ai_system: provider.into(),
+			gen_ai_request_model: request_model.into(),
+			gen_ai_response_model: llm_response
+				.and_then(|response| response.response_model.clone())
+				.into(),
+			custom: custom_metric_fields.clone(),
+			route: route_identifier.clone(),
+		});
+
+		log
+			.metrics
+			.gen_ai_request_duration
+			.get_or_create(&GenAIRequestDurationLabels {
+				common: gen_ai_labels.clone().into(),
+				error: request_error_type(log, true)
+					.map(|error_type| ErrorTypeLabel {
+						error_type: error_type.into(),
+					})
+					.into(),
+			})
+			.observe(duration.as_secs_f64());
+
 		if let Some(llm_response) = llm_response {
-			let gen_ai_labels = Arc::new(GenAILabels {
-				gen_ai_operation_name: strng::literal!("chat").into(),
-				gen_ai_system: llm_response.provider.clone().into(),
-				gen_ai_request_model: llm_response.request_model.clone().into(),
-				gen_ai_response_model: llm_response.response_model.clone().into(),
-				custom: custom_metric_fields.clone(),
-				route: route_identifier.clone(),
-			});
 			if let Some(status) = llm_response.cost_status {
 				log
 					.metrics
@@ -973,11 +999,6 @@ impl DropOnLog {
 					})
 					.observe(cwt as f64)
 			}
-			log
-				.metrics
-				.gen_ai_request_duration
-				.get_or_create(&gen_ai_labels)
-				.observe(duration.as_secs_f64());
 			if let Some(ttft) = llm_response
 				.time_to_first_token
 				.and_then(|duration| duration.0.to_std().ok())
@@ -1304,6 +1325,26 @@ pub struct RequestLog {
 
 fn request_log_level(error: Option<&str>) -> &'static str {
 	if error.is_some() { "error" } else { "info" }
+}
+
+pub(crate) fn request_error_type(
+	request: &RequestLog,
+	include_http_client_errors: bool,
+) -> Option<String> {
+	if request.error.is_some() {
+		return Some(
+			request
+				.reason
+				.map(|reason| reason.to_string())
+				.unwrap_or_else(|| "_OTHER".to_string()),
+		);
+	}
+	request
+		.status
+		.filter(|status| {
+			status.is_server_error() || (include_http_client_errors && status.is_client_error())
+		})
+		.map(|status| status.as_u16().to_string())
 }
 
 impl Drop for DropOnLog {
@@ -2682,6 +2723,7 @@ mod tests {
 	use opentelemetry::trace::SpanKind;
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
+	use prometheus_client::encoding::text::encode;
 	use prometheus_client::registry::Registry;
 
 	use super::*;
@@ -2730,7 +2772,7 @@ mod tests {
 		)
 	}
 
-	fn test_request_log() -> RequestLog {
+	fn test_request_log_with_registry() -> (RequestLog, Registry) {
 		let cel = CelLogging {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
@@ -2746,7 +2788,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		));
-		RequestLog::new(
+		let log = RequestLog::new(
 			cel,
 			metrics,
 			ModelCatalog::empty(),
@@ -2757,7 +2799,32 @@ mod tests {
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
-		)
+		);
+		(log, registry)
+	}
+
+	fn test_request_log() -> RequestLog {
+		test_request_log_with_registry().0
+	}
+
+	fn metric_test_llm_request() -> llm::LLMRequest {
+		llm::LLMRequest {
+			input_tokens: None,
+			input_format: llm::InputFormat::Responses,
+			cache_convention: Default::default(),
+			request_model: "test-model".into(),
+			provider: "test-provider".into(),
+			streaming: false,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		}
+	}
+
+	fn encoded_metrics(registry: &Registry) -> String {
+		let mut encoded = String::new();
+		encode(&mut encoded, registry).unwrap();
+		encoded
 	}
 
 	fn llm_context_with_content() -> LLMContext {
@@ -2778,6 +2845,113 @@ mod tests {
 		let mut context = LLMContext::from(request);
 		context.completion = Some(vec!["world".to_string()]);
 		context
+	}
+
+	#[test]
+	fn gen_ai_request_duration_records_success_and_failure_outcomes() {
+		for (status, error, reason, expected_error_type) in [
+			(http::StatusCode::OK, None, None, None),
+			(
+				http::StatusCode::TOO_MANY_REQUESTS,
+				None,
+				Some(ProxyResponseReason::Upstream),
+				Some("429"),
+			),
+			(
+				http::StatusCode::INTERNAL_SERVER_ERROR,
+				None,
+				Some(ProxyResponseReason::Upstream),
+				Some("500"),
+			),
+			(
+				http::StatusCode::BAD_GATEWAY,
+				Some("connection failed"),
+				Some(ProxyResponseReason::UpstreamFailure),
+				Some("UpstreamFailure"),
+			),
+			(
+				http::StatusCode::INTERNAL_SERVER_ERROR,
+				Some("unclassified failure"),
+				None,
+				Some("_OTHER"),
+			),
+		] {
+			let (mut log, registry) = test_request_log_with_registry();
+			log.status = Some(status);
+			log.error = error.map(str::to_string);
+			log.reason = reason;
+			log.llm_request = Some(metric_test_llm_request());
+
+			drop(DropOnLog::from(log));
+
+			let encoded = encoded_metrics(&registry);
+			let count = encoded
+				.lines()
+				.find(|line| line.starts_with("gen_ai_server_request_duration_count"))
+				.unwrap_or_else(|| panic!("no GenAI request duration count in:\n{encoded}"));
+			match expected_error_type {
+				Some(expected) => assert!(
+					count.contains(&format!("error_type=\"{expected}\"")),
+					"expected error.type {expected} in: {count}"
+				),
+				None => assert!(
+					!count.contains("error_type="),
+					"successful request unexpectedly has error.type: {count}"
+				),
+			}
+		}
+	}
+
+	#[test]
+	fn gen_ai_request_duration_requires_a_recognized_llm_operation() {
+		let (mut log, registry) = test_request_log_with_registry();
+		log.status = Some(http::StatusCode::BAD_GATEWAY);
+		log.error = Some("connection failed".to_string());
+		log.reason = Some(ProxyResponseReason::UpstreamFailure);
+
+		drop(DropOnLog::from(log));
+
+		let encoded = encoded_metrics(&registry);
+		assert!(
+			!encoded
+				.lines()
+				.any(|line| line.starts_with("gen_ai_server_request_duration_count")),
+			"non-GenAI request emitted a GenAI duration observation:\n{encoded}"
+		);
+	}
+
+	#[test]
+	fn gen_ai_error_type_is_specific_to_request_duration() {
+		let (mut log, registry) = test_request_log_with_registry();
+		let request = metric_test_llm_request();
+		let response = llm::LLMResponse {
+			input_tokens: Some(10),
+			output_tokens: Some(5),
+			..Default::default()
+		};
+		log.status = Some(http::StatusCode::INTERNAL_SERVER_ERROR);
+		log.llm_request = Some(request.clone());
+		log
+			.llm_response
+			.store(Some(llm::LLMInfo::new(request, response)));
+
+		drop(DropOnLog::from(log));
+
+		let encoded = encoded_metrics(&registry);
+		let duration_count = encoded
+			.lines()
+			.find(|line| line.starts_with("gen_ai_server_request_duration_count"))
+			.unwrap_or_else(|| panic!("no GenAI request duration count in:\n{encoded}"));
+		assert!(duration_count.contains("error_type=\"500\""));
+		for token_line in encoded
+			.lines()
+			.filter(|line| line.starts_with("gen_ai_client_token_usage"))
+		{
+			assert!(
+				!token_line.contains("error_type="),
+				"token metric unexpectedly has error.type: {token_line}"
+			);
+		}
 	}
 
 	#[test]
