@@ -285,6 +285,7 @@ struct ChatRequestContext<'a> {
 	provider: &'a AIProvider,
 	headers: &'a HeaderMap,
 	prompt_caching: Option<&'a policy::PromptCachingConfig>,
+	catalog: agent_llm::model_catalog::Catalog<'a>,
 }
 
 // Context provider to each response translation
@@ -402,9 +403,14 @@ fn apply_openai_moderation(
 	Ok(())
 }
 
-fn render_anthropic_messages(req: types::ChatRequest) -> Result<Vec<u8>, AIError> {
+fn render_anthropic_messages(
+	req: types::ChatRequest,
+	catalog: agent_llm::model_catalog::Catalog<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(&req),
+		types::ChatRequest::Completions(req) => {
+			conversion::messages::from_completions::translate(&req, catalog)
+		},
 		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
@@ -450,15 +456,17 @@ fn render_bedrock_converse(
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
+			ctx.catalog,
 		),
 		types::ChatRequest::Messages(req) => {
-			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers))
+			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers), ctx.catalog)
 		},
 		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
 			&req,
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
+			ctx.catalog,
 		),
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to bedrock converse"
@@ -505,9 +513,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req)?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
@@ -1103,11 +1111,12 @@ impl AIProvider {
 				..btls
 			},
 			AIProvider::Azure(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(
-					AzureAuth::Implicit {
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(AzureAuth {
+					kind: crate::http::auth::azure::AzureAuthKind::Implicit {
 						cached_cred: p.cached_cred.clone(),
 					},
-				))),
+					scopes: Vec::new(),
+				}))),
 				..btls
 			},
 			AIProvider::Custom(_) => return None,
@@ -1240,8 +1249,7 @@ impl AIProvider {
 		// duplicated. countTokens is unary and never sets one, but Google honours `alt=sse` there
 		// too and answers with SSE framing that `CountTokensResponse` cannot parse — so drop the
 		// client's `alt` on both native routes (same gate as the render below). Stripping it here
-		// rather than at parse time keeps it intact on the paths above, which forward the client's
-		// URI untouched.
+		// rather than at parse time keeps `alt` intact on the paths above.
 		if route_type == RouteType::GeminiCountTokens
 			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
 		{
@@ -1519,6 +1527,13 @@ impl AIProvider {
 			{
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+						// Native Gemini prefers query API keys over the bound Bearer credential.
+						// Removing parameters from an already-valid URI cannot fail.
+						let _ = http::modify_query_parameters(
+							&mut req.uri,
+							std::iter::empty::<(&str, &str)>(),
+							["key", "$key"],
+						);
 						let explicit_authorization = req
 							.extensions
 							.get::<AppliedBackendAuthLocation>()
@@ -2153,6 +2168,7 @@ impl AIProvider {
 				provider: self,
 				headers: &parts.headers,
 				prompt_caching: policies.and_then(|p| p.prompt_caching.as_ref()),
+				catalog,
 			},
 		)?;
 		llm_info.provider_state = rendered.provider_state;
@@ -2439,6 +2455,23 @@ impl AIProvider {
 		let BufferedResponse {
 			mut parts, bytes, ..
 		} = buffered;
+		parts.headers.remove(header::CONTENT_LENGTH);
+		if !parts.status.is_success() {
+			let body = self.process_error(
+				&req,
+				parts.status,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
+			return Ok(Self::finalize_response(
+				parts,
+				body.into(),
+				req,
+				LLMResponse::default(),
+				model_catalog,
+				log,
+			));
+		}
 		let (bytes, count) = match self {
 			AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
 				types::count_tokens::Response::translate_response(bytes)?
@@ -2460,7 +2493,6 @@ impl AIProvider {
 			},
 		};
 
-		parts.headers.remove(header::CONTENT_LENGTH);
 		Ok(Self::finalize_response(
 			parts,
 			bytes.into(),
@@ -2995,6 +3027,7 @@ impl AIProvider {
 				// the Google shape the client expects.
 				Ok(bytes.clone())
 			},
+			(_, InputFormat::CountTokens) => Ok(bytes.clone()),
 			(AIProvider::Bedrock(_), InputFormat::Embeddings) => {
 				conversion::bedrock::from_embeddings::translate_error(bytes)
 			},

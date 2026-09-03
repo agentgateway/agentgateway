@@ -6,8 +6,10 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/yaml"
 )
 
 func Command() *cobra.Command {
@@ -23,16 +25,19 @@ Use subcommands to import catalog data from supported sources.`,
 }
 
 type importFlags struct {
-	providers []string
-	sources   []string
-	out       string
-	pretty    bool
-	legacy    bool
+	providers        []string
+	excludeProviders []string
+	sources          []string
+	overlay          string
+	out              string
+	pretty           bool
+	legacy           bool
 }
 
 type importOptions struct {
-	providers []string
-	legacy    bool
+	providers        []string
+	excludeProviders []string
+	legacy           bool
 }
 
 var importSources = map[string]func(ctx context.Context, opts importOptions) (*ModelCatalog, []string, error){}
@@ -68,10 +73,9 @@ Multiple sources are merged in order, so later sources overlay earlier ones (e.g
 supplies pricing and aws-bedrock-mantle overlays Bedrock endpoint tags onto it).
 
 Examples:
-	agctl catalog import > catalog.json
 	agctl catalog import --out ./costs/catalog.json
 	agctl catalog import --source models.dev --providers anthropic,google,openai
-	agctl catalog import --source models.dev,aws-bedrock-mantle`,
+	agctl catalog import --source models.dev,aws-bedrock-mantle --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -80,7 +84,9 @@ Examples:
 	}
 
 	cmd.Flags().StringSliceVar(&f.sources, "source", f.sources, "import sources to merge, in order ("+importSourceList()+")")
+	cmd.Flags().StringVar(&f.overlay, "overlay", "", "YAML catalog to merge over imported data")
 	cmd.Flags().StringSliceVar(&f.providers, "providers", nil, "source provider ids to import (default: every provider the proxy supports)")
+	cmd.Flags().StringSliceVar(&f.excludeProviders, "exclude-providers", nil, "source provider ids to omit")
 	cmd.Flags().BoolVar(&f.legacy, "legacy", false, "include deprecated models")
 	cmd.Flags().BoolVar(&f.pretty, "pretty", false, "pretty-print the output JSON")
 	cmd.Flags().StringVarP(&f.out, "out", "o", f.out, "output catalog path (default: stdout)")
@@ -102,16 +108,36 @@ func runImport(cmd *cobra.Command, f *importFlags) error {
 			return fmt.Errorf("unsupported source %q (supported sources: %s)", name, importSourceList())
 		}
 		cat, w, err := src(ctx, importOptions{
-			providers: f.providers,
-			legacy:    f.legacy,
+			providers:        f.providers,
+			excludeProviders: f.excludeProviders,
+			legacy:           f.legacy,
 		})
 		if err != nil {
 			return fmt.Errorf("source %q: %w", name, err)
 		}
 		warns = append(warns, w...)
-		merged.mergeFrom(cat)
+		merged.overlayWith(cat)
 	}
 
+	if f.overlay != "" {
+		overlayData, err := os.ReadFile(f.overlay)
+		if err != nil {
+			return fmt.Errorf("read overlay %s: %w", f.overlay, err)
+		}
+		var overlay ModelCatalog
+		if err := yaml.UnmarshalStrict(overlayData, &overlay); err != nil {
+			return fmt.Errorf("parse overlay %s: %w", f.overlay, err)
+		}
+		if err := overlay.Validate(); err != nil {
+			return fmt.Errorf("invalid overlay %s: %w", f.overlay, err)
+		}
+		merged.overlayWith(&overlay)
+	}
+	if merged.Metadata == nil {
+		merged.Metadata = &CatalogMetadata{
+			GeneratedAt: time.Now().UTC().Truncate(time.Second),
+		}
+	}
 	if err := merged.Validate(); err != nil {
 		return fmt.Errorf("invalid catalog: %w", err)
 	}
@@ -128,7 +154,7 @@ func runImport(cmd *cobra.Command, f *importFlags) error {
 		if _, err := cmd.OutOrStdout().Write(data); err != nil {
 			return err
 		}
-	} else if err := os.WriteFile(dest, data, 0o600); err != nil {
+	} else if err := os.WriteFile(dest, data, 0o644); err != nil { //nolint:gosec // Catalog data is non-sensitive.
 		return fmt.Errorf("write %s: %w", dest, err)
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), "imported %d providers\n", len(merged.Providers))

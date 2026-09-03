@@ -34,6 +34,7 @@ use tracing::{Level, debug, trace};
 use value_bag::visit::Visit;
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
+use crate::http::substrate::ateattr;
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
@@ -44,7 +45,7 @@ use crate::telemetry::metrics::{
 	OutboundCallLabels, RouteIdentifier,
 };
 use crate::telemetry::trc::TraceParent;
-use crate::telemetry::{log_store, trc};
+use crate::telemetry::{log_store, semconv, trc};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
@@ -63,6 +64,81 @@ struct DatabaseAttributes {
 	agentgateway_user: Option<String>,
 	agentgateway_group: Option<String>,
 	user_agent_name: Option<String>,
+}
+
+struct HttpSemconvAttributes<'a> {
+	client_address: String,
+	server_address: Option<&'a str>,
+	server_port: Option<u16>,
+	url_scheme: &'a str,
+	url_path: Option<&'a str>,
+	url_query: Option<&'a str>,
+	network_protocol_version: Option<&'static str>,
+}
+
+impl<'a> HttpSemconvAttributes<'a> {
+	fn new(log: &'a RequestLog) -> Self {
+		let (url_path, url_query) = log.path.as_deref().map_or((None, None), |path| {
+			let (path, query) = semconv::path_and_query(path);
+			(Some(path), query)
+		});
+
+		Self {
+			client_address: log.tcp_info.peer_addr.ip().to_string(),
+			server_address: log.host.as_deref(),
+			server_port: log.server_port,
+			url_scheme: log.scheme.as_ref().map_or_else(
+				|| {
+					if log.tls_info.is_some() {
+						"https"
+					} else {
+						"http"
+					}
+				},
+				|scheme| scheme.as_str(),
+			),
+			url_path,
+			url_query,
+			network_protocol_version: log.version.as_ref().and_then(semconv::protocol_version),
+		}
+	}
+
+	fn apply<'b>(&'b self, attributes: &mut Vec<(&'b str, Option<ValueBag<'b>>)>) {
+		attributes
+			.reserve(1 + usize::from(self.server_port.is_some()) + usize::from(self.url_query.is_some()));
+
+		for (key, value) in &mut *attributes {
+			*key = semconv::http_attribute(key);
+			match *key {
+				semconv::attribute::CLIENT_ADDRESS => {
+					*value = Some(self.client_address.as_str().into());
+				},
+				semconv::attribute::SERVER_ADDRESS => {
+					*value = self.server_address.map(Into::into);
+				},
+				semconv::attribute::URL_PATH => {
+					*value = self.url_path.map(Into::into);
+				},
+				semconv::attribute::NETWORK_PROTOCOL_VERSION => {
+					*value = self.network_protocol_version.map(Into::into);
+				},
+				_ => {},
+			}
+		}
+
+		attributes.push((semconv::attribute::URL_SCHEME, Some(self.url_scheme.into())));
+
+		if let Some(port) = self.server_port {
+			attributes.push((
+				semconv::attribute::SERVER_PORT,
+				Some(i64::from(port).into()),
+			));
+		}
+
+		if let Some(query) = self.url_query {
+			attributes.push((semconv::attribute::URL_QUERY, Some(query.into())));
+		}
+	}
 }
 
 fn database_llm_payload(
@@ -937,6 +1013,14 @@ impl From<RequestLog> for DropOnLog {
 
 fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
 	cel::ProxyContext {
+		error: log
+			.error
+			.as_ref()
+			.zip(log.reason)
+			.map(|(message, reason)| cel::ErrorContext {
+				reason: reason.to_string(),
+				message: message.clone(),
+			}),
 		bind: log.bind_name.clone(),
 		gateway: log
 			.listener_name
@@ -977,6 +1061,7 @@ impl RequestLog {
 	) -> Self {
 		RequestLog {
 			cel,
+			access_log_preset: None,
 			database_llm: Default::default(),
 			input_messages: Default::default(),
 			metrics,
@@ -1001,6 +1086,8 @@ impl RequestLog {
 			backend_info: None,
 			backend_protocol: None,
 			host: None,
+			server_port: None,
+			scheme: None,
 			method: None,
 			path: None,
 			path_match: None,
@@ -1026,6 +1113,7 @@ impl RequestLog {
 			inference_pool: None,
 			ate_actor_id: None,
 			ate_atespace: None,
+			ate_router_resume: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -1125,6 +1213,7 @@ impl RequestLog {
 #[derive(Debug)]
 pub struct RequestLog {
 	pub cel: CelLogging,
+	pub access_log_preset: Option<crate::types::frontend::AccessLogPreset>,
 	/// Controls whether normalized LLM prompt/completion content is persisted in the database's
 	/// dedicated payload table. `None` preserves the legacy behavior of persisting content captured
 	/// by CEL expressions. This is independent from CEL attribute capture.
@@ -1164,7 +1253,9 @@ pub struct RequestLog {
 	pub backend_protocol: Option<cel::BackendProtocol>,
 
 	pub host: Option<String>,
+	pub scheme: Option<::http::uri::Scheme>,
 	pub method: Option<::http::Method>,
+	pub server_port: Option<u16>,
 	pub path: Option<String>,
 	pub path_match: Option<Strng>,
 	pub version: Option<::http::Version>,
@@ -1200,6 +1291,7 @@ pub struct RequestLog {
 
 	pub ate_actor_id: Option<String>,
 	pub ate_atespace: Option<String>,
+	pub ate_router_resume: Option<&'static str>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1208,6 +1300,10 @@ pub struct RequestLog {
 	pub source_context: Option<cel::SourceContext>,
 
 	pub response_bytes: u64,
+}
+
+fn request_log_level(error: Option<&str>) -> &'static str {
+	if error.is_some() { "error" } else { "info" }
 }
 
 impl Drop for DropOnLog {
@@ -1383,7 +1479,7 @@ impl Drop for DropOnLog {
 					.metrics
 					.mcp_requests
 					.get_or_create(&MCPCall {
-						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
+						method: mcp.method_name.clone().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
 						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
@@ -1394,7 +1490,13 @@ impl Drop for DropOnLog {
 					.inc();
 			}
 
-			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
+			let level = request_log_level(log.error.as_deref());
+			let level_filter = if level == "error" {
+				Level::ERROR
+			} else {
+				Level::INFO
+			};
+			let maybe_enable_log = agent_core::telemetry::enabled("request", &level_filter);
 			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
 			let log_store_enabled = log_store::enabled()
@@ -1608,7 +1710,8 @@ impl Drop for DropOnLog {
 					log.inference_pool.display(),
 				),
 				("ate.actor.id", log.ate_actor_id.display()),
-				("ate.atespace", log.ate_atespace.display()),
+				(ateattr::ATE_ATESPACE, log.ate_atespace.display()),
+				(ateattr::ATE_ROUTER_RESUME, log.ate_router_resume.display()),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",
@@ -1785,13 +1888,40 @@ impl Drop for DropOnLog {
 				.or_else(|| {
 					let request = log.request_snapshot.as_ref()?;
 					crate::http::is_grpc_content_type(&request.headers)
-						.then(|| request.path.path().trim_start_matches('/').to_owned())
+						.then(|| strng::new(request.path.path().trim_start_matches('/')))
 				});
+			let use_otel_stdout = maybe_enable_log
+				&& matches!(
+					log.access_log_preset.as_ref(),
+					Some(crate::types::frontend::AccessLogPreset::Otel)
+				);
 
-			if enable_trace && let Some(t) = &log.tracer {
-				let base_len = kv.len();
+			let trace_needs_otel = enable_trace
+				&& log
+					.outgoing_span
+					.as_ref()
+					.is_some_and(|span| span.is_sampled());
+
+			let needs_otel = trace_needs_otel || otlp_log_enabled || use_otel_stdout;
+			let http_semconv = (needs_otel && !is_tcp).then(|| HttpSemconvAttributes::new(&log));
+
+			let mut otel_kv = needs_otel.then(|| {
+				let mut otel_kv = kv.clone();
+
+				if let Some(http_semconv) = &http_semconv {
+					http_semconv.apply(&mut otel_kv);
+				}
+
+				otel_kv
+			});
+
+			if trace_needs_otel && let Some(t) = &log.tracer {
+				let otel_kv = otel_kv
+					.as_mut()
+					.expect("OTel attributes are built for sampled traces");
+				let base_len = otel_kv.len();
 				if let Some(trace_cost_fields) = &trace_cost_fields {
-					kv.extend(
+					otel_kv.extend(
 						trace_cost_fields
 							.iter()
 							.map(|(key, value)| (*key, Some(value.as_str().into()))),
@@ -1802,9 +1932,9 @@ impl Drop for DropOnLog {
 					&end_time,
 					&cel_exec,
 					protocol_span_name.as_deref(),
-					kv.as_slice(),
+					otel_kv.as_slice(),
 				);
-				kv.truncate(base_len);
+				otel_kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
 				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
@@ -1819,7 +1949,10 @@ impl Drop for DropOnLog {
 			if let Some(otel) = &log.otel_logger
 				&& cel_exec.eval_otlp_filter()
 			{
-				let mut otlp_kv = kv.clone();
+				let mut otlp_kv = otel_kv
+					.as_ref()
+					.expect("OTel attributes are built when OTLP logging is enabled")
+					.clone();
 				otlp_kv.reserve(cel_exec.otlp_fields.add.len());
 				for (k, v) in &mut otlp_kv {
 					if cel_exec.otlp_fields.has(k) {
@@ -1831,7 +1964,7 @@ impl Drop for DropOnLog {
 					let eval = v.as_ref().map(json_value_to_value_bag);
 					otlp_kv.push((k, eval));
 				}
-				otel.emit("info", "request", &otlp_kv);
+				otel.emit(level, "request", &otlp_kv);
 			}
 
 			if maybe_enable_log || log_store_enabled {
@@ -1857,7 +1990,29 @@ impl Drop for DropOnLog {
 				}
 
 				if maybe_enable_log {
-					agent_core::telemetry::log("info", "request", &kv);
+					if use_otel_stdout {
+						let mut stdout_kv = otel_kv
+							.as_ref()
+							.expect("OTel attributes are built for the OTel stdout preset")
+							.clone();
+
+						stdout_kv.reserve(fields.add.len());
+
+						for (k, v) in &mut stdout_kv {
+							if fields.has(k) {
+								*v = None;
+							}
+						}
+
+						for (k, v) in &raws {
+							let eval = v.as_ref().map(json_value_to_value_bag);
+							stdout_kv.push((k, eval));
+						}
+
+						agent_core::telemetry::log(level, "request", &stdout_kv);
+					} else {
+						agent_core::telemetry::log(level, "request", &kv);
+					}
 				}
 
 				if log_store_enabled {
@@ -2440,6 +2595,15 @@ impl SpanWriteOnDrop {
 		}
 	}
 
+	pub fn record_http_client_status(&mut self, status: http::StatusCode) {
+		self.add_attribute(KeyValue::new("http.status", i64::from(status.as_u16())));
+		if status.is_client_error() || status.is_server_error() {
+			// This is an outbound client span. A received error response is a successful
+			// transport result, but the operation represented by the span failed.
+			self.set_error(status.as_u16().to_string(), String::new());
+		}
+	}
+
 	pub fn record_grpc_result<T>(&mut self, result: &Result<tonic::Response<T>, tonic::Status>) {
 		match result {
 			Ok(_) => self.add_attribute(KeyValue::new("grpc.status", 0_i64)),
@@ -2817,6 +2981,48 @@ mod tests {
 			ProxyResponseReason::ExtAuth.to_string(),
 		)));
 		assert_eq!(child.status, Status::error("authorization denied"));
+	}
+
+	#[test]
+	fn outbound_client_span_classifies_http_response_status() {
+		let (tracer, _exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer);
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing);
+
+		for (status, expected) in [
+			(http::StatusCode::OK, Status::default()),
+			(http::StatusCode::FOUND, Status::default()),
+			(http::StatusCode::TOO_MANY_REQUESTS, Status::error("")),
+			(http::StatusCode::INTERNAL_SERVER_ERROR, Status::error("")),
+		] {
+			let mut span = request.span_writer().start_outbound(OutboundCallLabels {
+				kind: OutboundCallKind::Primary,
+				subtype: OutboundCallSubtype::Llm,
+			});
+			span.record_http_client_status(status);
+
+			assert_eq!(span.status, expected, "status {status}");
+			assert!(
+				span
+					.attributes
+					.contains(&KeyValue::new("http.status", i64::from(status.as_u16()),))
+			);
+			let error_type = span
+				.attributes
+				.iter()
+				.find(|attribute| attribute.key.as_str() == "error.type");
+			if status.is_client_error() || status.is_server_error() {
+				assert_eq!(
+					error_type.map(|attribute| attribute.value.as_str().into_owned()),
+					Some(status.as_u16().to_string()),
+				);
+			} else {
+				assert!(error_type.is_none());
+			}
+		}
 	}
 
 	#[test]

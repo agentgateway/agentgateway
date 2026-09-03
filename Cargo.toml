@@ -71,7 +71,7 @@ aws-sigv4 = "1.4"
 aws-types = "1.3"
 aws-smithy-eventstream = "0.61"
 aws-smithy-types = "1.3"
-aws-lc-rs = "1.17"
+aws-lc-rs = "1.18"
 # SymCrypt backend: symcrypt 0.5.1 dynamic-links the system libsymcrypt by default (requires libsymcrypt installed).
 symcrypt = "0.5.1"
 rustls-symcrypt = { version = "0.2.3", features = ["chacha", "x25519"] }
@@ -143,7 +143,7 @@ opentelemetry-otlp = { version = "0.32", default-features = false, features = ["
 opentelemetry-proto = { version = "0.32", features = ["gen-tonic", "logs"] }
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
 parking_lot = "0.12"
-pem = "3.0.6"
+pem = "4.0.0"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"

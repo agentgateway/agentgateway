@@ -742,6 +742,66 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 	expect(gateway.postedConfigs).toHaveLength(0);
 });
 
+test('creates an OpenAPI MCP target', async ({ page }) => {
+	const gateway = await mockGateway(page, emptyConfig());
+	await page.goto('/mcp/servers');
+
+	await page.getByRole('button', { name: 'Add server' }).first().click();
+	await page.getByLabel('Server name').fill('weather');
+	await page.getByRole('radio', { name: 'OpenAPI' }).click();
+	await page
+		.locator('label.field', { hasText: 'URL' })
+		.getByRole('textbox')
+		.fill('http://localhost:8101/mcp');
+	await page
+		.locator('label.field', { hasText: 'Schema' })
+		.getByRole('textbox')
+		.fill('https://example.com/weather-openapi.json');
+	await page.getByRole('button', { name: 'Save server' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as { mcp?: { targets?: unknown[] } };
+	expect(saved.mcp?.targets?.[0]).toEqual({
+		name: 'weather',
+		openapi: {
+			host: 'http://localhost:8101/mcp',
+			schema: { url: 'https://example.com/weather-openapi.json' }
+		}
+	});
+});
+
+test('editing an OpenAPI MCP target preserves its schema', async ({ page }) => {
+	const config = emptyConfig();
+	(config.mcp as { targets?: unknown[] }).targets = [
+		{
+			name: 'invoices',
+			openapi: {
+				host: 'http://localhost:8102/openapi',
+				schema: { url: 'https://example.com/invoices-openapi.json' }
+			}
+		}
+	];
+	const gateway = await mockGateway(page, config);
+	await page.goto('/mcp/servers');
+
+	await page
+		.getByRole('row', { name: /invoices/ })
+		.getByRole('button', { name: 'Edit server' })
+		.click();
+	await page.getByLabel('Server name').fill('invoices-v2');
+	await page.getByRole('button', { name: 'Save server' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as { mcp?: { targets?: unknown[] } };
+	expect(saved.mcp?.targets?.[0]).toEqual({
+		name: 'invoices-v2',
+		openapi: {
+			host: 'http://localhost:8102/openapi',
+			schema: { url: 'https://example.com/invoices-openapi.json' }
+		}
+	});
+});
+
 test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	const config = emptyConfig();
 	config.mcp = {
@@ -951,8 +1011,10 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 			const kind = String(resource.kind);
 			if (!kind.endsWith('.policy')) continue;
 			const sectionName = kind.split('.')[0];
-			const section = (effective[sectionName] ??= {}) as Record<string, unknown>;
-			const policies = (section.policies ??= {}) as Record<string, unknown>;
+			effective[sectionName] ??= {};
+			const section = effective[sectionName] as Record<string, unknown>;
+			section.policies ??= {};
+			const policies = section.policies as Record<string, unknown>;
 			policies[String(resource.id)] = resource.value;
 		}
 		return route.fulfill({
@@ -1067,6 +1129,16 @@ test('reveals a virtual API key explicitly', async ({ page }) => {
 	await expect(page.getByText('agw_sk_testkey123456789')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Show full key' }).click();
 	await expect(page.getByText('agw_sk_testkey123456789')).toBeVisible();
+});
+
+test('warns that API key budgets require the primary database', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/keys');
+
+	await page.getByRole('button', { name: 'Edit key' }).click();
+	await page.getByRole('button', { name: /^Budgets/ }).click();
+	const warning = page.locator('.status-banner.warn').filter({ hasText: 'Database required' });
+	await expect(warning).toContainText('API key budgets require config.database to be configured.');
 });
 
 test('LLM playground sends selected virtual model name', async ({ page }) => {

@@ -200,6 +200,12 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	logging := policy.Spec.Frontend.AccessLog
 	spec := &api.FrontendPolicySpec_Logging{}
 	var errs []error
+	if preset := logging.Preset; preset != nil {
+		switch *preset {
+		case agentgateway.AccessLogPresetOtel:
+			spec.Preset = api.FrontendPolicySpec_Logging_OTEL
+		}
+	}
 	if f := logging.Filter; f != nil {
 		spec.Filter = castCELPtr(f, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend accessLog filter is not a valid CEL expression: %s", expr))

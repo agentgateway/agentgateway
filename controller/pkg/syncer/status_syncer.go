@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
@@ -61,6 +62,7 @@ type AgentGwStatusSyncer struct {
 	tcpRoutes          StatusSyncer[*gwv1.TCPRoute, *gwv1.TCPRouteStatus]
 	tlsRoutes          StatusSyncer[*gwv1.TLSRoute, *gwv1.TLSRouteStatus]
 	backendTLSPolicies StatusSyncer[*gwv1.BackendTLSPolicy, gwv1.PolicyStatus]
+	xBackends          StatusSyncer[*gwxv1a1.XBackend, *gwxv1a1.BackendStatus]
 	inferencePools     StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]
 
 	extraAgwResourceStatusHandlers map[schema.GroupVersionKind]ResourceStatusSyncer
@@ -75,6 +77,7 @@ func NewAgwStatusSyncer(
 	extraHandlers map[schema.GroupVersionKind]ResourceStatusSyncer,
 	enableInference bool,
 	enableAgentgatewayModels bool,
+	enableXBackend bool,
 ) *AgentGwStatusSyncer {
 	f := kclient.Filter{ObjectFilter: client.ObjectFilter()}
 	syncer := &AgentGwStatusSyncer{
@@ -186,10 +189,21 @@ func NewAgwStatusSyncer(
 			},
 		},
 	}
+	if enableXBackend {
+		syncer.xBackends = StatusSyncer[*gwxv1a1.XBackend, *gwxv1a1.BackendStatus]{
+			Name:           "xBackend",
+			ControllerName: controllerName,
+			Client:         kclient.NewFilteredDelayed[*gwxv1a1.XBackend](client, wellknown.XBackendGVR, f),
+			Build: func(om metav1.ObjectMeta, s *gwxv1a1.BackendStatus) *gwxv1a1.XBackend {
+				return &gwxv1a1.XBackend{ObjectMeta: om, Status: *s}
+			},
+		}
+	}
 	if enableInference {
 		syncer.inferencePools = StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]{
-			Name:   "inferencePools",
-			Client: kclient.NewFilteredDelayed[*inf.InferencePool](client, wellknown.InferencePoolGVR, f),
+			Name:           "inferencePools",
+			ControllerName: controllerName,
+			Client:         kclient.NewFilteredDelayed[*inf.InferencePool](client, wellknown.InferencePoolGVR, f),
 			Build: func(om metav1.ObjectMeta, s inf.InferencePoolStatus) *inf.InferencePool {
 				return &inf.InferencePool{
 					ObjectMeta: om,
@@ -239,6 +253,13 @@ func (s *AgentGwStatusSyncer) Start(ctx context.Context) error {
 		s.agentgatewayBackends.Client.HasSynced,
 		s.agentgatewayPolicies.Client.HasSynced,
 	)
+	if s.xBackends.Client != nil {
+		s.client.WaitForCacheSync(
+			"agent gateway status clients",
+			ctx.Done(),
+			s.xBackends.Client.HasSynced,
+		)
+	}
 	if s.inferencePools.Client != nil {
 		s.client.WaitForCacheSync(
 			"agent gateway status clients",
@@ -289,6 +310,10 @@ func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status.Re
 		}
 	case wellknown.BackendTLSPolicyGVK:
 		s.backendTLSPolicies.ApplyStatus(ctx, resource, statusObj)
+	case wellknown.XBackendGVK:
+		if s.xBackends.Client != nil {
+			s.xBackends.ApplyStatus(ctx, resource, statusObj)
+		}
 	case wellknown.InferencePoolGVK:
 		if s.inferencePools.Client != nil {
 			s.inferencePools.ApplyStatus(ctx, resource, statusObj)
@@ -403,6 +428,20 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 				merged.Parents = mergeRouteParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)
 				mergedAny = &merged
 			}
+		case inf.InferencePoolStatus:
+			cur, ok := any(current).(*inf.InferencePool)
+			if ok {
+				merged := desired
+				merged.Parents = mergeInferencePoolParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)
+				mergedAny = merged
+			}
+		case *gwxv1a1.BackendStatus:
+			cur, ok := any(current).(*gwxv1a1.XBackend)
+			if ok {
+				merged := *desired
+				merged.Ancestors = mergeXBackendAncestorStatuses(s.ControllerName, cur.Status.Ancestors, desired.Ancestors)
+				mergedAny = &merged
+			}
 		}
 
 		merged, ok := mergedAny.(S)
@@ -452,6 +491,25 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 	} else {
 		logger.Debug("updated policy status")
 	}
+}
+
+func mergeXBackendAncestorStatuses(ourControllerName string, existing, desired []gwxv1a1.BackendAncestorStatus) []gwxv1a1.BackendAncestorStatus {
+	out := make([]gwxv1a1.BackendAncestorStatus, 0, len(existing)+len(desired))
+	for _, ancestor := range existing {
+		if string(ancestor.ControllerName) != ourControllerName {
+			out = append(out, ancestor)
+		}
+	}
+	ours := make([]gwxv1a1.BackendAncestorStatus, 0, len(desired))
+	for _, ancestor := range desired {
+		if string(ancestor.ControllerName) == ourControllerName {
+			ours = append(ours, ancestor)
+		}
+	}
+	slices.SortFunc(ours, func(a, b gwxv1a1.BackendAncestorStatus) int {
+		return compareParentReference(a.AncestorRef, b.AncestorRef)
+	})
+	return append(out, ours...)
 }
 
 func mergePolicyAncestorStatuses(ourControllerName string, existing []gwv1.PolicyAncestorStatus, desired []gwv1.PolicyAncestorStatus) []gwv1.PolicyAncestorStatus {
@@ -510,6 +568,37 @@ func mergeRouteParentStatuses(ourControllerName string, existing []gwv1.RoutePar
 			return c
 		}
 		return compareParentReference(a.ParentRef, b.ParentRef)
+	})
+
+	out = append(out, ours...)
+	return out
+}
+
+func mergeInferencePoolParentStatuses(ourControllerName string, existing []inf.ParentStatus, desired []inf.ParentStatus) []inf.ParentStatus {
+	out := make([]inf.ParentStatus, 0, len(existing)+len(desired))
+
+	// Preserve any entries not owned by our controller.
+	for _, p := range existing {
+		if string(p.ControllerName) != ourControllerName {
+			out = append(out, p)
+		}
+	}
+
+	// Only add entries owned by our controller from the desired status.
+	// This ensures we can clear stale entries by publishing an empty desired list.
+	ours := make([]inf.ParentStatus, 0, len(desired))
+	for _, p := range desired {
+		if string(p.ControllerName) == ourControllerName {
+			ours = append(ours, p)
+		}
+	}
+
+	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
+	slices.SortFunc(ours, func(a, b inf.ParentStatus) int {
+		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
+			return c
+		}
+		return compareInferencePoolParentReference(a.ParentRef, b.ParentRef)
 	})
 
 	out = append(out, ours...)
@@ -697,6 +786,37 @@ func compareParentReference(a, b gwv1.ParentReference) int {
 		return c
 	}
 	return comparePortNumberPtr(a.Port, b.Port)
+}
+
+func compareInferencePoolParentReference(a, b inf.ParentReference) int {
+	// ParentReference includes fields with defaults. Canonicalize those defaults so omitted vs explicitly-set
+	// default values don't introduce ordering churn.
+	if c := cmp.Compare(inferencePoolParentRefGroupOrDefault(a.Group), inferencePoolParentRefGroupOrDefault(b.Group)); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(inferencePoolParentRefKindOrDefault(a.Kind), inferencePoolParentRefKindOrDefault(b.Kind)); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(string(a.Namespace), string(b.Namespace)); c != 0 {
+		return c
+	}
+	return cmp.Compare(string(a.Name), string(b.Name))
+}
+
+func inferencePoolParentRefGroupOrDefault(g *inf.Group) string {
+	if g == nil {
+		// ParentReference.Group default.
+		return "gateway.networking.k8s.io"
+	}
+	return string(*g)
+}
+
+func inferencePoolParentRefKindOrDefault(k inf.Kind) string {
+	if k == "" {
+		// ParentReference.Kind default.
+		return "Gateway"
+	}
+	return string(k)
 }
 
 func parentRefGroupOrDefault(g *gwv1.Group) string {

@@ -77,11 +77,16 @@ build-target: $(UI_PREREQ)
 build-symcrypt: $(UI_PREREQ)
 	cargo build --release --no-default-features --features jemalloc,mimalloc,crypto-symcrypt $(UI_FEATURE) $(CARGO_BUILD_ARGS)
 
+# Build the AWS-LC provider in FIPS mode.
+.PHONY: build-fips
+build-fips: $(UI_PREREQ)
+	cargo build --release --no-default-features --features jemalloc,mimalloc,crypto-aws-lc,fips $(UI_FEATURE) $(CARGO_BUILD_ARGS)
+
 # lint
 .PHONY: lint
 lint:
 	cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
-	cargo clippy --all-targets
+	cargo clippy --all-targets -- -D clippy::disallowed_methods -D clippy::disallowed_fields
 
 .PHONY: clippy
 fix-clippy:
@@ -125,6 +130,10 @@ check-clean-repo:
 .PHONY: gen
 gen: generate-apis generate-schema format
 	@:
+
+.PHONY: refresh-model-catalog
+refresh-model-catalog:
+	go run ./controller/cmd/agctl catalog import --source models.dev,aws-bedrock-mantle --exclude-providers openrouter --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty
 
 .PHONY: generate-schema
 generate-schema:

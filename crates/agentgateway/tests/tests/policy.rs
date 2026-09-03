@@ -317,6 +317,36 @@ async fn gateway_transformation_response_headers_are_applied() {
 }
 
 #[tokio::test]
+async fn response_transformation_can_read_gateway_error() {
+	let (_mock, mut bind, _io) = basic_setup().await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"transformations": {
+					"response": {
+						"set": {
+							"x-error-reason": "proxy.error.reason",
+							"x-error-message": "proxy.error.message",
+						},
+					},
+				},
+			},
+			"backends": [{"host": "127.0.0.1:1"}],
+		}))
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request(io, Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+	assert_eq!(res.hdr("x-error-reason"), "UpstreamFailure");
+	assert!(
+		res
+			.hdr("x-error-message")
+			.starts_with("upstream call failed:")
+	);
+}
+
+#[tokio::test]
 async fn inline_backend_policies() {
 	let (mock, mut bind, io) = basic_setup().await;
 	bind

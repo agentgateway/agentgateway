@@ -561,6 +561,7 @@ spec:
       name: dummy
   frontend:
     accessLog:
+      preset: Otel
       filter: 'response.code >= 400'
       attributes:
         add:

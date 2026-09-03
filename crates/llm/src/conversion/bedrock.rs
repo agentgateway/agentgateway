@@ -24,6 +24,44 @@ pub struct BedrockRequest {
 	pub tool_name_map: BedrockToolNameMap,
 }
 
+fn anthropic_reasoning_fields(
+	model: &str,
+	catalog: crate::model_catalog::Catalog<'_>,
+	explicit_budget: Option<u64>,
+	effort: Option<messages::typed::ThinkingEffort>,
+) -> (Option<serde_json::Value>, bool) {
+	let capabilities = crate::model_catalog::anthropic_thinking_capabilities(model, catalog);
+	if let Some(budget_tokens) = explicit_budget
+		&& capabilities.legacy
+	{
+		return (
+			Some(serde_json::json!({
+				"thinking": { "type": "enabled", "budget_tokens": budget_tokens }
+			})),
+			true,
+		);
+	}
+	if (explicit_budget.is_some() || effort.is_some()) && capabilities.adaptive {
+		return (
+			Some(serde_json::json!({
+				"thinking": { "type": "adaptive" },
+				"output_config": { "effort": effort.unwrap_or(messages::typed::ThinkingEffort::High) }
+			})),
+			false,
+		);
+	}
+	let budget_tokens =
+		explicit_budget.or_else(|| effort.map(crate::types::thinking_budget_for_anthropic_effort));
+	(
+		budget_tokens.map(|budget_tokens| {
+			serde_json::json!({
+				"thinking": { "type": "enabled", "budget_tokens": budget_tokens }
+			})
+		}),
+		budget_tokens.is_some(),
+	)
+}
+
 /// Per-request mapping between client tool names and Bedrock-safe tool names.
 #[derive(Debug, Clone, Default)]
 pub struct BedrockToolNameMap {
@@ -469,6 +507,24 @@ pub mod from_embeddings {
 		} else if model.contains("cohere") {
 			let resp: types::bedrock::CohereEmbeddingResponse =
 				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+			let embeddings = match resp.embeddings {
+				types::bedrock::CohereEmbeddings::ByIndex(embeddings) => embeddings,
+				types::bedrock::CohereEmbeddings::ByType(mut embeddings) => {
+					let Some(float_embeddings) = embeddings.remove("float") else {
+						let mut received_types = embeddings.keys().map(String::as_str).collect::<Vec<_>>();
+						received_types.sort_unstable();
+						return Err(AIError::ResponseParsing(serde::de::Error::custom(format!(
+							"Cohere response did not include float embeddings; received types: {}",
+							if received_types.is_empty() {
+								"none".to_string()
+							} else {
+								received_types.join(", ")
+							}
+						))));
+					};
+					float_embeddings
+				},
+			};
 
 			// Cohere doesn't include token counts in the JSON body;
 			// Bedrock surfaces them via response headers instead.
@@ -480,8 +536,7 @@ pub mod from_embeddings {
 
 			let typed_resp = types::embeddings::typed::Response {
 				object: "list".to_string(),
-				data: resp
-					.embeddings
+				data: embeddings
 					.into_iter()
 					.enumerate()
 					.map(|(i, e)| types::embeddings::typed::Embedding {
@@ -729,11 +784,12 @@ pub mod from_completions {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::PromptCachingConfig>,
+		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestParsing)?;
 		let model_id = typed.model.clone().unwrap_or_default();
 		let (xlated, tool_name_map) =
-			translate_internal(typed, model_id, provider, headers, prompt_caching)?;
+			translate_internal(typed, model_id, provider, headers, prompt_caching, catalog)?;
 		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
 		Ok(super::BedrockRequest {
 			body,
@@ -747,6 +803,7 @@ pub mod from_completions {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::PromptCachingConfig>,
+		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
 		let mut tool_name_map = super::BedrockToolNameMap::default();
 		for tool in req.tools.iter().flatten() {
@@ -946,26 +1003,18 @@ pub mod from_completions {
 			Some(metadata)
 		};
 
-		let explicit_thinking_budget = req.vendor_extensions.thinking_budget_tokens;
-		let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
-			req
-				.reasoning_effort
-				.as_ref()
-				.and_then(crate::types::thinking_budget_for_reasoning_effort)
-		});
-
-		let mut additional_model_request_fields = enabled_thinking_budget.map(|budget| {
-			serde_json::json!({
-				"thinking": {
-					"type": "enabled",
-					"budget_tokens": budget
-				}
-			})
-		});
+		let effort = req
+			.reasoning_effort
+			.as_ref()
+			.and_then(crate::types::anthropic_effort_for_reasoning_effort);
+		let (mut additional_model_request_fields, manual_thinking) = super::anthropic_reasoning_fields(
+			&model_id,
+			catalog,
+			req.vendor_extensions.thinking_budget_tokens,
+			effort,
+		);
 		// Anthropic manual thinking is incompatible with custom sampling parameters.
-		if enabled_thinking_budget.is_none()
-			&& let Some(top_k) = top_k
-		{
+		if !manual_thinking && let Some(top_k) = top_k {
 			additional_model_request_fields
 				.get_or_insert_with(|| serde_json::json!({}))
 				.as_object_mut()
@@ -1191,6 +1240,7 @@ pub mod from_completions {
 							..Default::default()
 						};
 						let choice = completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta: d,
@@ -1270,6 +1320,7 @@ pub mod from_completions {
 
 					if let Some(delta) = delta {
 						let choice = completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta,
@@ -1289,6 +1340,7 @@ pub mod from_completions {
 				bedrock::ConverseStreamOutput::MessageStart(start) => {
 					// Just send a blob with the role
 					let choice = completions::ChatChoiceStream {
+						rest: Default::default(),
 						index: 0,
 						logprobs: None,
 						delta: completions::StreamResponseDelta {
@@ -1308,6 +1360,7 @@ pub mod from_completions {
 
 					// Just send a blob with the finish reason
 					let choice = completions::ChatChoiceStream {
+						rest: Default::default(),
 						index: 0,
 						logprobs: None,
 						delta: completions::StreamResponseDelta::default(),
@@ -1406,9 +1459,10 @@ pub mod from_messages {
 		req: &types::messages::Request,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
+		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
 		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
-		let (xlated, tool_name_map) = translate_internal(typed, provider, headers)?;
+		let (xlated, tool_name_map) = translate_internal(typed, provider, headers, catalog)?;
 		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
 		Ok(super::BedrockRequest {
 			body,
@@ -1417,10 +1471,23 @@ pub mod from_messages {
 	}
 
 	pub(super) fn translate_internal(
-		req: messages::Request,
+		mut req: messages::Request,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
+		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
+		let capabilities = crate::model_catalog::anthropic_thinking_capabilities(&req.model, catalog);
+		if matches!(req.thinking, Some(messages::ThinkingInput::Enabled { .. }))
+			&& capabilities.adaptive
+			&& !capabilities.legacy
+		{
+			req.thinking = Some(messages::ThinkingInput::Adaptive {});
+			req
+				.output_config
+				.get_or_insert_default()
+				.effort
+				.get_or_insert(messages::ThinkingEffort::High);
+		}
 		let mut tool_name_map = super::BedrockToolNameMap::default();
 		for tool in req.tools.iter().flatten() {
 			tool_name_map.register(tool.name());
@@ -2284,6 +2351,7 @@ pub mod from_responses {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::PromptCachingConfig>,
+		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
 		let typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
@@ -2296,6 +2364,7 @@ pub mod from_responses {
 			provider,
 			headers,
 			prompt_caching,
+			catalog,
 		)?;
 		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
 		Ok(super::BedrockRequest {
@@ -2311,6 +2380,7 @@ pub mod from_responses {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::PromptCachingConfig>,
+		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
 		use responses::{
 			CustomToolCallOutput, CustomToolCallOutputOutput, EasyInputContent, FunctionCallOutput,
@@ -2785,21 +2855,20 @@ pub mod from_responses {
 			.text
 			.as_ref()
 			.and_then(responses_text_format_to_bedrock_output_config);
-		let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
-			req
-				.reasoning
-				.as_ref()
-				.and_then(|r| r.effort.as_ref())
-				.and_then(crate::types::thinking_budget_for_reasoning_effort)
+		let effort = req.reasoning.as_ref().and_then(|reasoning| {
+			use responses::ReasoningEffort;
+			use types::messages::typed::ThinkingEffort;
+			match reasoning.effort.as_ref()? {
+				ReasoningEffort::None => None,
+				ReasoningEffort::Minimal | ReasoningEffort::Low => Some(ThinkingEffort::Low),
+				ReasoningEffort::Medium => Some(ThinkingEffort::Medium),
+				ReasoningEffort::High => Some(ThinkingEffort::High),
+				ReasoningEffort::Xhigh => Some(ThinkingEffort::Xhigh),
+				ReasoningEffort::Max => Some(ThinkingEffort::Max),
+			}
 		});
-		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
-			serde_json::json!({
-				"thinking": {
-					"type": "enabled",
-					"budget_tokens": budget
-				}
-			})
-		});
+		let (additional_model_request_fields, _) =
+			super::anthropic_reasoning_fields(&model_id, catalog, explicit_thinking_budget, effort);
 
 		let tool_config = if !tools.is_empty() {
 			Some(bedrock::ToolConfiguration { tools, tool_choice })
@@ -3793,6 +3862,7 @@ impl ConverseResponseAdapter {
 		};
 
 		let choice = completions::ChatChoice {
+			rest: Default::default(),
 			index: 0,
 			message,
 			finish_reason: Some(from_completions::translate_stop_reason(&self.stop_reason)),

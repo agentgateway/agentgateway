@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use ::http::{Method, Request};
 use http_body::Frame;
+use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use protos::envoy::service::ext_proc::v3::{
 	BodySendMode as EnvoyBodySendMode, ProcessingMode, processing_mode, processing_response,
@@ -1847,6 +1848,7 @@ mod dynamic_metadata_flow {
 		};
 		let mut resp = http::Response::new(Body::empty());
 		let (mut tx_chunk, _rx_chunk) = mpsc::channel(1);
+		let response_trailers = Mutex::new(None);
 
 		let (headers_done, eos) = super::super::handle_response_for_response_mutation(
 			false,
@@ -1854,6 +1856,7 @@ mod dynamic_metadata_flow {
 			false,
 			Some(&mut resp),
 			&mut tx_chunk,
+			&response_trailers,
 			presp,
 		)
 		.await
@@ -1867,6 +1870,33 @@ mod dynamic_metadata_flow {
 			.expect("response dynamic metadata should be attached to response extensions");
 		assert_eq!(metadata.0.get("auth_user").unwrap(), "test-user");
 		assert_eq!(metadata.0.get("is_admin").unwrap(), true);
+	}
+
+	#[tokio::test]
+	async fn unmatched_response_trailers_ack_does_not_end_response_flow() {
+		let presp = ProcessingResponse {
+			response: Some(processing_response::Response::ResponseTrailers(
+				proto::TrailersResponse::default(),
+			)),
+			..Default::default()
+		};
+		let mut tx_chunk = mpsc::channel(1).0;
+		let response_trailers = Mutex::new(None);
+
+		let (headers_done, eos) = super::super::handle_response_for_response_mutation(
+			true,
+			false,
+			false,
+			None,
+			&mut tx_chunk,
+			&response_trailers,
+			presp,
+		)
+		.await
+		.expect("unmatched trailers ACK should be ignored");
+
+		assert!(!headers_done);
+		assert!(!eos);
 	}
 }
 
@@ -4559,6 +4589,8 @@ fn request_log() -> RequestLog {
 struct RequestRecorder {
 	requests: RequestLog,
 	open_metadata: Arc<Mutex<Vec<HashMap<String, String>>>>,
+	request_trailer_mutation: Option<HeaderMutation>,
+	response_trailer_mutation: Option<HeaderMutation>,
 }
 
 impl RequestRecorder {
@@ -4566,7 +4598,19 @@ impl RequestRecorder {
 		Self {
 			requests: request_log(),
 			open_metadata: Arc::new(Mutex::new(Vec::new())),
+			request_trailer_mutation: None,
+			response_trailer_mutation: None,
 		}
+	}
+
+	fn with_request_trailer_mutation(mut self, mutation: HeaderMutation) -> Self {
+		self.request_trailer_mutation = Some(mutation);
+		self
+	}
+
+	fn with_response_trailer_mutation(mut self, mutation: HeaderMutation) -> Self {
+		self.response_trailer_mutation = Some(mutation);
+		self
 	}
 }
 
@@ -4599,7 +4643,7 @@ impl Handler for RequestRecorder {
 			.send(Ok(ProcessingResponse {
 				response: Some(processing_response::Response::RequestTrailers(
 					proto::TrailersResponse {
-						header_mutation: None,
+						header_mutation: self.request_trailer_mutation.clone(),
 					},
 				)),
 				..Default::default()
@@ -4617,7 +4661,7 @@ impl Handler for RequestRecorder {
 			.send(Ok(ProcessingResponse {
 				response: Some(processing_response::Response::ResponseTrailers(
 					proto::TrailersResponse {
-						header_mutation: None,
+						header_mutation: self.response_trailer_mutation.clone(),
 					},
 				)),
 				..Default::default()
@@ -5068,6 +5112,7 @@ mod body_streaming_and_trailers {
 			tx,
 			super::super::BodyStreamDirection::Request,
 			false,
+			None,
 			super::super::FirstExtProcMessage::default(),
 		)
 		.await;
@@ -5101,6 +5146,7 @@ mod body_streaming_and_trailers {
 			tx,
 			super::super::BodyStreamDirection::Request,
 			true,
+			None,
 			super::super::FirstExtProcMessage::default(),
 		)
 		.await;
@@ -5133,8 +5179,19 @@ mod body_streaming_and_trailers {
 	}
 
 	#[tokio::test]
-	async fn request_trailers_are_sent_end_to_end_when_enabled() {
-		let tracker = MetadataTracker::new();
+	async fn request_trailers_are_forwarded_and_mutated_end_to_end() {
+		let tracker = MetadataTracker::new().with_request_trailer_mutation(HeaderMutation {
+			set_headers: vec![HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "x-added-trailer".to_string(),
+					raw_value: b"added-by-ext-proc".to_vec(),
+					..Default::default()
+				}),
+				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+				..Default::default()
+			}],
+			remove_headers: vec!["x-remove-trailer".to_string()],
+		});
 		let requests = tracker.requests.clone();
 		let processing_options = ext_proc::ProcessingOptions {
 			request_body_mode: ext_proc::BodySendMode::FullDuplexStreamed,
@@ -5150,7 +5207,8 @@ mod body_streaming_and_trailers {
 			build_ext_proc_request_for_test(ext_proc.address, processing_options);
 
 		let mut trailers = ::http::HeaderMap::new();
-		trailers.insert("x-request-trailer", "request-value".parse().unwrap());
+		trailers.insert("grpc-status", "0".parse().unwrap());
+		trailers.insert("x-remove-trailer", "remove-me".parse().unwrap());
 		let frames = tokio_stream::iter(vec![
 			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::data(bytes::Bytes::from_static(
 				b"request body",
@@ -5162,6 +5220,17 @@ mod body_streaming_and_trailers {
 			.build()
 			.unwrap();
 		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
+		let collected = req.into_body().collect().await.unwrap();
+		let trailers = collected
+			.trailers()
+			.expect("request trailers must be forwarded upstream");
+		assert_eq!(trailers.get("grpc-status").unwrap(), "0");
+		assert_eq!(
+			trailers.get("x-added-trailer").unwrap(),
+			"added-by-ext-proc"
+		);
+		assert!(!trailers.contains_key("x-remove-trailer"));
+		assert_eq!(collected.to_bytes().as_ref(), b"request body");
 
 		let captured = requests.lock().unwrap();
 		let request_body_pos = captured
@@ -5189,6 +5258,41 @@ mod body_streaming_and_trailers {
 	}
 
 	#[tokio::test]
+	async fn buffered_request_trailers_are_forwarded_end_to_end() {
+		let tracker = MetadataTracker::new();
+		let ext_proc = ExtProcMock::new(move || tracker.clone()).spawn().await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_body_mode: ext_proc::BodySendMode::Buffered,
+			response_body_mode: ext_proc::BodySendMode::None,
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			response_header_mode: ext_proc::HeaderSendMode::Send,
+			request_trailer_mode: ext_proc::TrailerSendMode::Send,
+			response_trailer_mode: ext_proc::TrailerSendMode::Skip,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+
+		let mut trailers = ::http::HeaderMap::new();
+		trailers.insert("grpc-status", "0".parse().unwrap());
+		let frames = tokio_stream::iter(vec![
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::data(bytes::Bytes::from_static(
+				b"request body",
+			))),
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers.clone())),
+		]);
+		let mut req = crate::proxy::request_builder::RequestBuilder::new(Method::POST, "http://lo")
+			.body(Body::new(http_body_util::StreamBody::new(frames)))
+			.build()
+			.unwrap();
+		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
+
+		let collected = req.into_body().collect().await.unwrap();
+		assert_eq!(collected.trailers(), Some(&trailers));
+		assert_eq!(collected.to_bytes().as_ref(), b"request body");
+	}
+
+	#[tokio::test]
 	async fn response_trailers_are_sent_end_to_end_when_enabled() {
 		let tracker = MetadataTracker::new();
 		let requests = tracker.requests.clone();
@@ -5206,20 +5310,22 @@ mod body_streaming_and_trailers {
 			build_ext_proc_request_for_test(ext_proc.address, processing_options);
 
 		let mut trailers = ::http::HeaderMap::new();
+		trailers.insert("grpc-status", "0".parse().unwrap());
 		trailers.insert("x-response-trailer", "response-value".parse().unwrap());
 		let frames = tokio_stream::iter(vec![
 			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::data(bytes::Bytes::from_static(
 				b"upstream-response",
 			))),
-			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers)),
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers.clone())),
 		]);
 		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
 		let _ = ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
-		let body = read_body_raw(resp.into_body()).await;
-		assert_eq!(body.as_ref(), b"upstream-response");
+		let collected = resp.into_body().collect().await.unwrap();
+		assert_eq!(collected.trailers(), Some(&trailers));
+		assert_eq!(collected.to_bytes().as_ref(), b"upstream-response");
 
 		let captured = requests.lock().unwrap();
 		let response_body_pos = captured
@@ -5244,6 +5350,103 @@ mod body_streaming_and_trailers {
 			response_body_pos < response_trailers_pos,
 			"response trailers should arrive after response body chunks"
 		);
+	}
+
+	#[tokio::test]
+	async fn response_trailer_mutations_are_applied_end_to_end() {
+		let tracker = MetadataTracker::new().with_response_trailer_mutation(HeaderMutation {
+			set_headers: vec![HeaderValueOption {
+				header: Some(HeaderValue {
+					key: "x-added-trailer".to_string(),
+					raw_value: b"added-by-ext-proc".to_vec(),
+					..Default::default()
+				}),
+				append_action: HeaderAppendAction::OverwriteIfExistsOrAdd as i32,
+				..Default::default()
+			}],
+			remove_headers: vec!["x-remove-trailer".to_string()],
+		});
+		let ext_proc = ExtProcMock::new(move || tracker.clone()).spawn().await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_body_mode: ext_proc::BodySendMode::None,
+			response_body_mode: ext_proc::BodySendMode::FullDuplexStreamed,
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			response_header_mode: ext_proc::HeaderSendMode::Send,
+			request_trailer_mode: ext_proc::TrailerSendMode::Skip,
+			response_trailer_mode: ext_proc::TrailerSendMode::Send,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+
+		let mut trailers = ::http::HeaderMap::new();
+		trailers.insert("grpc-status", "0".parse().unwrap());
+		trailers.insert("x-remove-trailer", "remove-me".parse().unwrap());
+		let frames = tokio_stream::iter(vec![
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::data(bytes::Bytes::from_static(
+				b"upstream-response",
+			))),
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers)),
+		]);
+		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
+		let _ = ext_proc_request
+			.mutate_response(&mut resp, None)
+			.await
+			.unwrap();
+
+		let collected = resp.into_body().collect().await.unwrap();
+		let trailers = collected
+			.trailers()
+			.expect("response trailers must be preserved");
+		assert_eq!(trailers.get("grpc-status").unwrap(), "0");
+		assert_eq!(
+			trailers.get("x-added-trailer").unwrap(),
+			"added-by-ext-proc"
+		);
+		assert!(!trailers.contains_key("x-remove-trailer"));
+		assert_eq!(collected.to_bytes().as_ref(), b"upstream-response");
+	}
+
+	#[tokio::test]
+	async fn buffered_response_trailers_are_forwarded_end_to_end() {
+		let tracker = MetadataTracker::new();
+		let requests = tracker.requests.clone();
+		let ext_proc = ExtProcMock::new(move || tracker.clone()).spawn().await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_body_mode: ext_proc::BodySendMode::None,
+			response_body_mode: ext_proc::BodySendMode::Buffered,
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			response_header_mode: ext_proc::HeaderSendMode::Send,
+			request_trailer_mode: ext_proc::TrailerSendMode::Skip,
+			response_trailer_mode: ext_proc::TrailerSendMode::Send,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+
+		let mut trailers = ::http::HeaderMap::new();
+		trailers.insert("grpc-status", "0".parse().unwrap());
+		let frames = tokio_stream::iter(vec![
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::data(bytes::Bytes::from_static(
+				b"upstream-response",
+			))),
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers.clone())),
+		]);
+		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
+		let _ = ext_proc_request
+			.mutate_response(&mut resp, None)
+			.await
+			.unwrap();
+		assert!(requests.lock().unwrap().iter().any(|request| {
+			matches!(
+				request.request,
+				Some(proto::processing_request::Request::ResponseTrailers(_))
+			)
+		}));
+
+		let collected = resp.into_body().collect().await.unwrap();
+		assert_eq!(collected.trailers(), Some(&trailers));
+		assert_eq!(collected.to_bytes().as_ref(), b"upstream-response");
 	}
 }
 

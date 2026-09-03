@@ -57,7 +57,17 @@ impl std::fmt::Debug for AzureCredentialCache {
 }
 
 #[apply(schema!)]
-pub enum AzureAuth {
+pub struct AzureAuth {
+	#[serde(flatten)]
+	pub kind: AzureAuthKind,
+	/// Scopes requested for the Azure access token. When unset, the scope is
+	/// inferred from the backend hostname.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub scopes: Vec<String>,
+}
+
+#[apply(schema!)]
+pub enum AzureAuthKind {
 	/// Use explicit Azure credentials
 	#[serde(rename_all = "camelCase")]
 	ExplicitConfig {
@@ -87,14 +97,32 @@ pub enum AzureAuth {
 
 impl Default for AzureAuth {
 	fn default() -> Self {
-		Self::Implicit {
-			cached_cred: Default::default(),
+		Self {
+			kind: AzureAuthKind::Implicit {
+				cached_cred: Default::default(),
+			},
+			scopes: Vec::new(),
 		}
 	}
 }
 
 const SCOPES: &[&str] = &["https://cognitiveservices.azure.com/.default"];
 const FOUNDRY_SCOPES: &[&str] = &["https://ai.azure.com/.default"];
+
+fn scopes_for_target<'a>(
+	auth: &'a AzureAuth,
+	target: &crate::types::agent::Target,
+) -> Vec<&'a str> {
+	if !auth.scopes.is_empty() {
+		return auth.scopes.iter().map(String::as_str).collect();
+	}
+	if matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"))
+	{
+		FOUNDRY_SCOPES.to_vec()
+	} else {
+		SCOPES.to_vec()
+	}
+}
 
 /// A credential chain that mirrors the Azure Go SDK's DefaultAzureCredential.
 ///
@@ -238,8 +266,8 @@ async fn build_credential(
 		transport: Some(azure_core::http::Transport::new(Arc::new(client.clone()))),
 		..Default::default()
 	};
-	match auth {
-		AzureAuth::ExplicitConfig {
+	match &auth.kind {
+		AzureAuthKind::ExplicitConfig {
 			credential_source, ..
 		} => match credential_source {
 			AzureAuthCredentialSource::ClientSecret {
@@ -286,8 +314,10 @@ async fn build_credential(
 				))?)
 			},
 		},
-		AzureAuth::DeveloperImplicit { .. } => Ok(azure_identity::DeveloperToolsCredential::new(None)?),
-		AzureAuth::Implicit { .. } => {
+		AzureAuthKind::DeveloperImplicit { .. } => {
+			Ok(azure_identity::DeveloperToolsCredential::new(None)?)
+		},
+		AzureAuthKind::Implicit { .. } => {
 			// Build a DefaultAzureCredential chain following the Azure Go SDK pattern.
 			// Each credential is tried in order; the first to succeed is cached and
 			// used for all subsequent requests.
@@ -441,19 +471,17 @@ pub(super) async fn get_token(
 	auth: &AzureAuth,
 	target: &crate::types::agent::Target,
 ) -> anyhow::Result<http::HeaderValue> {
-	let cache = match auth {
-		AzureAuth::Implicit { cached_cred, .. } => &cached_cred.0,
-		AzureAuth::DeveloperImplicit { cached_cred, .. } => &cached_cred.0,
-		AzureAuth::ExplicitConfig { cached_cred, .. } => &cached_cred.0,
+	let cache = match &auth.kind {
+		AzureAuthKind::Implicit { cached_cred, .. } => &cached_cred.0,
+		AzureAuthKind::DeveloperImplicit { cached_cred, .. } => &cached_cred.0,
+		AzureAuthKind::ExplicitConfig { cached_cred, .. } => &cached_cred.0,
 	};
 	let cred = cache
 		.get_or_try_init(|| build_credential(client, auth))
 		.await?
 		.clone();
-	// Foundry endpoints (.services.ai.azure.com) require the ai.azure.com scope
-	let is_foundry = matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"));
-	let scopes = if is_foundry { FOUNDRY_SCOPES } else { SCOPES };
-	let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, cred.get_token(scopes, None))
+	let scopes = scopes_for_target(auth, target);
+	let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, cred.get_token(&scopes, None))
 		.await
 		.ctx("Azure token fetch timed out after 5s")??;
 	let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
@@ -467,6 +495,58 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn configured_scopes_are_siblings_of_the_auth_kind() {
+		let auth = serde_json::from_str::<AzureAuth>(
+			r#"{
+				"explicitConfig":{"managedIdentity":{}},
+				"scopes":["https://graph.microsoft.com/.default"]
+			}"#,
+		)
+		.expect("Azure auth with configured scopes should parse");
+
+		assert!(matches!(&auth.kind, AzureAuthKind::ExplicitConfig { .. }));
+		assert_eq!(auth.scopes, ["https://graph.microsoft.com/.default"]);
+		assert_eq!(
+			serde_json::to_value(auth).expect("Azure auth with configured scopes should serialize"),
+			serde_json::json!({
+				"explicitConfig": {"managedIdentity": {"userAssignedIdentity": null}},
+				"scopes": ["https://graph.microsoft.com/.default"]
+			})
+		);
+	}
+
+	#[test]
+	fn legacy_auth_shape_round_trips_without_scopes() {
+		let auth = serde_json::from_value::<AzureAuth>(serde_json::json!({"implicit": {}}))
+			.expect("legacy Azure auth should parse");
+
+		assert_eq!(
+			serde_json::to_value(auth).expect("legacy Azure auth should serialize"),
+			serde_json::json!({"implicit": {}})
+		);
+	}
+
+	#[test]
+	fn scopes_default_from_target_and_allow_an_explicit_override() {
+		let mut auth = AzureAuth::default();
+
+		assert_eq!(
+			scopes_for_target(&auth, &("example.openai.azure.com", 443).into()),
+			SCOPES
+		);
+		assert_eq!(
+			scopes_for_target(&auth, &("example.services.ai.azure.com", 443).into()),
+			FOUNDRY_SCOPES
+		);
+
+		auth.scopes = vec!["https://graph.microsoft.com/.default".to_string()];
+		assert_eq!(
+			scopes_for_target(&auth, &("example.services.ai.azure.com", 443).into()),
+			["https://graph.microsoft.com/.default"]
+		);
+	}
+
+	#[test]
 	fn existing_user_assigned_managed_identity_parses() {
 		serde_json::from_str::<AzureAuthCredentialSource>(
 			r#"{"managedIdentity":{"userAssignedIdentity":{"clientId":"cid"}}}"#,
@@ -478,9 +558,12 @@ mod tests {
 	async fn empty_managed_identity_builds_sdk_credential() {
 		let credential_source =
 			serde_json::from_str(r#"{"managedIdentity":{}}"#).expect("managed identity should parse");
-		let auth = AzureAuth::ExplicitConfig {
-			credential_source,
-			cached_cred: Default::default(),
+		let auth = AzureAuth {
+			kind: AzureAuthKind::ExplicitConfig {
+				credential_source,
+				cached_cred: Default::default(),
+			},
+			scopes: Vec::new(),
 		};
 		let config = crate::config::parse_config("{}".to_string(), None).expect("config");
 		let client = crate::client::Client::new(&config.dns, None, Default::default(), None);

@@ -275,8 +275,18 @@ pub struct AccessLogFields {
 	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
 }
 
+#[apply(schema_enum!)]
+pub enum AccessLogPreset {
+	/// Use the OTel-aligned built-in HTTP field set for stdout access logs.
+	Otel,
+}
+
 #[apply(schema!)]
 pub struct LoggingPolicy {
+	/// Selects the built-in fields for stdout access logs.
+	/// If unset, human-oriented legacy fields are used.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub preset: Option<AccessLogPreset>,
 	/// CEL expression that decides whether a request is logged.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub filter: Option<Arc<cel::Expression>>,

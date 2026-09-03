@@ -639,7 +639,7 @@ function upsertFileConfigResource(
 					);
 				})
 			: -1;
-		if (!previousId || !previousId.startsWith('@index:')) {
+		if (!previousId?.startsWith('@index:')) {
 			value.metadata = {
 				...record(value.metadata),
 				'agentgateway.dev/id': previousId ?? `test-key-${keys.length + 1}`,

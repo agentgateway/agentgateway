@@ -37,6 +37,7 @@ const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
+const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
@@ -142,6 +143,7 @@ mod requests {
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
 		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("reasoning-adaptive", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI]),
 		("reasoning_replay", &[BEDROCK]),
 		("reasoning_replay_unsigned", &[BEDROCK]),
@@ -219,6 +221,19 @@ mod requests {
 
 	#[test]
 	fn from_completions() {
+		let catalog = model_catalog::TestCatalog::new([
+			(
+				"custom-adaptive-model",
+				&[model_catalog::tags::ADAPTIVE_THINKING][..],
+			),
+			(
+				"claude-opus-4-6",
+				&[
+					model_catalog::tags::ADAPTIVE_THINKING,
+					model_catalog::tags::LEGACY_THINKING,
+				][..],
+			),
+		]);
 		let bedrock = bedrock::Provider {
 			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 			region: strng::new("us-west-2"),
@@ -231,11 +246,17 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i| {
-						conversion::messages::from_completions::translate(i)
+						conversion::messages::from_completions::translate(i, Some(&catalog))
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_completions::translate(i, &bedrock, None, None)
-							.map(|r| r.body)
+						conversion::bedrock::from_completions::translate(
+							i,
+							&bedrock,
+							None,
+							None,
+							Some(&catalog),
+						)
+						.map(|r| r.body)
 					}),
 					VERTEX_GEMINI => test_request(VERTEX_GEMINI, &path, |i| {
 						conversion::vertex_gemini::from_completions::translate(i, Some("gemini-2.5-pro"))
@@ -271,7 +292,7 @@ mod requests {
 						conversion::completions::from_messages::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_messages::translate(i, &bedrock, None).map(|r| r.body)
+						conversion::bedrock::from_messages::translate(i, &bedrock, None, None).map(|r| r.body)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
@@ -300,7 +321,8 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_responses::translate(i, &bedrock, None, None).map(|r| r.body)
+						conversion::bedrock::from_responses::translate(i, &bedrock, None, None, None)
+							.map(|r| r.body)
 					}),
 					GEMINI => test_request(GEMINI, &path, |i| {
 						conversion::openai_compat::from_responses::translate(i)
@@ -802,6 +824,7 @@ mod responses {
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_COMPLETIONS),
+		("stop_sequence", &[COMPLETIONS_TO_MESSAGES]),
 		("audio", ALL_COMPLETIONS),
 		(
 			"cache_write",
@@ -837,6 +860,10 @@ mod responses {
 	const EMBEDDING_RESPONSES: &[(&str, &str)] = &[
 		("response/bedrock-titan/embeddings.json", BEDROCK_TITAN),
 		("response/bedrock-cohere/embeddings.json", BEDROCK_COHERE),
+		(
+			"response/bedrock-cohere-v4/embeddings.json",
+			BEDROCK_COHERE_V4,
+		),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/vertex/embeddings.json", VERTEX),
 		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
@@ -1051,10 +1078,11 @@ mod responses {
 		};
 		for (path, provider) in EMBEDDING_RESPONSES {
 			match *provider {
-				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => {
+				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_COHERE_V4 | BEDROCK_NOVA => {
 					let model = match *provider {
 						BEDROCK_TITAN => "amazon.titan-embed-text-v2:0",
 						BEDROCK_COHERE => "cohere.embed-english-v3",
+						BEDROCK_COHERE_V4 => "cohere.embed-v4:0",
 						_ => "amazon.nova-2-multimodal-embeddings-v1:0",
 					};
 					test_response(provider, path, |i| {
@@ -1319,6 +1347,42 @@ data: [DONE]
 				"output_tokens": 5,
 				"cache_creation_input_tokens": 30,
 				"cache_read_input_tokens": 20,
+			})
+		);
+	}
+
+	#[tokio::test]
+	async fn completions_to_messages_stream_reports_matched_stop_sequence() {
+		let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop","matched_stop":"STOPPROBE"}],"model":"gpt-5","usage":null}
+
+data: {"id":"chunk","choices":[],"model":"gpt-5","usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}}
+
+data: [DONE]
+
+"#;
+		let output = conversion::completions::from_messages::translate_stream(
+			axum_core::body::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let delta = String::from_utf8(output.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+			.find(|event| event["type"] == "message_delta")
+			.unwrap();
+
+		assert_eq!(
+			delta["delta"],
+			json!({
+				"stop_reason": "stop_sequence",
+				"stop_sequence": "STOPPROBE",
 			})
 		);
 	}

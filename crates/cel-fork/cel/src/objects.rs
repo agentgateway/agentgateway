@@ -266,6 +266,7 @@ impl PartialOrd for Value<'_> {
 			(Value::UInt(a), Value::UInt(b)) => Some(a.cmp(b)),
 			(Value::Float(a), Value::Float(b)) => a.partial_cmp(b),
 			(Value::String(a), Value::String(b)) => Some(a.as_ref().cmp(b.as_ref())),
+			(Value::Bytes(a), Value::Bytes(b)) => Some(a.as_ref().cmp(b.as_ref())),
 			(Value::Bool(a), Value::Bool(b)) => Some(a.cmp(b)),
 			(Value::Null, Value::Null) => Some(Ordering::Equal),
 
@@ -1187,6 +1188,12 @@ impl<'a> ops::Add<Value<'a>> for Value<'a> {
 				res.push_str(r.as_ref());
 				Ok(Value::String(res.into()))
 			},
+			(Value::Bytes(l), Value::Bytes(r)) => {
+				let mut res = Vec::with_capacity(l.as_ref().len() + r.as_ref().len());
+				res.extend_from_slice(l.as_ref());
+				res.extend_from_slice(r.as_ref());
+				Ok(Value::Bytes(BytesValue::Owned(res.into())))
+			},
 
 			(Value::Duration(l), Value::Duration(r)) => l
 				.checked_add(&r)
@@ -1431,6 +1438,14 @@ mod tests {
 	}
 
 	#[test]
+	fn test_bytes_compare() {
+		let program =
+			Program::compile(r#"b"a" < b"b" && b"a" <= b"a" && b"b" > b"a" && b"b" >= b"b""#).unwrap();
+		let context = Context::default();
+		assert_eq!(program.execute(&context).unwrap(), true.into());
+	}
+
+	#[test]
 	fn test_invalid_compare() {
 		let context = Context::default();
 
@@ -1477,6 +1492,14 @@ mod tests {
 			"'foo' + 10",
 			ExecutionError::UnsupportedBinaryOperator("add", "foo".into(), Value::Int(10)),
 		);
+	}
+
+	#[test]
+	fn test_add_bytes() {
+		let program = Program::compile(r#"b"a" + b"b""#).unwrap();
+		let context = Context::default();
+		let value = program.execute(&context).unwrap();
+		assert_eq!(value, Value::from(b"ab".to_vec()));
 	}
 
 	#[test]

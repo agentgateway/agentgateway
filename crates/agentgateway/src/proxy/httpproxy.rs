@@ -116,6 +116,9 @@ fn select_route_chain(
 
 pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
 	// Merge filter/fields into config for this request
+	if lp.preset.is_some() {
+		log.access_log_preset = lp.preset;
+	}
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();
 	}
@@ -213,10 +216,6 @@ async fn apply_request_policies(
 	pol
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
-		.await?;
-	pol
-		.substrate_egress
-		.apply_without_response("substrate egress", c, l, req, rp.headers())
 		.await?;
 	pol
 		.substrate_ingress
@@ -668,16 +667,15 @@ impl HTTPProxy {
 			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
 			.map_err(|e| e.0);
-
-		log.with(|l| {
-			l.error = ret.as_ref().err().and_then(|e| {
-				if let ProxyResponse::Error(e) = e {
-					Some(e.to_string())
-				} else {
-					None
-				}
-			})
+		let error = ret.as_ref().err().and_then(|e| match e {
+			ProxyResponse::Error(e) => Some(cel::ErrorContext {
+				reason: e.as_reason().to_string(),
+				message: e.to_string(),
+			}),
+			ProxyResponse::DirectResponse(_) => None,
 		});
+
+		log.with(|l| l.error = error.as_ref().map(|e| e.message.clone()));
 		let reason = match &ret {
 			Ok(_) => ProxyResponseReason::Upstream,
 			Err(e) => e.as_reason(),
@@ -686,6 +684,16 @@ impl HTTPProxy {
 			ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
 			ProxyResponse::DirectResponse(dr) => *dr,
 		});
+		if let Some(error) = error {
+			if let Some(proxy) = resp.extensions_mut().get_mut::<cel::ProxyContext>() {
+				proxy.error = Some(error);
+			} else {
+				resp.extensions_mut().insert(cel::ProxyContext {
+					error: Some(error),
+					..Default::default()
+				});
+			}
+		}
 
 		if let Some(l) = log.as_mut() {
 			l.cel.ctx().maybe_buffer_response_body(&mut resp).await;
@@ -774,6 +782,8 @@ impl HTTPProxy {
 			.map(|s| s.to_string())
 			.snapshot_on_err(log, &mut req)?;
 		log.host = Some(host.clone());
+		log.server_port = req.uri().port_u16();
+		log.scheme = req.uri().scheme().cloned();
 		log.method = Some(req.method().clone());
 		log.path = Some(
 			if req.method() == ::http::Method::CONNECT && req.uri().path().is_empty() {
@@ -913,7 +923,7 @@ impl HTTPProxy {
 			service: selected_route_chain
 				.routes
 				.last()
-				.and_then(|r| r.service_key.as_ref()),
+				.and_then(|route| route.service_key.as_ref()),
 			routes: selected_route_chain
 				.routes
 				.iter()
@@ -1036,7 +1046,10 @@ impl HTTPProxy {
 		} else {
 			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
 		};
-		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
+		let retry_backoff = retries
+			.as_ref()
+			.and_then(|r| r.backoff)
+			.or_else(|| substrate_default_retry.then_some(std::time::Duration::from_millis(100)));
 		let request_timeout = response_policies
 			.timeout
 			.as_ref()
@@ -2222,15 +2235,16 @@ async fn build_simple_backend_call(
 #[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
-	route_policies: Arc<store::LLMRequestPolicies>,
+	mut route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
-	base_policies: Arc<BackendPolicies>,
+	mut base_policies: Arc<BackendPolicies>,
 	route_path: Option<RoutePath<'_>>,
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<Response, ProxyResponse> {
-	if let Backend::LLMRouter(_, router) = backend {
+	let resolved_backend;
+	let backend = if let Backend::LLMRouter(_, router) = backend {
 		let resolved = match router.resolve(&mut req).await {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
@@ -2242,21 +2256,13 @@ async fn make_backend_call(
 			&selected_backend.inline_policies,
 			route_path.clone(),
 		);
-		let route_policies = route_policies.merge_backend_policies(Some(resolved.llm_policy));
-		let policies = Arc::new(base_policies.as_ref().clone().merge(concrete_policies));
-		let backend = selected_backend.backend.backend;
-		return Box::pin(make_backend_call(
-			inputs,
-			route_policies,
-			&backend,
-			policies,
-			route_path,
-			req,
-			log,
-			response_policies,
-		))
-		.await;
-	}
+		route_policies = route_policies.merge_backend_policies(Some(resolved.llm_policy));
+		base_policies = Arc::new(base_policies.as_ref().clone().merge(concrete_policies));
+		resolved_backend = Box::new(selected_backend.backend.backend);
+		resolved_backend.as_ref()
+	} else {
+		backend
+	};
 
 	let policy_client = PolicyClient::new(inputs.clone()).with_parent(&req);
 	let hbone_source = req
@@ -2292,7 +2298,17 @@ async fn make_backend_call(
 		},
 		_ => (backend, base_policies),
 	};
-	Box::pin(handle_substrate_backend_selection(&mut req, backend)).await?;
+	let substrate_selection = Box::pin(handle_substrate_backend_selection(&mut req, backend))
+		.await
+		.map(|_| ());
+	if let Some(state) = req
+		.extensions()
+		.get::<http::substrate::SubstrateRequestState>()
+	{
+		let resume = state.resume_disposition().as_str();
+		log.add(|l| l.ate_router_resume = Some(resume));
+	}
+	substrate_selection?;
 
 	log.add(|l| {
 		l.backend_info = Some(backend.backend_info());
@@ -2554,6 +2570,16 @@ async fn make_backend_call(
 				.as_ref()
 				.map(|policy| policy.resolve_route(req.uri().path()))
 				.unwrap_or(llm::RouteType::Completions);
+			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
+				&& let Some(provider_model) = llm.provider.override_model()
+			{
+				Box::pin(model_router::rewrite_multipart_request_model(
+					&mut req,
+					provider_model.as_str(),
+				))
+				.await
+				.map_err(ProxyResponse::DirectResponse)?;
+			}
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			let llm_provider = llm.provider.provider().to_string();
 			dtrace::trace(|trace| {
@@ -2915,10 +2941,7 @@ async fn make_backend_call(
 	let resp = upstream.call(call).await;
 	if let Some(span) = span.as_deref_mut() {
 		match &resp {
-			Ok(response) => span.add_attribute(KeyValue::new(
-				"http.status",
-				i64::from(response.status().as_u16()),
-			)),
+			Ok(response) => span.record_http_client_status(response.status()),
 			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}
@@ -4732,12 +4755,7 @@ impl PolicyClient {
 			return;
 		};
 		match result {
-			Ok(response) => {
-				span.add_attribute(KeyValue::new(
-					"http.status",
-					i64::from(response.status().as_u16()),
-				));
-			},
+			Ok(response) => span.record_http_client_status(response.status()),
 			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}

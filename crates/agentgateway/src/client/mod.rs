@@ -552,6 +552,11 @@ impl Client {
 		if let Some(pool_max) = backend_config.pool_max_size {
 			b.pool_max_idle_per_host(pool_max);
 		};
+		if !backend_config.h2_keepalive_interval.is_zero() {
+			b.http2_keep_alive_interval(Some(backend_config.h2_keepalive_interval));
+			b.http2_keep_alive_timeout(backend_config.h2_keepalive_timeout);
+			b.http2_keep_alive_while_idle(true);
+		}
 
 		let connector = Connector {
 			resolver: Arc::new(resolver),
@@ -734,6 +739,8 @@ impl Client {
 			let map_error = |err: agent_pool::Error| {
 				if err.is_connect_timeout() {
 					ProxyError::UpstreamCallTimeout
+				} else if connect_tunnel::is_stale_assignment(&err) {
+					ProxyError::StaleAssignment
 				} else {
 					ProxyError::UpstreamCallFailed(err)
 				}

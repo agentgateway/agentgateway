@@ -1,0 +1,13 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw-accesslog-stdout-otel
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: gateway
+      group: gateway.networking.k8s.io
+  frontend:
+    accessLog:
+      preset: Otel

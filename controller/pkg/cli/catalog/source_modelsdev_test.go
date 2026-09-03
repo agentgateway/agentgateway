@@ -15,18 +15,26 @@ func TestSelectModelsDevProviders(t *testing.T) {
 	api := sampleAPI()
 
 	t.Run("explicit", func(t *testing.T) {
-		got := modelsDevSelectProviders(api, []string{"google", "openai"})
-		want := []string{"google", "openai"}
+		got := modelsDevSelectProviders(api, []string{"google", "openai", "openrouter"}, nil)
+		want := []string{"google", "openai", "openrouter"}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("modelsDevSelectProviders(..., explicit) = %v, want %v", got, want)
 		}
 	})
 
 	t.Run("supported only by default", func(t *testing.T) {
-		got := modelsDevSelectProviders(api, nil)
-		want := []string{"anthropic", "google", "openai"}
+		got := modelsDevSelectProviders(api, nil, nil)
+		want := []string{"anthropic", "google", "openai", "openrouter"}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("modelsDevSelectProviders(..., nil) = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("excluded", func(t *testing.T) {
+		got := modelsDevSelectProviders(api, nil, []string{"openrouter"})
+		want := []string{"anthropic", "google", "openai"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("modelsDevSelectProviders(..., excluded) = %v, want %v", got, want)
 		}
 	})
 }
@@ -47,8 +55,23 @@ func sampleAPI() map[string]modelsDevProvider {
 			},
 		}},
 		"anthropic": {ID: "anthropic", Models: map[string]modelsDevModel{
+			"claude-opus-4-7": {
+				Family:           "claude-opus",
+				Cost:             &modelsDevCost{Input: "5", Output: "25"},
+				ReasoningOptions: []modelsDevReasoningOption{{Type: "effort"}},
+			},
+			"claude-opus-4-6": {
+				Family: "claude-opus",
+				Cost:   &modelsDevCost{Input: "5", Output: "25"},
+				ReasoningOptions: []modelsDevReasoningOption{
+					{Type: "effort"},
+					{Type: "budget_tokens"},
+				},
+			},
 			"claude-sonnet-4-5": {
-				Cost: &modelsDevCost{Input: "3", Output: "15", CacheRead: "0.3", CacheWrite: "3.75"},
+				Family:           "claude-sonnet",
+				Cost:             &modelsDevCost{Input: "3", Output: "15", CacheRead: "0.3", CacheWrite: "3.75"},
+				ReasoningOptions: []modelsDevReasoningOption{{Type: "budget_tokens"}},
 			},
 		}},
 		"google": {ID: "google", Models: map[string]modelsDevModel{
@@ -60,6 +83,11 @@ func sampleAPI() map[string]modelsDevProvider {
 						Tier: modelsDevTierKind{Type: "context", Size: 200000},
 					}},
 				},
+			},
+		}},
+		"openrouter": {ID: "openrouter", Models: map[string]modelsDevModel{
+			"volatile-model": {
+				Cost: &modelsDevCost{Input: "1", Output: "2"},
 			},
 		}},
 		"alibaba-cn": {ID: "alibaba-cn", Models: map[string]modelsDevModel{

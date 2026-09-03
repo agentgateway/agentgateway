@@ -1,0 +1,12 @@
+# Hand-maintained model catalog data merged over the generated base catalog.
+providers:
+  "*":
+    models:
+      "*opus-4-6*":
+        tags: [adaptive_thinking]
+      "*opus-4.6*":
+        tags: [adaptive_thinking]
+      "*sonnet-4-6*":
+        tags: [adaptive_thinking]
+      "*sonnet-4.6*":
+        tags: [adaptive_thinking]

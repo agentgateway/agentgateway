@@ -53,6 +53,21 @@
 	},
 	"overrides": [
 		{
+			// Defer CSS and React linting until visual regression baselines can guard behavior-changing fixes.
+			"includes": ["**/*", "!src/**/*.{tsx,css}"],
+			"linter": {
+				"domains": {
+					"playwright": "all",
+					"project": "recommended",
+					"test": "recommended",
+					"types": "recommended"
+				},
+				"rules": {
+					"preset": "recommended"
+				}
+			}
+		},
+		{
 			"includes": ["src/**/*.{ts,tsx}"],
 			"linter": {
 				"rules": {

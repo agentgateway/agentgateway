@@ -5,16 +5,53 @@ use std::sync::Arc;
 
 /// Well-known catalog tags: AWS Bedrock endpoint tags, plus format tags mirroring [`crate::ChatFormat::tag`].
 pub mod tags {
+	// AWS Bedrock endpoint tags.
+
 	/// AWS Bedrock model is served on the Runtime (Converse/Invoke) endpoint.
 	pub const RUNTIME: &str = "runtime";
 	/// AWS Bedrock model is served on the Mantle endpoint.
 	pub const MANTLE: &str = "mantle";
 
-	pub const OPENAI_COMPLETIONS: &str = "openai_completions";
-	pub const OPENAI_RESPONSES: &str = "openai_responses";
+	// Request formats.
+
+	/// Accepts Anthropic's native Messages request format.
 	pub const ANTHROPIC_MESSAGES: &str = "anthropic_messages";
+	/// Accepts Amazon Bedrock's Converse request format.
 	pub const BEDROCK_CONVERSE: &str = "bedrock_converse";
+	/// Accepts OpenAI's Chat Completions request format.
+	pub const OPENAI_COMPLETIONS: &str = "openai_completions";
+	/// Accepts OpenAI's Responses request format.
+	pub const OPENAI_RESPONSES: &str = "openai_responses";
+	/// Accepts Google's native Gemini request format.
 	pub const VERTEX_GEMINI: &str = "vertex_gemini";
+
+	// Anthropic thinking capabilities.
+
+	/// Supports Anthropic adaptive thinking with an effort level.
+	pub const ADAPTIVE_THINKING: &str = "adaptive_thinking";
+	/// Supports Anthropic legacy thinking with an explicit token budget.
+	pub const LEGACY_THINKING: &str = "legacy_thinking";
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct AnthropicThinkingCapabilities {
+	pub adaptive: bool,
+	pub legacy: bool,
+}
+
+pub(crate) fn anthropic_thinking_capabilities(
+	model: &str,
+	catalog: Catalog<'_>,
+) -> AnthropicThinkingCapabilities {
+	let tags = catalog.and_then(|catalog| catalog.get_model_tags(model));
+	AnthropicThinkingCapabilities {
+		adaptive: tags
+			.as_ref()
+			.is_some_and(|tags| tags.contains(tags::ADAPTIVE_THINKING)),
+		legacy: tags
+			.as_ref()
+			.is_some_and(|tags| tags.contains(tags::LEGACY_THINKING)),
+	}
 }
 
 /// Read handle to the model catalog; implemented in agentgateway on the cost `ModelCatalog`.

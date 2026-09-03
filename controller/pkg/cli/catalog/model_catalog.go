@@ -6,87 +6,139 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
 
 type ModelCatalog struct {
+	Metadata  *CatalogMetadata    `json:"metadata,omitempty"`
 	Providers map[string]Provider `json:"providers"`
 }
 
-// mergeFrom deep-merges overlay into c (mirrors the proxy's Catalog::override_with): insert absent
-// models, fill only empty rate fields, replace tiers when overlay has them, and union tags. This
-// lets one source contribute rates (models.dev) and another contribute tags (aws-bedrock-mantle).
-func (c *ModelCatalog) mergeFrom(overlay *ModelCatalog) {
-	if overlay == nil {
-		return
-	}
+type CatalogMetadata struct {
+	// Source is accepted for compatibility with older catalogs.
+	Source      string    `json:"source,omitempty"`
+	GeneratedAt time.Time `json:"generatedAt"`
+}
+
+func (c *ModelCatalog) overlayWith(overlay *ModelCatalog) {
 	if c.Providers == nil {
 		c.Providers = map[string]Provider{}
 	}
-	for pid, op := range overlay.Providers {
-		bp, ok := c.Providers[pid]
-		if !ok {
-			bp = Provider{Models: map[string]Model{}}
+	if global, ok := overlay.Providers["*"]; ok {
+		providerIDs := make([]string, 0, len(c.Providers))
+		for providerID := range c.Providers {
+			providerIDs = append(providerIDs, providerID)
 		}
-		if bp.Models == nil {
-			bp.Models = map[string]Model{}
+		slices.Sort(providerIDs)
+		for _, providerID := range providerIDs {
+			provider := c.Providers[providerID]
+			provider.overlayWith(global, false)
+			c.Providers[providerID] = provider
 		}
-		for mid, om := range op.Models {
-			bp.Models[mid] = mergeModel(bp.Models[mid], om)
+	}
+
+	providerIDs := make([]string, 0, len(overlay.Providers))
+	for providerID := range overlay.Providers {
+		if providerID != "*" {
+			providerIDs = append(providerIDs, providerID)
 		}
-		c.Providers[pid] = bp
+	}
+	slices.Sort(providerIDs)
+	for _, providerID := range providerIDs {
+		overlayProvider := overlay.Providers[providerID]
+		provider := c.Providers[providerID]
+		provider.overlayWith(overlayProvider, true)
+		c.Providers[providerID] = provider
 	}
 }
 
-// mergeModel overlays om onto base (see mergeFrom); a zero-value base yields om unchanged.
-func mergeModel(base, om Model) Model {
-	base.Rates = base.Rates.overlay(om.Rates)
-	if len(om.Tiers) > 0 {
-		base.Tiers = om.Tiers
+func (p *Provider) overlayWith(overlay Provider, addExactModels bool) {
+	if p.Models == nil {
+		p.Models = map[string]Model{}
 	}
-	base.Tags = unionTags(base.Tags, om.Tags)
-	return base
-}
-
-// overlay fills each empty field of r from o.
-func (r Rates) overlay(o Rates) Rates {
-	fill := func(dst *Money, src Money) {
-		if *dst == "" {
-			*dst = src
+	modelPatterns := make([]string, 0, len(overlay.Models))
+	exactModels := make([]string, 0, len(overlay.Models))
+	for modelID := range overlay.Models {
+		if strings.Contains(modelID, "*") {
+			modelPatterns = append(modelPatterns, modelID)
+		} else {
+			exactModels = append(exactModels, modelID)
 		}
 	}
-	fill(&r.Input, o.Input)
-	fill(&r.Output, o.Output)
-	fill(&r.CacheRead, o.CacheRead)
-	fill(&r.CacheWrite, o.CacheWrite)
-	fill(&r.Reasoning, o.Reasoning)
-	fill(&r.InputAudio, o.InputAudio)
-	fill(&r.OutputAudio, o.OutputAudio)
-	return r
+	slices.Sort(modelPatterns)
+	slices.Sort(exactModels)
+
+	baseModelIDs := make([]string, 0, len(p.Models))
+	for modelID := range p.Models {
+		baseModelIDs = append(baseModelIDs, modelID)
+	}
+	slices.Sort(baseModelIDs)
+	for _, pattern := range modelPatterns {
+		for _, modelID := range baseModelIDs {
+			if starMatch(pattern, modelID) {
+				model := p.Models[modelID]
+				model.overlayWith(overlay.Models[pattern])
+				p.Models[modelID] = model
+			}
+		}
+	}
+	for _, modelID := range exactModels {
+		model, exists := p.Models[modelID]
+		if !exists && !addExactModels {
+			continue
+		}
+		model.overlayWith(overlay.Models[modelID])
+		p.Models[modelID] = model
+	}
 }
 
-// unionTags returns the sorted, de-duplicated union of a and b (nil if both are empty).
-func unionTags(a, b []string) []string {
-	if len(a) == 0 && len(b) == 0 {
-		return nil
+func (m *Model) overlayWith(overlay Model) {
+	m.Rates.overlayWith(overlay.Rates)
+	if len(overlay.Tiers) > 0 {
+		m.Tiers = overlay.Tiers
 	}
-	set := make(map[string]bool, len(a)+len(b))
-	for _, t := range a {
-		set[t] = true
+	for _, tag := range overlay.Tags {
+		if !slices.Contains(m.Tags, tag) {
+			m.Tags = append(m.Tags, tag)
+		}
 	}
-	for _, t := range b {
-		set[t] = true
+}
+
+// starMatch matches a string pattern where '*' represents any sequence of bytes, including '/'.
+func starMatch(pattern, value string) bool {
+	patternIndex, valueIndex := 0, 0
+	starIndex, retryValueIndex := -1, 0
+	for valueIndex < len(value) {
+		switch {
+		case patternIndex < len(pattern) && pattern[patternIndex] == value[valueIndex]:
+			patternIndex++
+			valueIndex++
+		case patternIndex < len(pattern) && pattern[patternIndex] == '*':
+			starIndex = patternIndex
+			patternIndex++
+			retryValueIndex = valueIndex
+		case starIndex >= 0:
+			patternIndex = starIndex + 1
+			retryValueIndex++
+			valueIndex = retryValueIndex
+		default:
+			return false
+		}
 	}
-	out := make([]string, 0, len(set))
-	for t := range set {
-		out = append(out, t)
+	for patternIndex < len(pattern) && pattern[patternIndex] == '*' {
+		patternIndex++
 	}
-	slices.Sort(out)
-	return out
+	return patternIndex == len(pattern)
 }
 
 func (c *ModelCatalog) Validate() error {
+	if c.Metadata != nil {
+		if c.Metadata.GeneratedAt.IsZero() {
+			return fmt.Errorf("metadata generatedAt is required")
+		}
+	}
 	for provider, p := range c.Providers {
 		for model, m := range p.Models {
 			if err := m.validate(); err != nil {
@@ -130,6 +182,16 @@ type Money string
 
 func (r Rates) IsZero() bool {
 	return r == Rates{}
+}
+
+func (r *Rates) overlayWith(overlay Rates) {
+	dst := reflect.ValueOf(r).Elem()
+	src := reflect.ValueOf(overlay)
+	for i := range src.NumField() {
+		if !src.Field(i).IsZero() {
+			dst.Field(i).Set(src.Field(i))
+		}
+	}
 }
 
 func (m Money) Decimal() (decimal.Decimal, error) {

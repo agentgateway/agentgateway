@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +12,9 @@ use crate::{apply, schema};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
+	/// Identifies a generated base catalog and when its contents last changed.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub metadata: Option<CatalogMetadata>,
 	/// Map of provider name to its supported models and pricing.
 	#[serde(default)]
 	pub providers: BTreeMap<String, Provider>,
@@ -60,6 +64,17 @@ impl Catalog {
 	pub fn resolve(&self, provider: &str, model: &str) -> Option<&Model> {
 		self.providers.get(provider)?.models.get(model)
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CatalogMetadata {
+	/// Legacy provenance field retained for compatibility with older generated catalogs.
+	#[serde(default, skip_serializing)]
+	pub source: Option<String>,
+	/// Time the generated catalog contents last changed.
+	pub generated_at: DateTime<Utc>,
 }
 
 pub fn from_json(s: &str) -> anyhow::Result<Catalog> {

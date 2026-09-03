@@ -421,7 +421,9 @@
             },
             "connectTimeout": "11s",
             "poolIdleTimeout": "1m30s",
-            "poolMaxSize": null
+            "poolMaxSize": null,
+            "h2KeepaliveInterval": "0s",
+            "h2KeepaliveTimeout": "5s"
           }
         },
         "hbone": {
@@ -536,6 +538,17 @@
     "Catalog": {
       "type": "object",
       "properties": {
+        "metadata": {
+          "description": "Identifies a generated base catalog and when its contents last changed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "providers": {
           "description": "Map of provider name to its supported models and pricing.",
           "type": "object",
@@ -546,6 +559,28 @@
         }
       },
       "additionalProperties": false
+    },
+    "CatalogMetadata": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Legacy provenance field retained for compatibility with older generated catalogs.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "writeOnly": true
+        },
+        "generatedAt": {
+          "description": "Time the generated catalog contents last changed.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "generatedAt"
+      ]
     },
     "Provider": {
       "type": "object",
@@ -1079,6 +1114,16 @@
           "format": "uint",
           "minimum": 0,
           "default": null
+        },
+        "h2KeepaliveInterval": {
+          "description": "Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.\nPINGs are sent even on idle connections to proactively evict dead connections from the pool.\nDisabled by default (\"0s\"). Note: many gRPC servers enforce a minimum ping interval\nand will reject connections that ping more frequently.",
+          "type": "string",
+          "default": "0s"
+        },
+        "h2KeepaliveTimeout": {
+          "description": "Timeout waiting for a PING ACK before considering the connection dead and closing it.\nOnly applies when h2_keepalive_interval is set. Defaults to 5s.",
+          "type": "string",
+          "default": "5s"
         }
       },
       "additionalProperties": false
@@ -1990,18 +2035,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/SubstrateIngress"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "substrateEgress": {
-          "description": "Authorize CONNECT egress using the originating actor's dynamic policy.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SubstrateEgress"
             },
             {
               "type": "null"
@@ -3535,6 +3568,17 @@
       ]
     },
     "AzureAuth": {
+      "type": "object",
+      "properties": {
+        "scopes": {
+          "description": "Scopes requested for the Azure access token. When unset, the scope is\ninferred from the backend hostname.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false,
       "oneOf": [
         {
           "description": "Use explicit Azure credentials",
@@ -3613,8 +3657,7 @@
           },
           "required": [
             "explicitConfig"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
@@ -3627,8 +3670,7 @@
           },
           "required": [
             "developerImplicit"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "description": "Automatically detect authentication method based on environment.\nUses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.",
@@ -3641,8 +3683,7 @@
           },
           "required": [
             "implicit"
-          ],
-          "additionalProperties": false
+          ]
         }
       ]
     },
@@ -7652,81 +7693,6 @@
       },
       "additionalProperties": false
     },
-    "SubstrateEgress": {
-      "description": "Authorizes an actor's egress to the hostname recovered from an internal CONNECT listener.",
-      "type": "object",
-      "properties": {
-        "policies": {
-          "description": "Backend policies used when connecting to the service.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "unevaluatedProperties": false,
-      "oneOf": [
-        {
-          "description": "Service reference. Service must be defined in the top level services list.",
-          "type": "object",
-          "properties": {
-            "service": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "description": "Name of the target Service, as defined in the top-level `services` list.",
-                  "$ref": "#/$defs/NamespacedHostname"
-                },
-                "port": {
-                  "description": "Port on the target Service to route to.",
-                  "type": "integer",
-                  "format": "uint16",
-                  "minimum": 0,
-                  "maximum": 65535
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name",
-                "port"
-              ]
-            }
-          },
-          "required": [
-            "service"
-          ]
-        },
-        {
-          "description": "Hostname or IP address",
-          "type": "object",
-          "properties": {
-            "host": {
-              "description": "Hostname or IP address",
-              "type": "string"
-            }
-          },
-          "required": [
-            "host"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "backend": {
-              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-              "type": "string"
-            }
-          },
-          "required": [
-            "backend"
-          ]
-        }
-      ]
-    },
     "LocalExplicitOrConditional_LocalTransformationConfig": {
       "anyOf": [
         {
@@ -9787,6 +9753,18 @@
           ],
           "default": null
         },
+        "substrateEgress": {
+          "description": "Validate the originating actor before accepting a CONNECT tunnel.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubstrateEgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "proxy": {
           "description": "Enable downstream PROXY protocol handling on this gateway or port, including\nversion matching and whether PROXY headers are required or optional.",
           "anyOf": [
@@ -10100,6 +10078,81 @@
       "description": "CEL authorization rules for downstream network connections.",
       "$ref": "#/$defs/RuleSet"
     },
+    "SubstrateEgress": {
+      "description": "Validates an actor's identity before accepting a CONNECT tunnel.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
     "Proxy": {
       "type": "object",
       "properties": {
@@ -10184,6 +10237,17 @@
     "LoggingPolicy": {
       "type": "object",
       "properties": {
+        "preset": {
+          "description": "Selects the built-in fields for stdout access logs.\nIf unset, human-oriented legacy fields are used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccessLogPreset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "filter": {
           "description": "CEL expression that decides whether a request is logged.",
           "anyOf": [
@@ -10234,6 +10298,15 @@
         }
       },
       "additionalProperties": false
+    },
+    "AccessLogPreset": {
+      "oneOf": [
+        {
+          "description": "Use the OTel-aligned built-in HTTP field set for stdout access logs.",
+          "type": "string",
+          "const": "otel"
+        }
+      ]
     },
     "OtlpLoggingConfig": {
       "type": "object",

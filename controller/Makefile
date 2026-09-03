@@ -136,7 +136,7 @@ analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options wit
 .PHONY: ensure-custom-golangci-lint
 ensure-custom-golangci-lint:
 	@expected_go_version="$$(go env GOVERSION)"; \
-	current_go_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* built with \(go[0-9.]*\).*/\1/p' )"; \
+	current_go_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* built with \(go[^[:space:]]*\).*/\1/p' )"; \
 	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ]; then \
 		echo "Rebuilding golangci-lint custom with $$expected_go_version..."; \
 		rm -f "$(CUSTOM_GOLANGCI_LINT_BIN)"; \

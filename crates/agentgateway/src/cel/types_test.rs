@@ -46,6 +46,7 @@ fn build_test_request() -> crate::http::Request {
 	};
 	req.extensions_mut().insert(backend);
 	req.extensions_mut().insert(ProxyContext {
+		error: None,
 		bind: Some("bind".into()),
 		gateway: Some(ProxyGatewayContext {
 			namespace: "default".into(),
@@ -328,6 +329,7 @@ fn test_route_metadata_context() {
 #[test]
 fn test_proxy_timing_is_native_duration() {
 	let proxy = ProxyContext {
+		error: None,
 		bind: None,
 		gateway: None,
 		listener: None,

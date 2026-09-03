@@ -13,9 +13,16 @@ default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 # Crypto provider selection. `crypto-aws-lc` (the default) backs all crypto with
-# aws-lc-rs. `crypto-symcrypt` routes TLS/AEAD/hash/RNG through SymCrypt and falls
-# back to aws-lc-rs for JWT and certificate issuance (no SymCrypt hook there).
+# aws-lc-rs. `fips` is an operating-mode modifier; it currently requires the
+# `crypto-aws-lc` backend and builds it against AWS-LC-FIPS (aws-lc-fips-sys).
+# The concrete AWS-LC-FIPS module is determined by the aws-lc-fips-sys version
+# resolved in Cargo.lock.
+# Note the linked module version is not necessarily CMVP-validated; check the
+# certificate for the exact AWS-LC-FIPS version before making a compliance claim.
+# `crypto-symcrypt` routes TLS/AEAD/hash/RNG through SymCrypt and falls back to
+# aws-lc-rs for JWT and certificate issuance (no SymCrypt hook there).
 crypto-aws-lc = ["dep:aws-lc-rs", "rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs", "jsonwebtoken/aws_lc_rs"]
+fips = ["aws-lc-rs?/fips", "rustls/fips", "tokio-rustls/fips"]
 crypto-symcrypt = ["dep:symcrypt", "dep:rustls-symcrypt", "dep:aws-lc-rs", "jsonwebtoken/aws_lc_rs"]
 ui = []
 schema = ["schemars", "agent-core/schema", "agent-llm/schema"]
