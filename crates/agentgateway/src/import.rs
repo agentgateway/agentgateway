@@ -730,19 +730,6 @@ impl LiteLlmCredentials {
 		}
 		}
 
-		if credential.params.is_empty()
-			&& credential.upstream_headers.extra_headers.values.is_empty()
-			&& credential.upstream_headers.organization.value.is_none()
-		{
-			plan.findings.push(ImportFinding {
-				source_path: reference_path,
-				status: ImportStatus::Manual,
-				message: format!(
-					"LiteLLM credential {credential_name:?} contains no supported provider values and was not applied"
-				),
-			});
-			return;
-		}
 		let can_reference = model
 			.params
 			.iter()
@@ -781,6 +768,16 @@ impl LiteLlmCredentials {
 					.iter()
 					.cloned(),
 			);
+		}
+		if credential.params.is_empty() && credential_request_headers.is_empty() {
+			plan.findings.push(ImportFinding {
+				source_path: reference_path,
+				status: ImportStatus::Manual,
+				message: format!(
+					"LiteLLM credential {credential_name:?} contains no supported provider values and was not applied"
+				),
+			});
+			return;
 		}
 
 		let organization = if model_upstream_headers.organization.present {

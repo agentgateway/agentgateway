@@ -246,3 +246,6 @@ findings:
   - sourcePath: "model_list[11]"
     status: exact
     message: Imported model deployment for local
+  - sourcePath: "model_list[11].litellm_params.litellm_credential_name"
+    status: manual
+    message: "LiteLLM credential \"ollama-org-only\" contains no supported provider values and was not applied"
