@@ -1317,6 +1317,10 @@ impl HTTPProxy {
 				sampler.client_sampling = Some(cs.clone());
 				log.cel.cel_context.register_expression(cs.as_ref());
 			}
+			if let Some(pns) = &tp.config.parent_not_sampled {
+				sampler.parent_not_sampled = Some(pns.clone());
+				log.cel.cel_context.register_expression(pns.as_ref());
+			}
 			if let Some(f) = &tp.config.filter {
 				log.cel.cel_context.register_log_expression(f.as_ref());
 			}
@@ -1325,30 +1329,33 @@ impl HTTPProxy {
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
 		let trace_parent = trc::TraceParent::from_request(req);
-		let (trace_sampled, trace_decision) = sampler.trace_sampled(req, trace_parent.as_ref());
-		dtrace::trace(|trace| trace.trace_sampling(trace_decision));
+		let decision = sampler.decide(req, trace_parent.as_ref());
+		dtrace::trace(|trace| trace.trace_sampling(decision.reason));
+		log.trace_sampled = decision.export;
 
-		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
-		if trace_sampled {
-			log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
-				debug!(
-					resources_count=%tp.config.resources.len(),
-					attrs_count=%tp.config.attributes.len(),
-					"Using dynamic tracer from frontend policy"
-				);
+		if decision.participate {
+			// Use dynamic tracer from frontend policy if available, otherwise use static tracer
+			if decision.export {
+				log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
+					debug!(
+						resources_count=%tp.config.resources.len(),
+						attrs_count=%tp.config.attributes.len(),
+						"Using dynamic tracer from frontend policy"
+					);
 
-				tp.get_or_init(self.policy_client())
-					.map(|t| Some(t.clone()))
-					.unwrap_or_else(|e| {
-						warn!("ignoring invalid tracing policy: {e}");
-						None
-					})
-			} else {
-				None
-			};
-			// Register CEL expressions from the tracer
-			if let Some(tracer) = &log.tracer {
-				log.cel.register(tracer.fields.as_ref());
+					tp.get_or_init(self.policy_client())
+						.map(|t| Some(t.clone()))
+						.unwrap_or_else(|e| {
+							warn!("ignoring invalid tracing policy: {e}");
+							None
+						})
+				} else {
+					None
+				};
+				// Register CEL expressions from the tracer
+				if let Some(tracer) = &log.tracer {
+					log.cel.register(tracer.fields.as_ref());
+				}
 			}
 
 			// Now create outgoing span with the correct tracer already set

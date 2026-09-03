@@ -115,7 +115,8 @@ pub fn trace_span_data(
 		span_context: SpanContext::new(
 			TraceId::from(span.trace_id),
 			SpanId::from(span.span_id),
-			TraceFlags::new(span.flags),
+			// `span.flags` is the value propagated upstream, which may be an unsampled parent's `-00`
+			TraceFlags::SAMPLED,
 			false,
 			TraceState::default(),
 		),
@@ -284,10 +285,12 @@ impl Tracer {
 			.filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
 			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(v)))
 			.collect_vec();
-		let out_span = request.outgoing_span.as_ref().unwrap();
-		if !out_span.is_sampled() {
+		if !request.trace_sampled {
 			return;
 		}
+		let Some(out_span) = request.outgoing_span.as_ref() else {
+			return;
+		};
 		if !should_export_span(self.filter.as_deref(), &cel_exec.executor) {
 			return;
 		}
@@ -320,7 +323,6 @@ impl Tracer {
 		});
 		let status = request_span_status(request, &mut attributes);
 
-		let out_span = request.outgoing_span.as_ref().unwrap();
 		self.processor.emit(trace_span_data(
 			span_name,
 			SpanKind::Server,
@@ -863,7 +865,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		));
-		RequestLog::new(
+		let mut log = RequestLog::new(
 			cel,
 			metrics,
 			ModelCatalog::empty(),
@@ -874,7 +876,9 @@ mod tests {
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
-		)
+		);
+		log.trace_sampled = true;
+		log
 	}
 
 	#[test]
@@ -919,6 +923,80 @@ mod tests {
 		assert_eq!(span.parent_span_id, incoming.span_id.into());
 		assert!(span.parent_span_is_remote);
 		assert!(span.links.iter().next().is_none());
+	}
+
+	/// A forced span keeps the unsampled parent's `-00` in `outgoing_span` (that is the value
+	/// propagated upstream) but is still exported, and is marked sampled in its own SpanContext.
+	#[test]
+	fn send_exports_forced_span_from_unsampled_parent() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.method = Some(http::Method::GET);
+		request.path_match = Some(strng::new("/trace"));
+
+		let incoming = TraceParent::new();
+		let outgoing = incoming.new_span();
+		assert!(!incoming.is_sampled());
+		assert!(!outgoing.is_sampled());
+		request.incoming_span = Some(incoming.clone());
+		request.outgoing_span = Some(outgoing.clone());
+
+		let filter = None;
+		let fields = LoggingFields::default();
+		let otlp_filter = None;
+		let otlp_fields = LoggingFields::default();
+		let metric_fields = Arc::new(MetricFields::default());
+		let database_fields = LoggingFields::default();
+		let cel_exec = CelLoggingExecutor {
+			executor: crate::cel::Executor::new_empty(),
+			filter: &filter,
+			fields: &fields,
+			otlp_filter: &otlp_filter,
+			otlp_fields: &otlp_fields,
+			metric_fields: &metric_fields,
+			database_fields: &database_fields,
+		};
+
+		tracer.send(&request, &Timestamp::now(), &cel_exec, None, &[]);
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		assert_eq!(spans.len(), 1);
+		let span = &spans[0];
+		assert_eq!(span.span_context.trace_id(), outgoing.trace_id.into());
+		assert_eq!(span.span_context.span_id(), outgoing.span_id.into());
+		assert_eq!(span.parent_span_id, incoming.span_id.into());
+		assert!(span.parent_span_is_remote);
+		assert!(span.span_context.is_sampled());
+	}
+
+	#[test]
+	fn send_skips_export_when_not_sampled() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.trace_sampled = false;
+		request.outgoing_span = Some(TraceParent::new());
+
+		let filter = None;
+		let fields = LoggingFields::default();
+		let otlp_filter = None;
+		let otlp_fields = LoggingFields::default();
+		let metric_fields = Arc::new(MetricFields::default());
+		let database_fields = LoggingFields::default();
+		let cel_exec = CelLoggingExecutor {
+			executor: crate::cel::Executor::new_empty(),
+			filter: &filter,
+			fields: &fields,
+			otlp_filter: &otlp_filter,
+			otlp_fields: &otlp_fields,
+			metric_fields: &metric_fields,
+			database_fields: &database_fields,
+		};
+
+		tracer.send(&request, &Timestamp::now(), &cel_exec, None, &[]);
+		let _ = tracer.provider.force_flush();
+
+		assert!(exporter.finished_spans().is_empty());
 	}
 
 	fn test_llm_request() -> crate::llm::LLMRequest {

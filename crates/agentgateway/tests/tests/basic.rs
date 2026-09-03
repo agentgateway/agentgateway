@@ -295,6 +295,178 @@ async fn tracing_exports_to_otel_trace_mock() {
 	assert_eq!(ext_authz.parent_span_id, request.span_id);
 }
 
+/// `parentNotSampled` exports spans for a request whose incoming `traceparent` is `-00`, while
+/// still forwarding `-00` upstream so downstream services are not made to trace.
+#[tokio::test]
+async fn tracing_parent_not_sampled_exports_without_propagating_sampled_flag() {
+	unsafe {
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	struct CountingTraceHandler {
+		spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
+	}
+
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for CountingTraceHandler {
+		async fn export(
+			&mut self,
+			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+		) -> Result<
+			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+			tonic::Status,
+		> {
+			self.spans.lock().unwrap().extend(
+				request
+					.resource_spans
+					.iter()
+					.flat_map(|resource| &resource.scope_spans)
+					.flat_map(|scope| &scope.spans)
+					.cloned(),
+			);
+			oteltracemock::ok_response()
+		}
+	}
+
+	const TRACE_ID: &str = "0af7651916cd43dd8448eb211c80319c";
+	const PARENT_SPAN_ID: &str = "b7ad6b7169203331";
+	let unsampled = format!("00-{TRACE_ID}-{PARENT_SPAN_ID}-00");
+
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = Arc::clone(&spans);
+		move || CountingTraceHandler {
+			spans: Arc::clone(&spans),
+		}
+	})
+	.spawn()
+	.await;
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"tracing": {
+				"host": otel.address.to_string(),
+				"parentNotSampled": true
+			}
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("traceparent", unsampled.as_str())],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	let upstream = read_body(res.into_body()).await;
+	let forwarded = upstream
+		.headers
+		.get("traceparent")
+		.expect("traceparent should be forwarded upstream")
+		.to_str()
+		.unwrap()
+		.to_string();
+	assert!(
+		forwarded.ends_with("-00"),
+		"upstream traceparent must keep the client's unsampled flag, got {forwarded}"
+	);
+	assert!(
+		forwarded.starts_with(&format!("00-{TRACE_ID}-")),
+		"upstream traceparent must stay in the client's trace, got {forwarded}"
+	);
+	assert!(
+		!forwarded.contains(PARENT_SPAN_ID),
+		"upstream traceparent must carry the gateway's own span id, got {forwarded}"
+	);
+
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while spans.lock().unwrap().is_empty() {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.expect("a span should be exported for an unsampled parent");
+
+	let spans = spans.lock().unwrap();
+	let request = spans
+		.iter()
+		.find(|span| hex::encode(&span.trace_id) == TRACE_ID)
+		.expect("exported span should stay in the client's trace");
+	assert_eq!(hex::encode(&request.parent_span_id), PARENT_SPAN_ID);
+	assert_eq!(request.flags & 0x01, 0x01);
+}
+
+/// Without `parentNotSampled`, an incoming `-00` is honored and nothing is exported.
+#[tokio::test]
+async fn tracing_honors_unsampled_parent_by_default() {
+	unsafe {
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	struct CountingTraceHandler {
+		spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
+	}
+
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for CountingTraceHandler {
+		async fn export(
+			&mut self,
+			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+		) -> Result<
+			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+			tonic::Status,
+		> {
+			self.spans.lock().unwrap().extend(
+				request
+					.resource_spans
+					.iter()
+					.flat_map(|resource| &resource.scope_spans)
+					.flat_map(|scope| &scope.spans)
+					.cloned(),
+			);
+			oteltracemock::ok_response()
+		}
+	}
+
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = Arc::clone(&spans);
+		move || CountingTraceHandler {
+			spans: Arc::clone(&spans),
+		}
+	})
+	.spawn()
+	.await;
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"tracing": {
+				"host": otel.address.to_string(),
+				"clientSampling": true
+			}
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[(
+			"traceparent",
+			"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00",
+		)],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	tokio::time::sleep(Duration::from_millis(200)).await;
+	assert!(spans.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn multiple_requests() {
 	let (_mock, _bind, io) = basic_setup().await;

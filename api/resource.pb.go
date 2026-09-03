@@ -11013,6 +11013,12 @@ type FrontendPolicySpec_Tracing struct {
 	// request already has a trace. This should evaluate to a float between 0.0-1.0,
 	// or a boolean (true/false). If unspecified, client sampling is 100% enabled.
 	ClientSampling *string `protobuf:"bytes,5,opt,name=client_sampling,json=clientSampling,proto3,oneof" json:"client_sampling,omitempty"`
+	// parent_not_sampled is a CEL expression for requests whose incoming traceparent has the
+	// sampled flag cleared (-00); the `remoteParentNotSampled` delegate of the OpenTelemetry
+	// `ParentBased` sampler. Spans are exported, but the traceparent sent upstream keeps the
+	// client's -00. This should evaluate to a float between 0.0-1.0, or a boolean (true/false).
+	// If unspecified, an incoming -00 is honored and nothing is exported.
+	ParentNotSampled *string `protobuf:"bytes,11,opt,name=parent_not_sampled,json=parentNotSampled,proto3,oneof" json:"parent_not_sampled,omitempty"`
 	// OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
 	Path *string `protobuf:"bytes,6,opt,name=path,proto3,oneof" json:"path,omitempty"`
 	// protocol specifies the OTLP protocol variant to use. Default is HTTP
@@ -11098,6 +11104,13 @@ func (x *FrontendPolicySpec_Tracing) GetRandomSampling() string {
 func (x *FrontendPolicySpec_Tracing) GetClientSampling() string {
 	if x != nil && x.ClientSampling != nil {
 		return *x.ClientSampling
+	}
+	return ""
+}
+
+func (x *FrontendPolicySpec_Tracing) GetParentNotSampled() string {
+	if x != nil && x.ParentNotSampled != nil {
+		return *x.ParentNotSampled
 	}
 	return ""
 }
@@ -18373,7 +18386,7 @@ const file_resource_proto_rawDesc = "" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\xe9'\n" +
+	"\b_retries\"\xb3(\n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -18457,7 +18470,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06Preset\x12\x16\n" +
 	"\x12PRESET_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04OTEL\x10\x01B\t\n" +
-	"\a_filter\x1a\xd8\x05\n" +
+	"\a_filter\x1a\xa2\x06\n" +
 	"\aTracing\x12V\n" +
 	"\x10provider_backend\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0fproviderBackend\x12^\n" +
 	"\n" +
@@ -18468,15 +18481,17 @@ const file_resource_proto_rawDesc = "" +
 	" \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePolicies\x12\x16\n" +
 	"\x06remove\x18\b \x03(\tR\x06remove\x12,\n" +
 	"\x0frandom_sampling\x18\x04 \x01(\tH\x00R\x0erandomSampling\x88\x01\x01\x12,\n" +
-	"\x0fclient_sampling\x18\x05 \x01(\tH\x01R\x0eclientSampling\x88\x01\x01\x12\x17\n" +
-	"\x04path\x18\x06 \x01(\tH\x02R\x04path\x88\x01\x01\x12Z\n" +
+	"\x0fclient_sampling\x18\x05 \x01(\tH\x01R\x0eclientSampling\x88\x01\x01\x121\n" +
+	"\x12parent_not_sampled\x18\v \x01(\tH\x02R\x10parentNotSampled\x88\x01\x01\x12\x17\n" +
+	"\x04path\x18\x06 \x01(\tH\x03R\x04path\x88\x01\x01\x12Z\n" +
 	"\bprotocol\x18\a \x01(\x0e2>.agentgateway.dev.resource.FrontendPolicySpec.Tracing.ProtocolR\bprotocol\x12\x1b\n" +
-	"\x06filter\x18\t \x01(\tH\x03R\x06filter\x88\x01\x01\"\x1e\n" +
+	"\x06filter\x18\t \x01(\tH\x04R\x06filter\x88\x01\x01\"\x1e\n" +
 	"\bProtocol\x12\b\n" +
 	"\x04HTTP\x10\x00\x12\b\n" +
 	"\x04GRPC\x10\x01B\x12\n" +
 	"\x10_random_samplingB\x12\n" +
-	"\x10_client_samplingB\a\n" +
+	"\x10_client_samplingB\x15\n" +
+	"\x13_parent_not_sampledB\a\n" +
 	"\x05_pathB\t\n" +
 	"\a_filter\x1a<\n" +
 	"\x10TracingAttribute\x12\x12\n" +

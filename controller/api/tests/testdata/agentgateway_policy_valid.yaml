@@ -589,6 +589,7 @@ spec:
       path: /custom/v1/traces
       randomSampling: '0.1'
       clientSampling: '1.0'
+      parentNotSampled: 'true'
 #---
 #apiVersion: agentgateway.dev/v1alpha1
 #kind: AgentgatewayPolicy

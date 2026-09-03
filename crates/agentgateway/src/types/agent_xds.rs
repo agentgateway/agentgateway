@@ -3632,6 +3632,10 @@ fn tracing_config_from_proto(
 		.client_sampling
 		.as_ref()
 		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.clientSampling", s));
+	let parent_not_sampled = t
+		.parent_not_sampled
+		.as_ref()
+		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.parentNotSampled", s));
 	let filter = t
 		.filter
 		.as_ref()
@@ -3658,6 +3662,7 @@ fn tracing_config_from_proto(
 		remove: t.remove.clone(),
 		random_sampling,
 		client_sampling,
+		parent_not_sampled,
 		filter,
 		path,
 		protocol,

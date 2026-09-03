@@ -10514,6 +10514,18 @@
           ],
           "default": null
         },
+        "parentNotSampled": {
+          "description": "Sampling for requests whose incoming `traceparent` has the sampled flag cleared (`-00`); the\n`remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased` sampler. Spans are\nexported, but the `traceparent` sent upstream keeps the client's `-00`. If unspecified, an\nincoming `-00` is honored and nothing is exported.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StringBoolFloat"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "filter": {
           "description": "Optional CEL filter with KEEP semantics. When set, only requests for which the expression\nevaluates to `true` have their trace span(s) exported; all other spans are dropped. When\nunset, no filtering is applied (all sampled spans are exported). Composes after sampling\n(only sampled spans are evaluated). This matches `accessLog.filter` (keep-semantics):\n`true` keeps. Missing/errored fields evaluate to `false`, so on eval error the span is\ndropped (fail closed).",
           "anyOf": [

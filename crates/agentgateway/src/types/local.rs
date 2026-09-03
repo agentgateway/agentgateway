@@ -280,6 +280,7 @@ fn merge_deprecated_frontend_policies(
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
 				random_sampling,
 				client_sampling,
+				parent_not_sampled: None,
 				path,
 				protocol: match protocol {
 					Protocol::Grpc => crate::types::agent::TracingProtocol::Grpc,

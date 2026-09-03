@@ -7357,6 +7357,18 @@ spec:
                         maxLength: 16384
                         minLength: 1
                         type: string
+                      parentNotSampled:
+                        description: |-
+                          Expression that determines sampling for requests whose incoming
+                          `traceparent` has the sampled flag cleared (`-00`); the
+                          `remoteParentNotSampled` delegate of the OpenTelemetry `ParentBased`
+                          sampler. Spans are exported, but the `traceparent` sent upstream keeps
+                          the client's `-00`. This should evaluate to a float between `0.0` and
+                          `1.0`, or a boolean (`true` or `false`). If unspecified, an incoming
+                          `-00` is honored and nothing is exported.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
                       path:
                         description: |-
                           OTLP path to use. This is only applicable when

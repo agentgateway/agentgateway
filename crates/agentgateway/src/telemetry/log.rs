@@ -535,37 +535,75 @@ fn original_model_from_metadata<'a>(
 		.and_then(Value::as_str)
 }
 
+/// `random_sampling` is the `root` delegate of the OpenTelemetry `ParentBased` sampler,
+/// `client_sampling` is `remoteParentSampled`, `parent_not_sampled` is `remoteParentNotSampled`.
 #[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	pub client_sampling: Option<Arc<cel::Expression>>,
+	pub parent_not_sampled: Option<Arc<cel::Expression>>,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct SamplingDecision {
+	/// Mint a gateway span id and propagate it, so access logs carry `trace.id`/`span.id`.
+	pub participate: bool,
+	/// Export spans to OTLP. Independent of the flags propagated upstream.
+	pub export: bool,
+	pub reason: &'static str,
 }
 
 impl TraceSampler {
-	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> (bool, &'static str) {
+	pub fn decide(&self, req: &Request, tp: Option<&TraceParent>) -> SamplingDecision {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
+			parent_not_sampled,
 		} = &self;
-		let (expr, client) = if tp.is_some() {
-			let Some(cs) = client_sampling else {
-				// If client_sampling is not set, default to include it
-				return (true, "sample (client)");
-			};
-			(cs, true)
-		} else {
-			let Some(rs) = random_sampling else {
-				// If random_sampling is not set, default to NOT include it
-				return (false, "not sampled (random)");
-			};
-			(rs, false)
-		};
 		let exec = cel::Executor::new_request(req);
-		match (exec.eval_rng(expr.as_ref()), client) {
-			(true, true) => (true, "sample (client)"),
-			(true, false) => (true, "sample (random)"),
-			(false, true) => (false, "not sampled (client)"),
-			(false, false) => (false, "not sampled (random)"),
+		let eval = |expr: &Option<Arc<cel::Expression>>, default: bool| match expr {
+			Some(e) => exec.eval_rng(e.as_ref()),
+			None => default,
+		};
+
+		match tp {
+			None => {
+				let sampled = eval(random_sampling, false);
+				SamplingDecision {
+					participate: sampled,
+					export: sampled,
+					reason: if sampled {
+						"sample (random)"
+					} else {
+						"not sampled (random)"
+					},
+				}
+			},
+			Some(tp) if tp.is_sampled() => {
+				let sampled = eval(client_sampling, true);
+				SamplingDecision {
+					participate: sampled,
+					export: sampled,
+					reason: if sampled {
+						"sample (client)"
+					} else {
+						"not sampled (client)"
+					},
+				}
+			},
+			Some(_) => {
+				let forced = eval(parent_not_sampled, false);
+				SamplingDecision {
+					// `forced ||` so parent_not_sampled is not silently defeated by client_sampling
+					participate: forced || eval(client_sampling, true),
+					export: forced,
+					reason: if forced {
+						"sample (unsampled parent)"
+					} else {
+						"not sampled (unsampled parent)"
+					},
+				}
+			},
 		}
 	}
 }
@@ -1104,6 +1142,7 @@ impl RequestLog {
 			mcp_status: Default::default(),
 			incoming_span: None,
 			outgoing_span: None,
+			trace_sampled: false,
 			llm_request: None,
 			llm_response: Default::default(),
 			guardrails: Default::default(),
@@ -1137,7 +1176,7 @@ impl RequestLog {
 		// Early return if there is no tracer enabled at all
 		self.tracer.as_ref()?;
 		let tp = self.outgoing_span.clone()?;
-		if !tp.is_sampled() {
+		if !self.trace_sampled {
 			return None;
 		}
 
@@ -1278,6 +1317,10 @@ pub struct RequestLog {
 
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
+	/// Whether to export spans. Distinct from `outgoing_span.flags`, which is only the value
+	/// propagated upstream: an unsampled parent can be exported locally while still forwarding
+	/// `-00`.
+	pub trace_sampled: bool,
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
@@ -1896,11 +1939,7 @@ impl Drop for DropOnLog {
 					Some(crate::types::frontend::AccessLogPreset::Otel)
 				);
 
-			let trace_needs_otel = enable_trace
-				&& log
-					.outgoing_span
-					.as_ref()
-					.is_some_and(|span| span.is_sampled());
+			let trace_needs_otel = enable_trace && log.trace_sampled && log.outgoing_span.is_some();
 
 			let needs_otel = trace_needs_otel || otlp_log_enabled || use_otel_stdout;
 			let http_semconv = (needs_otel && !is_tcp).then(|| HttpSemconvAttributes::new(&log));
@@ -1937,7 +1976,7 @@ impl Drop for DropOnLog {
 				otel_kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
-				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
+				if log.trace_sampled
 					&& trc::should_export_span(t.filter.as_deref(), &cel_exec.executor)
 					&& let Ok(mut spans) = log.trace_spans.lock()
 				{
@@ -2746,7 +2785,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		));
-		RequestLog::new(
+		let mut log = RequestLog::new(
 			cel,
 			metrics,
 			ModelCatalog::empty(),
@@ -2757,7 +2796,92 @@ mod tests {
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
-		)
+		);
+		log.trace_sampled = true;
+		log
+	}
+
+	fn sampler_request() -> crate::http::Request {
+		::http::Request::builder()
+			.method(::http::Method::GET)
+			.uri("http://example.com/trace")
+			.body(crate::http::Body::empty())
+			.unwrap()
+	}
+
+	fn sampling_expr(v: &str) -> Option<Arc<cel::Expression>> {
+		Some(Arc::new(cel::Expression::new_strict(v).unwrap()))
+	}
+
+	fn traceparent(sampled: bool) -> TraceParent {
+		let mut tp = TraceParent::new();
+		tp.flags = u8::from(sampled);
+		tp
+	}
+
+	/// The full sampling matrix. `parent_not_sampled` is the only new capability: every other cell
+	/// pins pre-existing behavior. `incoming` is `None` for a request with no `traceparent`,
+	/// otherwise the parent's sampled flag.
+	#[test]
+	fn decide_sampling_matrix() {
+		// (random, client, parent_not_sampled, incoming, participate, export)
+		let cases = [
+			// No incoming traceparent: the `root` delegate, default off.
+			(None, None, None, None, false, false),
+			(Some("true"), None, None, None, true, true),
+			(Some("false"), None, None, None, false, false),
+			// Incoming `-01`: the `remoteParentSampled` delegate, default on.
+			(None, None, None, Some(true), true, true),
+			(None, Some("true"), None, Some(true), true, true),
+			(None, Some("false"), None, Some(true), false, false),
+			// Incoming `-00`: the `remoteParentNotSampled` delegate, default off.
+			(None, None, None, Some(false), true, false),
+			(None, Some("true"), None, Some(false), true, false),
+			(None, Some("false"), None, Some(false), false, false),
+			(None, None, Some("false"), Some(false), true, false),
+			// Forced: exports despite the client's opt-out.
+			(None, None, Some("true"), Some(false), true, true),
+			(None, Some("true"), Some("true"), Some(false), true, true),
+			// Forced participation is not defeated by `clientSampling: false`.
+			(None, Some("false"), Some("true"), Some(false), true, true),
+			// `parentNotSampled` does not apply to an already-sampled parent.
+			(None, Some("false"), Some("true"), Some(true), false, false),
+			// `randomSampling` does not apply when a traceparent is present.
+			(Some("false"), None, None, Some(true), true, true),
+			(Some("true"), None, None, Some(false), true, false),
+		];
+
+		for (random, client, parent_not_sampled, incoming, participate, export) in cases {
+			let sampler = TraceSampler {
+				random_sampling: random.and_then(sampling_expr),
+				client_sampling: client.and_then(sampling_expr),
+				parent_not_sampled: parent_not_sampled.and_then(sampling_expr),
+			};
+			let tp = incoming.map(traceparent);
+			let got = sampler.decide(&sampler_request(), tp.as_ref());
+			assert_eq!(
+				(got.participate, got.export),
+				(participate, export),
+				"random={random:?} client={client:?} parentNotSampled={parent_not_sampled:?} incoming={incoming:?} reason={}",
+				got.reason
+			);
+		}
+	}
+
+	#[test]
+	fn decide_reports_unsampled_parent_reason() {
+		let req = sampler_request();
+		let unsampled = traceparent(false);
+
+		let honored = TraceSampler::default().decide(&req, Some(&unsampled));
+		assert_eq!(honored.reason, "not sampled (unsampled parent)");
+
+		let forced = TraceSampler {
+			parent_not_sampled: sampling_expr("true"),
+			..Default::default()
+		}
+		.decide(&req, Some(&unsampled));
+		assert_eq!(forced.reason, "sample (unsampled parent)");
 	}
 
 	fn llm_context_with_content() -> LLMContext {
@@ -3026,10 +3150,11 @@ mod tests {
 	}
 
 	#[test]
-	fn span_writer_noops_for_unsampled_outgoing_span() {
+	fn span_writer_noops_when_not_sampled() {
 		let (tracer, exporter) = test_tracer();
 		let mut request = test_request_log();
 		request.tracer = Some(tracer.clone());
+		request.trace_sampled = false;
 
 		let mut outgoing = trc::TraceParent::new();
 		outgoing.flags = 0;
