@@ -10426,7 +10426,7 @@ spec:
                       request:
                         description: |-
                           Maximum time allowed from the start of downstream request processing until response headers
-                          are received. The response body is not included; use ResponseIdle to bound gaps between body frames.
+                          are received. The response body is not included; use `responseIdle` to bound gaps between body frames.
                         maxLength: 32
                         pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string

@@ -3330,7 +3330,7 @@ type HostnameRewrite struct {
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Timeouts struct {
 	// Maximum time allowed from the start of downstream request processing until response headers
-	// are received. The response body is not included; use ResponseIdle to bound gaps between body frames.
+	// are received. The response body is not included; use `responseIdle` to bound gaps between body frames.
 	//
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="request must be at least 1ms"
 	// +optional
