@@ -447,7 +447,7 @@ fn server_tls_config_from_proto(
 					.to_string(),
 			);
 		}
-		return ServerTLSConfig::spiffe(default_alpns);
+		return ServerTLSConfig::spiffe(default_alpns, value.spiffe_additional_trust_domains.clone());
 	}
 
 	if certificate_source == proto::agent::tls_config::CertificateSource::DynamicCa {
@@ -2675,6 +2675,8 @@ fn backend_policy_from_proto(
 				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
 					.unwrap_or_default()
 					== bps::backend_tls::CertificateSource::Spiffe,
+				spiffe_additional_trust_domains: (!btls.spiffe_additional_trust_domains.is_empty())
+					.then(|| btls.spiffe_additional_trust_domains.clone()),
 			};
 			let metadata = http::backendtls::BackendTLSInfo::from_resolved(&resolved);
 			// A rejected policy must not leave the backend reachable in plaintext.

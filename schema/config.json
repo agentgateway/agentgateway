@@ -1081,6 +1081,11 @@
             "string",
             "null"
           ]
+        },
+        "allowAdditionalTrustDomains": {
+          "description": "Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in\nper-flow `additionalTrustDomains` lists. Does not control which bundles SPIRE delivers; when\nfalse, only the local trust domain may be accepted. Invalid entries and unavailable or\nunusable non-local bundles are skipped with a warning; the local bundle is required.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false
@@ -1903,6 +1908,16 @@
     },
     "LocalSpiffeConfig": {
       "type": "object",
+      "properties": {
+        "additionalTrustDomains": {
+          "description": "Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted;\nthe local trust domain is always implicit.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
       "additionalProperties": false
     },
     "TLSVersion": {
@@ -3537,6 +3552,16 @@
     },
     "LocalSpiffeBackendTLS": {
       "type": "object",
+      "properties": {
+        "additionalTrustDomains": {
+          "description": "Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the\nlocal trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
       "additionalProperties": false
     },
     "BackendAuthCompat": {
