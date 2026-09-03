@@ -2,6 +2,9 @@ package plugins
 
 import (
 	"maps"
+	"reflect"
+	"slices"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -12,6 +15,9 @@ type AgwPlugin struct {
 	ContributesBackends  map[schema.GroupKind]BackendPlugin
 }
 
+// MergePlugins combines the contributions of every plugin into a single AgwPlugin.
+// AddResourcesPlugin collection fields must be disjoint across the set; compose two
+// plugins yourself if one adds to the other's contribution.
 func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 	ret := AgwPlugin{
 		ContributesPolicies: make(map[schema.GroupKind]PolicyPlugin),
@@ -47,5 +53,35 @@ func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 			}
 		}
 	}
+	if contested := contestedResourceExtensionFields(plug); len(contested) > 0 {
+		logger.Error("addResourceExtension fields contributed by more than one plugin, all but one contribution is discarded",
+			"fields", strings.Join(contested, ", "))
+	}
 	return ret
+}
+
+// contestedResourceExtensionFields names the collection fields more than one plugin
+// populates. Collection fields are interfaces; ParentResolvers is a slice and
+// accumulates across plugins by design.
+func contestedResourceExtensionFields(plug []AgwPlugin) []string {
+	contributors := map[string]int{}
+	for _, p := range plug {
+		if p.AddResourceExtension == nil {
+			continue
+		}
+		v := reflect.ValueOf(*p.AddResourceExtension)
+		for i := range v.NumField() {
+			if f := v.Field(i); f.Kind() == reflect.Interface && !f.IsNil() {
+				contributors[v.Type().Field(i).Name]++
+			}
+		}
+	}
+	var contested []string
+	for name, n := range contributors {
+		if n > 1 {
+			contested = append(contested, name)
+		}
+	}
+	slices.Sort(contested)
+	return contested
 }
