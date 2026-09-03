@@ -4334,7 +4334,7 @@ mod tests {
 	}
 
 	#[test]
-	fn oauth_load_warnings_do_not_reject_config() {
+	fn oauth_load_warnings_are_reported_without_rejecting_config() {
 		let mut diagnostics = Diagnostics::default();
 		let auth = backend_auth_kind_for_test(
 			proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
@@ -4347,11 +4347,13 @@ mod tests {
 		);
 
 		assert!(matches!(auth, BackendAuthKind::OAuthTokenExchange(_)));
-		assert!(diagnostics.is_empty());
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1, "{warnings:?}");
+		assert!(warnings[0].contains("bad scope"), "{warnings:?}");
 	}
 
 	#[test]
-	fn cross_app_access_load_warnings_do_not_reject_config() {
+	fn cross_app_access_load_warnings_are_reported_without_rejecting_config() {
 		fn endpoint(backend: &str) -> proto::agent::cross_app_access_auth::Endpoint {
 			proto::agent::cross_app_access_auth::Endpoint {
 				token_endpoint: Some(proto::agent::BackendReference {
@@ -4386,7 +4388,9 @@ mod tests {
 		);
 
 		assert!(matches!(auth, BackendAuthKind::CrossAppAccess(_)));
-		assert!(diagnostics.is_empty());
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1, "{warnings:?}");
+		assert!(warnings[0].contains("accessTokenScopes"), "{warnings:?}");
 	}
 
 	fn jwt_sign_from_proto_for_test(

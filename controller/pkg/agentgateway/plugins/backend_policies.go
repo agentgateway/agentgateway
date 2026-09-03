@@ -114,7 +114,7 @@ func validateExtractionAuthorizationLocation(loc *agentgateway.AuthorizationExtr
 	if loc == nil || loc.Expression == nil || isCEL(*loc.Expression) {
 		return nil
 	}
-	return fmt.Errorf("%s expression is not a valid CEL expression", context)
+	return fmt.Errorf("%s expression is not a valid CEL expression: %s", context, *loc.Expression)
 }
 
 func TranslateInlineBackendPolicy(
@@ -1094,7 +1094,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.CrossAppAccessAuth, error) {
 	if auth == nil {
 		err := errors.New("crossAppAccess must not be nil")
-		return &api.CrossAppAccessAuth{TranslationError: new(err.Error())}, err
+		return invalidCrossAppAccess(), err
 	}
 
 	var errs []error
@@ -1132,9 +1132,30 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		Cache:                       cache,
 	}
 	if err := errors.Join(errs...); err != nil {
-		return &api.CrossAppAccessAuth{TranslationError: new(err.Error())}, err
+		return invalidCrossAppAccess(), err
 	}
 	return result, nil
+}
+
+const crossAppAccessTranslationError = "crossAppAccess configuration is invalid"
+
+func invalidCrossAppAccess() *api.CrossAppAccessAuth {
+	// Keep this fallback loadable but fail-closed for older OAuth-capable proxies
+	invalidEndpoint := func() *api.CrossAppAccessAuth_Endpoint {
+		return &api.CrossAppAccessAuth_Endpoint{
+			TokenEndpoint: &api.BackendReference{},
+			ClientAuth: &api.OAuthClientAuth{
+				ClientId: "invalid",
+				Method:   api.OAuthClientAuth_CLIENT_SECRET_POST,
+			},
+		}
+	}
+	return &api.CrossAppAccessAuth{
+		IdentityProvider:            invalidEndpoint(),
+		ResourceAuthorizationServer: invalidEndpoint(),
+		Audience:                    "invalid",
+		TranslationError:            new(crossAppAccessTranslationError),
+	}
 }
 
 func translateCrossAppAccessScopes(scopes *[]string) *api.CrossAppAccessAuth_ScopeOverride {
@@ -1200,7 +1221,7 @@ func buildCrossAppAccessEndpoint(ctx PolicyCtx, endpoint *agentgateway.CrossAppA
 func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
 	if auth == nil {
 		err := errors.New("oauthTokenExchange must not be nil")
-		return &api.OAuthTokenExchange{TranslationError: new(err.Error())}, err
+		return invalidOAuthTokenExchange(), err
 	}
 
 	var errs []error
@@ -1287,9 +1308,18 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 	}
 
 	if err := errors.Join(errs...); err != nil {
-		return &api.OAuthTokenExchange{TranslationError: new(err.Error())}, err
+		return invalidOAuthTokenExchange(), err
 	}
 	return oauth, nil
+}
+
+const oauthTokenExchangeTranslationError = "oauthTokenExchange configuration is invalid"
+
+func invalidOAuthTokenExchange() *api.OAuthTokenExchange {
+	// An omitted endpoint fails closed on older OAuth-capable proxies
+	return &api.OAuthTokenExchange{
+		TranslationError: new(oauthTokenExchangeTranslationError),
+	}
 }
 
 func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {
@@ -1443,7 +1473,7 @@ func validateOAuthTokenType(tokenType agentgateway.OAuthTokenType, field string)
 	}
 	parsed, err := url.Parse(string(tokenType))
 	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" {
-		return fmt.Errorf("%s must be a built-in token type or an absolute URI without a fragment", field)
+		return fmt.Errorf("%s %q must be a built-in token type or an absolute URI without a fragment", field, tokenType)
 	}
 	return nil
 }

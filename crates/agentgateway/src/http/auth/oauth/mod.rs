@@ -85,6 +85,15 @@ pub(crate) fn log_config_warnings(warnings: impl IntoIterator<Item = OAuthConfig
 	}
 }
 
+fn report_config_warnings(
+	warnings: impl IntoIterator<Item = OAuthConfigWarning>,
+	diagnostics: &mut Diagnostics,
+) {
+	for warning in warnings {
+		diagnostics.add_warning(warning.to_string());
+	}
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(untagged)]
 enum OAuthTokenExchangeState {
@@ -405,7 +414,7 @@ impl OAuthTokenExchangeAuth {
 			cache,
 		};
 		warnings.extend(config.check_load().map_err(ProtoError::Generic)?);
-		log_config_warnings(warnings);
+		report_config_warnings(warnings, diagnostics);
 		Ok(config.into())
 	}
 }
