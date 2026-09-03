@@ -72,9 +72,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: extProc requestAttributes "bad" is not a valid CEL expression:
-          foolen_{{jwt.sub}}'
+        message: 'Policy is attached with invalid configuration: extProc requestAttributes
+          "bad" is not a valid CEL expression: foolen_{{jwt.sub}}'
         reason: Attached
         status: "True"
         type: Attached

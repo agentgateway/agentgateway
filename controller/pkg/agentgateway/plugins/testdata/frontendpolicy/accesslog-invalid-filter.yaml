@@ -53,8 +53,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: frontend accessLog filter is not a valid CEL expression: foolen_{{response.code}}'
+        message: 'Policy is attached with invalid configuration: frontend accessLog
+          filter is not a valid CEL expression: foolen_{{response.code}}'
         reason: Attached
         status: "True"
         type: Attached

@@ -2,7 +2,6 @@ package plugins
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +30,7 @@ func TestPolicyConditionMapAlwaysReportsAcceptedAndAttached(t *testing.T) {
 			acceptedReason:        agentgateway.PolicyReasonPartiallyValid,
 			attachedStatus:        metav1.ConditionTrue,
 			attachedReason:        agentgateway.PolicyReasonAttached,
-			attachedMessage:       errInvalid.Error(),
+			attachedMessage:       "Policy is attached with invalid configuration: " + errInvalid.Error(),
 		},
 		{
 			name:           "invalid",
@@ -65,8 +64,8 @@ func TestPolicyConditionMapAlwaysReportsAcceptedAndAttached(t *testing.T) {
 			if attached == nil || attached.Status != tt.attachedStatus || attached.Reason != tt.attachedReason {
 				t.Fatalf("Attached condition = %#v, want status %q and reason %q", attached, tt.attachedStatus, tt.attachedReason)
 			}
-			if tt.attachedMessage != "" && !strings.Contains(attached.Message, tt.attachedMessage) {
-				t.Fatalf("Attached message = %q, want containing %q", attached.Message, tt.attachedMessage)
+			if tt.attachedMessage != "" && attached.Message != tt.attachedMessage {
+				t.Fatalf("Attached message = %q, want %q", attached.Message, tt.attachedMessage)
 			}
 		})
 	}

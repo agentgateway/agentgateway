@@ -57,9 +57,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: authorization matchExpression is not a valid CEL expression:
-          foolen_{{request.path}}'
+        message: 'Policy is attached with invalid configuration: authorization matchExpression
+          is not a valid CEL expression: foolen_{{request.path}}'
         reason: Attached
         status: "True"
         type: Attached

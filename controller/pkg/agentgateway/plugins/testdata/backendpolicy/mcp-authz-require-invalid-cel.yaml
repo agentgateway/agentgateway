@@ -60,9 +60,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: backend MCP authorization matchExpression is not a valid CEL
-          expression: foolen_{{mcp.tool.name}}'
+        message: 'Policy is attached with invalid configuration: backend MCP authorization
+          matchExpression is not a valid CEL expression: foolen_{{mcp.tool.name}}'
         reason: Attached
         status: "True"
         type: Attached

@@ -93,8 +93,7 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: jwks keyset for "https://login.test.com:443/test-path/discovery/v2.0/keys"
+        message: 'Policy is attached with invalid configuration: jwks keyset for "https://login.test.com:443/test-path/discovery/v2.0/keys"
           isn''t available (not yet fetched or fetch failed)'
         reason: Attached
         status: "True"

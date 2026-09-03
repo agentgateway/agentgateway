@@ -70,10 +70,9 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: configMap apikey-configmap-raw-key contains invalid key key1:
-          keys sourced from a ConfigMap must use keyHash, not a raw key, since ConfigMaps
-          are not confidential'
+        message: 'Policy is attached with invalid configuration: configMap apikey-configmap-raw-key
+          contains invalid key key1: keys sourced from a ConfigMap must use keyHash,
+          not a raw key, since ConfigMaps are not confidential'
         reason: Attached
         status: "True"
         type: Attached

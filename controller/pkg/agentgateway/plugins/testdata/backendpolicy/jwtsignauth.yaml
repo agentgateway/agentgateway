@@ -188,8 +188,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: failed to resolve jwtSign signing secret default/jwt-sign-secret-missing'
+        message: 'Policy is attached with invalid configuration: failed to resolve
+          jwtSign signing secret default/jwt-sign-secret-missing'
         reason: Attached
         status: "True"
         type: Attached

@@ -1094,7 +1094,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.CrossAppAccessAuth, error) {
 	if auth == nil {
 		err := errors.New("crossAppAccess must not be nil")
-		return &api.CrossAppAccessAuth{TranslationError: new(err.Error())}, err
+		return invalidCrossAppAccess(err.Error()), err
 	}
 
 	var errs []error
@@ -1132,9 +1132,32 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		Cache:                       cache,
 	}
 	if err := errors.Join(errs...); err != nil {
-		return &api.CrossAppAccessAuth{TranslationError: new(err.Error())}, err
+		return invalidCrossAppAccess(err.Error()), err
 	}
 	return result, nil
+}
+
+func invalidCrossAppAccess(translationError string) *api.CrossAppAccessAuth {
+	// Older proxies ignore translation_error, so provide the minimum configuration that passes
+	// their load validation. Both endpoints and their token endpoints are required. A non-empty
+	// client ID with CLIENT_SECRET_POST is the only client auth that needs no secret, a non-empty
+	// audience is required, and an omitted subject token selects the valid ID-token default. The
+	// empty backend references then preserve fail-closed behavior at runtime.
+	invalidEndpoint := func() *api.CrossAppAccessAuth_Endpoint {
+		return &api.CrossAppAccessAuth_Endpoint{
+			TokenEndpoint: &api.BackendReference{},
+			ClientAuth: &api.OAuthClientAuth{
+				ClientId: "invalid",
+				Method:   api.OAuthClientAuth_CLIENT_SECRET_POST,
+			},
+		}
+	}
+	return &api.CrossAppAccessAuth{
+		IdentityProvider:            invalidEndpoint(),
+		ResourceAuthorizationServer: invalidEndpoint(),
+		Audience:                    "invalid",
+		TranslationError:            new(translationError),
+	}
 }
 
 func translateCrossAppAccessScopes(scopes *[]string) *api.CrossAppAccessAuth_ScopeOverride {
@@ -1200,7 +1223,7 @@ func buildCrossAppAccessEndpoint(ctx PolicyCtx, endpoint *agentgateway.CrossAppA
 func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
 	if auth == nil {
 		err := errors.New("oauthTokenExchange must not be nil")
-		return &api.OAuthTokenExchange{TranslationError: new(err.Error())}, err
+		return invalidOAuthTokenExchange(err.Error()), err
 	}
 
 	var errs []error
@@ -1287,9 +1310,16 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 	}
 
 	if err := errors.Join(errs...); err != nil {
-		return &api.OAuthTokenExchange{TranslationError: new(err.Error())}, err
+		return invalidOAuthTokenExchange(err.Error()), err
 	}
 	return oauth, nil
+}
+
+func invalidOAuthTokenExchange(translationError string) *api.OAuthTokenExchange {
+	// Older proxies ignore translation_error and resolve a missing token endpoint as runtime-invalid.
+	return &api.OAuthTokenExchange{
+		TranslationError: new(translationError),
+	}
 }
 
 func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {

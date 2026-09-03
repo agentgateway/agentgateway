@@ -4386,6 +4386,51 @@ mod tests {
 		assert!(diagnostics.is_empty());
 	}
 
+	#[test]
+	fn legacy_proxies_accept_oauth_invalid_fallbacks() {
+		fn invalid_endpoint() -> proto::agent::cross_app_access_auth::Endpoint {
+			proto::agent::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::agent::BackendReference::default()),
+				client_auth: Some(proto::agent::OAuthClientAuth {
+					client_id: "invalid".to_string(),
+					method: proto::agent::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			}
+		}
+
+		assert!(matches!(
+			resolve_simple_reference(None),
+			SimpleBackendReference::Invalid
+		));
+
+		let mut diagnostics = Diagnostics::default();
+		let oauth = backend_auth_kind_for_test(
+			proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
+				proto::agent::OAuthTokenExchange::default(),
+			),
+			&mut diagnostics,
+		);
+		assert!(matches!(oauth, BackendAuthKind::OAuthTokenExchange(_)));
+		assert!(diagnostics.is_empty());
+
+		let cross_app_access = backend_auth_kind_for_test(
+			proto::agent::backend_auth_policy::Kind::CrossAppAccess(proto::agent::CrossAppAccessAuth {
+				identity_provider: Some(invalid_endpoint()),
+				resource_authorization_server: Some(invalid_endpoint()),
+				audience: "invalid".to_string(),
+				..Default::default()
+			}),
+			&mut diagnostics,
+		);
+		assert!(matches!(
+			cross_app_access,
+			BackendAuthKind::CrossAppAccess(_)
+		));
+		assert!(diagnostics.is_empty());
+	}
+
 	fn jwt_sign_from_proto_for_test(
 		jwt_sign: proto::agent::JwtSign,
 		diagnostics: &mut Diagnostics,
