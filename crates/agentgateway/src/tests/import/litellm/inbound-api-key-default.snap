@@ -1,6 +1,6 @@
 ---
 source: crates/agentgateway/src/import.rs
-description: src/tests/import/litellm/unmapped-fields.yaml
+description: src/tests/import/litellm/inbound-api-key-default.yaml
 ---
 source: litellm
 config:
@@ -29,24 +29,9 @@ config:
             name: authorization
             prefix: "Bearer "
 findings:
-  - sourcePath: "model_list[0].model_info.id"
-    status: manual
-    message: LiteLLM model metadata requires manual review and was not emitted
-  - sourcePath: "model_list[0].custom_model_field"
-    status: unsupported
-    message: Unrecognized LiteLLM model field was not emitted
   - sourcePath: "model_list[0]"
     status: exact
     message: Imported model deployment for chat
-  - sourcePath: "credential_list[0]"
-    status: manual
-    message: "LiteLLM credential \"shared\" is not referenced by an imported model and was not emitted"
   - sourcePath: general_settings.master_key
     status: approximate
     message: Mapped LiteLLM master_key to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers
-  - sourcePath: environment_variables.LOG_LEVEL
-    status: manual
-    message: Requires manual review and was not emitted
-  - sourcePath: custom_section
-    status: unsupported
-    message: Unrecognized LiteLLM top-level field was not emitted
