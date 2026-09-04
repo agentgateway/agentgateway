@@ -76,7 +76,7 @@ pub async fn run_with_ui_assets(
 	};
 	let spiffe = if let Some(cfg) = &config.spiffe {
 		let client = Arc::new(
-			spiffe::SpiffeClient::new(cfg.endpoint.clone())
+			spiffe::SpiffeClient::new(cfg.endpoint.clone(), cfg.federated_trust_domains.clone())
 				.await
 				.context("connect to SPIFFE workload API")?,
 		);

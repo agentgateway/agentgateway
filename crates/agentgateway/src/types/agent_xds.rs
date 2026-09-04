@@ -443,7 +443,7 @@ fn server_tls_config_from_proto(
 					.to_string(),
 			);
 		}
-		return ServerTLSConfig::spiffe(default_alpns);
+		return ServerTLSConfig::spiffe(default_alpns, value.spiffe_accepted_trust_domains.clone());
 	}
 
 	if certificate_source == proto::agent::tls_config::CertificateSource::DynamicCa {
@@ -2344,6 +2344,7 @@ fn backend_policy_from_proto(
 				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
 					.unwrap_or_default()
 					== bps::backend_tls::CertificateSource::Spiffe,
+				spiffe_accepted_trust_domains: btls.spiffe_accepted_trust_domains.clone(),
 			}
 			.try_into()
 			.map_err(|e| ProtoError::Generic(e.to_string()))?;

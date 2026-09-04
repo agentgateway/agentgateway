@@ -29,6 +29,7 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 		subject_alt_names: None,
 		key_exchange_groups: None,
 		spiffe: false,
+		spiffe_accepted_trust_domains: vec![],
 	}
 	.try_into()
 	.unwrap()
@@ -101,6 +102,9 @@ pub struct SpiffeBackendTLS {
 	pub alpn: Option<Vec<String>>,
 	/// Expected upstream SPIFFE IDs to pin; empty means accept any SVID chaining to the bundle.
 	pub verify_sans: Vec<String>,
+	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
+	/// local trust domain is always implicit. Combine with `verify_sans` to pin exact IDs.
+	pub accepted_trust_domains: Vec<String>,
 }
 
 impl BackendTLS {
@@ -249,7 +253,12 @@ pub struct LocalBackendTLS {
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct LocalSpiffeBackendTLS {} // Empty config for now, allows values to be added in the future.
+pub struct LocalSpiffeBackendTLS {
+	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
+	/// local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.
+	#[serde(default)]
+	pub accepted_trust_domains: Vec<String>,
+}
 
 #[derive(Default, Debug)]
 pub struct ResolvedBackendTLS {
@@ -264,6 +273,8 @@ pub struct ResolvedBackendTLS {
 	pub subject_alt_names: Option<Vec<String>>,
 	pub key_exchange_groups: Option<Vec<tls::KeyExchangeGroup>>,
 	pub spiffe: bool,
+	/// Federated trust domains accepted for a SPIFFE-sourced backend (empty unless `spiffe`).
+	pub spiffe_accepted_trust_domains: Vec<String>,
 }
 
 impl ResolvedBackendTLS {
@@ -284,6 +295,7 @@ impl ResolvedBackendTLS {
 			BackendTLSSource::Spiffe(SpiffeBackendTLS {
 				alpn: self.alpn,
 				verify_sans: self.subject_alt_names.unwrap_or_default(),
+				accepted_trust_domains: self.spiffe_accepted_trust_domains,
 			})
 		} else {
 			let mut roots = rustls::RootCertStore::empty();
@@ -385,6 +397,11 @@ impl LocalBackendTLS {
 			None => None,
 		};
 
+		let spiffe_accepted_trust_domains = self
+			.spiffe
+			.as_ref()
+			.map(|s| s.accepted_trust_domains.clone())
+			.unwrap_or_default();
 		ResolvedBackendTLS {
 			cert,
 			key,
@@ -396,6 +413,7 @@ impl LocalBackendTLS {
 			subject_alt_names: self.subject_alt_names,
 			key_exchange_groups: self.key_exchange_groups,
 			spiffe: self.spiffe.is_some(),
+			spiffe_accepted_trust_domains,
 		}
 		.try_into()
 	}

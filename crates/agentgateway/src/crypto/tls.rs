@@ -13,7 +13,7 @@ use std::sync::Arc;
 use rustls::crypto::CryptoProvider;
 
 use crate::transport::tls::{
-	CipherSuite, DEFAULT_CIPHER_SUITES, DEFAULT_KEY_EXCHANGE_GROUPS, KeyExchangeGroup,
+	CipherSuite, KeyExchangeGroup, DEFAULT_CIPHER_SUITES, DEFAULT_KEY_EXCHANGE_GROUPS,
 };
 
 /// Returns a [`CryptoProvider`] for the compiled-in backend using the default

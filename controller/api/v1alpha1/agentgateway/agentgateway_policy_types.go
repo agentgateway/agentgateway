@@ -567,12 +567,25 @@ const (
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
 // +kubebuilder:validation:XValidation:rule="!has(self.certificateSource) || self.certificateSource != 'SPIFFE' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))",message="certificateSource SPIFFE may not be combined with mtlsCertificateRef, caCertificateRefs, or insecureSkipVerify"
+// +kubebuilder:validation:XValidation:rule="!has(self.acceptedTrustDomains) || (has(self.certificateSource) && self.certificateSource == 'SPIFFE')",message="acceptedTrustDomains may only be set when certificateSource is SPIFFE"
 type BackendTLS struct {
 	// Source for the gateway's client identity and trust roots (`Inline` default, or `SPIFFE`).
 	//
 	// +optional
 	// +kubebuilder:default=Inline
 	CertificateSource *BackendTLSCertificateSource `json:"certificateSource,omitempty"`
+
+	// AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+	// Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
+	// implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
+	// them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
+	// the Workload API, otherwise the connection fails closed). When empty, only the local trust
+	// domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
+	// is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+	//
+	// +optional
+	// +listType=set
+	AcceptedTrustDomains []string `json:"acceptedTrustDomains,omitempty"`
 
 	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
 	// referenced credential source (defaulting to a Kubernetes `Secret`). An

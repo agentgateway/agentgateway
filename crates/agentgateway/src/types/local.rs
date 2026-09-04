@@ -1333,7 +1333,12 @@ pub enum LocalTLSServerMode {
 }
 
 #[apply(schema_de!)]
-pub struct LocalSpiffeConfig {}
+pub struct LocalSpiffeConfig {
+	/// Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted;
+	/// the local trust domain is always implicit.
+	#[serde(default)]
+	pub accepted_trust_domains: Vec<String>,
+}
 
 #[apply(schema_de!)]
 pub struct LocalRouteName {
@@ -5582,7 +5587,7 @@ impl LocalTLSServerConfig {
 	) -> anyhow::Result<ServerTLSConfig> {
 		// SPIFFE sources its identity from the Workload API, so it carries no cert/key/root files
 		// and is selected by the `spiffe` field rather than `mode`.
-		if self.spiffe.is_some() {
+		if let Some(spiffe) = self.spiffe.as_ref() {
 			if self.cert.is_some() || self.key.is_some() || self.root.is_some() {
 				anyhow::bail!("'spiffe' is mutually exclusive with 'cert'/'key'/'root'");
 			}
@@ -5602,10 +5607,10 @@ impl LocalTLSServerConfig {
 					"'spiffe' cannot be combined with tls cipherSuites/minTLSVersion/maxTLSVersion/keyExchangeGroups"
 				);
 			}
-			return Ok(ServerTLSConfig::spiffe(vec![
-				b"h2".to_vec(),
-				b"http/1.1".to_vec(),
-			]));
+			return Ok(ServerTLSConfig::spiffe(
+				vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+				spiffe.accepted_trust_domains.clone(),
+			));
 		}
 		let cert_pem = resources
 			.fetch(crate::resource_manager::ResourceRef::File(

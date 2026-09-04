@@ -12,7 +12,7 @@
 /// Length in bytes of a SHA-256 digest.
 pub const SHA256_LEN: usize = 32;
 
-pub use imp::{Sha256, sha256};
+pub use imp::{sha256, Sha256};
 
 #[cfg(feature = "crypto-aws-lc")]
 mod imp {
@@ -98,7 +98,7 @@ mod imp {
 
 #[cfg(test)]
 mod tests {
-	use super::{Sha256, sha256};
+	use super::{sha256, Sha256};
 
 	// SHA-256("abc") known-answer vector (FIPS 180-4).
 	const ABC: [u8; 32] = [

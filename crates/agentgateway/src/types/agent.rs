@@ -227,7 +227,12 @@ enum ServerTlsCertificateSource {
 	Static,
 	DynamicCa,
 	IstioWorkload { mtls: bool, default_alpns: Alpns },
-	Spiffe { default_alpns: Alpns },
+	Spiffe {
+		default_alpns: Alpns,
+		/// Federated trust domains (beyond the gateway's own) whose client SVIDs this listener
+		/// accepts; the local trust domain is always implicit.
+		accepted_trust_domains: Vec<String>,
+	},
 }
 
 impl Eq for ServerTLSConfig {}
@@ -385,9 +390,12 @@ impl ServerTLSConfig {
 	}
 
 	/// Serving identity sourced from the SPIFFE Workload API
-	pub fn spiffe(default_alpns: Alpns) -> Self {
+	pub fn spiffe(default_alpns: Alpns, accepted_trust_domains: Vec<String>) -> Self {
 		Self {
-			source: ServerTlsCertificateSource::Spiffe { default_alpns },
+			source: ServerTlsCertificateSource::Spiffe {
+				default_alpns,
+				accepted_trust_domains,
+			},
 			base_config: None,
 			inputs: None,
 			insecure_fallback_verifier: None,
@@ -416,12 +424,16 @@ impl ServerTLSConfig {
 			return Ok(Arc::new(cert.server_config(alpns, *mtls)?));
 		}
 
-		if let ServerTlsCertificateSource::Spiffe { default_alpns } = &self.source {
+		if let ServerTlsCertificateSource::Spiffe {
+			default_alpns,
+			accepted_trust_domains,
+		} = &self.source
+		{
 			let spiffe = spiffe.ok_or_else(|| anyhow!("SPIFFE source is required for spiffe TLS"))?;
 			let alpns = tls
 				.and_then(|t| t.alpn.clone())
 				.unwrap_or_else(|| default_alpns.clone());
-			return Ok(spiffe.server_config(alpns)?);
+			return Ok(spiffe.server_config(alpns, accepted_trust_domains.clone())?);
 		}
 
 		let inputs = match self.inputs.as_ref() {
