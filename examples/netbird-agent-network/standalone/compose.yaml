@@ -49,7 +49,6 @@ services:
 
   netbird-server:
     image: ${NETBIRD_SERVER_IMAGE}
-    platform: linux/amd64
     command: ["--config", "/etc/netbird/config.yaml"]
     restart: unless-stopped
     environment:
@@ -59,12 +58,13 @@ services:
     volumes:
       - ./runtime/netbird-config.yaml:/etc/netbird/config.yaml:ro
       - netbird-data:/var/lib/netbird
+    extra_hosts:
+      - "agent-network-agentgateway:172.30.0.10"
     networks:
       - management
 
   netbird-dashboard:
     image: ${NETBIRD_DASHBOARD_IMAGE}
-    platform: linux/amd64
     restart: unless-stopped
     environment:
       NETBIRD_MGMT_API_ENDPOINT: https://${NETBIRD_MANAGEMENT_DOMAIN}
@@ -91,12 +91,12 @@ services:
     volumes:
       - ./agent-network-agentgateway.yaml:/etc/agentgateway/config.yaml:ro
     networks:
-      - agent-network
+      agent-network:
+        ipv4_address: 172.30.0.10
 
   netbird-proxy:
     profiles: [configured]
     image: ${NETBIRD_PROXY_IMAGE}
-    platform: linux/amd64
     restart: unless-stopped
     depends_on:
       certificate-init:
@@ -138,7 +138,7 @@ services:
 
   netbird-example-client:
     profiles: [configured]
-    image: ${NETBIRD_CLIENT_IMAGE:-netbirdio/netbird:0.77.0}
+    image: ${NETBIRD_CLIENT_IMAGE:-netbirdio/netbird:0.78.1}
     restart: unless-stopped
     depends_on:
       management-agentgateway:
@@ -192,3 +192,6 @@ networks:
         - subnet: 172.31.0.0/24
   agent-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

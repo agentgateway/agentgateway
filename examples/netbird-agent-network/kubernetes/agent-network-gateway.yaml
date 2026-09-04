@@ -37,6 +37,25 @@ spec:
         namespaces:
           from: Same
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netbird-agentgateway-upstream
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/instance: netbird-agentgateway
+    app.kubernetes.io/name: netbird-agentgateway
+    gateway.networking.k8s.io/gateway-name: netbird-agentgateway
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
