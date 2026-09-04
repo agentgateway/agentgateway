@@ -5153,8 +5153,16 @@ mod body_streaming_and_trailers {
 
 		let mut saw_expected_trailer = false;
 		let mut saw_body_after_trailers = false;
+		let mut saw_non_terminal_body = false;
 		while let Some(req) = rx.recv().await {
 			match req.request {
+				Some(proto::processing_request::Request::RequestBody(body)) => {
+					assert!(!body.end_of_stream, "trailers must terminate the stream");
+					saw_non_terminal_body = true;
+					if saw_expected_trailer {
+						saw_body_after_trailers = true;
+					}
+				},
 				Some(proto::processing_request::Request::RequestTrailers(ts)) => {
 					if let Some(map) = ts.trailers
 						&& map
@@ -5165,16 +5173,41 @@ mod body_streaming_and_trailers {
 						saw_expected_trailer = true;
 					}
 				},
-				Some(proto::processing_request::Request::RequestBody(_)) if saw_expected_trailer => {
-					saw_body_after_trailers = true;
-				},
 				_ => {},
 			}
 		}
+		assert!(saw_non_terminal_body);
 		assert!(saw_expected_trailer);
 		assert!(
 			!saw_body_after_trailers,
 			"trailers should be the final message for a body stream"
+		);
+	}
+
+	#[tokio::test]
+	async fn handle_body_stream_marks_last_body_chunk_as_end_of_stream_without_trailers() {
+		let body = Body::from("hello");
+		let (tx, mut rx) = mpsc::channel(8);
+		super::super::ExtProcInstance::handle_body_stream(
+			None,
+			body,
+			tx,
+			super::super::BodyStreamDirection::Request,
+			true,
+			None,
+			super::super::FirstExtProcMessage::default(),
+		)
+		.await;
+
+		let request = rx.recv().await.expect("body request should be sent");
+		let Some(proto::processing_request::Request::RequestBody(body)) = request.request else {
+			panic!("expected request body");
+		};
+		assert_eq!(body.body, "hello");
+		assert!(body.end_of_stream);
+		assert!(
+			rx.recv().await.is_none(),
+			"no terminal body message is needed"
 		);
 	}
 

@@ -1320,7 +1320,7 @@ impl ExtProcInstance {
 		{
 			let request = Some(if frame.is_data() {
 				let frame = frame.into_data().expect("already checked");
-				let end_of_stream = !send_trailers && body.is_end_stream();
+				let end_of_stream = body.is_end_stream();
 				sent_end_stream |= end_of_stream;
 				trace!("sending body chunk...",);
 				body_direction.body_message(HttpBody {
