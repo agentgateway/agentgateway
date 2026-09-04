@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-03T08:35:48Z"
+    "generatedAt": "2026-09-04T08:34:50Z"
   },
   "providers": {
     "anthropic": {
@@ -2003,6 +2003,12 @@
             "cacheRead": "0.14"
           }
         },
+        "zai-org/GLM-5.3-Fast": {
+          "rates": {
+            "input": "2.1",
+            "output": "6.6"
+          }
+        },
         "zai-org/GLM-5.3-Flash": {
           "rates": {
             "input": "0.15",
@@ -2104,6 +2110,17 @@
             "adaptive_thinking"
           ]
         },
+        "claude-fable-5.1": {
+          "rates": {
+            "input": "10",
+            "output": "50",
+            "cacheRead": "0.25",
+            "cacheWrite": "12.5"
+          },
+          "tags": [
+            "adaptive_thinking"
+          ]
+        },
         "claude-haiku-4.5": {
           "rates": {
             "input": "1",
@@ -2113,28 +2130,6 @@
           },
           "tags": [
             "legacy_thinking"
-          ]
-        },
-        "claude-opus-4.5": {
-          "rates": {
-            "input": "5",
-            "output": "25",
-            "cacheRead": "0.5",
-            "cacheWrite": "6.25"
-          },
-          "tags": [
-            "legacy_thinking"
-          ]
-        },
-        "claude-opus-4.6": {
-          "rates": {
-            "input": "5",
-            "output": "25",
-            "cacheRead": "0.5",
-            "cacheWrite": "6.25"
-          },
-          "tags": [
-            "adaptive_thinking"
           ]
         },
         "claude-opus-4.7": {
@@ -2170,25 +2165,6 @@
             "adaptive_thinking"
           ]
         },
-        "claude-sonnet-4": {
-          "rates": {
-            "input": "3",
-            "output": "15",
-            "cacheRead": "0.3",
-            "cacheWrite": "3.75"
-          }
-        },
-        "claude-sonnet-4.5": {
-          "rates": {
-            "input": "3",
-            "output": "15",
-            "cacheRead": "0.3",
-            "cacheWrite": "3.75"
-          },
-          "tags": [
-            "legacy_thinking"
-          ]
-        },
         "claude-sonnet-4.6": {
           "rates": {
             "input": "3",
@@ -2210,23 +2186,6 @@
           },
           "tags": [
             "adaptive_thinking"
-          ]
-        },
-        "gemini-3.1-pro-preview": {
-          "rates": {
-            "input": "2",
-            "output": "12",
-            "cacheRead": "0.2"
-          },
-          "tiers": [
-            {
-              "contextOver": 200000,
-              "rates": {
-                "input": "4",
-                "output": "18",
-                "cacheRead": "0.4"
-              }
-            }
           ]
         },
         "gemini-3.5-flash": {
@@ -2251,11 +2210,11 @@
             "cacheRead": "0.075"
           }
         },
-        "gpt-4.1": {
+        "gemini-3.8-flash": {
           "rates": {
-            "input": "2",
-            "output": "8",
-            "cacheRead": "0.5"
+            "input": "0.75",
+            "output": "3.75",
+            "cacheRead": "0.075"
           }
         },
         "gpt-5-mini": {
@@ -2263,20 +2222,6 @@
             "input": "0.25",
             "output": "2",
             "cacheRead": "0.025"
-          }
-        },
-        "gpt-5.2": {
-          "rates": {
-            "input": "1.75",
-            "output": "14",
-            "cacheRead": "0.175"
-          }
-        },
-        "gpt-5.2-codex": {
-          "rates": {
-            "input": "1.75",
-            "output": "14",
-            "cacheRead": "0.175"
           }
         },
         "gpt-5.3-codex": {
@@ -2735,6 +2680,13 @@
             "input": "0.08",
             "output": "0.18",
             "cacheRead": "0.016"
+          }
+        },
+        "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp": {
+          "rates": {
+            "input": "0.44",
+            "output": "1.32",
+            "cacheRead": "0.14"
           }
         },
         "deepseek-ai/DeepSeek-V4-Pro": {
@@ -4045,6 +3997,12 @@
           "rates": {
             "input": "0.14",
             "output": "0.28"
+          }
+        },
+        "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp": {
+          "rates": {
+            "input": "0.44",
+            "output": "1.32"
           }
         },
         "deepseek-ai/DeepSeek-V4-Pro": {
