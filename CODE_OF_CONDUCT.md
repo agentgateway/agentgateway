@@ -20,6 +20,7 @@ These policies help ensure that the code base is kept at a high level of quality
 Additionally, it ensures maintainers do not waste time reviewing low-quality AI-generated code.
 
 Issues or PRs that appear to violate these guidelines may be closed without review.
+Additionally, offenders may be banned from the organization for 1-30 days, or indefinitely.
 
 ## Other rules
 
