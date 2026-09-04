@@ -7,11 +7,14 @@ use tokio::sync::Notify;
 
 use crate::common::prelude::*;
 
+const ACTOR_UID: &str = "6f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f";
+
 #[derive(Clone)]
 struct IngressHandler {
 	pod_ip: String,
 	calls: Arc<AtomicUsize>,
 	resumed: bool,
+	uid: &'static str,
 }
 
 #[derive(Clone)]
@@ -60,13 +63,16 @@ impl ateapimock::Handler for IngressHandler {
 		self.calls.fetch_add(1, Ordering::Relaxed);
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
+				metadata: Some(ResourceMetadata {
+					uid: self.uid.to_owned(),
+					..Default::default()
+				}),
 				status: Some(ActorStatus {
 					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
 						worker_pod_ip: self.pod_ip.clone(),
 					}),
 				}),
-				..Default::default()
 			}),
 			resumed: self.resumed,
 		})
@@ -91,6 +97,7 @@ struct SelectiveParkingHandler {
 	release: Arc<Notify>,
 	calls: Arc<AtomicUsize>,
 	resumed: bool,
+	uid: &'static str,
 }
 
 #[async_trait::async_trait]
@@ -107,13 +114,16 @@ impl ateapimock::Handler for SelectiveParkingHandler {
 		}
 		Ok(ResumeActorResponse {
 			actor: Some(Actor {
+				metadata: Some(ResourceMetadata {
+					uid: self.uid.to_owned(),
+					..Default::default()
+				}),
 				status: Some(ActorStatus {
 					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
 						worker_pod_ip: self.pod_ip.clone(),
 					}),
 				}),
-				..Default::default()
 			}),
 			resumed: self.resumed,
 		})
@@ -165,6 +175,7 @@ async fn actor_ingress_resolves_the_dynamic_backend() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			resumed: true,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()
@@ -326,6 +337,7 @@ async fn actor_ingress_keeps_cached_actor_available_when_parking_is_full() {
 			release: release.clone(),
 			calls: calls.clone(),
 			resumed: true,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()
@@ -389,6 +401,12 @@ async fn assert_logged_resume(path: &str, want: &str) {
 	.unwrap();
 }
 
+async fn find_request_log(path: &str) -> Value {
+	agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", path)])
+		.await
+		.unwrap()
+}
+
 fn actor_url(actor: &str, path: &str) -> String {
 	format!("http://{actor}.demo.actors.resources.substrate.ate.dev{path}")
 }
@@ -426,6 +444,7 @@ async fn actor_ingress_reports_a_triggered_resume_as_a_cold_start() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			resumed: true,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()
@@ -471,6 +490,7 @@ async fn actor_ingress_reports_no_resume_when_the_actor_is_already_running() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			resumed: false,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()
@@ -501,6 +521,7 @@ async fn actor_ingress_reports_no_resume_for_a_cache_hit_after_a_cold_start() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			resumed: true,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()
@@ -527,6 +548,120 @@ async fn actor_ingress_reports_no_resume_for_a_cache_hit_after_a_cold_start() {
 }
 
 #[tokio::test]
+async fn actor_ingress_logs_the_actor_uid_on_a_cold_start() {
+	const PATH: &str = "/actor-uid-cold";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || IngressHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			resumed: true,
+			uid: ACTOR_UID,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let response = send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", PATH),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+	assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+	let log = find_request_log(PATH).await;
+	assert_eq!(log["ate.actor.uid"].as_str(), Some(ACTOR_UID), "{log:#?}");
+}
+
+#[tokio::test]
+async fn actor_ingress_logs_the_actor_uid_from_the_assignment_cache() {
+	const COLD_PATH: &str = "/actor-uid-cache-cold";
+	const WARM_PATH: &str = "/actor-uid-cache-warm";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || IngressHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			resumed: true,
+			uid: ACTOR_UID,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	for path in [COLD_PATH, WARM_PATH] {
+		let response = send_request(
+			gateway.serve_http(BIND_KEY),
+			Method::GET,
+			&actor_url("my-actor", path),
+		)
+		.await;
+		assert_eq!(response.status(), StatusCode::OK);
+	}
+
+	assert_eq!(
+		calls.load(Ordering::Relaxed),
+		1,
+		"the second request must be served from the assignment cache"
+	);
+	for path in [COLD_PATH, WARM_PATH] {
+		let log = find_request_log(path).await;
+		assert_eq!(
+			log["ate.actor.uid"].as_str(),
+			Some(ACTOR_UID),
+			"{path}: {log:#?}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn actor_ingress_logs_actor_identity_under_the_upstream_spellings() {
+	const PATH: &str = "/actor-identity-spelling";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || IngressHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			resumed: true,
+			uid: ACTOR_UID,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let response = send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", PATH),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+
+	let log = find_request_log(PATH).await;
+	assert_eq!(log["ate.actor.name"].as_str(), Some("my-actor"), "{log:#?}");
+	assert_eq!(log["ate.actor.uid"].as_str(), Some(ACTOR_UID), "{log:#?}");
+	assert_eq!(log["ate.atespace"].as_str(), Some("demo"), "{log:#?}");
+	assert!(
+		log.get("ate.actor.id").is_none(),
+		"ate.actor.id was renamed to ate.actor.name: {log:#?}"
+	);
+}
+
+#[tokio::test]
 async fn actor_ingress_reports_a_joined_resume_for_a_follower_on_an_in_flight_resume() {
 	const LEADER_PATH: &str = "/resume-join-leader";
 	const FOLLOWER_PATH: &str = "/resume-join-follower";
@@ -546,6 +681,7 @@ async fn actor_ingress_reports_a_joined_resume_for_a_follower_on_an_in_flight_re
 			release: release.clone(),
 			calls: calls.clone(),
 			resumed: true,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()
@@ -639,6 +775,7 @@ async fn actor_ingress_uses_the_original_connect_authority() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			resumed: true,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()
@@ -753,6 +890,7 @@ async fn actor_ingress_uses_backend_tunnel_for_connect() {
 			pod_ip: pod_ip.clone(),
 			calls: calls.clone(),
 			resumed: true,
+			uid: ACTOR_UID,
 		}
 	})
 	.spawn()

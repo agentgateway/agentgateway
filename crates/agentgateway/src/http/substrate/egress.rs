@@ -114,6 +114,7 @@ impl SubstrateEgress {
 			name: identity.actor_name,
 		};
 		log.ate_actor_name = Some(actor.name.clone());
+		log.ate_actor_uid = Some(identity.actor_uid.clone());
 		log.ate_atespace = Some(actor.atespace.clone());
 		let channel = self
 			.target

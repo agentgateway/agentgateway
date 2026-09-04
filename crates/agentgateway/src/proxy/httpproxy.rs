@@ -2306,7 +2306,11 @@ async fn make_backend_call(
 		.get::<http::substrate::SubstrateRequestState>()
 	{
 		let resume = state.resume_disposition().as_str();
-		log.add(|l| l.ate_router_resume = Some(resume));
+		let actor_uid = state.actor_uid();
+		log.add(|l| {
+			l.ate_router_resume = Some(resume);
+			l.ate_actor_uid = actor_uid;
+		});
 	}
 	substrate_selection?;
 

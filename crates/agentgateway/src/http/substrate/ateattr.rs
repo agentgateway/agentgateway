@@ -9,6 +9,7 @@ use std::fmt::{Display, Formatter};
 /// The atespace-scoped addressable name, mirroring `k8s.pod.name`. Upstream has deliberately no
 /// `ate.actor.id`: it is ambiguous once an actor has both a name and a uid.
 pub(crate) const ATE_ACTOR_NAME: &str = "ate.actor.name";
+pub(crate) const ATE_ACTOR_UID: &str = "ate.actor.uid";
 pub(crate) const ATE_ATESPACE: &str = "ate.atespace";
 pub(crate) const ATE_ROUTER_RESUME: &str = "ate.router.resume";
 
@@ -60,6 +61,7 @@ mod tests {
 		assert_eq!(super::ATE_ROUTER_RESUME, "ate.router.resume");
 		assert_eq!(super::ATE_ATESPACE, "ate.atespace");
 		assert_eq!(super::ATE_ACTOR_NAME, "ate.actor.name");
+		assert_eq!(super::ATE_ACTOR_UID, "ate.actor.uid");
 	}
 
 	#[test]

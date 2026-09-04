@@ -92,6 +92,7 @@ struct CachedAssignment {
 	expires_at: Instant,
 	generation: u64,
 	resumed: bool,
+	uid: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -272,7 +273,7 @@ impl SubstrateIngress {
 		&self,
 		client: &PolicyClient,
 		actor: &ActorRef,
-	) -> Result<(SocketAddr, bool), ResumeError> {
+	) -> Result<(SocketAddr, bool, Option<String>), ResumeError> {
 		let budget = self.request_parking.budget();
 		let deadline = tokio::time::Instant::now() + budget;
 		let result = async {
@@ -310,6 +311,10 @@ impl SubstrateIngress {
 								"ResumeActor response did not include an actor".to_owned(),
 							)
 						})?;
+						let uid = actor
+							.metadata
+							.map(|metadata| metadata.uid)
+							.filter(|uid| !uid.is_empty());
 						let assignment = actor
 							.status
 							.and_then(|status| status.worker_assignment)
@@ -327,7 +332,11 @@ impl SubstrateIngress {
 									assignment.worker_pod_ip
 								))
 							})?;
-						return Ok((SocketAddr::new(ip, self.connect_target_port.get()), resumed));
+						return Ok((
+							SocketAddr::new(ip, self.connect_target_port.get()),
+							resumed,
+							uid,
+						));
 					},
 					Ok(Err(status)) if self.retryable_while_parked(status.code()) => {
 						let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -418,11 +427,12 @@ impl SubstrateIngress {
 					let result = self
 						.resume_actor(client, &actor)
 						.await
-						.map(|(target, resumed)| CachedAssignment {
+						.map(|(target, resumed, uid)| CachedAssignment {
 							target,
 							expires_at: Instant::now() + self.cache_ttl,
 							generation: self.cache.next_generation.fetch_add(1, Ordering::Relaxed),
 							resumed,
+							uid,
 						});
 					let _ = guard.insert(result.clone());
 					match &result {
@@ -460,6 +470,15 @@ impl SubstrateRequestState {
 
 	pub(crate) fn resume_disposition(&self) -> ResumeDisposition {
 		*self.resume.lock().unwrap()
+	}
+
+	pub(crate) fn actor_uid(&self) -> Option<String> {
+		self
+			.current
+			.lock()
+			.unwrap()
+			.as_ref()
+			.and_then(|current| current.uid.clone())
 	}
 
 	/// Policy events describe a single resolution attempt; this describes the request. A

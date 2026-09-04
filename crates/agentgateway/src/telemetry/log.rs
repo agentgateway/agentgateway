@@ -1112,6 +1112,7 @@ impl RequestLog {
 			a2a_response: None,
 			inference_pool: None,
 			ate_actor_name: None,
+			ate_actor_uid: None,
 			ate_atespace: None,
 			ate_router_resume: None,
 			request_handle: None,
@@ -1290,6 +1291,7 @@ pub struct RequestLog {
 	pub inference_pool: Option<SocketAddr>,
 
 	pub ate_actor_name: Option<String>,
+	pub ate_actor_uid: Option<String>,
 	pub ate_atespace: Option<String>,
 	pub ate_router_resume: Option<&'static str>,
 
@@ -1710,6 +1712,7 @@ impl Drop for DropOnLog {
 					log.inference_pool.display(),
 				),
 				(ateattr::ATE_ACTOR_NAME, log.ate_actor_name.display()),
+				(ateattr::ATE_ACTOR_UID, log.ate_actor_uid.display()),
 				(ateattr::ATE_ATESPACE, log.ate_atespace.display()),
 				(ateattr::ATE_ROUTER_RESUME, log.ate_router_resume.display()),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
