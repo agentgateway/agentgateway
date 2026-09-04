@@ -274,6 +274,7 @@ pub struct Metrics {
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
+	pub gen_ai_inter_chunk_latency: Histogram<GenAILabels>,
 
 	pub tls_handshake_duration: Histogram<TCPLabels>,
 
@@ -414,6 +415,13 @@ impl Metrics {
 			gen_ai_time_to_first_token.clone(),
 		);
 
+		let gen_ai_inter_chunk_latency = histogram_family(histogram_mode, &OUTPUT_TOKEN_BUCKET);
+		registry.register(
+			"gen_ai_server_inter_chunk_latency",
+			"Time between consecutive output chunks for a given request",
+			gen_ai_inter_chunk_latency.clone(),
+		);
+
 		Metrics {
 			requests: build(
 				&mut registry,
@@ -465,6 +473,7 @@ impl Metrics {
 			gen_ai_request_duration,
 			gen_ai_time_per_output_token,
 			gen_ai_time_to_first_token,
+			gen_ai_inter_chunk_latency,
 
 			response_bytes: {
 				let m = Family::<HTTPLabels, _>::default();
