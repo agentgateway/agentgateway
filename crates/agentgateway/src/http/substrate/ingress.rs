@@ -635,7 +635,7 @@ impl RequestPolicyTrait for SubstrateIngress {
 			atespace: atespace.to_owned(),
 			name: name.to_owned(),
 		};
-		log.ate_actor_id = Some(actor.name.clone());
+		log.ate_actor_name = Some(actor.name.clone());
 		log.ate_atespace = Some(actor.atespace.clone());
 		// Ordinary atunnel ingress uses this header to select the actor port and
 		// strips it before forwarding. Raw CONNECT carries the port in its
