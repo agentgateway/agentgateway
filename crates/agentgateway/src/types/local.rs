@@ -927,9 +927,9 @@ pub struct LocalLLMParams {
 	vertex_region: Option<Strng>,
 	/// Google Cloud project ID to use for the Vertex AI provider.
 	vertex_project: Option<Strng>,
-	/// For Azure: the resource name of the deployment
+	/// For Azure: the resource name, or the Azure region for Speech resources
 	azure_resource_name: Option<Strng>,
-	/// For Azure: the type of Azure endpoint (openAI or foundry)
+	/// For Azure: the type of Azure endpoint
 	azure_resource_type: Option<crate::llm::azure::AzureResourceType>,
 	/// For Azure: the API version to use
 	azure_api_version: Option<Strng>,

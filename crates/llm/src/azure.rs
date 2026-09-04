@@ -13,7 +13,7 @@ pub enum AzureResourceType {
 	#[serde(alias = "aiServices")]
 	Foundry,
 	/// Azure Cognitive Services Speech endpoint: `{resourceName}.stt.speech.microsoft.com`.
-	/// For Speech resources, `resource_name` is the Azure region (for example, `westeurope`).
+	/// For Speech resources, `resourceName` is the Azure region (for example, `westeurope`).
 	Speech,
 }
 

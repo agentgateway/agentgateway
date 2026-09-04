@@ -69303,8 +69303,8 @@
 |`llm.providers[].params.awsRegion`|string|AWS region to use for the Bedrock provider.|
 |`llm.providers[].params.vertexRegion`|string|Google Cloud region to use for the Vertex AI provider.|
 |`llm.providers[].params.vertexProject`|string|Google Cloud project ID to use for the Vertex AI provider.|
-|`llm.providers[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
-|`llm.providers[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
+|`llm.providers[].params.azureResourceName`|string|For Azure: the resource name, or the Azure region for Speech resources|
+|`llm.providers[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`llm.providers[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.providers[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
 |`llm.providers[].params.azureSpeechEndpoint`|enum|For Azure Speech: the REST endpoint family<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
@@ -70029,8 +70029,8 @@
 |`llm.models[].params.awsRegion`|string|AWS region to use for the Bedrock provider.|
 |`llm.models[].params.vertexRegion`|string|Google Cloud region to use for the Vertex AI provider.|
 |`llm.models[].params.vertexProject`|string|Google Cloud project ID to use for the Vertex AI provider.|
-|`llm.models[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
-|`llm.models[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
+|`llm.models[].params.azureResourceName`|string|For Azure: the resource name, or the Azure region for Speech resources|
+|`llm.models[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.models[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
 |`llm.models[].params.azureSpeechEndpoint`|enum|For Azure Speech: the REST endpoint family<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
