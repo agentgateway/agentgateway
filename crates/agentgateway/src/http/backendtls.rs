@@ -29,7 +29,7 @@ pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
 		subject_alt_names: None,
 		key_exchange_groups: None,
 		spiffe: false,
-		spiffe_accepted_trust_domains: vec![],
+		..Default::default()
 	}
 	.try_into()
 	.unwrap()
@@ -273,8 +273,8 @@ pub struct ResolvedBackendTLS {
 	pub subject_alt_names: Option<Vec<String>>,
 	pub key_exchange_groups: Option<Vec<tls::KeyExchangeGroup>>,
 	pub spiffe: bool,
-	/// Federated trust domains accepted for a SPIFFE-sourced backend (empty unless `spiffe`).
-	pub spiffe_accepted_trust_domains: Vec<String>,
+	/// Federated trust domains accepted for a SPIFFE-sourced backend, when configured.
+	pub spiffe_accepted_trust_domains: Option<Vec<String>>,
 }
 
 impl ResolvedBackendTLS {
@@ -295,7 +295,7 @@ impl ResolvedBackendTLS {
 			BackendTLSSource::Spiffe(SpiffeBackendTLS {
 				alpn: self.alpn,
 				verify_sans: self.subject_alt_names.unwrap_or_default(),
-				accepted_trust_domains: self.spiffe_accepted_trust_domains,
+				accepted_trust_domains: self.spiffe_accepted_trust_domains.unwrap_or_default(),
 			})
 		} else {
 			let mut roots = rustls::RootCertStore::empty();
@@ -401,7 +401,7 @@ impl LocalBackendTLS {
 			.spiffe
 			.as_ref()
 			.map(|s| s.accepted_trust_domains.clone())
-			.unwrap_or_default();
+			.filter(|domains| !domains.is_empty());
 		ResolvedBackendTLS {
 			cert,
 			key,

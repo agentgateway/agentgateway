@@ -1145,7 +1145,7 @@ impl TestBind {
 			subject_alt_names: None,
 			key_exchange_groups: None,
 			spiffe: false,
-			spiffe_accepted_trust_domains: vec![],
+			spiffe_accepted_trust_domains: None,
 		}
 		.try_into()
 		.unwrap();
@@ -1184,7 +1184,7 @@ impl TestBind {
 			subject_alt_names: None,
 			key_exchange_groups: None,
 			spiffe: false,
-			spiffe_accepted_trust_domains: vec![],
+			spiffe_accepted_trust_domains: None,
 		}
 		.try_into()
 		.unwrap();

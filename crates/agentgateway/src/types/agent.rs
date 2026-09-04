@@ -226,7 +226,10 @@ pub struct ServerTLSConfig {
 enum ServerTlsCertificateSource {
 	Static,
 	DynamicCa,
-	IstioWorkload { mtls: bool, default_alpns: Alpns },
+	IstioWorkload {
+		mtls: bool,
+		default_alpns: Alpns,
+	},
 	Spiffe {
 		default_alpns: Alpns,
 		/// Federated trust domains (beyond the gateway's own) whose client SVIDs this listener

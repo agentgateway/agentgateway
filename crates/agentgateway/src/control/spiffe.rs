@@ -135,10 +135,7 @@ impl std::fmt::Debug for SpiffeClient {
 
 impl SpiffeClient {
 	/// Connects to the SPIFFE Workload API and performs the initial SVID/bundle sync.
-	pub async fn new(
-		endpoint: String,
-		federated_trust_domains: Vec<String>,
-	) -> Result<Self, Error> {
+	pub async fn new(endpoint: String, federated_trust_domains: Vec<String>) -> Result<Self, Error> {
 		info!(endpoint = %endpoint, "connecting to SPIFFE workload API");
 		// Validate the declared federated trust domains up front so a typo fails at startup.
 		let federated_trust_domains: Arc<[TrustDomain]> =
@@ -213,8 +210,12 @@ impl SpiffeClient {
 		let ctx = self.source.x509_context()?;
 		let provider = transport::tls::provider();
 		// Verify inbound client SVIDs against the accepted trust domains' bundles (local + federated).
-		let verifier =
-			build_client_verifier(&ctx, accepted, &self.federated_trust_domains, provider.clone())?;
+		let verifier = build_client_verifier(
+			&ctx,
+			accepted,
+			&self.federated_trust_domains,
+			provider.clone(),
+		)?;
 		let (chain, key, spiffe_id) = svid_identity(&ctx)?;
 
 		let mut config = ServerConfig::builder_with_provider(provider)
@@ -305,8 +306,8 @@ fn snapshot_svid(ctx: &X509Context) -> Result<&Arc<X509Svid>, Error> {
 fn normalize_trust_domains(names: &[String]) -> Result<Vec<TrustDomain>, Error> {
 	let mut tds: Vec<TrustDomain> = Vec::with_capacity(names.len());
 	for name in names {
-		let td = TrustDomain::new(name)
-			.map_err(|e| Error::InvalidTrustDomain(name.clone(), e.to_string()))?;
+		let td =
+			TrustDomain::new(name).map_err(|e| Error::InvalidTrustDomain(name.clone(), e.to_string()))?;
 		if !tds.contains(&td) {
 			tds.push(td);
 		}
@@ -368,7 +369,11 @@ fn roots_by_trust_domain(
 		}
 		by_td.insert(td, Arc::new(roots));
 	}
-	debug!(purpose, trust_domains = by_td.len(), "loaded SPIFFE trust bundles");
+	debug!(
+		purpose,
+		trust_domains = by_td.len(),
+		"loaded SPIFFE trust bundles"
+	);
 	Ok(by_td)
 }
 
@@ -408,11 +413,9 @@ fn build_server_verifier(
 	for (td, store) in roots {
 		let verifier: Arc<dyn ServerCertVerifier> = if verify_sans.is_empty() {
 			// No SPIFFE ID pinned: accept any SVID that chains to this trust domain's bundle.
-			let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(
-				store,
-				provider.clone(),
-			)
-			.build()?;
+			let inner =
+				rustls::client::WebPkiServerVerifier::builder_with_provider(store, provider.clone())
+					.build()?;
 			Arc::new(transport::tls::insecure::NoServerNameVerification::new(
 				inner,
 			))
@@ -958,10 +961,16 @@ mod tests {
 		let accepted = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
 		let federated = accepted.clone();
 
-		let fed_peer =
-			CertificateDer::from(fed.issue("spiffe://federated.example/ns/default/sa/peer").leaf_der);
-		let local_peer =
-			CertificateDer::from(local.issue("spiffe://example.org/ns/default/sa/peer").leaf_der);
+		let fed_peer = CertificateDer::from(
+			fed
+				.issue("spiffe://federated.example/ns/default/sa/peer")
+				.leaf_der,
+		);
+		let local_peer = CertificateDer::from(
+			local
+				.issue("spiffe://example.org/ns/default/sa/peer")
+				.leaf_der,
+		);
 
 		let v = build_client_verifier(&ctx, &accepted, &federated, transport::tls::provider()).unwrap();
 		assert!(
@@ -973,8 +982,11 @@ mod tests {
 			"the local trust domain is always implicitly accepted"
 		);
 		// §7.3: dispatched to the local bundle by its claimed trust domain, a foreign-CA cert cannot chain.
-		let imposter =
-			CertificateDer::from(fed.issue("spiffe://example.org/ns/default/sa/victim").leaf_der);
+		let imposter = CertificateDer::from(
+			fed
+				.issue("spiffe://example.org/ns/default/sa/victim")
+				.leaf_der,
+		);
 		assert!(
 			v.verify_client_cert(&imposter, &[], now).is_err(),
 			"a federated CA must not be able to impersonate the local trust domain"
@@ -1009,7 +1021,10 @@ mod tests {
 		let federated = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
 		let err = build_client_verifier(&ctx, &accepted, &federated, transport::tls::provider())
 			.expect_err("an undeclared accepted trust domain must fail");
-		assert!(matches!(err, Error::TrustDomainNotFederated(_)), "got {err:?}");
+		assert!(
+			matches!(err, Error::TrustDomainNotFederated(_)),
+			"got {err:?}"
+		);
 		handle.abort();
 	}
 
@@ -1061,17 +1076,34 @@ mod tests {
 		let v = build_server_verifier(&ctx, vec![], &accepted, &federated).unwrap();
 		assert!(v.verify_server_cert(&upstream, &[], &sni, &[], now).is_ok());
 		// §7.3: a federated CA claiming the local trust domain is rejected.
-		let imposter =
-			CertificateDer::from(fed.issue("spiffe://example.org/ns/default/sa/upstream").leaf_der);
-		assert!(v.verify_server_cert(&imposter, &[], &sni, &[], now).is_err());
+		let imposter = CertificateDer::from(
+			fed
+				.issue("spiffe://example.org/ns/default/sa/upstream")
+				.leaf_der,
+		);
+		assert!(
+			v.verify_server_cert(&imposter, &[], &sni, &[], now)
+				.is_err()
+		);
 
 		// Pinning a federated SPIFFE ID accepts the match and rejects a different federated ID.
 		let pinned =
 			build_server_verifier(&ctx, vec![upstream_id.to_string()], &accepted, &federated).unwrap();
-		assert!(pinned.verify_server_cert(&upstream, &[], &sni, &[], now).is_ok());
-		let other =
-			CertificateDer::from(fed.issue("spiffe://federated.example/ns/default/sa/other").leaf_der);
-		assert!(pinned.verify_server_cert(&other, &[], &sni, &[], now).is_err());
+		assert!(
+			pinned
+				.verify_server_cert(&upstream, &[], &sni, &[], now)
+				.is_ok()
+		);
+		let other = CertificateDer::from(
+			fed
+				.issue("spiffe://federated.example/ns/default/sa/other")
+				.leaf_der,
+		);
+		assert!(
+			pinned
+				.verify_server_cert(&other, &[], &sni, &[], now)
+				.is_err()
+		);
 		handle.abort();
 	}
 
@@ -1414,7 +1446,10 @@ mod tests {
 		let cfg_before = client.server_config(alpns.clone(), vec![]).unwrap();
 		// While the SVID is unchanged, the same key returns the cached config (same allocation).
 		assert!(
-			Arc::ptr_eq(&cfg_before, &client.server_config(alpns.clone(), vec![]).unwrap()),
+			Arc::ptr_eq(
+				&cfg_before,
+				&client.server_config(alpns.clone(), vec![]).unwrap()
+			),
 			"an unchanged SVID should serve the cached config"
 		);
 
