@@ -1394,6 +1394,23 @@ impl TestBind {
 		addr
 	}
 
+	/// Only listeners started with `serve_gateway_listener` release their drain handle; other serve_*
+	/// helpers hold one for the life of the test, so a drain after them never completes.
+	pub async fn start_drain(self) {
+		let Self {
+			_drain_tx: drain_tx,
+			drain_rx,
+			..
+		} = self;
+		drop(drain_rx);
+		tokio::time::timeout(
+			std::time::Duration::from_secs(30),
+			drain_tx.start_drain_and_wait(drain::DrainMode::Graceful),
+		)
+		.await
+		.expect("drain did not complete; something still holds a DrainWatcher")
+	}
+
 	pub async fn serve_gateway_listener(&self, bind_name: BindKey) -> SocketAddr {
 		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
 		listener.set_nonblocking(true).unwrap();

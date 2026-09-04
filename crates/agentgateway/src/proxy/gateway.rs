@@ -303,8 +303,6 @@ impl Gateway {
 			// However, we don't want to block from our listen() loop, or we would never finish.
 			// Having a weak reference allows us to listen() forever without blocking, but create blockers for accepted connections.
 			let (mut upgrader, weak) = drain.into_weak();
-			let (inner_trigger, inner_drain) = drain::new();
-			drop(inner_drain);
 			let admission = pi.admission.bind(&name);
 			let connection_shed = pi
 				.metrics
@@ -390,52 +388,32 @@ impl Gateway {
 				}
 			};
 			upgrader.disable();
-			// Now we are draining. We need to immediately start draining the inner requests
-			// Wait for Min_duration complete AND inner join complete
-			let mode = drain_mode.mode(); // TODO: handle mode differently?
 			drop(drain_mode);
-			let drained_for_minimum = async move {
-				tokio::join!(
-					inner_trigger.start_drain_and_wait(mode),
-					tokio::time::sleep(min_deadline)
-				);
-			};
-			tokio::pin!(drained_for_minimum);
-			// We still need to accept new connections during this time though, so race them
+			// Keep accepting while the drain runs. Connections accepted from here on are not tracked, so
+			// they are at risk of a forced close. This future never completes on its own: run_with_drain
+			// drops it once every tracked connection has finished or the deadline passes.
 			backoff = BACKOFF_INITIAL;
 			loop {
-				tokio::select! {
-					res = listener.accept() => match res {
-						Ok((stream, _peer)) => {
-							backoff = BACKOFF_INITIAL;
-							handle_stream(stream, &upgrader);
+				match listener.accept().await {
+					Ok((stream, _peer)) => {
+						backoff = BACKOFF_INITIAL;
+						handle_stream(stream, &upgrader);
+					},
+					Err(e) => {
+						if is_accept_error_permanent(&e) {
+							error!(bind=?name, "fatal accept error during drain, stopping listener: {e}");
+							std::future::pending::<()>().await;
 						}
-						Err(e) => {
-							if is_accept_error_permanent(&e) {
-								error!(bind=?name, "fatal accept error during drain, stopping listener: {e}");
-								return;
-							}
-							if is_accept_error_per_connection(&e) {
-								debug!(bind=?name, "per-connection accept error during drain: {e}");
-								continue;
-							}
-							warn!(bind=?name, "accept error during drain: {e}");
-							let jittered = Duration::from_millis(
-								rand::rng().random_range(0..=backoff.as_millis() as u64)
-							);
-							tokio::select! {
-								_ = tokio::time::sleep(jittered) => {},
-								_ = &mut drained_for_minimum => { return; }
-							}
-							backoff = (backoff * 2).min(BACKOFF_MAX);
+						if is_accept_error_per_connection(&e) {
+							debug!(bind=?name, "per-connection accept error during drain: {e}");
 							continue;
 						}
+						warn!(bind=?name, "accept error during drain: {e}");
+						let jittered =
+							Duration::from_millis(rand::rng().random_range(0..=backoff.as_millis() as u64));
+						tokio::time::sleep(jittered).await;
+						backoff = (backoff * 2).min(BACKOFF_MAX);
 					},
-					_ = &mut drained_for_minimum => {
-						// We are done! exit.
-						// This will stop accepting new connections
-						return;
-					}
 				}
 			}
 		};
