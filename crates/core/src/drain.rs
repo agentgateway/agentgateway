@@ -337,11 +337,80 @@ mod test {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use std::task;
 	use std::task::Poll;
+	use std::time::Duration;
 
 	use pin_project_lite::pin_project;
+	use tokio::sync::oneshot;
+	use tokio::task::JoinHandle;
 
 	use crate::drain;
 	use crate::drain::DrainMode::Graceful;
+	use crate::drain::DrainTrigger;
+
+	#[derive(Debug, PartialEq)]
+	enum ConnectionExit {
+		Completed,
+		Forced,
+	}
+
+	struct RunBindHarness {
+		drain: DrainTrigger,
+		connection_complete: oneshot::Sender<()>,
+		connection_exit: oneshot::Receiver<ConnectionExit>,
+		started: oneshot::Receiver<()>,
+		run: JoinHandle<()>,
+	}
+
+	fn run_bind_harness(deadline: Duration, min_delay: Duration) -> RunBindHarness {
+		let (drain, watcher) = drain::new();
+		let (connection_complete, connection_complete_rx) = oneshot::channel();
+		let (connection_exit_tx, connection_exit) = oneshot::channel();
+		let (started_tx, started) = oneshot::channel();
+
+		let run = tokio::spawn(drain::run_with_drain(
+			"test bind".to_string(),
+			watcher,
+			deadline,
+			min_delay,
+			move |drain: drain::DrainWatcher, mut force_shutdown: tokio::sync::watch::Receiver<()>| async move {
+				// Model run_bind: spawned connections hold upgraded drain watchers after
+				// the accept future stops accepting and returns.
+				let drain_watch = drain.clone();
+				let (mut upgrader, weak) = drain.into_weak();
+				let connection_drain = upgrader.upgrade(weak);
+				tokio::spawn(async move {
+					let exit = tokio::select! {
+						_ = connection_complete_rx => ConnectionExit::Completed,
+						_ = force_shutdown.changed() => ConnectionExit::Forced,
+					};
+					drop(connection_drain);
+					let _ = connection_exit_tx.send(exit);
+				});
+				let _ = started_tx.send(());
+
+				let drain = drain_watch.wait_for_drain().await;
+				assert_eq!(drain.mode(), Graceful);
+				upgrader.disable();
+				drop(drain);
+			},
+		));
+
+		RunBindHarness {
+			drain,
+			connection_complete,
+			connection_exit,
+			started,
+			run,
+		}
+	}
+
+	async fn start_graceful_drain(drain: DrainTrigger) -> JoinHandle<()> {
+		let task = tokio::spawn(drain.start_drain_and_wait(Graceful));
+		for _ in 0..3 {
+			tokio::task::yield_now().await;
+		}
+		task
+	}
 
 	pin_project! {
 			#[derive(Debug)]
@@ -369,6 +438,85 @@ mod test {
 				Poll::Pending => Poll::Pending,
 			}
 		}
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn run_with_drain_forces_connections_at_deadline() {
+		let deadline = Duration::from_secs(5);
+		let RunBindHarness {
+			drain,
+			connection_complete,
+			mut connection_exit,
+			started,
+			run,
+		} = run_bind_harness(deadline, Duration::ZERO);
+		started.await.unwrap();
+		let draining = start_graceful_drain(drain).await;
+
+		tokio::time::advance(deadline - Duration::from_millis(1)).await;
+		assert!(matches!(
+			connection_exit.try_recv(),
+			Err(oneshot::error::TryRecvError::Empty)
+		));
+		assert!(!run.is_finished());
+
+		tokio::time::advance(Duration::from_millis(1)).await;
+		assert_eq!(connection_exit.await.unwrap(), ConnectionExit::Forced);
+		run.await.unwrap();
+		draining.await.unwrap();
+		drop(connection_complete);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn run_with_drain_finishes_when_connections_complete_early() {
+		let deadline = Duration::from_secs(5);
+		let RunBindHarness {
+			drain,
+			connection_complete,
+			mut connection_exit,
+			started,
+			run,
+		} = run_bind_harness(deadline, Duration::ZERO);
+		started.await.unwrap();
+		let draining = start_graceful_drain(drain).await;
+
+		tokio::time::advance(Duration::from_secs(2)).await;
+		assert!(matches!(
+			connection_exit.try_recv(),
+			Err(oneshot::error::TryRecvError::Empty)
+		));
+		connection_complete.send(()).unwrap();
+
+		assert_eq!(connection_exit.await.unwrap(), ConnectionExit::Completed);
+		run.await.unwrap();
+		draining.await.unwrap();
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn run_with_drain_keeps_connections_alive_after_min_delay() {
+		let min_delay = Duration::from_secs(3);
+		let RunBindHarness {
+			drain,
+			connection_complete,
+			mut connection_exit,
+			started,
+			run,
+		} = run_bind_harness(Duration::from_secs(5), min_delay);
+		started.await.unwrap();
+		let draining = start_graceful_drain(drain).await;
+
+		tokio::time::advance(min_delay).await;
+		tokio::task::yield_now().await;
+		assert!(matches!(
+			connection_exit.try_recv(),
+			Err(oneshot::error::TryRecvError::Empty)
+		));
+		assert!(!run.is_finished());
+		connection_complete.send(()).unwrap();
+		assert_eq!(connection_exit.await.unwrap(), ConnectionExit::Completed);
+
+		run.await.unwrap();
+		draining.await.unwrap();
 	}
 
 	#[tokio::test]
