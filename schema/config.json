@@ -4747,6 +4747,18 @@
             "string",
             "null"
           ]
+        },
+        "brokerCallback": {
+          "description": "Broker-callback mode for the `entra` provider. When enabled, the gateway presents Entra a\nsingle, pre-registered Web redirect (`<served-metadata-path>/callback`) for every MCP\nclient, then relays Entra's authorization code back to each client's own redirect URI. This\ncollapses Entra's per-client redirect-URI registration (Entra has no DCR) to one URL and\nkeeps every sign-in classified as a browser flow. Requires `signingKey` and `clientId`.\nDefaults to `false` (plain pass-through: Entra sees each client's own redirect URI).",
+          "type": "boolean",
+          "default": false
+        },
+        "signingKey": {
+          "description": "HMAC-SHA256 key used to sign the stateless broker-callback state token. **Required when\n`brokerCallback` is enabled.** It is dedicated to callback integrity and is independent of\n`clientSecret` and the OAuth client credential, so it also works for public-client\nregistrations and can be rotated on its own. The key is stable across gateway replicas, so\nany replica can verify a state token another replica issued (no shared session store).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
