@@ -3543,11 +3543,25 @@ type Tracing struct {
 	RandomSampling *CELExpression `json:"randomSampling,omitempty"`
 	// Expression that determines the amount of client
 	// sampling. Client sampling determines whether to initiate a new trace
-	// span if the incoming request does have a trace already. This should
+	// span if the incoming request does have a trace already. This only
+	// applies when that trace is sampled (`-01`); use `parentNotSampled` for
+	// requests whose trace is not. This should
 	// evaluate to a float between `0.0` and `1.0`, or a boolean (`true` or
 	// `false`). If unspecified, client sampling is `100%` enabled.
 	// +optional
 	ClientSampling *CELExpression `json:"clientSampling,omitempty"`
+	// Expression that determines whether to trace a request that arrives with
+	// a `traceparent` whose sampled flag is unset (`-00`), meaning the client
+	// asked for it not to be traced. When this is `true` the request is traced
+	// anyway, and `-01` is sent upstream so downstream services trace it too.
+	// This should evaluate to a float between `0.0` and `1.0`, or a boolean
+	// (`true` or `false`). If unspecified, the client's choice is honored and
+	// the request is not traced.
+	//
+	// Only one of `randomSampling`, `clientSampling` and `parentNotSampled`
+	// applies to any given request; the incoming `traceparent` decides which.
+	// +optional
+	ParentNotSampled *CELExpression `json:"parentNotSampled,omitempty"`
 
 	// Expression that determines whether a sampled span is exported.
 	// This uses keep semantics: spans are exported only when the expression

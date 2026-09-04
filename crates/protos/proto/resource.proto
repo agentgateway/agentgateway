@@ -866,9 +866,21 @@ message FrontendPolicySpec {
 
     // client_sampling is a CEL expression to determine the amount of client sampling.
     // Client sampling determines whether to initiate a new trace span if the incoming
-    // request already has a trace. This should evaluate to a float between 0.0-1.0,
-    // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
+    // request already has a trace. This only applies when that trace is sampled (-01);
+    // use parent_not_sampled for requests whose trace is not. This should evaluate to a
+    // float between 0.0-1.0, or a boolean (true/false). If unspecified, client sampling
+    // is 100% enabled.
     optional string client_sampling = 5;
+
+    // parent_not_sampled is a CEL expression deciding whether to trace a request that arrives
+    // with a traceparent whose sampled flag is unset (-00), meaning the client asked for it not
+    // to be traced. When true the request is traced anyway, and -01 is sent upstream so
+    // downstream services trace it too. This should evaluate to a float between 0.0-1.0, or a
+    // boolean (true/false). If unspecified, the client's choice is honored.
+    //
+    // Only one of random_sampling, client_sampling and parent_not_sampled applies to any given
+    // request; the incoming traceparent decides which.
+    optional string parent_not_sampled = 11;
 
     // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
     optional string path = 6;

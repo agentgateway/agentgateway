@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -535,37 +536,46 @@ fn original_model_from_metadata<'a>(
 		.and_then(Value::as_str)
 }
 
+/// The incoming trace context picks which setting applies: `random_sampling` when the request has
+/// no trace, `client_sampling` when it has one that is sampled, `parent_not_sampled` when it has
+/// one that is not.
 #[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	pub client_sampling: Option<Arc<cel::Expression>>,
+	pub parent_not_sampled: Option<Arc<cel::Expression>>,
 }
 
 impl TraceSampler {
+	/// Exactly one of the three settings applies to any given request.
 	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> (bool, &'static str) {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
+			parent_not_sampled,
 		} = &self;
-		let (expr, client) = if tp.is_some() {
-			let Some(cs) = client_sampling else {
-				// If client_sampling is not set, default to include it
-				return (true, "sample (client)");
-			};
-			(cs, true)
-		} else {
-			let Some(rs) = random_sampling else {
-				// If random_sampling is not set, default to NOT include it
-				return (false, "not sampled (random)");
-			};
-			(rs, false)
+		// Built at most once, and not at all when the setting that applies is unset
+		let exec = OnceCell::new();
+		let eval = |expr: &Option<Arc<cel::Expression>>, default: bool| match expr {
+			Some(e) => exec
+				.get_or_init(|| cel::Executor::new_request(req))
+				.eval_rng(e.as_ref()),
+			None => default,
 		};
-		let exec = cel::Executor::new_request(req);
-		match (exec.eval_rng(expr.as_ref()), client) {
-			(true, true) => (true, "sample (client)"),
-			(true, false) => (true, "sample (random)"),
-			(false, true) => (false, "not sampled (client)"),
-			(false, false) => (false, "not sampled (random)"),
+
+		match tp {
+			None => match eval(random_sampling, false) {
+				true => (true, "sample (random)"),
+				false => (false, "not sampled (random)"),
+			},
+			Some(tp) if tp.is_sampled() => match eval(client_sampling, true) {
+				true => (true, "sample (client)"),
+				false => (false, "not sampled (client)"),
+			},
+			Some(_) => match eval(parent_not_sampled, false) {
+				true => (true, "sample (unsampled parent)"),
+				false => (false, "not sampled (unsampled parent)"),
+			},
 		}
 	}
 }
@@ -1548,7 +1558,13 @@ impl Drop for DropOnLog {
 				None
 			};
 
-			let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
+			// Falls back to the incoming trace so unsampled requests stay correlatable. There is no
+			// span id to report when nothing was recorded.
+			let trace_id = log
+				.outgoing_span
+				.as_ref()
+				.or(log.incoming_span.as_ref())
+				.map(|id| id.trace_id());
 			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
 			let fields = cel_exec.fields;
 			let reason = log.reason.and_then(|r| match r {
@@ -2770,6 +2786,85 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	fn sampler_request() -> crate::http::Request {
+		::http::Request::builder()
+			.method(::http::Method::GET)
+			.uri("http://example.com/trace")
+			.body(crate::http::Body::empty())
+			.unwrap()
+	}
+
+	fn sampling_expr(v: &str) -> Option<Arc<cel::Expression>> {
+		Some(Arc::new(cel::Expression::new_strict(v).unwrap()))
+	}
+
+	fn traceparent(sampled: bool) -> TraceParent {
+		let mut tp = TraceParent::new();
+		tp.flags = u8::from(sampled);
+		tp
+	}
+
+	/// The full sampling matrix. `parentNotSampled` is the only new capability: every other cell
+	/// pins pre-existing behavior. `incoming` is `None` for a request with no `traceparent`,
+	/// otherwise the parent's sampled flag.
+	#[test]
+	fn trace_sampled_matrix() {
+		// (random, client, parent_not_sampled, incoming, sampled)
+		let cases = [
+			// No incoming traceparent: `randomSampling` applies, default off.
+			(None, None, None, None, false),
+			(Some("true"), None, None, None, true),
+			(Some("false"), None, None, None, false),
+			// Incoming `-01`: `clientSampling` applies, default on.
+			(None, None, None, Some(true), true),
+			(None, Some("true"), None, Some(true), true),
+			(None, Some("false"), None, Some(true), false),
+			// Incoming `-00`: `parentNotSampled` applies, default off.
+			(None, None, None, Some(false), false),
+			(None, None, Some("false"), Some(false), false),
+			(None, None, Some("true"), Some(false), true),
+			// `clientSampling` has no say over an unsampled parent, in either direction.
+			(None, Some("true"), None, Some(false), false),
+			(None, Some("false"), Some("true"), Some(false), true),
+			(None, Some("true"), Some("false"), Some(false), false),
+			// `parentNotSampled` has no say over an already-sampled parent.
+			(None, Some("false"), Some("true"), Some(true), false),
+			// `randomSampling` has no say once a traceparent is present.
+			(Some("false"), None, None, Some(true), true),
+			(Some("true"), None, None, Some(false), false),
+		];
+
+		for (random, client, parent_not_sampled, incoming, want) in cases {
+			let sampler = TraceSampler {
+				random_sampling: random.and_then(sampling_expr),
+				client_sampling: client.and_then(sampling_expr),
+				parent_not_sampled: parent_not_sampled.and_then(sampling_expr),
+			};
+			let tp = incoming.map(traceparent);
+			let (got, reason) = sampler.trace_sampled(&sampler_request(), tp.as_ref());
+			assert_eq!(
+				got, want,
+				"random={random:?} client={client:?} parentNotSampled={parent_not_sampled:?} incoming={incoming:?} reason={reason}"
+			);
+		}
+	}
+
+	#[test]
+	fn trace_sampled_reports_unsampled_parent_reason() {
+		let req = sampler_request();
+		let unsampled = traceparent(false);
+
+		let (_, honored) = TraceSampler::default().trace_sampled(&req, Some(&unsampled));
+		assert_eq!(honored, "not sampled (unsampled parent)");
+
+		let (_, forced) = TraceSampler {
+			parent_not_sampled: sampling_expr("true"),
+			..Default::default()
+		}
+		.trace_sampled(&req, Some(&unsampled));
+		assert_eq!(forced, "sample (unsampled parent)");
 	}
 
 	fn llm_context_with_content() -> LLMContext {

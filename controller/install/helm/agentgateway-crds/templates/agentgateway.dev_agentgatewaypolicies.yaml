@@ -7352,7 +7352,9 @@ spec:
                         description: |-
                           Expression that determines the amount of client
                           sampling. Client sampling determines whether to initiate a new trace
-                          span if the incoming request does have a trace already. This should
+                          span if the incoming request does have a trace already. This only
+                          applies when that trace is sampled (`-01`); use `parentNotSampled` for
+                          requests whose trace is not. This should
                           evaluate to a float between `0.0` and `1.0`, or a boolean (`true` or
                           `false`). If unspecified, client sampling is `100%` enabled.
                         maxLength: 16384
@@ -7363,6 +7365,21 @@ spec:
                           Expression that determines whether a sampled span is exported.
                           This uses keep semantics: spans are exported only when the expression
                           evaluates to `true`. If unspecified, all sampled spans are exported.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
+                      parentNotSampled:
+                        description: |-
+                          Expression that determines whether to trace a request that arrives with
+                          a `traceparent` whose sampled flag is unset (`-00`), meaning the client
+                          asked for it not to be traced. When this is `true` the request is traced
+                          anyway, and `-01` is sent upstream so downstream services trace it too.
+                          This should evaluate to a float between `0.0` and `1.0`, or a boolean
+                          (`true` or `false`). If unspecified, the client's choice is honored and
+                          the request is not traced.
+
+                          Only one of `randomSampling`, `clientSampling` and `parentNotSampled`
+                          applies to any given request; the incoming `traceparent` decides which.
                         maxLength: 16384
                         minLength: 1
                         type: string

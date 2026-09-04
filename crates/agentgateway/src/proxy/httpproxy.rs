@@ -1390,6 +1390,10 @@ impl HTTPProxy {
 				sampler.client_sampling = Some(cs.clone());
 				log.cel.cel_context.register_expression(cs.as_ref());
 			}
+			if let Some(pns) = &tp.config.parent_not_sampled {
+				sampler.parent_not_sampled = Some(pns.clone());
+				log.cel.cel_context.register_expression(pns.as_ref());
+			}
 			if let Some(f) = &tp.config.filter {
 				log.cel.cel_context.register_log_expression(f.as_ref());
 			}
@@ -1400,6 +1404,8 @@ impl HTTPProxy {
 		let trace_parent = trc::TraceParent::from_request(req);
 		let (trace_sampled, trace_decision) = sampler.trace_sampled(req, trace_parent.as_ref());
 		dtrace::trace(|trace| trace.trace_sampling(trace_decision));
+		// Recorded even when unsampled so the access log can still correlate by trace id
+		log.incoming_span = trace_parent.clone();
 
 		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
@@ -1425,20 +1431,13 @@ impl HTTPProxy {
 			}
 
 			// Now create outgoing span with the correct tracer already set
-			let ns = match trace_parent {
-				Some(tp) => {
-					// Build a new span off the existing trace
-					let ns = tp.new_span();
-					log.incoming_span = Some(tp);
-					ns
-				},
-				None => {
-					// Build an entirely new trace
-					let mut ns = TraceParent::new();
-					ns.flags = 1;
-					ns
-				},
+			let mut ns = match &trace_parent {
+				// Build a new span off the existing trace
+				Some(tp) => tp.new_span(),
+				// Build an entirely new trace
+				None => TraceParent::new(),
 			};
+			ns.set_sampled(true);
 			ns.insert_header(req);
 			log.outgoing_span = Some(ns);
 			log.insert_span_writer(req.extensions_mut());

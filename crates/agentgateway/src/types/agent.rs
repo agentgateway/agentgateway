@@ -2475,10 +2475,21 @@ pub struct TracingConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	/// Optional per-policy override for client sampling. If set, overrides global config for
-	/// requests that use this frontend policy.
+	/// requests that use this frontend policy. Only applies to requests arriving with a sampled
+	/// `traceparent` (`-01`); use `parentNotSampled` for requests whose trace is not sampled.
 	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
 	pub client_sampling: Option<Arc<cel::Expression>>,
+	/// Whether to trace a request that arrives with a `traceparent` whose sampled flag is unset
+	/// (`-00`), meaning the client asked for it not to be traced. When this is `true` the request
+	/// is traced anyway, and `-01` is sent upstream so downstream services trace it too. If
+	/// unspecified, the client's choice is honored and the request is not traced.
+	///
+	/// Only one of `randomSampling`, `clientSampling` and `parentNotSampled` applies to any given
+	/// request; the incoming `traceparent` decides which.
+	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
+	pub parent_not_sampled: Option<Arc<cel::Expression>>,
 	/// Optional CEL filter with KEEP semantics. When set, only requests for which the expression
 	/// evaluates to `true` have their trace span(s) exported; all other spans are dropped. When
 	/// unset, no filtering is applied (all sampled spans are exported). Composes after sampling
