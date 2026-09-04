@@ -1,8 +1,26 @@
 export const apiBase = import.meta.env.VITE_AGENTGATEWAY_API ?? '';
 
-export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+let redirecting = false;
+
+export async function requestApi(path: string, init?: RequestInit): Promise<Response> {
+	// Retry authentication as a document navigation; fetch cannot follow cross-origin login redirects.
 	const response = await fetch(`${apiBase}${path}`, {
+		...init,
 		credentials: 'include',
+		redirect: 'manual'
+	});
+	if (response.status === 401 || response.type === 'opaqueredirect') {
+		if (!redirecting) {
+			redirecting = true;
+			window.location.reload();
+		}
+		return new Promise<Response>(() => {});
+	}
+	return response;
+}
+
+export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+	const response = await requestApi(path, {
 		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
 		...init
 	});
