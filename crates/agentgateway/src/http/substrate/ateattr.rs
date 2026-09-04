@@ -12,6 +12,7 @@ pub(crate) const ATE_ACTOR_NAME: &str = "ate.actor.name";
 pub(crate) const ATE_ACTOR_UID: &str = "ate.actor.uid";
 pub(crate) const ATE_ATESPACE: &str = "ate.atespace";
 pub(crate) const ATE_ROUTER_RESUME: &str = "ate.router.resume";
+pub(crate) const ATE_ROUTER_ROUTE_DURATION: &str = "ate.router.route.duration";
 
 /// Whether this request experienced a cold actor activation.
 ///
@@ -62,6 +63,10 @@ mod tests {
 		assert_eq!(super::ATE_ATESPACE, "ate.atespace");
 		assert_eq!(super::ATE_ACTOR_NAME, "ate.actor.name");
 		assert_eq!(super::ATE_ACTOR_UID, "ate.actor.uid");
+		assert_eq!(
+			super::ATE_ROUTER_ROUTE_DURATION,
+			"ate.router.route.duration"
+		);
 	}
 
 	#[test]

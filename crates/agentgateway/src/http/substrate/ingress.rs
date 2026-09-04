@@ -152,6 +152,7 @@ pub(crate) struct SubstrateRequestState {
 	client: PolicyClient,
 	current: Arc<Mutex<Option<CachedAssignment>>>,
 	resume: Arc<Mutex<ResumeDisposition>>,
+	route_duration: Arc<Mutex<Duration>>,
 }
 
 fn default_cache_ttl() -> Duration {
@@ -481,11 +482,20 @@ impl SubstrateRequestState {
 			.and_then(|current| current.uid.clone())
 	}
 
+	pub(crate) fn route_duration(&self) -> Duration {
+		*self.route_duration.lock().unwrap()
+	}
+
 	/// Policy events describe a single resolution attempt; this describes the request. A
 	/// stale-assignment retry can therefore log `triggered` while its last event says `none`.
 	fn record_resume(&self, observed: ResumeDisposition) {
 		let mut resume = self.resume.lock().unwrap();
 		*resume = (*resume).max(observed);
+	}
+
+	fn record_route_duration(&self, observed: Duration) {
+		let mut duration = self.route_duration.lock().unwrap();
+		*duration = duration.saturating_add(observed);
 	}
 
 	pub(crate) async fn resolve_target(&self) -> Result<Target, crate::proxy::ProxyResponse> {
@@ -506,7 +516,10 @@ impl SubstrateRequestState {
 			);
 			return Ok(Target::Address(current.target));
 		}
-		match self.ingress.resolve(&self.client, self.actor.clone()).await {
+		let started = tokio::time::Instant::now();
+		let resolution = self.ingress.resolve(&self.client, self.actor.clone()).await;
+		self.record_route_duration(started.elapsed());
+		match resolution {
 			Ok(Resolved {
 				assignment,
 				source,
@@ -672,6 +685,7 @@ impl RequestPolicyTrait for SubstrateIngress {
 			client: client.clone(),
 			current: Arc::new(Mutex::new(None)),
 			resume: Arc::new(Mutex::new(ResumeDisposition::None)),
+			route_duration: Arc::new(Mutex::new(Duration::ZERO)),
 		});
 		Ok(PolicyResponse::default())
 	}

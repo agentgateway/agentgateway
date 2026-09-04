@@ -401,6 +401,17 @@ async fn assert_logged_resume(path: &str, want: &str) {
 	.unwrap();
 }
 
+fn logged_route_duration(log: &Value) -> f64 {
+	let duration = &log["ate.router.route.duration"];
+	assert!(
+		duration.as_str().is_none(),
+		"the route duration must be a number, not a formatted string: {log:#?}"
+	);
+	duration
+		.as_f64()
+		.unwrap_or_else(|| panic!("no numeric ate.router.route.duration: {log:#?}"))
+}
+
 async fn find_request_log(path: &str) -> Value {
 	agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", path)])
 		.await
@@ -714,6 +725,231 @@ async fn actor_ingress_reports_a_joined_resume_for_a_follower_on_an_in_flight_re
 
 	assert_logged_resume(LEADER_PATH, "triggered").await;
 	assert_logged_resume(FOLLOWER_PATH, "joined").await;
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_the_activation_time_for_a_triggered_resume() {
+	const PATH: &str = "/route-duration-triggered";
+	const GATE: Duration = Duration::from_millis(300);
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let entered = Arc::new(Notify::new());
+	let release = Arc::new(Notify::new());
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let entered = entered.clone();
+		let release = release.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || SelectiveParkingHandler {
+			pod_ip: pod_ip.clone(),
+			parked_actor: "my-actor".to_string(),
+			entered: entered.clone(),
+			release: release.clone(),
+			calls: calls.clone(),
+			resumed: true,
+			uid: ACTOR_UID,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let request = tokio::spawn({
+		let io = gateway.serve_http(BIND_KEY);
+		let url = actor_url("my-actor", PATH);
+		async move { send_request(io, Method::GET, &url).await }
+	});
+	entered.notified().await;
+	tokio::time::sleep(GATE).await;
+	release.notify_one();
+	assert_eq!(request.await.unwrap().status(), StatusCode::OK);
+
+	assert_logged_resume(PATH, "triggered").await;
+	let log = find_request_log(PATH).await;
+	let duration = logged_route_duration(&log);
+	assert!(
+		duration >= 0.25,
+		"a resume gated for {GATE:?} must report at least that long, got {duration}: {log:#?}"
+	);
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_a_followers_own_wait_rather_than_the_leaders() {
+	const LEADER_PATH: &str = "/route-duration-leader";
+	const FOLLOWER_PATH: &str = "/route-duration-follower";
+	const LEAD: Duration = Duration::from_millis(300);
+	const FOLLOWER_WAIT: Duration = Duration::from_millis(200);
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let entered = Arc::new(Notify::new());
+	let release = Arc::new(Notify::new());
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let entered = entered.clone();
+		let release = release.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || SelectiveParkingHandler {
+			pod_ip: pod_ip.clone(),
+			parked_actor: "my-actor".to_string(),
+			entered: entered.clone(),
+			release: release.clone(),
+			calls: calls.clone(),
+			resumed: true,
+			uid: ACTOR_UID,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let leader = tokio::spawn({
+		let io = gateway.serve_http(BIND_KEY);
+		let url = actor_url("my-actor", LEADER_PATH);
+		async move { send_request(io, Method::GET, &url).await }
+	});
+	// The leader is inside ResumeActor. It stays there for LEAD before the follower is even sent,
+	// so the two requests cannot have waited the same amount of time.
+	entered.notified().await;
+	tokio::time::sleep(LEAD).await;
+	let follower = tokio::spawn({
+		let io = gateway.serve_http(BIND_KEY);
+		let url = actor_url("my-actor", FOLLOWER_PATH);
+		async move { send_request(io, Method::GET, &url).await }
+	});
+	tokio::time::sleep(FOLLOWER_WAIT).await;
+	release.notify_one();
+
+	assert_eq!(leader.await.unwrap().status(), StatusCode::OK);
+	assert_eq!(follower.await.unwrap().status(), StatusCode::OK);
+	assert_eq!(
+		calls.load(Ordering::Relaxed),
+		1,
+		"the follower must have joined the leader's resume, not started its own"
+	);
+	assert_logged_resume(LEADER_PATH, "triggered").await;
+	assert_logged_resume(FOLLOWER_PATH, "joined").await;
+
+	let leader_log = find_request_log(LEADER_PATH).await;
+	let follower_log = find_request_log(FOLLOWER_PATH).await;
+	let leader_duration = logged_route_duration(&leader_log);
+	let follower_duration = logged_route_duration(&follower_log);
+	assert!(
+		leader_duration >= 0.45,
+		"the leader waited {LEAD:?} + {FOLLOWER_WAIT:?}, got {leader_duration}: {leader_log:#?}"
+	);
+	assert!(
+		follower_duration >= 0.15,
+		"the follower parked on the guard for {FOLLOWER_WAIT:?}, got {follower_duration}: {follower_log:#?}"
+	);
+	assert!(
+		leader_duration - follower_duration > 0.15,
+		"a follower must report its own wait, not the leader's cached number: \
+		 leader={leader_duration} follower={follower_duration}"
+	);
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_a_near_zero_duration_for_a_cache_hit() {
+	const COLD_PATH: &str = "/route-duration-cache-cold";
+	const WARM_PATH: &str = "/route-duration-cache-warm";
+	const GATE: Duration = Duration::from_millis(300);
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let entered = Arc::new(Notify::new());
+	let release = Arc::new(Notify::new());
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let entered = entered.clone();
+		let release = release.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || SelectiveParkingHandler {
+			pod_ip: pod_ip.clone(),
+			parked_actor: "my-actor".to_string(),
+			entered: entered.clone(),
+			release: release.clone(),
+			calls: calls.clone(),
+			resumed: true,
+			uid: ACTOR_UID,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let cold = tokio::spawn({
+		let io = gateway.serve_http(BIND_KEY);
+		let url = actor_url("my-actor", COLD_PATH);
+		async move { send_request(io, Method::GET, &url).await }
+	});
+	entered.notified().await;
+	tokio::time::sleep(GATE).await;
+	release.notify_one();
+	assert_eq!(cold.await.unwrap().status(), StatusCode::OK);
+
+	let warm = send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", WARM_PATH),
+	)
+	.await;
+	assert_eq!(warm.status(), StatusCode::OK);
+	assert_eq!(
+		calls.load(Ordering::Relaxed),
+		1,
+		"the second request must be served from the assignment cache"
+	);
+
+	let cold_log = find_request_log(COLD_PATH).await;
+	let warm_log = find_request_log(WARM_PATH).await;
+	let cold_duration = logged_route_duration(&cold_log);
+	let warm_duration = logged_route_duration(&warm_log);
+	assert!(
+		warm_duration < 0.05,
+		"a cache hit resolves without ateapi, got {warm_duration}: {warm_log:#?}"
+	);
+	assert!(
+		cold_duration - warm_duration > 0.15,
+		"a cache hit must not inherit the cold start's duration: \
+		 cold={cold_duration} warm={warm_duration}"
+	);
+}
+
+#[tokio::test]
+async fn actor_ingress_emits_the_route_duration_as_a_number_of_seconds() {
+	const PATH: &str = "/route-duration-number";
+	let actor = simple_mock().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let calls = calls.clone();
+		let pod_ip = actor.address().ip().to_string();
+		move || IngressHandler {
+			pod_ip: pod_ip.clone(),
+			calls: calls.clone(),
+			resumed: true,
+			uid: ACTOR_UID,
+		}
+	})
+	.spawn()
+	.await;
+	let gateway = resume_disposition_gateway(api.address, actor.address().port()).await;
+
+	let response = send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", PATH),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+
+	let log = find_request_log(PATH).await;
+	assert!(
+		log["ate.router.route.duration"].is_number(),
+		"a latency panel queries this arithmetically: {log:#?}"
+	);
+	assert!(
+		log["duration"].as_str().is_some(),
+		"the sibling `duration` is the formatted style this key must not copy: {log:#?}"
+	);
 }
 
 #[tokio::test]
