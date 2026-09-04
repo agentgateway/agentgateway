@@ -927,6 +927,9 @@ impl AIProvider {
 				}
 			},
 			AIProvider::Azure(p) => {
+				if matches!(p.resource_type, azure::AzureResourceType::Speech) {
+					return vec![];
+				}
 				let mut formats = vec![Completions, Responses, Embeddings, Rerank];
 				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
 					&& p.is_anthropic_model(request_model)
@@ -981,6 +984,9 @@ impl AIProvider {
 				// Foundry Claude models require the Anthropic-native endpoint; the
 				// OpenAI-compatible chat/responses endpoints return api_not_supported.
 				vec![ChatFormat::AnthropicMessages]
+			},
+			AIProvider::Azure(p) if matches!(p.resource_type, azure::AzureResourceType::Speech) => {
+				vec![]
 			},
 			AIProvider::Azure(_) => vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions],
 
@@ -1110,6 +1116,7 @@ impl AIProvider {
 				}))),
 				..btls
 			},
+			AIProvider::Azure(p) if matches!(p.resource_type, azure::AzureResourceType::Speech) => btls,
 			AIProvider::Azure(p) => BackendPolicies {
 				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(AzureAuth {
 					kind: crate::http::auth::azure::AzureAuthKind::Implicit {
@@ -1149,6 +1156,7 @@ impl AIProvider {
 		path_prefix: Option<&str>,
 		has_host_override: bool,
 	) -> anyhow::Result<()> {
+		req.headers_mut().remove(model_router::MODEL_HEADER);
 		if let Some(path_override) = path_override {
 			http::modify_req_uri(req, |uri| {
 				uri.path_and_query = Some(PathAndQuery::from_str(path_override)?);
@@ -1462,6 +1470,23 @@ impl AIProvider {
 				})
 			},
 			AIProvider::Azure(p) => {
+				if matches!(p.resource_type, azure::AzureResourceType::Speech) {
+					return http::modify_req(req, |req| {
+						if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+							let explicit_authorization = req
+								.extensions
+								.get::<AppliedBackendAuthLocation>()
+								.is_some_and(|auth| auth.explicit);
+							if !explicit_authorization {
+								req.headers.remove(http::header::AUTHORIZATION);
+								let mut api_key = HeaderValue::from_str(authz.token())?;
+								api_key.set_sensitive(true);
+								req.headers.insert("ocp-apim-subscription-key", api_key);
+							}
+						}
+						Ok(())
+					});
+				}
 				// Foundry's Anthropic-native endpoint requires the anthropic-version header,
 				// but only for Claude models — GPT models use the OpenAI-compatible path.
 				let model = llm_request.map(|r| r.request_model.as_str()).unwrap_or("");
@@ -2030,6 +2055,14 @@ impl AIProvider {
 		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
+			if llm_info.request_model.is_empty()
+				&& let Some(model) = parts
+					.headers
+					.get(model_router::MODEL_HEADER)
+					.and_then(|value| value.to_str().ok())
+			{
+				llm_info.request_model = model.into();
+			}
 		}
 		llm_info.cache_convention =
 			cache_convention_for(self, provider_format, &llm_info.request_model);

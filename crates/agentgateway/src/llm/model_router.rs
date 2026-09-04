@@ -15,6 +15,8 @@ use crate::types::agent::{
 };
 use crate::{apply, cel, llm, schema_enum, schema_ser_schema};
 
+pub const MODEL_HEADER: &str = "x-agentgateway-model";
+
 #[apply(schema_ser_schema!)]
 pub struct ModelRoute {
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -149,6 +151,7 @@ struct RequestedModel {
 
 enum RequestedModelLocation {
 	Body(Value),
+	Header,
 	Multipart,
 	Path,
 }
@@ -157,7 +160,7 @@ impl RequestedModelLocation {
 	fn llm_request(&self) -> Option<&Value> {
 		match self {
 			Self::Body(body) => Some(body),
-			Self::Multipart | Self::Path => None,
+			Self::Header | Self::Multipart | Self::Path => None,
 		}
 	}
 }
@@ -499,6 +502,19 @@ async fn requested_model(req: &mut Request) -> RouterResult<RequestedModel> {
 			location: RequestedModelLocation::Path,
 		});
 	}
+	if let Some(model) = req.headers().get(MODEL_HEADER) {
+		let model = model.to_str().map_err(|_| {
+			Box::new(llm_error_response(
+				::http::StatusCode::BAD_REQUEST,
+				"x-agentgateway-model header must be valid text",
+				"invalid_model",
+			))
+		})?;
+		return Ok(RequestedModel {
+			model: model.to_string(),
+			location: RequestedModelLocation::Header,
+		});
+	}
 
 	let body = body_bytes(req).await?;
 	if let Some(boundary) = multipart_boundary(req) {
@@ -540,6 +556,19 @@ async fn rewrite_request_model(
 ) -> RouterResult<()> {
 	match location {
 		RequestedModelLocation::Body(body) => rewrite_body_model(req, body, target),
+		RequestedModelLocation::Header => {
+			req.headers_mut().insert(
+				MODEL_HEADER,
+				::http::HeaderValue::from_str(target).map_err(|_| {
+					Box::new(llm_error_response(
+						::http::StatusCode::BAD_REQUEST,
+						"resolved model is not valid as an HTTP header",
+						"invalid_model",
+					))
+				})?,
+			);
+			Ok(())
+		},
 		RequestedModelLocation::Path => rewrite_uri_model(req, target),
 		RequestedModelLocation::Multipart => rewrite_multipart_request_model(req, target).await,
 	}
@@ -1394,6 +1423,42 @@ mod tests {
 				.expect("decompressed request body"),
 			Bytes::from_static(body)
 		);
+	}
+
+	#[tokio::test]
+	async fn requested_model_reads_header_without_touching_binary_body() {
+		let body = Bytes::from_static(b"RIFF\x00\x01audio-bytes");
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/speech/recognition/conversation/cognitiveservices/v1")
+			.header(MODEL_HEADER, "azure-speech")
+			.body(http::Body::from(body.clone()))
+			.unwrap();
+
+		let requested = requested_model(&mut req)
+			.await
+			.expect("model header should route a binary request");
+		assert_eq!(requested.model, "azure-speech");
+		assert!(matches!(requested.location, RequestedModelLocation::Header));
+		assert_eq!(
+			http::read_body_with_limit(req.into_body(), 1024)
+				.await
+				.expect("binary request body"),
+			body
+		);
+	}
+
+	#[tokio::test]
+	async fn rewrite_header_model_supports_aliases() {
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/speech/recognition/conversation/cognitiveservices/v1")
+			.header(MODEL_HEADER, "public-speech")
+			.body(http::Body::empty())
+			.unwrap();
+
+		rewrite_request_model(&mut req, RequestedModelLocation::Header, "azure-speech")
+			.await
+			.expect("model header rewrite");
+		assert_eq!(req.headers()[MODEL_HEADER], "azure-speech");
 	}
 
 	#[tokio::test]

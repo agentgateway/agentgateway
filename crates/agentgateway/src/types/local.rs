@@ -935,6 +935,8 @@ pub struct LocalLLMParams {
 	azure_api_version: Option<Strng>,
 	/// For Azure: the Foundry project name (required for foundry resource type)
 	azure_project_name: Option<Strng>,
+	/// For Azure Speech: the REST endpoint family
+	azure_speech_endpoint: Option<crate::llm::azure::AzureSpeechEndpoint>,
 	/// Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.
 	#[serde(default)]
 	base_url: Option<Strng>,
@@ -967,6 +969,7 @@ impl LocalLLMModels {
 			azure_resource_name: None,
 			azure_resource_type: None,
 			azure_api_version: None,
+			azure_speech_endpoint: None,
 			azure_project_name: None,
 			base_url: None,
 			host_override: None,
@@ -4455,6 +4458,7 @@ async fn convert_llm_config(
 						.context("azure requires azureResourceType")?,
 					api_version: p.azure_api_version,
 					project_name: p.azure_project_name,
+					speech_endpoint: p.azure_speech_endpoint,
 				})
 			},
 		};

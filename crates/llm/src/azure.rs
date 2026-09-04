@@ -12,6 +12,22 @@ pub enum AzureResourceType {
 	/// Requires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`
 	#[serde(alias = "aiServices")]
 	Foundry,
+	/// Azure Cognitive Services Speech endpoint: `{resourceName}.stt.speech.microsoft.com`.
+	/// For Speech resources, `resource_name` is the Azure region (for example, `westeurope`).
+	Speech,
+}
+
+/// The Azure Speech REST endpoint family.
+#[apply(schema!)]
+#[derive(Copy, Default)]
+pub enum AzureSpeechEndpoint {
+	/// Short audio transcription for audio up to 60 seconds.
+	#[default]
+	ShortAudio,
+	/// Fast transcription for longer audio files.
+	FastTranscription,
+	/// Text-to-speech synthesis.
+	TextToSpeech,
 }
 
 #[apply(schema!)]
@@ -32,6 +48,9 @@ pub struct Provider {
 	/// This is distinct from `resourceName` which is used for the host.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub project_name: Option<Strng>,
+	/// The Speech REST endpoint family. Only used when `resourceType` is `speech`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub speech_endpoint: Option<AzureSpeechEndpoint>,
 }
 
 impl super::Provider for Provider {
@@ -50,6 +69,7 @@ impl Provider {
 		match self.resource_type {
 			AzureResourceType::Foundry => self.foundry_path(route, model),
 			AzureResourceType::OpenAI => self.openai_path(route, model),
+			AzureResourceType::Speech => unreachable!("Speech requests use native passthrough paths"),
 		}
 	}
 
@@ -102,6 +122,17 @@ impl Provider {
 			AzureResourceType::Foundry => {
 				strng::format!("{}.services.ai.azure.com", self.resource_name)
 			},
+			AzureResourceType::Speech => match self.speech_endpoint.unwrap_or_default() {
+				AzureSpeechEndpoint::ShortAudio => {
+					strng::format!("{}.stt.speech.microsoft.com", self.resource_name)
+				},
+				AzureSpeechEndpoint::FastTranscription => {
+					strng::format!("{}.api.cognitive.microsoft.com", self.resource_name)
+				},
+				AzureSpeechEndpoint::TextToSpeech => {
+					strng::format!("{}.tts.speech.microsoft.com", self.resource_name)
+				},
+			},
 		}
 	}
 
@@ -121,15 +152,38 @@ mod tests {
 			resource_type,
 			api_version: None,
 			project_name: None,
+			speech_endpoint: None,
 		}
 	}
 
 	#[rstest::rstest]
 	#[case::openai(AzureResourceType::OpenAI, "my-resource.openai.azure.com")]
 	#[case::foundry(AzureResourceType::Foundry, "my-resource.services.ai.azure.com")]
+	#[case::speech(AzureResourceType::Speech, "westeurope.stt.speech.microsoft.com")]
 	fn test_get_host(#[case] resource_type: AzureResourceType, #[case] expected: &str) {
-		let p = make_provider("my-resource", resource_type);
+		let resource_name = match resource_type {
+			AzureResourceType::Speech => "westeurope",
+			_ => "my-resource",
+		};
+		let p = make_provider(resource_name, resource_type);
 		assert_eq!(p.get_host().as_str(), expected);
+	}
+
+	#[test]
+	fn test_get_fast_transcription_host() {
+		let mut p = make_provider("westeurope", AzureResourceType::Speech);
+		p.speech_endpoint = Some(AzureSpeechEndpoint::FastTranscription);
+		assert_eq!(
+			p.get_host().as_str(),
+			"westeurope.api.cognitive.microsoft.com"
+		);
+	}
+
+	#[test]
+	fn test_get_text_to_speech_host() {
+		let mut p = make_provider("westeurope", AzureResourceType::Speech);
+		p.speech_endpoint = Some(AzureSpeechEndpoint::TextToSpeech);
+		assert_eq!(p.get_host().as_str(), "westeurope.tts.speech.microsoft.com");
 	}
 
 	#[rstest::rstest]

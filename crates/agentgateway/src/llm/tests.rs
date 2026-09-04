@@ -2465,6 +2465,7 @@ fn foundry_claude_messages_error_uses_anthropic_shape() {
 		resource_type: azure::AzureResourceType::Foundry,
 		api_version: None,
 		project_name: Some(strng::new("project")),
+		speech_endpoint: None,
 	});
 	let mut req = llm_request_with_tokens(None);
 	req.input_format = InputFormat::Messages;
@@ -3006,11 +3007,75 @@ fn setup_request_azure_applies_path_prefix_with_host_override() {
 			resource_type: azure::AzureResourceType::OpenAI,
 			api_version: Some(strng::new("2024-02-15-preview")),
 			project_name: None,
+			speech_endpoint: None,
 		}),
 		"gpt-4.1",
 		"/proxy/openai/deployments/gpt-4.1/chat/completions",
 		Some("api-version=2024-02-15-preview&trace=repro"),
 	);
+}
+
+#[test]
+fn setup_request_azure_speech_sets_native_host_and_key_header() {
+	let provider = AIProvider::azure(azure::Provider {
+		model: None,
+		resource_name: strng::new("westeurope"),
+		resource_type: azure::AzureResourceType::Speech,
+		api_version: None,
+		project_name: None,
+		speech_endpoint: None,
+	});
+	let mut req = crate::http::tests_common::request(
+		"https://gateway.example.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US&format=detailed",
+		http::Method::POST,
+		&[
+			("authorization", "Bearer speech-key"),
+			(model_router::MODEL_HEADER, "azure-speech"),
+		],
+	);
+
+	provider
+		.setup_request(&mut req, RouteType::Passthrough, None, None, None, false)
+		.expect("Speech request setup");
+
+	assert_eq!(
+		req.uri().authority().unwrap(),
+		"westeurope.stt.speech.microsoft.com"
+	);
+	assert_eq!(req.headers()["ocp-apim-subscription-key"], "speech-key");
+	assert!(!req.headers().contains_key(http::header::AUTHORIZATION));
+	assert!(!req.headers().contains_key(model_router::MODEL_HEADER));
+	assert_eq!(req.uri().query(), Some("language=en-US&format=detailed"));
+}
+
+#[test]
+fn setup_request_azure_speech_preserves_explicit_authorization() {
+	let provider = AIProvider::azure(azure::Provider {
+		model: None,
+		resource_name: strng::new("westeurope"),
+		resource_type: azure::AzureResourceType::Speech,
+		api_version: None,
+		project_name: None,
+		speech_endpoint: None,
+	});
+	let mut req = crate::http::tests_common::request(
+		"https://gateway.example.com/speech/recognition/conversation/cognitiveservices/v1",
+		http::Method::POST,
+		&[("authorization", "Bearer entra-token")],
+	);
+	req
+		.extensions_mut()
+		.insert(AppliedBackendAuthLocation { explicit: true });
+
+	provider
+		.setup_request(&mut req, RouteType::Passthrough, None, None, None, false)
+		.expect("Speech request setup");
+
+	assert_eq!(
+		req.headers()[http::header::AUTHORIZATION],
+		"Bearer entra-token"
+	);
+	assert!(!req.headers().contains_key("ocp-apim-subscription-key"));
 }
 
 #[test]

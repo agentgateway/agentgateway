@@ -1864,7 +1864,7 @@ message AIBackend {
     optional string project_name = 4;
   }
   // Azure provider with explicit resource-based configuration.
-  // Supports both Azure OpenAI and Azure AI Foundry resource types.
+  // Supports Azure OpenAI, Azure AI Foundry, and Azure Cognitive Services Speech resource types.
   message Azure {
     // The Azure resource name used to construct the endpoint host.
     string resource_name = 1;
@@ -1876,10 +1876,13 @@ message AIBackend {
     optional string api_version = 4;
     // Foundry project name, required when resource_type is FOUNDRY.
     optional string project_name = 5;
+    // Azure Speech REST endpoint family. Only used when resource_type is SPEECH.
+    optional AzureSpeechEndpoint speech_endpoint = 6;
   }
   enum AzureResourceType {
     OPEN_AI = 0;
     FOUNDRY = 1;
+    SPEECH = 2;
   }
   enum ProviderFormat {
     PROVIDER_FORMAT_UNSPECIFIED = 0;
@@ -1955,6 +1958,12 @@ message AIBackend {
     repeated Provider providers = 1;
   }
   repeated ProviderGroup provider_groups = 1;
+}
+
+enum AzureSpeechEndpoint {
+  SHORT_AUDIO = 0;
+  FAST_TRANSCRIPTION = 1;
+  TEXT_TO_SPEECH = 2;
 }
 
 message MCPBackend {

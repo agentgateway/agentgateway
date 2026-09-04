@@ -8851,6 +8851,17 @@
             "string",
             "null"
           ]
+        },
+        "speechEndpoint": {
+          "description": "The Speech REST endpoint family. Only used when `resourceType` is `speech`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureSpeechEndpoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -8876,6 +8887,31 @@
           "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
           "type": "string",
           "const": "aiServices"
+        },
+        {
+          "description": "Azure Cognitive Services Speech endpoint: `{resourceName}.stt.speech.microsoft.com`.\nFor Speech resources, `resource_name` is the Azure region (for example, `westeurope`).",
+          "type": "string",
+          "const": "speech"
+        }
+      ]
+    },
+    "AzureSpeechEndpoint": {
+      "description": "The Azure Speech REST endpoint family.",
+      "oneOf": [
+        {
+          "description": "Short audio transcription for audio up to 60 seconds.",
+          "type": "string",
+          "const": "shortAudio"
+        },
+        {
+          "description": "Fast transcription for longer audio files.",
+          "type": "string",
+          "const": "fastTranscription"
+        },
+        {
+          "description": "Text-to-speech synthesis.",
+          "type": "string",
+          "const": "textToSpeech"
         }
       ]
     },
@@ -11627,6 +11663,17 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "azureSpeechEndpoint": {
+          "description": "For Azure Speech: the REST endpoint family",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureSpeechEndpoint"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "baseUrl": {
