@@ -1167,13 +1167,34 @@ impl Policy {
 				"Bedrock guardrail masked output count mismatch; rejecting content"
 			);
 		}
+		let blocked = resp.is_blocked();
 		let detail = resp.build_detail(guardrails);
 		let outcome = if masked {
 			GuardrailOutcome::Masked(TextReplacements::replace_all(resp.into_output_texts()))
 		} else {
-			GuardrailOutcome::Rejected(rejection.as_response())
+			GuardrailOutcome::Rejected(Self::bedrock_reject_response(rejection, blocked, &resp))
 		};
 		(outcome, Some(detail))
+	}
+	fn bedrock_reject_response(
+		rejection: &RequestRejection,
+		blocked: bool,
+		resp: &bedrock_guardrails::ApplyGuardrailResponse,
+	) -> Response {
+		if rejection.body != default_body() || !blocked {
+			return rejection.as_response();
+		}
+		let Some(body) = resp
+			.outputs
+			.iter()
+			.map(|o| o.text.as_str())
+			.find(|t| !t.trim().is_empty())
+		else {
+			return rejection.as_response();
+		};
+		let mut response = rejection.as_response();
+		*response.body_mut() = http::Body::from(Bytes::from(body.to_owned()));
+		response
 	}
 
 	async fn evaluate_google_model_armor_request(
