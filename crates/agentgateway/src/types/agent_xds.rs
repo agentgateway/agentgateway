@@ -1921,14 +1921,29 @@ pub(crate) fn backend_with_policies_from_proto(
 								proto::agent::ai_backend::AzureResourceType::Foundry => {
 									llm::azure::AzureResourceType::Foundry
 								},
+								proto::agent::ai_backend::AzureResourceType::Speech => {
+									llm::azure::AzureResourceType::Speech
+								},
 								_ => llm::azure::AzureResourceType::OpenAI,
 							};
+							let speech_endpoint = azure.speech_endpoint.map(|endpoint| {
+								match proto::agent::AzureSpeechEndpoint::try_from(endpoint) {
+									Ok(proto::agent::AzureSpeechEndpoint::FastTranscription) => {
+										llm::azure::AzureSpeechEndpoint::FastTranscription
+									},
+									Ok(proto::agent::AzureSpeechEndpoint::TextToSpeech) => {
+										llm::azure::AzureSpeechEndpoint::TextToSpeech
+									},
+									_ => llm::azure::AzureSpeechEndpoint::ShortAudio,
+								}
+							});
 							AIProvider::azure(llm::azure::Provider {
 								model: azure.model.as_deref().map(strng::new),
 								resource_name: strng::new(&azure.resource_name),
 								resource_type,
 								api_version: azure.api_version.as_deref().map(strng::new),
 								project_name: azure.project_name.as_deref().map(strng::new),
+								speech_endpoint,
 							})
 						},
 						Some(provider::Provider::Azureopenai(_)) => {

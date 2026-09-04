@@ -5764,9 +5764,10 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom`|object||
@@ -9163,9 +9164,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -24652,9 +24654,10 @@
 |`backends[].ai.provider.azure`|object||
 |`backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`backends[].ai.provider.copilot`|object||
 |`backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`backends[].ai.provider.custom`|object||
@@ -28051,9 +28054,10 @@
 |`backends[].ai.groups[].providers[].provider.azure`|object||
 |`backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.groups[].providers[].provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`backends[].ai.groups[].providers[].provider.copilot`|object||
 |`backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.custom`|object||
@@ -40415,9 +40419,10 @@
 |`routeGroups[].routes[].backends[].ai.provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`routeGroups[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`routeGroups[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`routeGroups[].routes[].backends[].ai.provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.custom`|object||
@@ -43814,9 +43819,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -58828,9 +58834,10 @@
 |`routes[].backends[].ai.provider.azure`|object||
 |`routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routes[].backends[].ai.provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`routes[].backends[].ai.provider.copilot`|object||
 |`routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.custom`|object||
@@ -62227,9 +62234,10 @@
 |`routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
-|`routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routes[].backends[].ai.groups[].providers[].provider.azure.speechEndpoint`|enum|The Speech REST endpoint family. Only used when `resourceType` is `speech`.<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -69295,10 +69303,11 @@
 |`llm.providers[].params.awsRegion`|string|AWS region to use for the Bedrock provider.|
 |`llm.providers[].params.vertexRegion`|string|Google Cloud region to use for the Vertex AI provider.|
 |`llm.providers[].params.vertexProject`|string|Google Cloud project ID to use for the Vertex AI provider.|
-|`llm.providers[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
-|`llm.providers[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`llm.providers[].params.azureResourceName`|string|For Azure: the resource name, or the Azure region for Speech resources|
+|`llm.providers[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`llm.providers[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.providers[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
+|`llm.providers[].params.azureSpeechEndpoint`|enum|For Azure Speech: the REST endpoint family<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`llm.providers[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.|
 |`llm.providers[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.providers[].params.pathOverride`|string|Override the upstream path for this provider.|
@@ -70020,10 +70029,11 @@
 |`llm.models[].params.awsRegion`|string|AWS region to use for the Bedrock provider.|
 |`llm.models[].params.vertexRegion`|string|Google Cloud region to use for the Vertex AI provider.|
 |`llm.models[].params.vertexProject`|string|Google Cloud project ID to use for the Vertex AI provider.|
-|`llm.models[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
-|`llm.models[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`llm.models[].params.azureResourceName`|string|For Azure: the resource name, or the Azure region for Speech resources|
+|`llm.models[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint<br>Possible values: `openAI`, `foundry`, `aiServices`, `speech`.|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.models[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
+|`llm.models[].params.azureSpeechEndpoint`|enum|For Azure Speech: the REST endpoint family<br>Possible values: `shortAudio`, `fastTranscription`, `textToSpeech`.|
 |`llm.models[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
