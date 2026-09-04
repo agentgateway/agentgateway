@@ -51,13 +51,13 @@ pub async fn run_with_drain<F, O>(
 			// the deadline.
 			// If this feature is implemented, we can instead join!() the min_delay and `start_drain_and_wait`.
 			tokio::time::sleep(min_delay).await;
+			let remaining = deadline.saturating_sub(min_delay);
 			info!(
 				component,
-				"minimum drain completed, waiting, not accepting new connections and waiting {:?} for any connections to complete",
-				deadline
+				"minimum drain completed, waiting {:?} for any connections to complete", remaining
 			);
 			let res = tokio::time::timeout(
-				deadline,
+				remaining,
 				sub_drain_signal.start_drain_and_wait(DrainMode::Graceful),
 			)
 			.await;
