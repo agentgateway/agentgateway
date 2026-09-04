@@ -21,7 +21,8 @@ pub fn new() -> (DrainTrigger, DrainWatcher) {
 /// * drain: while holding onto this, the future is marked as active, which will block the server from shutting down.
 ///   Additionally, it can be watched (with drain.signaled()) to see when to start a graceful shutdown.
 /// * force_shutdown: when this is triggered, the future must forcefully shutdown any ongoing work ASAP.
-///   This means the graceful drain exceeded the hard deadline, and all work must terminate now.
+///   This happens for immediate shutdown and when graceful drain reaches its hard deadline. It is also
+///   broadcast after a graceful drain completes, when no watched work should remain.
 ///   This is only required for spawned() tasks; otherwise, the future is dropped entirely, canceling all work.
 pub async fn run_with_drain<F, O>(
 	component: String,
@@ -35,14 +36,26 @@ pub async fn run_with_drain<F, O>(
 {
 	let (sub_drain_signal, sub_drain) = new();
 	let (trigger_force_shutdown, force_shutdown) = watch::channel(());
-	let trigger_force_shutdown_cpy = trigger_force_shutdown.clone();
 	// Stop accepting once we drain.
 	// We will then allow connections up to `deadline` to terminate on their own.
 	// After that, they will be forcefully terminated.
 	let fut = make_future(sub_drain, force_shutdown).in_current_span();
+	tokio::pin!(fut);
+
+	// A future that exits before draining indicates that the accept loop failed. Preserve
+	// the immediate shutdown behavior for that case. Once a drain is already ready, it
+	// takes precedence so the graceful drain remains authoritative.
+	let drain = tokio::select! {
+		biased;
+		res = drain.wait_for_drain() => res,
+		_ = &mut fut => {
+			let _ = trigger_force_shutdown.send(());
+			return;
+		},
+	};
+
 	let watch = async move {
-		let res = drain.wait_for_drain().await;
-		if res.mode() == DrainMode::Graceful {
+		if drain.mode() == DrainMode::Graceful {
 			info!(
 				component,
 				"drain started, waiting {:?}-{:?} for any connections to complete", min_delay, deadline
@@ -71,20 +84,21 @@ pub async fn run_with_drain<F, O>(
 		} else {
 			debug!(component, "terminating");
 		}
-		// Trigger force shutdown. In theory, this is only needed in the timeout case. However,
-		// it doesn't hurt to always trigger it.
+		// Notify force-shutdown observers after watched work drains or the deadline
+		// expires. The latter terminates any connections that are still running.
 		let _ = trigger_force_shutdown.send(());
 
 		info!(component, "shutdown complete");
 	};
+	tokio::pin!(watch);
+
+	// The accept future can finish after it stops accepting while spawned connections
+	// still hold upgraded drain watchers. Keep polling it during shutdown, but if it
+	// finishes, continue waiting for the watcher to drain or reach its deadline.
 	tokio::select! {
-		_ = fut => {
-			// Trigger force shutdown. This probably is redundant and the future will not complete
-			// until all tasks are done. But just to be sure send it, in case the future is watching this
-			// but not holding any drain blockers.
-			let _ = trigger_force_shutdown_cpy.send(());
-		},
-		_ = watch => {}
+		biased;
+		_ = &mut watch => {},
+		_ = &mut fut => watch.await,
 	}
 }
 
