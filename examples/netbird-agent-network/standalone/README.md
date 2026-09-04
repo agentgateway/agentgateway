@@ -39,6 +39,12 @@ trusted `x-netbird-user-id` and `x-netbird-groups` values before forwarding to
 the private AI agentgateway. Agentgateway requires NetBird's virtual API key
 and uses the identity values for attribution.
 
+The private AI agentgateway has a fixed address on its isolated Docker network.
+The management container maps its hostname to that address so NetBird recognizes
+the provider as private and defers a live credential check. Management is
+not attached to that network and cannot reach the gateway; the NetBird proxy is
+the only application container attached to both networks.
+
 ## Static certificates
 
 `prepare.sh` creates a private demo CA, a management certificate, and a wildcard
@@ -56,16 +62,17 @@ To test operator-provided certificates, place the management and wildcard leaf
 pairs at `runtime/certs/{management,proxy}/tls.{crt,key}` and their trust anchor
 at `runtime/certs/ca.crt` before running `prepare.sh`.
 
-## Temporary NetBird images
+## Component versions
 
-The example uses the pinned development images in `versions.env`. Replace
-the NetBird server and proxy images with the first official release containing
-[netbirdio/netbird#6970](https://github.com/netbirdio/netbird/issues/6970), and
-replace the dashboard image with the first official release containing
-[netbirdio/dashboard#774](https://github.com/netbirdio/dashboard/pull/774).
-The temporary server, proxy, and dashboard images are AMD64-only, so Compose
-uses emulation on ARM64 Docker hosts. Remove the `platform` overrides after
-switching to multi-architecture release images.
+The example uses official NetBird 0.78.1 server, reverse proxy, and client
+images. NetBird 0.78.1 is the minimum tested release because it includes
+[agentgateway integration support][netbird-agentgateway]. The dashboard uses
+version 2.92.0 or later, which includes the
+[agentgateway provider UI][dashboard-agentgateway]. The multi-architecture
+images are pinned by tag and digest in `versions.env`.
+
+[netbird-agentgateway]: https://github.com/netbirdio/netbird/pull/7274
+[dashboard-agentgateway]: https://github.com/netbirdio/dashboard/pull/774
 
 ## Prerequisites
 

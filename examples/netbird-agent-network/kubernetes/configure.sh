@@ -5,7 +5,7 @@ NAMESPACE=netbird-agent-network
 GROUP_NAME=${NETBIRD_GROUP_NAME:-agentgateway-clients}
 PROVIDER_NAME=${NETBIRD_PROVIDER_NAME:-agentgateway}
 POLICY_NAME=${NETBIRD_POLICY_NAME:-Agentgateway access}
-UPSTREAM_URL=${AGENTGATEWAY_UPSTREAM_URL:-http://netbird-agentgateway.netbird-agent-network.svc.cluster.local}
+UPSTREAM_URL=${AGENTGATEWAY_UPSTREAM_URL:-http://netbird-agentgateway-upstream.netbird-agent-network.svc.cluster.local}
 MODE=api
 CHECK_ONLY=false
 

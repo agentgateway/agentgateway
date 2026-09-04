@@ -58,8 +58,12 @@ private agentgateway listener
 The NetBird Agent Network proxy has a public LoadBalancer and accepts requests
 from authorized NetBird clients. It replaces caller-supplied identity headers
 with trusted NetBird identity, adds the virtual API key, and forwards requests
-to the private AI agentgateway Service. A NetworkPolicy permits only the
-NetBird proxy to reach this gateway. Agentgateway routes Anthropic message
+to a headless Service for the private AI agentgateway. Resolving the gateway to
+its pod addresses lets NetBird recognize the upstream as private and defer its
+live credential check; agentgateway still checks the virtual key on
+requests from the NetBird proxy. The controller-managed ClusterIP Service
+remains in place for the Gateway resource. A NetworkPolicy permits only the
+NetBird proxy to reach the gateway. Agentgateway routes Anthropic message
 requests by path and sends all other requests to OpenAI.
 
 Authorized clients reach the Agent Network proxy through NetBird's encrypted
@@ -69,26 +73,17 @@ encryption and server authentication. The public LoadBalancer supports
 certificate issuance and public-path denial checks; normal authorized requests
 use the NetBird tunnel.
 
-## Temporary NetBird images
+## Component versions
 
-This example temporarily uses NetBird server and proxy development images built
-from the agentgateway implementation through commit `de8635e00`, plus a
-dashboard image built from the dashboard integration branch:
+The example uses official NetBird 0.78.1 server, reverse proxy, and client
+images. NetBird 0.78.1 is the minimum tested release because it includes
+[agentgateway integration support][netbird-agentgateway]. The optional
+dashboard uses version 2.92.0 or later, which includes the
+[agentgateway provider UI][dashboard-agentgateway]. The multi-architecture
+images are pinned by tag and digest in `versions.env`.
 
-```text
-danehans/netbird-server:agw-e2e-de8635e00@sha256:7a284a036f7a3206b603848048ae5c312cdf006fe3d718e2262ad0433c815d68
-danehans/netbird-proxy:agw-e2e-de8635e00@sha256:5e082ea45eecc78630e4a5a1a26708bf5fdadb831fef00433a5dc5628f19bc6d
-danehans/netbird-dashboard:agw-e2e-2208b98d4-20260824-175445@sha256:f4ae567bb502c45b3c5384cf5d2af0539ffe00a0ffe12689a49ed9547d4fe3b0
-```
-
-These personal test images are not NetBird production releases. Replace them
-in `versions.env` with the first official `netbirdio/netbird-server` and
-`netbirdio/netbird-proxy` release that contains the fix for
-[netbirdio/netbird#6970](https://github.com/netbirdio/netbird/issues/6970).
-Replace the dashboard image with the first official NetBird dashboard release
-that contains [netbirdio/dashboard#774][dashboard-pr].
-
-[dashboard-pr]: https://github.com/netbirdio/dashboard/pull/774
+[netbird-agentgateway]: https://github.com/netbirdio/netbird/pull/7274
+[dashboard-agentgateway]: https://github.com/netbirdio/dashboard/pull/774
 
 ## Prerequisites
 
@@ -114,8 +109,8 @@ the pod is replaced or rescheduled, causing the proxy to request certificates
 again and increasing the risk of ACME validation failures or rate limits.
 
 The example was tested with agentgateway 1.5.0, cert-manager 1.21.1, Gateway
-API 1.6.0, and the NetBird 0.77.0 client. All versions are pinned in
-`versions.env`.
+API 1.6.0, NetBird 0.78.1, and NetBird dashboard 2.92.0. All versions are
+pinned in `versions.env`.
 
 ## 1. Set variables
 
@@ -329,7 +324,7 @@ group, setup key, and Kubernetes workloads required by this example.
 
 1. Open **Agent Network > Providers** and add a provider.
 2. Select **agentgateway**, name it `agentgateway`, and set the upstream URL to
-   `http://netbird-agentgateway.netbird-agent-network.svc.cluster.local`.
+   `http://netbird-agentgateway-upstream.netbird-agent-network.svc.cluster.local`.
 3. Enter the current `NETBIRD_VIRTUAL_KEY`, leave the model list empty to allow
    all models, keep the provider enabled, and keep identity metadata enabled.
    Saving the first provider also creates the generated Agent Network endpoint.
