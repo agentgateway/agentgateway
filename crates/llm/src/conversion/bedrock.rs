@@ -2724,6 +2724,9 @@ pub mod from_responses {
 					);
 				},
 				InputItem::Item(Item::FunctionCallOutput(output)) => {
+					let Some(call_id) = output.call_id.filter(|call_id| !call_id.is_empty()) else {
+						continue;
+					};
 					let output_text = match output.output {
 						FunctionCallOutput::Text(text) => text,
 						FunctionCallOutput::Content(parts) => parts
@@ -2742,7 +2745,7 @@ pub mod from_responses {
 							role: bedrock::Role::User,
 							content: vec![bedrock::ContentBlock::ToolResult(
 								bedrock::ToolResultBlock {
-									tool_use_id: output.call_id,
+									tool_use_id: call_id,
 									content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
 									// Responses tool outputs do not carry explicit success/error metadata.
 									// Leave Bedrock status unset instead of assuming success.
@@ -3160,6 +3163,7 @@ pub mod from_responses {
 										caller: None,
 										id: Some(tool_call_item_id),
 										status: Some(OutputStatus::InProgress),
+										r#async: None,
 									}),
 								});
 
@@ -3293,6 +3297,7 @@ pub mod from_responses {
 									caller: None,
 									id: Some(item_id),
 									status: Some(OutputStatus::Completed),
+									r#async: None,
 								}),
 							});
 						events.push(("event", item_done_event));
@@ -3403,6 +3408,7 @@ pub mod from_responses {
 							ErrorObject {
 								code: "content_filter".to_string(),
 								message: "Content filtered by guardrails".to_string(),
+								misalignment: None,
 							},
 						),
 						Some(bedrock::StopReason::ToolUse) => {
@@ -3960,6 +3966,7 @@ impl ConverseResponseAdapter {
 							caller: None,
 							id: Some(tool_use.tool_use_id.clone()),
 							status: Some(output_status),
+							r#async: None,
 						},
 					));
 				},
@@ -4014,6 +4021,7 @@ impl ConverseResponseAdapter {
 				Some(responsest::ErrorObject {
 					code: "content_filter".to_string(),
 					message: "Content filtered by guardrails".to_string(),
+					misalignment: None,
 				})
 			},
 			_ => None,

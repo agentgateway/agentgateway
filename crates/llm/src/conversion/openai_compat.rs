@@ -275,6 +275,9 @@ pub mod from_responses {
 						}
 					},
 					Item::FunctionCallOutput(output) => {
+						let Some(call_id) = output.call_id.filter(|call_id| !call_id.is_empty()) else {
+							continue;
+						};
 						let output_text = match output.output {
 							responses::FunctionCallOutput::Text(text) => text,
 							responses::FunctionCallOutput::Content(parts) => parts
@@ -289,7 +292,7 @@ pub mod from_responses {
 						messages.push(completions::RequestMessage::Tool(
 							completions::RequestToolMessage {
 								content: completions::RequestToolMessageContent::Text(output_text),
-								tool_call_id: output.call_id,
+								tool_call_id: call_id,
 							},
 						));
 					},
@@ -522,6 +525,7 @@ pub mod to_responses {
 									id: Some(f.id.clone()),
 									status: Some(responses::OutputStatus::Completed),
 									namespace: None,
+									r#async: None,
 								},
 							));
 						},
@@ -563,6 +567,7 @@ pub mod to_responses {
 			Some(completions::FinishReason::ContentFilter) => Some(responses::ErrorObject {
 				code: "content_filter".to_string(),
 				message: "Content filtered".to_string(),
+				misalignment: None,
 			}),
 			_ => None,
 		};
@@ -804,6 +809,7 @@ pub mod to_responses {
 													caller: None,
 													id: Some(entry.0.clone()),
 													status: Some(OutputStatus::InProgress),
+													r#async: None,
 												}),
 											}),
 										));
@@ -951,6 +957,7 @@ pub mod to_responses {
 						caller: None,
 						id: Some(item_id),
 						status: Some(OutputStatus::Completed),
+						r#async: None,
 					}),
 				}),
 			));
@@ -1059,6 +1066,7 @@ pub mod to_responses {
 				ErrorObject {
 					code: "content_filter".to_string(),
 					message: "Content filtered".to_string(),
+					misalignment: None,
 				},
 			),
 		};
