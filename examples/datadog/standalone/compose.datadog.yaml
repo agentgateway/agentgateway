@@ -1,0 +1,22 @@
+# When explicitly included, sends synthetic telemetry to the Datadog organization owning DD_API_KEY.
+services:
+  collector:
+    environment:
+      OTLP_EXPORT_ENDPOINT: http://datadog:4318
+    depends_on:
+      datadog:
+        condition: service_started
+  datadog:
+    image: registry.datadoghq.com/agent:7.82.3
+    environment:
+      DD_API_KEY: ${DD_API_KEY:?Set DD_API_KEY in the ignored .env file}
+      DD_SITE: ${DD_SITE:-us3.datadoghq.com}
+      DD_HOSTNAME: agentgateway-datadog-dev
+      DD_ENV: datadog-dev
+      DD_TAGS: "env:datadog-dev service:agentgateway version:1.5.0"
+      DD_APM_ENABLED: "true"
+      DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT: 0.0.0.0:4318
+      DD_PROCESS_CONFIG_PROCESS_COLLECTION_ENABLED: "false"
+      DD_LOGS_ENABLED: "false"
+    volumes:
+      - ./openmetrics.yaml:/etc/datadog-agent/conf.d/openmetrics.d/conf.yaml:ro
