@@ -1,117 +1,37 @@
-use serde::Deserialize;
+use ipnet::IpNet;
 use tonic::Code;
 
-use super::{ActorRef, TRACE_POLICY_KIND, valid_resource_name};
-use crate::http::Request;
+use super::{ActorIdentity, ActorRef, TRACE_POLICY_KIND};
+use crate::http::{PolicyResponse, Request};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponse};
-use crate::telemetry::log;
+use crate::store::RequestPolicyTrait;
 use crate::telemetry::log::RequestLog;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
-use crate::*;
+use crate::{cel, *};
 
-const ACTOR_IDENTITY_OID: &str = "1.3.6.1.4.1.11129.2.12.2";
-
-#[derive(Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct ActorIdentity {
-	atespace: String,
-	actor_name: String,
-	actor_uid: String,
-	purpose: String,
-}
-
-/// Validates an actor's identity before accepting a CONNECT tunnel.
+/// Retrieves and enforces the current Substrate egress policy for each request.
 #[apply(schema!)]
 pub struct SubstrateEgress {
-	/// Backend that receives GetActor calls and policies used when connecting to it.
+	/// Backend that receives GetActorEgressPolicy calls and policies used when connecting to it.
 	#[serde(flatten)]
 	pub target: SimpleBackendReferenceWithPolicies,
 }
 
-impl SubstrateEgress {
-	fn identity(req: &Request) -> Result<ActorIdentity, ProxyError> {
-		let certificate = req
-			.extensions()
-			.get::<TLSConnectionInfo>()
-			.and_then(|tls| tls.src_identity.as_ref())
-			.and_then(|identity| identity.certificate.as_deref())
-			.ok_or_else(|| {
-				ProxyError::SubstrateEgressDenied("missing authenticated actor certificate".to_owned())
-			})?;
-		let pem = pem::parse(certificate.as_bytes()).map_err(|error| {
-			ProxyError::SubstrateEgressDenied(format!("invalid actor certificate: {error}"))
-		})?;
-		let (_, certificate) =
-			x509_parser::parse_x509_certificate(pem.contents()).map_err(|error| {
-				ProxyError::SubstrateEgressDenied(format!("invalid actor certificate: {error}"))
-			})?;
-		let mut extensions = certificate
-			.extensions()
-			.iter()
-			.filter(|extension| extension.oid.to_id_string() == ACTOR_IDENTITY_OID);
-		let extension = extensions.next().ok_or_else(|| {
-			ProxyError::SubstrateEgressDenied("actor certificate has no ActorIdentity".to_owned())
-		})?;
-		if extensions.next().is_some() {
-			return Err(ProxyError::SubstrateEgressDenied(
-				"actor certificate has multiple ActorIdentity extensions".to_owned(),
-			));
-		}
-		let identity: ActorIdentity = serde_json::from_slice(extension.value).map_err(|error| {
-			ProxyError::SubstrateEgressDenied(format!("invalid ActorIdentity: {error}"))
-		})?;
-		if !valid_resource_name(&identity.atespace)
-			|| !valid_resource_name(&identity.actor_name)
-			|| identity.actor_uid.is_empty()
-			|| identity.purpose != "atunnel"
-		{
-			return Err(ProxyError::SubstrateEgressDenied(
-				"invalid ActorIdentity".to_owned(),
-			));
-		}
-		Ok(identity)
-	}
-
-	pub(crate) async fn authorize_connect(
-		&self,
-		inputs: &Arc<ProxyInputs>,
-		connection: &Extension,
-		req: &mut Request,
-	) -> Result<(), ProxyResponse> {
-		let tcp = connection
-			.copy::<TCPConnectionInfo>(req.extensions_mut())
-			.expect("tcp connection must be set")
-			.clone();
-		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
-		let mut log = RequestLog::new(
-			log::CelLogging::new(inputs.cfg.logging.clone(), inputs.cfg.metrics.clone()),
-			inputs.metrics.clone(),
-			inputs.model_catalog.clone(),
-			agent_core::Timestamp::now(),
-			tcp,
-		);
-		self
-			.authorize(
-				&PolicyClient::new(inputs.clone()).with_parent(req),
-				&mut log,
-				req,
-			)
-			.await
-	}
-
-	async fn authorize(
+impl RequestPolicyTrait for SubstrateEgress {
+	async fn apply(
 		&self,
 		client: &PolicyClient,
 		log: &mut RequestLog,
 		req: &mut Request,
-	) -> Result<(), ProxyResponse> {
-		let identity = Self::identity(req)?;
+	) -> Result<PolicyResponse, ProxyResponse> {
+		let identity = req.extensions().get::<ActorIdentity>().ok_or_else(|| {
+			ProxyError::SubstrateEgressDenied("missing CONNECT-authorized actor identity".to_owned())
+		})?;
 		let actor = ActorRef {
-			atespace: identity.atespace,
-			name: identity.actor_name,
+			atespace: identity.atespace.clone(),
+			name: identity.actor_name.clone(),
 		};
 		log.ate_actor_name = Some(actor.name.clone());
 		log.ate_actor_uid = Some(identity.actor_uid.clone());
@@ -120,101 +40,277 @@ impl SubstrateEgress {
 			.target
 			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate));
 		let mut control = protos::ateapi::control_client::ControlClient::new(channel);
-		let result = crate::proxy::dtrace::scope_future(
+		let policy = crate::proxy::dtrace::scope_future(
 			Some(TRACE_POLICY_KIND),
-			control.get_actor(protos::ateapi::GetActorRequest {
+			control.get_actor_egress_policy(protos::ateapi::GetActorEgressPolicyRequest {
 				actor: Some(protos::ateapi::ObjectRef {
-					atespace: actor.atespace.clone(),
-					name: actor.name.clone(),
+					atespace: actor.atespace,
+					name: actor.name,
 				}),
 			}),
 		)
 		.await;
-		let current = match result {
+		let policy = match policy {
 			Ok(response) => response.into_inner(),
+			// An Actor without an EgressPolicy has no actor-specific restrictions.
+			// CONNECT authentication already established that this is a running Actor.
+			Err(status) if status.code() == Code::NotFound => return Ok(PolicyResponse::default()),
 			Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => {
 				return Err(
 					ProxyError::SubstrateEgressUnavailable(format!(
-						"actor identity check unavailable: {status}"
+						"actor egress policy unavailable: {status}"
 					))
 					.into(),
 				);
 			},
 			Err(status) => {
 				return Err(
-					ProxyError::SubstrateEgressDenied(format!("actor identity check denied: {status}"))
-						.into(),
+					ProxyError::SubstrateEgressDenied(format!("actor egress policy denied: {status}")).into(),
 				);
 			},
 		};
-		if current
-			.metadata
-			.as_ref()
-			.map(|metadata| metadata.uid.as_str())
-			!= Some(identity.actor_uid.as_str())
-		{
-			return Err(ProxyError::SubstrateEgressDenied("actor UID mismatch".to_owned()).into());
+		let _matched_rule = matching_rule(&policy, req)?;
+		// TODO: After Substrate defines a credential-provider data-plane contract, apply the
+		// matched hostname rule's `inject_static_headers` effects here.
+		Ok(PolicyResponse::default())
+	}
+}
+
+fn matching_rule<'a>(
+	policy: &'a protos::ateapi::EgressPolicy,
+	req: &Request,
+) -> Result<&'a protos::ateapi::EgressRule, ProxyResponse> {
+	let destination = req
+		.extensions()
+		.get::<cel::DestinationContext>()
+		.ok_or_else(|| {
+			ProxyError::SubstrateEgressDenied("missing egress destination context".to_owned())
+		})?;
+	for rule in &policy.rules {
+		if rule_matches(rule, destination)? {
+			return Ok(rule);
 		}
-		if current.status.as_ref().map(|status| status.state)
-			!= Some(protos::ateapi::ActorState::Running as i32)
-		{
-			return Err(ProxyError::SubstrateEgressDenied("actor is not running".to_owned()).into());
-		}
-		Ok(())
+	}
+	Err(ProxyError::SubstrateEgressDenied("actor egress policy denied destination".to_owned()).into())
+}
+
+fn rule_matches(
+	rule: &protos::ateapi::EgressRule,
+	destination: &cel::DestinationContext,
+) -> Result<bool, ProxyResponse> {
+	if let Some(hostnames) = &rule.hostnames {
+		return Ok(destination.hostname.as_deref().is_some_and(|hostname| {
+			hostnames
+				.patterns
+				.iter()
+				.any(|pattern| hostname_matches(pattern, hostname))
+		}));
+	}
+	if let Some(ip_blocks) = &rule.ip_blocks {
+		return ip_blocks.cidrs.iter().try_fold(false, |matches, cidr| {
+			if matches {
+				return Ok(true);
+			}
+			let network = cidr.parse::<IpNet>().map_err(|error| {
+				ProxyError::SubstrateEgressDenied(format!("invalid actor egress CIDR: {error}"))
+			})?;
+			Ok(network.contains(&destination.address))
+		});
+	}
+	Ok(rule.all.is_some())
+}
+
+fn hostname_matches(pattern: &str, hostname: &str) -> bool {
+	if let Some(suffix) = pattern.strip_prefix("*.") {
+		let Some(prefix) = hostname.strip_suffix(suffix) else {
+			return false;
+		};
+		let Some(label) = prefix.strip_suffix('.') else {
+			return false;
+		};
+		!label.is_empty() && !label.contains('.')
+	} else {
+		pattern == hostname
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use rcgen::{CertificateParams, CustomExtension, KeyPair};
+	use std::net::IpAddr;
 
 	use super::*;
-	use crate::http::Body;
-	use crate::transport::tls::TlsInfo;
 
-	fn request_with_identity(identity: &str) -> Request {
-		let mut params = CertificateParams::default();
-		params
-			.custom_extensions
-			.push(CustomExtension::from_oid_content(
-				&[1, 3, 6, 1, 4, 1, 11129, 2, 12, 2],
-				identity.as_bytes().to_vec(),
-			));
-		let certificate = params
-			.self_signed(&KeyPair::generate().unwrap())
-			.unwrap()
-			.pem();
-		let mut req = Request::new(Body::empty());
-		req.extensions_mut().insert(TLSConnectionInfo {
-			src_identity: Some(TlsInfo {
-				certificate: Some(certificate.into()),
-				..Default::default()
-			}),
-			..Default::default()
+	fn request(address: &str, hostname: Option<&str>) -> Request {
+		let address = address.parse::<IpAddr>().unwrap();
+		let mut request = Request::new(crate::http::Body::empty());
+		request.extensions_mut().insert(cel::DestinationContext {
+			address,
+			port: 443,
+			hostname: hostname.map(Into::into),
 		});
-		req
+		request
 	}
 
 	#[test]
-	fn actor_identity_is_parsed_from_the_certificate() {
-		let identity = SubstrateEgress::identity(&request_with_identity(
-			r#"{"Atespace":"demo","ActorName":"my-actor","ActorUid":"uid-1","Purpose":"atunnel"}"#,
-		))
+	fn cidr_rules_authorize_only_matching_destinations() {
+		let policy = protos::ateapi::EgressPolicy {
+			rules: vec![protos::ateapi::EgressRule {
+				ip_blocks: Some(protos::ateapi::IpBlockRule {
+					cidrs: vec!["192.0.2.0/24".to_owned()],
+				}),
+				..Default::default()
+			}],
+			..Default::default()
+		};
+		assert!(matching_rule(&policy, &request("192.0.2.10", None)).is_ok());
+		assert!(matching_rule(&policy, &request("198.51.100.10", None)).is_err());
+	}
+
+	#[test]
+	fn hostname_rules_match_exact_and_single_label_wildcards() {
+		let policy = protos::ateapi::EgressPolicy {
+			rules: vec![protos::ateapi::EgressRule {
+				hostnames: Some(protos::ateapi::HostnameRule {
+					patterns: vec!["api.example.com".to_owned(), "*.example.net".to_owned()],
+					..Default::default()
+				}),
+				..Default::default()
+			}],
+			..Default::default()
+		};
+		assert!(matching_rule(&policy, &request("192.0.2.1", Some("api.example.com"))).is_ok());
+		assert!(matching_rule(&policy, &request("192.0.2.1", Some("one.example.net"))).is_ok());
+		assert!(
+			matching_rule(
+				&policy,
+				&request("192.0.2.1", Some("nested.one.example.net"))
+			)
+			.is_err()
+		);
+	}
+
+	#[test]
+	fn first_matching_hostname_rule_controls_effects() {
+		let policy = protos::ateapi::EgressPolicy {
+			rules: vec![
+				protos::ateapi::EgressRule {
+					hostnames: Some(protos::ateapi::HostnameRule {
+						patterns: vec!["api.example.com".to_owned()],
+						effects: Some(protos::ateapi::EgressRuleEffects {
+							inject_static_headers: vec![protos::ateapi::CredentialHeaderInjection {
+								header: "Authorization".to_owned(),
+								prefix: "Bearer ".to_owned(),
+								credential_uri: "substrate-secret://example/first/token".to_owned(),
+							}],
+						}),
+					}),
+					..Default::default()
+				},
+				protos::ateapi::EgressRule {
+					hostnames: Some(protos::ateapi::HostnameRule {
+						patterns: vec!["api.example.com".to_owned()],
+						effects: Some(protos::ateapi::EgressRuleEffects {
+							inject_static_headers: vec![protos::ateapi::CredentialHeaderInjection {
+								header: "Authorization".to_owned(),
+								prefix: "Bearer ".to_owned(),
+								credential_uri: "substrate-secret://example/second/token".to_owned(),
+							}],
+						}),
+					}),
+					..Default::default()
+				},
+			],
+			..Default::default()
+		};
+		let matched =
+			matching_rule(&policy, &request("198.51.100.10", Some("api.example.com"))).unwrap();
+		assert_eq!(
+			matched
+				.hostnames
+				.as_ref()
+				.unwrap()
+				.effects
+				.as_ref()
+				.unwrap()
+				.inject_static_headers[0]
+				.credential_uri,
+			"substrate-secret://example/first/token"
+		);
+	}
+
+	#[test]
+	fn first_matching_rule_wins_across_matcher_types() {
+		let policy = protos::ateapi::EgressPolicy {
+			rules: vec![
+				protos::ateapi::EgressRule {
+					ip_blocks: Some(protos::ateapi::IpBlockRule {
+						cidrs: vec!["192.0.2.0/24".to_owned()],
+					}),
+					..Default::default()
+				},
+				protos::ateapi::EgressRule {
+					hostnames: Some(protos::ateapi::HostnameRule {
+						patterns: vec!["api.example.com".to_owned()],
+						..Default::default()
+					}),
+					..Default::default()
+				},
+			],
+			..Default::default()
+		};
+		let matched = matching_rule(&policy, &request("192.0.2.10", Some("api.example.com"))).unwrap();
+		assert!(matched.ip_blocks.is_some());
+	}
+
+	#[test]
+	fn all_matches_only_after_earlier_rules_do_not_match() {
+		let policy = protos::ateapi::EgressPolicy {
+			rules: vec![
+				protos::ateapi::EgressRule {
+					hostnames: Some(protos::ateapi::HostnameRule {
+						patterns: vec!["api.example.com".to_owned()],
+						..Default::default()
+					}),
+					..Default::default()
+				},
+				protos::ateapi::EgressRule {
+					all: Some(()),
+					..Default::default()
+				},
+			],
+			..Default::default()
+		};
+
+		let matched =
+			matching_rule(&policy, &request("198.51.100.10", Some("api.example.com"))).unwrap();
+		assert!(matched.hostnames.is_some());
+
+		let matched = matching_rule(
+			&policy,
+			&request("198.51.100.10", Some("other.example.com")),
+		)
 		.unwrap();
-		assert_eq!(identity.atespace, "demo");
-		assert_eq!(identity.actor_name, "my-actor");
-		assert_eq!(identity.actor_uid, "uid-1");
+		assert!(matched.all.is_some());
 	}
 
 	#[test]
-	fn actor_identity_requires_every_field_and_atunnel_purpose() {
-		for identity in [
-			r#"{"Atespace":"","ActorName":"my-actor","ActorUid":"uid-1","Purpose":"atunnel"}"#,
-			r#"{"Atespace":"demo","ActorName":"","ActorUid":"uid-1","Purpose":"atunnel"}"#,
-			r#"{"Atespace":"demo","ActorName":"my-actor","ActorUid":"","Purpose":"atunnel"}"#,
-			r#"{"Atespace":"demo","ActorName":"my-actor","ActorUid":"uid-1","Purpose":"other"}"#,
-		] {
-			assert!(SubstrateEgress::identity(&request_with_identity(identity)).is_err());
-		}
+	fn no_matching_rule_denies() {
+		let policy = protos::ateapi::EgressPolicy {
+			rules: vec![protos::ateapi::EgressRule {
+				hostnames: Some(protos::ateapi::HostnameRule {
+					patterns: vec!["api.example.com".to_owned()],
+					..Default::default()
+				}),
+				..Default::default()
+			}],
+			..Default::default()
+		};
+		assert!(
+			matching_rule(
+				&policy,
+				&request("198.51.100.10", Some("other.example.com"))
+			)
+			.is_err()
+		);
 	}
 }

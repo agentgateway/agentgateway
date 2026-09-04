@@ -9,6 +9,7 @@ use frozen_collections::FzHashSet;
 use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter;
 use prometheus_client::metrics::family::{Family, MetricConstructor};
+use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{Histogram as PromHistogram, NativeHistogramConfig};
 use prometheus_client::metrics::info::Info;
 use prometheus_client::registry::{Metric, Unit};
@@ -166,6 +167,12 @@ pub struct AdmissionLabels {
 	pub bind: DefaultedUnknown<RichStrng>,
 }
 
+#[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct SubstrateRouteLabels {
+	pub ate_router_outcome: DefaultedUnknown<RichStrng>,
+	pub ate_router_resume: DefaultedUnknown<RichStrng>,
+}
+
 #[derive(
 	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
 )]
@@ -264,6 +271,7 @@ pub struct Metrics {
 	pub requests: Counter,
 	pub request_duration: Histogram<HTTPLabels>,
 	pub request_processing_duration: Histogram<MinimalHTTPLabels>,
+	pub substrate_route_duration: Histogram<SubstrateRouteLabels>,
 	pub response_processing_duration: Histogram<MinimalHTTPLabels>,
 	pub response_bytes: Family<HTTPLabels, counter::Counter>,
 
@@ -293,6 +301,9 @@ pub struct Metrics {
 
 	// metrics for request retries
 	pub retries: Counter,
+
+	// Number of requests currently waiting for a Substrate actor to become routable.
+	pub substrate_request_parking_active: Gauge,
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -415,6 +426,15 @@ impl Metrics {
 		);
 
 		Metrics {
+			substrate_request_parking_active: {
+				let m = Gauge::default();
+				registry.register(
+					"substrate_request_parking_active",
+					"Number of requests waiting for a Substrate actor to become routable",
+					m.clone(),
+				);
+				m
+			},
 			requests: build(
 				&mut registry,
 				"requests",
@@ -491,6 +511,16 @@ impl Metrics {
 				registry.register_with_unit(
 					"request_processing",
 					"Duration from receiving an HTTP request to sending the primary outbound call (seconds)",
+					Unit::Seconds,
+					m.clone(),
+				);
+				m
+			},
+			substrate_route_duration: {
+				let m = histogram_family(histogram_mode, &SUBSTRATE_ROUTE_DURATION_BUCKETS);
+				registry.register_with_unit(
+					"atenet_router_route_duration",
+					"Time from receiving a Substrate request to resolving its worker endpoint",
 					Unit::Seconds,
 					m.clone(),
 				);
@@ -610,6 +640,10 @@ const CONNECT_DURATION_BUCKET: [f64; 10] = [
 const HTTP_REQUEST_DURATION_BUCKET: [f64; 14] = [
 	0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 80.0,
 ];
+const SUBSTRATE_ROUTE_DURATION_BUCKETS: [f64; 18] = [
+	0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+	15.0, 30.0,
+];
 // Internal processing time
 // Covers 50us to 250ms with growth.
 const PROCESSING_DURATION_BUCKETS: [f64; 10] = [
@@ -639,6 +673,7 @@ const FIRST_TOKEN_BUCKET: [f64; 16] = [
 #[cfg(test)]
 mod tests {
 	use prometheus_client::encoding::prometheus_protobuf;
+	use prometheus_client::encoding::text::encode;
 	use prometheus_client::registry::Registry;
 
 	use super::*;
@@ -672,5 +707,16 @@ mod tests {
 				"mode: {mode:?}"
 			);
 		}
+	}
+
+	#[test]
+	fn substrate_request_parking_gauge_is_exported() {
+		let mut registry = Registry::default();
+		let metrics = Metrics::new(&mut registry, Default::default(), HistogramMode::Classic);
+		metrics.substrate_request_parking_active.inc();
+
+		let mut encoded = String::new();
+		encode(&mut encoded, &registry).expect("text encoding succeeds");
+		assert!(encoded.contains("substrate_request_parking_active 1"));
 	}
 }

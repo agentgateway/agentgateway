@@ -24,8 +24,10 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
+use crate::cel::BackendProtocol;
 use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
+use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
@@ -756,6 +758,7 @@ impl Gateway {
 		policies: FrontendPolices,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
+		let policies = Arc::new(policies);
 		let connection = Arc::new(raw_stream.get_ext());
 		let def = frontend::HTTP::default();
 		let buffer = policies
@@ -764,7 +767,7 @@ impl Gateway {
 			.map(|h| h.max_buffer_size)
 			.unwrap_or(def.max_buffer_size);
 		let server = auto_server(policies.http.as_ref());
-		let substrate_egress = policies.substrate_egress;
+		let substrate_egress_actor_resolution = policies.substrate_egress_actor_resolution.clone();
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(raw_stream),
@@ -772,7 +775,8 @@ impl Gateway {
 				let inputs = inputs.clone();
 				let connection = connection.clone();
 				let drain = drain.clone();
-				let substrate_egress = substrate_egress.clone();
+				let substrate_egress_actor_resolution = substrate_egress_actor_resolution.clone();
+				let policies = policies.clone();
 				async move {
 					let mut req = req.map(crate::http::Body::new);
 					req.extensions_mut().insert(BufferLimit::new(buffer));
@@ -840,16 +844,29 @@ impl Gateway {
 							(SocketAddr::new(target_ip, port), bind)
 						}
 					};
-					if let Some(policy) = substrate_egress
-						&& let Err(error) = policy
+					let actor_identity = if let Some(policy) = substrate_egress_actor_resolution {
+						match policy
 							.authorize_connect(&inputs, connection.as_ref(), &mut req)
 							.await
-					{
-						return Ok(match error {
-							crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
-							crate::proxy::ProxyResponse::DirectResponse(response) => *response,
-						});
-					}
+						{
+							Ok(identity) => Some(identity),
+							Err(error) => {
+								return Ok(match error {
+									crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
+									crate::proxy::ProxyResponse::DirectResponse(response) => *response,
+								});
+							},
+						}
+					} else {
+						None
+					};
+					Self::log_terminated_connect(
+						&inputs,
+						&policies,
+						connection.as_ref(),
+						&connect_headers,
+						actor_identity.as_ref(),
+					);
 
 					tokio::task::spawn(async move {
 						let downstream = match upgrade.await {
@@ -860,6 +877,9 @@ impl Gateway {
 							},
 						};
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
+						if let Some(identity) = actor_identity {
+							downstream.ext_mut().insert(identity);
+						}
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						downstream.ext_mut().insert(BufferLimit::new(buffer));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
@@ -876,6 +896,55 @@ impl Gateway {
 		);
 		serve.await.map_err(|e| anyhow!("{e}"))?;
 		Ok(())
+	}
+
+	fn log_terminated_connect(
+		inputs: &Arc<ProxyInputs>,
+		policies: &FrontendPolices,
+		connection: &Extension,
+		connect_headers: &::http::HeaderMap,
+		actor_identity: Option<&crate::http::substrate::ActorIdentity>,
+	) {
+		let tcp = connection
+			.get::<TCPConnectionInfo>()
+			.expect("tcp connection must be set");
+		let unverified_workload = crate::cel::WorkloadContext::from_stores(
+			&inputs.stores,
+			&inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
+		let mut source = crate::cel::SourceContext::from_tcp_connection(
+			tcp,
+			connection
+				.get::<TLSConnectionInfo>()
+				.and_then(|tls| tls.src_identity.clone()),
+			unverified_workload,
+		);
+		source.connect_headers = connect_headers.clone();
+
+		let mut log = RequestLog::new(
+			crate::telemetry::log::CelLogging::new(
+				inputs.cfg.logging.clone(),
+				inputs.cfg.metrics.clone(),
+			),
+			inputs.metrics.clone(),
+			inputs.model_catalog.clone(),
+			agent_core::Timestamp::now(),
+			tcp.clone(),
+		);
+		log.source_context = Some(source);
+		log.backend_protocol = Some(BackendProtocol::tcp);
+		log.status = Some(StatusCode::OK);
+		if let Some(identity) = actor_identity {
+			log.ate_actor_name = Some(identity.actor_name.clone());
+			log.ate_actor_uid = Some(identity.actor_uid.clone());
+			log.ate_atespace = Some(identity.atespace.clone());
+		}
+		policies.register_cel_expressions(log.cel.ctx());
+		if let Some(access_log) = &policies.access_log {
+			crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, access_log);
+		}
+		drop(DropOnLog::from(log));
 	}
 
 	async fn proxy(

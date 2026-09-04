@@ -2892,7 +2892,7 @@ struct LocalFrontendPolicies {
 	pub network_ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
 	/// Validate the originating actor before accepting a CONNECT tunnel.
 	#[serde(default)]
-	pub substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
+	pub substrate_egress_actor_resolution: Option<crate::http::substrate::EgressActorResolution>,
 	/// Enable downstream PROXY protocol handling on this gateway or port, including
 	/// version matching and whether PROXY headers are required or optional.
 	#[serde(default, rename = "proxyProtocol", alias = "proxy")]
@@ -2996,6 +2996,9 @@ pub struct FilterOrPolicy {
 	/// Resolve Substrate actor hostnames for dynamic route backends on ingress.
 	#[serde(default)]
 	substrate_ingress: Option<crate::http::substrate::SubstrateIngress>,
+	/// Enforce the CONNECT-pinned effective Substrate egress policy.
+	#[serde(default)]
+	substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
 	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
@@ -5157,7 +5160,7 @@ async fn split_frontend_policies(
 		tcp,
 		network_authorization,
 		network_ext_authz,
-		substrate_egress,
+		substrate_egress_actor_resolution,
 		proxy_protocol,
 		connect,
 		access_log,
@@ -5187,8 +5190,11 @@ async fn split_frontend_policies(
 			"networkExtAuthz",
 		);
 	}
-	if let Some(p) = substrate_egress {
-		add(FrontendPolicy::SubstrateEgress(p), "substrateEgress");
+	if let Some(p) = substrate_egress_actor_resolution {
+		add(
+			FrontendPolicy::SubstrateEgressActorResolution(p),
+			"substrateEgressActorResolution",
+		);
 	}
 	if let Some(p) = proxy_protocol {
 		add(FrontendPolicy::Proxy(p), "proxy");
@@ -5274,6 +5280,7 @@ pub(crate) async fn split_policies_for_target(
 		ext_authz,
 		ext_proc,
 		substrate_ingress,
+		substrate_egress,
 		buffer,
 		timeout,
 		retry,
@@ -5454,6 +5461,9 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = substrate_ingress {
 		route_policies.push(TrafficPolicy::SubstrateIngress(RequestPolicy::single(p)))
+	}
+	if let Some(p) = substrate_egress {
+		route_policies.push(TrafficPolicy::SubstrateEgress(RequestPolicy::single(p)))
 	}
 	if let Some(p) = local_rate_limit
 		&& !p.is_empty()

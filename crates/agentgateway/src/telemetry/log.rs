@@ -42,7 +42,7 @@ use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
-	OutboundCallLabels, RouteIdentifier,
+	OutboundCallLabels, RouteIdentifier, SubstrateRouteLabels,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, semconv, trc};
@@ -1442,6 +1442,21 @@ impl Drop for DropOnLog {
 				.request_duration
 				.get_or_create(&http_labels)
 				.observe(duration.as_secs_f64());
+			if let Some(route_duration) = log.ate_router_route_duration {
+				let outcome = if log.status.is_some_and(|status| status.is_success()) {
+					"ok"
+				} else {
+					"resume_error"
+				};
+				log
+					.metrics
+					.substrate_route_duration
+					.get_or_create(&SubstrateRouteLabels {
+						ate_router_outcome: RichStrng::from(outcome).into(),
+						ate_router_resume: log.ate_router_resume.map(RichStrng::from).into(),
+					})
+					.observe(route_duration.as_secs_f64());
+			}
 
 			if let Some(retry_count) = log.retry_attempt {
 				log

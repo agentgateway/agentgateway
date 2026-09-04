@@ -257,6 +257,10 @@ async fn apply_request_policies(
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
 	pol
+		.substrate_egress
+		.apply_without_response("substrate egress", c, l, req, rp.headers())
+		.await?;
+	pol
 		.substrate_ingress
 		.apply_without_response("substrate ingress", c, l, req, rp.headers())
 		.await?;
@@ -680,6 +684,7 @@ impl HTTPProxy {
 			.expect("tcp connection must be set")
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		connection.copy::<http::substrate::ActorIdentity>(req.extensions_mut());
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		connection.copy::<cel::DestinationContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
@@ -810,6 +815,7 @@ impl HTTPProxy {
 		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
+		set_destination_hostname(&mut req);
 		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
 			req.extensions_mut().remove::<OnUpgrade>()
 		} else {
@@ -4419,6 +4425,59 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 	}
 	debug!("request after normalization: {req:?}");
 	Ok(())
+}
+
+/// Record the normalized HTTP request hostname in the destination CEL context.
+fn set_destination_hostname(req: &mut Request) {
+	let hostname = req
+		.uri()
+		.authority()
+		.map(|authority| authority.host())
+		.and_then(normalize_hostname)
+		.map(strng::new);
+	if let Some(destination) = req.extensions_mut().get_mut::<cel::DestinationContext>() {
+		destination.hostname = hostname;
+	}
+}
+
+fn normalize_hostname(hostname: &str) -> Option<String> {
+	let hostname = hostname.strip_suffix('.').unwrap_or(hostname);
+	(!hostname.is_empty()).then(|| hostname.to_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod destination_context_tests {
+	use super::*;
+
+	#[test]
+	fn http_host_populates_normalized_destination_hostname() {
+		let mut req = ::http::Request::builder()
+			.version(::http::Version::HTTP_11)
+			.uri("/v1/models")
+			.header(::http::header::HOST, "API.Example.com.:8443")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(cel::DestinationContext {
+			address: "192.0.2.1".parse().unwrap(),
+			port: 443,
+			hostname: None,
+		});
+
+		normalize_uri(None, &mut req).unwrap();
+		set_destination_hostname(&mut req);
+
+		assert_eq!(
+			req.uri().authority().map(|authority| authority.as_str()),
+			Some("API.Example.com.:8443")
+		);
+		assert_eq!(
+			req
+				.extensions()
+				.get::<cel::DestinationContext>()
+				.and_then(|destination| destination.hostname.as_deref()),
+			Some("api.example.com")
+		);
+	}
 }
 
 fn apply_auto_hostname(req: &mut Request, target: &Target) -> Result<(), ProxyError> {

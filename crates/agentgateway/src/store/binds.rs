@@ -148,7 +148,7 @@ pub struct FrontendPolices {
 	pub tcp: Option<frontend::TCP>,
 	pub network_authorization: Option<NetworkAuthorizationSet>,
 	pub network_ext_authz: Option<Arc<ext_authz::ExtAuthz>>,
-	pub substrate_egress: Option<substrate::SubstrateEgress>,
+	pub substrate_egress_actor_resolution: Option<substrate::EgressActorResolution>,
 	pub proxy: Option<frontend::Proxy>,
 	pub connect: Option<frontend::Connect>,
 	pub access_log: Option<frontend::LoggingPolicy>,
@@ -179,8 +179,10 @@ impl FrontendPolices {
 			FrontendPolicy::NetworkExtAuthz(p) => {
 				self.network_ext_authz.get_or_insert_with(|| p.clone());
 			},
-			FrontendPolicy::SubstrateEgress(p) => {
-				self.substrate_egress.get_or_insert_with(|| p.clone());
+			FrontendPolicy::SubstrateEgressActorResolution(p) => {
+				self
+					.substrate_egress_actor_resolution
+					.get_or_insert_with(|| p.clone());
 			},
 			FrontendPolicy::Proxy(p) => {
 				self.proxy.get_or_insert_with(|| p.clone());
@@ -383,6 +385,7 @@ pub struct RoutePolicies {
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
 	pub budget: RequestPolicy<http::budget::BudgetPolicy>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
+	pub substrate_egress: RequestPolicy<substrate::SubstrateEgress>,
 	pub substrate_ingress: RequestPolicy<substrate::SubstrateIngress>,
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
@@ -456,6 +459,7 @@ impl RoutePolicies {
 			&self.api_key as &dyn PolicyExpressions,
 			&self.budget as &dyn PolicyExpressions,
 			&self.ext_authz as &dyn PolicyExpressions,
+			&self.substrate_egress as &dyn PolicyExpressions,
 			&self.substrate_ingress as &dyn PolicyExpressions,
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.transformation as &dyn PolicyExpressions,
@@ -1157,6 +1161,11 @@ impl Store {
 				TrafficPolicy::SubstrateIngress(p) => {
 					pol
 						.substrate_ingress
+						.merge_with_inheritance(p, lock_inheritance);
+				},
+				TrafficPolicy::SubstrateEgress(p) => {
+					pol
+						.substrate_egress
 						.merge_with_inheritance(p, lock_inheritance);
 				},
 			}

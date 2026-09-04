@@ -2,11 +2,14 @@ syntax = "proto3";
 
 package ateapi;
 
+import "google/protobuf/empty.proto";
+
 // Minimal wire-compatible subset of the Substrate control API used by
 // agentgateway's actor policies.
 service Control {
   rpc GetActor(GetActorRequest) returns (Actor) {}
   rpc ResumeActor(ResumeActorRequest) returns (ResumeActorResponse) {}
+  rpc GetActorEgressPolicy(GetActorEgressPolicyRequest) returns (EgressPolicy) {}
 }
 
 message Actor {
@@ -59,5 +62,40 @@ message ResumeActorResponse {
 }
 
 message GetActorRequest {
+  ObjectRef actor = 1;
+}
+
+// EgressPolicy is the actor-owned source policy.
+message EgressPolicy {
+  ResourceMetadata metadata = 1;
+  repeated EgressRule rules = 2;
+}
+
+message EgressRule {
+  HostnameRule hostnames = 1;
+  IPBlockRule ip_blocks = 2;
+  google.protobuf.Empty all = 3;
+}
+
+message HostnameRule {
+  repeated string patterns = 1;
+  EgressRuleEffects effects = 2;
+}
+
+message IPBlockRule {
+  repeated string cidrs = 1;
+}
+
+message EgressRuleEffects {
+  repeated CredentialHeaderInjection inject_static_headers = 1;
+}
+
+message CredentialHeaderInjection {
+  string header = 1;
+  string prefix = 2;
+  string credential_uri = 3;
+}
+
+message GetActorEgressPolicyRequest {
   ObjectRef actor = 1;
 }
