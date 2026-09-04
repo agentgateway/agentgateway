@@ -54,6 +54,9 @@ chrono.workspace = true
 [build-dependencies]
 rustc_version.workspace = true
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
 [lints.rust]
 # This rule makes code more confusing
 mismatched_lifetime_syntaxes = "allow"
