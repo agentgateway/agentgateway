@@ -41,7 +41,7 @@ use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
-	CostCatalogLookupLabels, ErrorTypeLabel, GenAILabels, GenAILabelsTokenUsage,
+	CostCatalogLookupLabels, ErrorTypeLabel, GenAIErrorType, GenAILabels, GenAILabelsTokenUsage,
 	GenAIRequestDurationLabels, HTTPLabels, MCPCall, Metrics, OutboundCallLabels, RouteIdentifier,
 };
 use crate::telemetry::trc::TraceParent;
@@ -896,7 +896,10 @@ impl DropOnLog {
 			.map(|response| response.request_model.clone())
 			.or_else(|| request.map(|request| request.request_model.clone()));
 		let gen_ai_labels = Arc::new(GenAILabels {
-			gen_ai_operation_name: strng::literal!("chat").into(),
+			gen_ai_operation_name: request
+				.map(|request| gen_ai_operation_name(request.input_format))
+				.map(RichStrng::from)
+				.into(),
 			gen_ai_system: provider.into(),
 			gen_ai_request_model: request_model.into(),
 			gen_ai_response_model: llm_response
@@ -911,9 +914,9 @@ impl DropOnLog {
 			.gen_ai_request_duration
 			.get_or_create(&GenAIRequestDurationLabels {
 				common: gen_ai_labels.clone().into(),
-				error: request_error_type(log, true)
-					.map(|error_type| ErrorTypeLabel {
-						error_type: error_type.into(),
+				error: gen_ai_operation_failed(log)
+					.then_some(ErrorTypeLabel {
+						error_type: GenAIErrorType::Other,
 					})
 					.into(),
 			})
@@ -1327,24 +1330,21 @@ fn request_log_level(error: Option<&str>) -> &'static str {
 	if error.is_some() { "error" } else { "info" }
 }
 
-pub(crate) fn request_error_type(
-	request: &RequestLog,
-	include_http_client_errors: bool,
-) -> Option<String> {
-	if request.error.is_some() {
-		return Some(
-			request
-				.reason
-				.map(|reason| reason.to_string())
-				.unwrap_or_else(|| "_OTHER".to_string()),
-		);
+fn gen_ai_operation_failed(request: &RequestLog) -> bool {
+	// A provider 4xx (such as rate limiting) fails the GenAI operation even though
+	// an inbound HTTP server span does not classify client errors as server failures.
+	request.error.is_some()
+		|| request
+			.status
+			.is_some_and(|status| status.is_client_error() || status.is_server_error())
+}
+
+fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
+	if input_format == InputFormat::Embeddings {
+		"embeddings"
+	} else {
+		"chat"
 	}
-	request
-		.status
-		.filter(|status| {
-			status.is_server_error() || (include_http_client_errors && status.is_client_error())
-		})
-		.map(|status| status.as_u16().to_string())
 }
 
 impl Drop for DropOnLog {
@@ -2123,13 +2123,10 @@ impl Drop for DropOnLog {
 						span_id: span_id.map(|id| id.to_string()),
 						http_status: log.status.as_ref().map(|s| i64::from(s.as_u16())),
 						error: log.error.clone(),
-						gen_ai_operation_name: log.llm_request.as_ref().map(|request| {
-							if request.input_format == InputFormat::Embeddings {
-								"embeddings".to_string()
-							} else {
-								"chat".to_string()
-							}
-						}),
+						gen_ai_operation_name: log
+							.llm_request
+							.as_ref()
+							.map(|request| gen_ai_operation_name(request.input_format).to_string()),
 						gen_ai_provider_name: log
 							.llm_request
 							.as_ref()
@@ -2855,19 +2852,19 @@ mod tests {
 				http::StatusCode::TOO_MANY_REQUESTS,
 				None,
 				Some(ProxyResponseReason::Upstream),
-				Some("429"),
+				Some("_OTHER"),
 			),
 			(
 				http::StatusCode::INTERNAL_SERVER_ERROR,
 				None,
 				Some(ProxyResponseReason::Upstream),
-				Some("500"),
+				Some("_OTHER"),
 			),
 			(
 				http::StatusCode::BAD_GATEWAY,
 				Some("connection failed"),
 				Some(ProxyResponseReason::UpstreamFailure),
-				Some("UpstreamFailure"),
+				Some("_OTHER"),
 			),
 			(
 				http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -2898,6 +2895,52 @@ mod tests {
 					!count.contains("error_type="),
 					"successful request unexpectedly has error.type: {count}"
 				),
+			}
+		}
+	}
+
+	#[test]
+	fn gen_ai_metrics_use_the_request_operation() {
+		for (format, operation) in [
+			(InputFormat::Completions, "chat"),
+			(InputFormat::Messages, "chat"),
+			(InputFormat::Responses, "chat"),
+			(InputFormat::Gemini, "chat"),
+			(InputFormat::Embeddings, "embeddings"),
+		] {
+			for has_response in [false, true] {
+				let (mut log, registry) = test_request_log_with_registry();
+				let mut request = metric_test_llm_request();
+				request.input_format = format;
+				log.llm_request = Some(request.clone());
+				if has_response {
+					log.llm_response.store(Some(llm::LLMInfo::new(
+						request,
+						llm::LLMResponse {
+							input_tokens: Some(10),
+							..Default::default()
+						},
+					)));
+					log.status = Some(http::StatusCode::OK);
+				} else {
+					log.error = Some("connection failed".to_string());
+				}
+				drop(DropOnLog::from(log));
+				let encoded = encoded_metrics(&registry);
+				let counts: Vec<_> = encoded
+					.lines()
+					.filter(|line| {
+						line.starts_with("gen_ai_server_request_duration_count")
+							|| line.starts_with("gen_ai_client_token_usage_count")
+					})
+					.collect();
+				assert_eq!(counts.len(), if has_response { 2 } else { 1 });
+				for count in counts {
+					assert!(
+						count.contains(&format!("gen_ai_operation_name=\"{operation}\"")),
+						"{count}"
+					);
+				}
 			}
 		}
 	}
@@ -2942,7 +2985,7 @@ mod tests {
 			.lines()
 			.find(|line| line.starts_with("gen_ai_server_request_duration_count"))
 			.unwrap_or_else(|| panic!("no GenAI request duration count in:\n{encoded}"));
-		assert!(duration_count.contains("error_type=\"500\""));
+		assert!(duration_count.contains("error_type=\"_OTHER\""));
 		for token_line in encoded
 			.lines()
 			.filter(|line| line.starts_with("gen_ai_client_token_usage"))

@@ -16,7 +16,7 @@ use opentelemetry_sdk::trace::{
 pub use traceparent::TraceParent;
 
 use crate::cel;
-use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog, request_error_type};
+use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingConfig};
 
 #[derive(Clone, Debug)]
@@ -335,10 +335,19 @@ impl Tracer {
 }
 
 fn request_span_status(request: &RequestLog, attributes: &mut Vec<KeyValue>) -> Status {
-	let Some(error_type) = request_error_type(request, false) else {
+	let (error_type, description) = if let Some(error) = &request.error {
+		(
+			request
+				.reason
+				.map(|reason| reason.to_string())
+				.unwrap_or_else(|| "_OTHER".to_string()),
+			error.clone(),
+		)
+	} else if let Some(status) = request.status.filter(http::StatusCode::is_server_error) {
+		(status.as_u16().to_string(), String::new())
+	} else {
 		return Status::default();
 	};
-	let description = request.error.clone().unwrap_or_default();
 
 	if !attributes
 		.iter()

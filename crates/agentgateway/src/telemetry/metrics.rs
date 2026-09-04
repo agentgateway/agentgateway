@@ -128,7 +128,23 @@ pub struct GenAILabelsTokenUsage {
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct ErrorTypeLabel {
-	pub error_type: RichStrng,
+	pub error_type: GenAIErrorType,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq)]
+pub enum GenAIErrorType {
+	Other,
+}
+
+impl prometheus_client::encoding::EncodeLabelValue for GenAIErrorType {
+	fn encode(
+		&self,
+		encoder: &mut prometheus_client::encoding::LabelValueEncoder,
+	) -> Result<(), std::fmt::Error> {
+		match self {
+			Self::Other => "_OTHER".encode(encoder),
+		}
+	}
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
@@ -410,7 +426,7 @@ impl Metrics {
 		let gen_ai_request_duration = histogram_family(histogram_mode, &REQUEST_DURATION_BUCKET);
 		registry.register(
 			"gen_ai_server_request_duration",
-			"Duration of generative AI request",
+			"Duration of a generative AI request in seconds; failed operations have error_type=\"_OTHER\" and successful operations omit the label",
 			gen_ai_request_duration.clone(),
 		);
 
