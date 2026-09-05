@@ -1506,6 +1506,7 @@ impl Policy {
 			.transpose()?;
 		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
 		let messages = req.get_messages();
+		let sent_roles: Vec<String> = messages.iter().map(|m| m.role.to_string()).collect();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let whr = match webhook::send_request(client, webhook, context, &headers, messages).await {
 			Ok(whr) => whr,
@@ -1534,11 +1535,12 @@ impl Policy {
 				}),
 			));
 		}
-		Self::webhook_request_outcome(whr.action)
+		Self::webhook_request_outcome(whr.action, &sent_roles)
 	}
 
 	fn webhook_request_outcome(
 		action: RequestAction,
+		original_roles: &[String],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
 		match action {
 			RequestAction::Mask(mask) => {
@@ -1549,6 +1551,18 @@ impl Policy {
 				let MaskActionBody::PromptMessages(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
+				if body.messages.len() != original_roles.len() {
+					anyhow::bail!(
+						"webhook mask returned {} messages, expected {}",
+						body.messages.len(),
+						original_roles.len()
+					);
+				}
+				for (i, (returned, role)) in body.messages.iter().zip(original_roles).enumerate() {
+					if returned.role.as_str() != role.as_str() {
+						anyhow::bail!("webhook mask changed message role at index {i}");
+					}
+				}
 				Ok((
 					GuardrailOutcome::Masked(RequestGuardMutation::Messages(body.messages)),
 					Some(GuardDetail {
