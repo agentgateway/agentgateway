@@ -27,6 +27,7 @@ span more than one agentgateway traffic type.
 ### LLM
 
 * [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
+* [llm-iflytek](llm-iflytek/README.md): route OpenAI-compatible requests to iFlytek Spark and Astron MaaS.
 * [llm-cost-routing](llm-cost-routing/README.md): classify LLM requests with CEL and route the same public model name to different upstream models.
 * [llm-ollama-postgres](llm-ollama-postgres/README.md): proxy local Ollama models and store request logs in Postgres.
 * [llm-prompt-enrichment](llm-prompt-enrichment/README.md): append or prepend prompts to agentgateway AI requests.
