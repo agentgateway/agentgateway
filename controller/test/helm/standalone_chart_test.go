@@ -253,6 +253,86 @@ func TestStandaloneChartInlineConfig(t *testing.T) {
 	require.Contains(t, out, "port: 3000")
 }
 
+func TestStandaloneChartConfigChecksum(t *testing.T) {
+	render := func(t *testing.T, values string) (string, string) {
+		t.Helper()
+		out, stderr, err := renderStandaloneChart(t, values)
+		require.NoError(t, err, "helm template failed: %s", stderr)
+
+		const prefix = "checksum/config: "
+		_, checksumAndRest, found := strings.Cut(out, prefix)
+		require.True(t, found, "rendered Deployment does not contain %q", prefix)
+		checksum, _, _ := strings.Cut(checksumAndRest, "\n")
+		return out, checksum
+	}
+
+	baseValues := `config:
+  gateways:
+    default:
+      port: 3000
+`
+	baseOutput, baseChecksum := render(t, baseValues)
+
+	t.Run("dynamic config does not restart pods", func(t *testing.T) {
+		output, checksum := render(t, `config:
+  gateways:
+    default:
+      port: 4000
+`)
+		require.NotEqual(t, baseOutput, output, "test must change the rendered ConfigMap")
+		require.Equal(t, baseChecksum, checksum)
+	})
+
+	t.Run("model catalog does not restart pods", func(t *testing.T) {
+		output, checksum := render(t, `config:
+  config:
+    modelCatalog:
+    - inline:
+        providers: {}
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, baseOutput, output, "test must change the rendered ConfigMap")
+		require.Equal(t, baseChecksum, checksum)
+	})
+
+	t.Run("startup config restarts pods", func(t *testing.T) {
+		_, checksum := render(t, `config:
+  config:
+    adminAddr: 127.0.0.1:15000
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, baseChecksum, checksum)
+	})
+
+	t.Run("storage and database config restart pods", func(t *testing.T) {
+		_, databaseChecksum := render(t, `mode: database
+database:
+  postgres:
+    url: postgres://agentgateway@example.com/agentgateway
+config:
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, baseChecksum, databaseChecksum)
+
+		_, changedDatabaseChecksum := render(t, `mode: database
+database:
+  postgres:
+    url: postgres://agentgateway@other.example.com/agentgateway
+config:
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, databaseChecksum, changedDatabaseChecksum)
+	})
+}
+
 func TestStandaloneChartDatabaseModeAllowsReplicas(t *testing.T) {
 	out, stderr, err := renderStandaloneChart(t, `replicaCount: 3
 mode: database

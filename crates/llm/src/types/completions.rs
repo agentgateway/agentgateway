@@ -768,6 +768,10 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoiceStream {
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,
@@ -830,6 +834,10 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoice {
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,

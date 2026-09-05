@@ -285,6 +285,7 @@ struct ChatRequestContext<'a> {
 	provider: &'a AIProvider,
 	headers: &'a HeaderMap,
 	prompt_caching: Option<&'a policy::PromptCachingConfig>,
+	catalog: agent_llm::model_catalog::Catalog<'a>,
 }
 
 // Context provider to each response translation
@@ -402,9 +403,14 @@ fn apply_openai_moderation(
 	Ok(())
 }
 
-fn render_anthropic_messages(req: types::ChatRequest) -> Result<Vec<u8>, AIError> {
+fn render_anthropic_messages(
+	req: types::ChatRequest,
+	catalog: agent_llm::model_catalog::Catalog<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(&req),
+		types::ChatRequest::Completions(req) => {
+			conversion::messages::from_completions::translate(&req, catalog)
+		},
 		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
@@ -450,15 +456,17 @@ fn render_bedrock_converse(
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
+			ctx.catalog,
 		),
 		types::ChatRequest::Messages(req) => {
-			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers))
+			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers), ctx.catalog)
 		},
 		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
 			&req,
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
+			ctx.catalog,
 		),
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to bedrock converse"
@@ -505,9 +513,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req)?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
@@ -1103,11 +1111,12 @@ impl AIProvider {
 				..btls
 			},
 			AIProvider::Azure(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(
-					AzureAuth::Implicit {
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(AzureAuth {
+					kind: crate::http::auth::azure::AzureAuthKind::Implicit {
 						cached_cred: p.cached_cred.clone(),
 					},
-				))),
+					scopes: Vec::new(),
+				}))),
 				..btls
 			},
 			AIProvider::Custom(_) => return None,
@@ -2093,6 +2102,7 @@ impl AIProvider {
 				provider: self,
 				headers: &parts.headers,
 				prompt_caching: policies.and_then(|p| p.prompt_caching.as_ref()),
+				catalog,
 			},
 		)?;
 		llm_info.provider_state = rendered.provider_state;

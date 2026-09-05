@@ -1,6 +1,28 @@
 use agentgateway::test_helpers::extauthmock;
+use agentgateway::test_helpers::extprocmock::{ExtProcMock, ReplaceRequestBody};
 
 use crate::common::prelude::*;
+
+#[tokio::test]
+async fn request_redirect_without_backend() {
+	let mut bind = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
+	bind
+		.attach_route(json!({
+			"matches": [{"path": {"pathPrefix": "/redirect"}}],
+			"policies": {
+				"requestRedirect": {
+					"scheme": "https",
+					"status": 301,
+				},
+			},
+		}))
+		.await;
+
+	let io = bind.serve_http(BIND_KEY);
+	let res = send_request(io, Method::GET, "http://lo/redirect").await;
+	assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
+	assert_eq!(res.hdr("location"), "https://lo/redirect");
+}
 
 #[tokio::test]
 async fn response_policy_short_circuit() {
@@ -314,6 +336,167 @@ async fn gateway_transformation_response_headers_are_applied() {
 		body.headers.get("x-gateway-xfm-req").unwrap().as_bytes(),
 		b"gateway-request"
 	);
+}
+
+#[tokio::test]
+async fn request_body_transformations_observe_latest_body() {
+	let (mock, mut bind, _io) = basic_setup().await;
+	bind
+		.attach_gateway_policy(json!({
+			"transformations": {
+				"request": {
+					// Register and populate the buffered request body at the earliest phase.
+					"body": "json(request.body)",
+				},
+			},
+		}))
+		.await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"transformations": {
+					"request": {
+						"body": r#"{"value": "middle"}"#,
+					},
+				},
+			},
+			"backends": [{
+				"host": mock.address().to_string(),
+				"policies": {
+					"transformations": {
+						"request": {
+							"set": {"x-observed-value": "json(request.body).value"},
+						},
+					},
+				},
+			}],
+		}))
+		.await;
+
+	let io = bind.serve_http(BIND_KEY);
+	let res = send_request_body(io, Method::POST, "http://lo/p", br#"{"value":"early"}"#).await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.headers.get("x-observed-value").unwrap(), "middle");
+	assert_eq!(body.body.as_ref(), br#"{"value":"middle"}"#);
+}
+
+#[tokio::test]
+async fn ext_proc_body_replacement_refreshes_buffered_body() {
+	let (mock, mut bind, _io) = basic_setup().await;
+	let ext_proc = ExtProcMock::new(|| ReplaceRequestBody(bytes::Bytes::from_static(b"middle")))
+		.spawn()
+		.await;
+	bind
+		.attach_gateway_policy(json!({
+			"transformations": {"request": {"body": "request.body"}},
+		}))
+		.await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"extProc": {
+					"host": ext_proc.address,
+					"processingOptions": {
+						"requestBodyMode": "buffered",
+						"responseBodyMode": "none",
+					},
+				},
+			},
+			"backends": [{
+				"host": mock.address().to_string(),
+				"policies": {"transformations": {"request": {
+					"set": {"x-observed-body": "string(request.body)"},
+				}}},
+			}],
+		}))
+		.await;
+
+	let res = send_request_body(
+		bind.serve_http(BIND_KEY),
+		Method::POST,
+		"http://lo/p",
+		b"early",
+	)
+	.await;
+	let body = read_body(res.into_body()).await;
+	assert_eq!(body.headers.get("x-observed-body").unwrap(), "middle");
+	assert_eq!(body.body.as_ref(), b"middle");
+}
+
+#[tokio::test]
+async fn body_transformations_preserve_logging_at_every_level() {
+	for level in ["gateway", "route", "backend"] {
+		for direction in ["request", "response"] {
+			let mock = simple_mock().await;
+			let mut bind = setup_proxy_test(
+				r#"{"config":{"logging":{"fields":{"add":{"request_body":"string(request.body)","response_body":"string(response.body)"}}}}}"#,
+			)
+			.unwrap()
+			.with_bind(simple_bind());
+			let transformed = format!("{level}-{direction}");
+			let policy = json!({
+				"transformations": {(direction): {"body": format!("'{transformed}'")}},
+			});
+			match level {
+				"gateway" => {
+					bind.attach_gateway_policy(policy).await;
+					bind
+						.attach_route(json!({
+							"backends": [{"host": mock.address().to_string()}],
+						}))
+						.await;
+				},
+				"route" => {
+					bind
+						.attach_route(json!({
+							"policies": policy,
+							"backends": [{"host": mock.address().to_string()}],
+						}))
+						.await
+				},
+				"backend" => {
+					bind
+						.attach_route(json!({
+							"backends": [{
+								"host": mock.address().to_string(),
+								"policies": policy,
+							}],
+						}))
+						.await
+				},
+				_ => unreachable!(),
+			}
+
+			let path = format!("/body-transform-{level}-{direction}");
+			let url = format!("http://lo{path}");
+			let response =
+				send_request_body(bind.serve_http(BIND_KEY), Method::POST, &url, b"original").await;
+			if direction == "request" {
+				assert_eq!(
+					read_body(response.into_body()).await.body.as_ref(),
+					transformed.as_bytes()
+				);
+			} else {
+				assert_eq!(
+					read_body_raw(response.into_body()).await.as_ref(),
+					transformed.as_bytes()
+				);
+			}
+			let log = agent_core::telemetry::testing::eventually_find(&[
+				("scope", "request"),
+				("http.path", &path),
+			])
+			.await
+			.unwrap();
+			let log_field = format!("{direction}_body");
+			assert!(
+				log
+					.get(&log_field)
+					.is_some_and(serde_json::Value::is_string)
+			);
+		}
+	}
 }
 
 #[tokio::test]

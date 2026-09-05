@@ -573,6 +573,7 @@ impl<'a> Executor<'a> {
 		self.api_key = ExtensionOrDirect::Extension(ext);
 		self.jwt = ExtensionOrDirect::Extension(ext);
 		self.llm = ExtensionOrDirect::Extension(ext);
+		self.mcp = ext.get::<MCPInfo>();
 		self.basic_auth = ExtensionOrDirect::Extension(ext);
 		self.extauthz = ExtensionOrDirect::Extension(ext);
 		self.extproc = ExtensionOrDirect::Extension(ext);

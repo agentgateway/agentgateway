@@ -10,8 +10,6 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::Utc;
 use include_dir::Dir;
-#[cfg(feature = "ui")]
-use include_dir::include_dir;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -73,19 +71,16 @@ impl App {
 	}
 }
 
-#[cfg(feature = "ui")]
-static ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
-
-#[cfg(not(feature = "ui"))]
-static ASSETS_DIR: Dir<'static> = Dir::new("", &[]);
+pub(crate) static EMPTY_ASSETS_DIR: Dir<'static> = Dir::new("", &[]);
 
 pub fn router(
 	cfg: Arc<Config>,
 	model_catalog: Arc<ModelCatalog>,
 	config_resource_store: Option<ConfigResourceStore>,
 	resource_manager: crate::resource_manager::ResourceManager,
+	assets_dir: &'static Dir<'static>,
 ) -> Router {
-	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, &ASSETS_DIR));
+	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
 	Router::new()
 		// Redirect to the UI
 		.route("/api/runtime", get(get_runtime))
@@ -682,7 +677,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 		}
 	});
 	if configured_file.is_none() && app.state.storage.mode == ConfigStoreMode::Hybrid {
-		let refreshed = crate::llm::catalog::refresh::fetch_models_dev_base_catalog().await?;
+		let refreshed = crate::llm::catalog::refresh::fetch_base_catalog().await?;
 		let resources = app
 			.config_resource_store()?
 			.list(None)
@@ -733,7 +728,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 		dir.join(BASE_COSTS_FILE)
 	};
 
-	let refreshed = crate::llm::catalog::refresh::refresh_models_dev_base_catalog(
+	let refreshed = crate::llm::catalog::refresh::refresh_base_catalog(
 		&base_costs_file,
 		configured_file.map(|_| app.model_catalog.as_ref()),
 	)

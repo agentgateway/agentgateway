@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,7 +17,8 @@ type ModelCatalog struct {
 }
 
 type CatalogMetadata struct {
-	Source      string    `json:"source"`
+	// Source is accepted for compatibility with older catalogs.
+	Source      string    `json:"source,omitempty"`
 	GeneratedAt time.Time `json:"generatedAt"`
 }
 
@@ -24,29 +26,115 @@ func (c *ModelCatalog) overlayWith(overlay *ModelCatalog) {
 	if c.Providers == nil {
 		c.Providers = map[string]Provider{}
 	}
-	for providerID, overlayProvider := range overlay.Providers {
+	if global, ok := overlay.Providers["*"]; ok {
+		providerIDs := make([]string, 0, len(c.Providers))
+		for providerID := range c.Providers {
+			providerIDs = append(providerIDs, providerID)
+		}
+		slices.Sort(providerIDs)
+		for _, providerID := range providerIDs {
+			provider := c.Providers[providerID]
+			provider.overlayWith(global, false)
+			c.Providers[providerID] = provider
+		}
+	}
+
+	providerIDs := make([]string, 0, len(overlay.Providers))
+	for providerID := range overlay.Providers {
+		if providerID != "*" {
+			providerIDs = append(providerIDs, providerID)
+		}
+	}
+	slices.Sort(providerIDs)
+	for _, providerID := range providerIDs {
+		overlayProvider := overlay.Providers[providerID]
 		provider := c.Providers[providerID]
-		if provider.Models == nil {
-			provider.Models = map[string]Model{}
-		}
-		for modelID, overlayModel := range overlayProvider.Models {
-			model := provider.Models[modelID]
-			model.Rates.overlayWith(overlayModel.Rates)
-			if len(overlayModel.Tiers) > 0 {
-				model.Tiers = overlayModel.Tiers
-			}
-			model.Tags = append(model.Tags, overlayModel.Tags...)
-			provider.Models[modelID] = model
-		}
+		provider.overlayWith(overlayProvider, true)
 		c.Providers[providerID] = provider
 	}
 }
 
+func (p *Provider) overlayWith(overlay Provider, addExactModels bool) {
+	if p.Models == nil {
+		p.Models = map[string]Model{}
+	}
+	modelPatterns := make([]string, 0, len(overlay.Models))
+	exactModels := make([]string, 0, len(overlay.Models))
+	for modelID := range overlay.Models {
+		if strings.Contains(modelID, "*") {
+			modelPatterns = append(modelPatterns, modelID)
+		} else {
+			exactModels = append(exactModels, modelID)
+		}
+	}
+	slices.Sort(modelPatterns)
+	slices.Sort(exactModels)
+
+	baseModelIDs := make([]string, 0, len(p.Models))
+	for modelID := range p.Models {
+		baseModelIDs = append(baseModelIDs, modelID)
+	}
+	slices.Sort(baseModelIDs)
+	for _, pattern := range modelPatterns {
+		for _, modelID := range baseModelIDs {
+			if starMatch(pattern, modelID) {
+				model := p.Models[modelID]
+				model.overlayWith(overlay.Models[pattern])
+				p.Models[modelID] = model
+			}
+		}
+	}
+	for _, modelID := range exactModels {
+		model, exists := p.Models[modelID]
+		if !exists && !addExactModels {
+			continue
+		}
+		model.overlayWith(overlay.Models[modelID])
+		p.Models[modelID] = model
+	}
+}
+
+func (m *Model) overlayWith(overlay Model) {
+	m.Rates.overlayWith(overlay.Rates)
+	if len(overlay.Tiers) > 0 {
+		m.Tiers = overlay.Tiers
+	}
+	for _, tag := range overlay.Tags {
+		if !slices.Contains(m.Tags, tag) {
+			m.Tags = append(m.Tags, tag)
+		}
+	}
+}
+
+// starMatch matches a string pattern where '*' represents any sequence of bytes, including '/'.
+func starMatch(pattern, value string) bool {
+	patternIndex, valueIndex := 0, 0
+	starIndex, retryValueIndex := -1, 0
+	for valueIndex < len(value) {
+		switch {
+		case patternIndex < len(pattern) && pattern[patternIndex] == value[valueIndex]:
+			patternIndex++
+			valueIndex++
+		case patternIndex < len(pattern) && pattern[patternIndex] == '*':
+			starIndex = patternIndex
+			patternIndex++
+			retryValueIndex = valueIndex
+		case starIndex >= 0:
+			patternIndex = starIndex + 1
+			retryValueIndex++
+			valueIndex = retryValueIndex
+		default:
+			return false
+		}
+	}
+	for patternIndex < len(pattern) && pattern[patternIndex] == '*' {
+		patternIndex++
+	}
+	return patternIndex == len(pattern)
+}
+
 func (c *ModelCatalog) Validate() error {
 	if c.Metadata != nil {
-		if c.Metadata.Source == "" {
-			return fmt.Errorf("metadata source is required")
-		}
 		if c.Metadata.GeneratedAt.IsZero() {
 			return fmt.Errorf("metadata generatedAt is required")
 		}

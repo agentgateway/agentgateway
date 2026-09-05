@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"istio.io/istio/pkg/test/util/retry"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,11 +32,12 @@ const (
 func TestMultipleControllers(tt *testing.T) {
 	t := New(tt)
 
-	assertGatewayClassController(t, "agentgateway", base.AgentgatewayControllerName)
+	assertGatewayClassController(t, base.AgentgatewayClassName, base.AgentgatewayControllerName)
 
 	secondary := e2e.CreateSharedTestInstallation(
 		secondaryControllerNamespace,
 		e2e.ManifestPath("agent-gateway-secondary.yaml"),
+		e2e.WithManagedLifecycle(),
 	)
 	secondary.ExtraHelmArgs = primaryImageHelmArgs(t)
 	testutils.Cleanup(t, func() {
@@ -45,7 +47,7 @@ func TestMultipleControllers(tt *testing.T) {
 	secondary.InstallAgentgatewayCoreFromLocalChart(t.Ctx, tt)
 
 	assertGatewayClassController(t, secondaryGatewayClass, secondaryControllerName)
-	assertGatewayClassController(t, "agentgateway", base.AgentgatewayControllerName)
+	assertGatewayClassController(t, base.AgentgatewayClassName, base.AgentgatewayControllerName)
 
 	t.Apply(manifest("multicontroller", "setup.yaml"))
 	t.GatewayReady("secondary-gateway", secondaryWorkloadNamespace)
@@ -77,7 +79,7 @@ func TestMultipleControllers(tt *testing.T) {
 		curl.WithPath("/status/200"),
 	)
 
-	assertGatewayClassController(t, "agentgateway", base.AgentgatewayControllerName)
+	assertGatewayClassController(t, base.AgentgatewayClassName, base.AgentgatewayControllerName)
 }
 
 func applyWithoutResourceWait(t base.Test, manifest string) {
@@ -94,7 +96,7 @@ func primaryImageHelmArgs(t base.Test) []string {
 	t.Helper()
 	deployment, err := t.TestInstallation.ClusterContext.Client.Kube().AppsV1().Deployments(
 		t.TestInstallation.InstallNamespace,
-	).Get(t.Ctx, "agentgateway", metav1.GetOptions{})
+	).Get(t.Ctx, base.AgentgatewayControllerDeploymentName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("get primary controller deployment: %v", err)
 	}
@@ -102,17 +104,112 @@ func primaryImageHelmArgs(t base.Test) []string {
 		t.Fatal("primary controller deployment has no containers")
 	}
 
-	image := deployment.Spec.Template.Spec.Containers[0].Image
+	controller := deployment.Spec.Template.Spec.Containers[0]
+	helmArgs, err := installationImageHelmArgs(controller.Image, controller.Env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return helmArgs
+}
+
+func installationImageHelmArgs(image string, env []corev1.EnvVar) ([]string, error) {
 	lastSlash := strings.LastIndex(image, "/")
 	lastColon := strings.LastIndex(image, ":")
 	if lastSlash < 0 || lastColon <= lastSlash || lastColon == len(image)-1 {
-		t.Fatalf("primary controller image %q does not contain a registry, repository, and tag", image)
+		return nil, fmt.Errorf("primary controller image %q does not contain a registry, repository, and tag", image)
 	}
 
-	return []string{
-		"--set-string", "image.registry=" + image[:lastSlash],
-		"--set-string", "image.tag=" + image[lastColon+1:],
+	registry := image[:lastSlash]
+	tag := image[lastColon+1:]
+	args := []string{
+		"--set-string", "controller.image.registry=" + registry,
+		"--set-string", "controller.image.repository=" + image[lastSlash+1:lastColon],
+		"--set-string", "controller.image.tag=" + tag,
 	}
+
+	proxyImage := map[string]string{
+		"registry":   registry,
+		"repository": "",
+		"tag":        tag,
+	}
+	for _, variable := range env {
+		switch variable.Name {
+		case "AGW_PROXY_IMAGE_REGISTRY":
+			proxyImage["registry"] = variable.Value
+		case "AGW_PROXY_IMAGE_REPOSITORY":
+			proxyImage["repository"] = variable.Value
+		case "AGW_PROXY_IMAGE_TAG":
+			proxyImage["tag"] = variable.Value
+		}
+	}
+	if proxyImage["repository"] == "" {
+		return nil, fmt.Errorf("primary controller deployment does not configure AGW_PROXY_IMAGE_REPOSITORY")
+	}
+
+	args = append(args,
+		"--set-string", "proxy.image.registry="+proxyImage["registry"],
+		"--set-string", "proxy.image.repository="+proxyImage["repository"],
+		"--set-string", "proxy.image.tag="+proxyImage["tag"],
+	)
+	return args, nil
+}
+
+func TestInstallationImageHelmArgs(t *testing.T) {
+	tests := []struct {
+		name  string
+		image string
+		env   []corev1.EnvVar
+		want  []string
+	}{
+		{
+			name:  "default registry",
+			image: "cr.agentgateway.dev/agentgateway/controller:v1.2.3",
+			env: []corev1.EnvVar{
+				{Name: "AGW_PROXY_IMAGE_REGISTRY", Value: "cr.agentgateway.dev/agentgateway"},
+				{Name: "AGW_PROXY_IMAGE_REPOSITORY", Value: "agentgateway"},
+				{Name: "AGW_PROXY_IMAGE_TAG", Value: "v1.2.3"},
+			},
+			want: []string{
+				"--set-string", "controller.image.registry=cr.agentgateway.dev/agentgateway",
+				"--set-string", "controller.image.repository=controller",
+				"--set-string", "controller.image.tag=v1.2.3",
+				"--set-string", "proxy.image.registry=cr.agentgateway.dev/agentgateway",
+				"--set-string", "proxy.image.repository=agentgateway",
+				"--set-string", "proxy.image.tag=v1.2.3",
+			},
+		},
+		{
+			name:  "registry with port and alternate repository",
+			image: "localhost:5000/team/enterprise-controller:test",
+			env: []corev1.EnvVar{
+				{Name: "AGW_PROXY_IMAGE_REGISTRY", Value: "localhost:5000/team"},
+				{Name: "AGW_PROXY_IMAGE_REPOSITORY", Value: "enterprise-proxy"},
+				{Name: "AGW_PROXY_IMAGE_TAG", Value: "test"},
+			},
+			want: []string{
+				"--set-string", "controller.image.registry=localhost:5000/team",
+				"--set-string", "controller.image.repository=enterprise-controller",
+				"--set-string", "controller.image.tag=test",
+				"--set-string", "proxy.image.registry=localhost:5000/team",
+				"--set-string", "proxy.image.repository=enterprise-proxy",
+				"--set-string", "proxy.image.tag=test",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := installationImageHelmArgs(tt.image, tt.env)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+	_, err := installationImageHelmArgs("controller:latest", nil)
+	assert.EqualError(t, err, `primary controller image "controller:latest" does not contain a registry, repository, and tag`)
+
+	_, err = installationImageHelmArgs("registry.example/controller:latest", nil)
+	assert.EqualError(t, err, "primary controller deployment does not configure AGW_PROXY_IMAGE_REPOSITORY")
 }
 
 func assertGatewayClassController(t base.Test, name, controllerName string) {

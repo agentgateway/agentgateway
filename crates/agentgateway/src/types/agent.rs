@@ -552,7 +552,8 @@ impl ServerTLSConfig {
 		cipher_suites: &[crate::transport::tls::CipherSuite],
 		key_exchange_groups: &[crate::transport::tls::KeyExchangeGroup],
 	) -> anyhow::Result<(ServerConfig, Option<Arc<dyn ClientCertVerifier>>)> {
-		let provider = crate::transport::tls::provider_with_options(cipher_suites, key_exchange_groups);
+		let provider =
+			crate::transport::tls::provider_with_options_validated(cipher_suites, key_exchange_groups)?;
 
 		let versions = tls_versions_for_range(min_version, max_version)?;
 		let scb = ServerConfig::builder_with_provider(provider.clone())
@@ -2759,6 +2760,7 @@ pub enum FrontendPolicy {
 	TCP(frontend::TCP),
 	NetworkAuthorization(frontend::NetworkAuthorization),
 	NetworkExtAuthz(Arc<ext_authz::ExtAuthz>),
+	SubstrateEgress(crate::http::substrate::SubstrateEgress),
 	Proxy(frontend::Proxy),
 	Connect(frontend::Connect),
 	AccessLog(frontend::LoggingPolicy),
@@ -2778,7 +2780,6 @@ pub enum TrafficPolicy {
 	LocalRateLimit(RequestPolicy<Vec<crate::http::localratelimit::RateLimit>>),
 	RemoteRateLimit(RequestPolicy<remoteratelimit::RemoteRateLimit>),
 	ExtAuthz(RequestPolicy<ext_authz::ExtAuthz>),
-	SubstrateEgress(RequestPolicy<crate::http::substrate::SubstrateEgress>),
 	SubstrateIngress(RequestPolicy<crate::http::substrate::SubstrateIngress>),
 	ExtProc(RequestPolicy<ext_proc::ExtProc>),
 	JwtAuth(RequestPolicy<JwtAuthentication>),
@@ -3248,6 +3249,16 @@ pub mod defaults {
 mod tests {
 	use super::*;
 
+	#[cfg(feature = "fips")]
+	fn fips_test_certificate() -> (Vec<u8>, Vec<u8>) {
+		let key = rcgen::KeyPair::generate().expect("generate test key");
+		let mut params =
+			rcgen::CertificateParams::new(vec!["fips.example.com".to_string()]).expect("valid test name");
+		params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+		let cert = params.self_signed(&key).expect("generate test certificate");
+		(cert.pem().into_bytes(), key.serialize_pem().into_bytes())
+	}
+
 	fn route_match(path: &'static str) -> RouteMatch {
 		RouteMatch {
 			headers: vec![],
@@ -3362,6 +3373,59 @@ mod tests {
 
 		assert!(!Arc::ptr_eq(&base, &profiled));
 		assert_eq!(profiled.alpn_protocols, vec![b"http/1.1".to_vec()]);
+	}
+
+	#[cfg(feature = "fips")]
+	#[test]
+	fn fips_config_static_frontend_tls_rejects_non_approved_cipher_suite() {
+		use crate::transport::tls::CipherSuite;
+
+		let (cert, key) = fips_test_certificate();
+		let result = ServerTLSConfig::from_pem_with_profile(
+			cert,
+			key,
+			None,
+			vec![],
+			None,
+			None,
+			Some(vec![CipherSuite::TLS_CHACHA20_POLY1305_SHA256]),
+			None,
+			false,
+		);
+		let err = match result {
+			Ok(_) => panic!("non-approved frontend cipher suite was accepted"),
+			Err(err) => err,
+		};
+		assert!(
+			err.to_string().contains("TLS_CHACHA20_POLY1305_SHA256"),
+			"error should name the configured cipher suite, got: {err}"
+		);
+	}
+
+	#[cfg(feature = "fips")]
+	#[test]
+	fn fips_config_dynamic_ca_tls_rejects_non_approved_key_exchange_group() {
+		use crate::transport::tls::KeyExchangeGroup;
+
+		let (cert, key) = fips_test_certificate();
+		let result = ServerTLSConfig::dynamic_ca_with_profile(
+			cert,
+			key,
+			vec![],
+			None,
+			None,
+			None,
+			Some(vec![KeyExchangeGroup::X25519]),
+			Default::default(),
+		);
+		let err = match result {
+			Ok(_) => panic!("non-approved dynamic-CA key exchange group was accepted"),
+			Err(err) => err,
+		};
+		assert!(
+			err.to_string().contains("X25519"),
+			"error should name the configured key exchange group, got: {err}"
+		);
 	}
 
 	#[test]

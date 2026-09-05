@@ -28,7 +28,7 @@ jobs:
 
     - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
       with:
-        go-version-file: go.mod
+        go-version: "1.27.1"
         cache: false
 
     - name: Refresh catalog
@@ -38,7 +38,10 @@ jobs:
       id: changes
       shell: bash
       run: |
-        if git diff --quiet -- catalog/model-catalog.json; then
+        jq 'del(.metadata.generatedAt)' catalog/model-catalog.json > "$RUNNER_TEMP/model-catalog-new.json"
+        git show HEAD:catalog/model-catalog.json \
+          | jq 'del(.metadata.generatedAt)' > "$RUNNER_TEMP/model-catalog-old.json"
+        if cmp --silent "$RUNNER_TEMP/model-catalog-old.json" "$RUNNER_TEMP/model-catalog-new.json"; then
           echo 'changed=false' >> "$GITHUB_OUTPUT"
         else
           echo 'changed=true' >> "$GITHUB_OUTPUT"

@@ -1,0 +1,46 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stop_sequence.json
+info:
+  id: chatcmpl-stop-sequence
+  object: chat.completion
+  created: 1772656915
+  model: test-model
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: before stop
+      finish_reason: stop
+      stop_reason: STOPPROBE
+  usage:
+    prompt_tokens: 4
+    completion_tokens: 2
+    total_tokens: 6
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "before stop"
+      }
+    ],
+    "model": "test-model",
+    "stop_reason": "stop_sequence",
+    "stop_sequence": "STOPPROBE",
+    "usage": {
+      "input_tokens": 4,
+      "output_tokens": 2
+    }
+  },
+  "parsed": {
+    "input_tokens": 4,
+    "output_tokens": 2,
+    "total_tokens": 6,
+    "provider_model": "test-model"
+  }
+}

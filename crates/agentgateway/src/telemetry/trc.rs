@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use agent_core::telemetry::ValueBag;
-use http::Version;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use opentelemetry::trace::{SpanContext, SpanId, SpanKind, Status, TraceId, TraceState};
@@ -156,13 +155,6 @@ pub struct DeprecatedConfig {
 	pub path: String,
 }
 
-mod semconv {
-	use opentelemetry::Key;
-
-	pub static PROTOCOL_VERSION: Key = Key::from_static_str("network.protocol.version");
-	pub static URL_SCHEME: Key = Key::from_static_str("url.scheme");
-}
-
 impl Tracer {
 	pub fn new(
 		config: &TracingConfig,
@@ -302,19 +294,6 @@ impl Tracer {
 		let start = request.start.as_system_time();
 		let end = end.as_system_time();
 
-		// For now we only accept HTTP(?)
-		attributes.push(KeyValue::new(semconv::URL_SCHEME.clone(), "http"));
-		// Otel spec has a special format here
-		match &request.version {
-			Some(Version::HTTP_11) => {
-				attributes.push(KeyValue::new(semconv::PROTOCOL_VERSION.clone(), "1.1"));
-			},
-			Some(Version::HTTP_2) => {
-				attributes.push(KeyValue::new(semconv::PROTOCOL_VERSION.clone(), "2"));
-			},
-			_ => {},
-		}
-
 		attributes.reserve(self.fields.add.len());
 
 		// To avoid lifetime issues need to store the expression before we give it to ValueBag reference.
@@ -339,11 +318,7 @@ impl Tracer {
 				}
 			})
 		});
-		let status = if let Some(error) = &request.error {
-			Status::error(error.clone())
-		} else {
-			Status::default()
-		};
+		let status = request_span_status(request, &mut attributes);
 
 		let out_span = request.outgoing_span.as_ref().unwrap();
 		self.processor.emit(trace_span_data(
@@ -357,6 +332,30 @@ impl Tracer {
 			status,
 		));
 	}
+}
+
+fn request_span_status(request: &RequestLog, attributes: &mut Vec<KeyValue>) -> Status {
+	let (error_type, description) = if let Some(error) = &request.error {
+		(
+			request
+				.reason
+				.map(|reason| reason.to_string())
+				.unwrap_or_else(|| "_OTHER".to_string()),
+			error.clone(),
+		)
+	} else if let Some(status) = request.status.filter(http::StatusCode::is_server_error) {
+		(status.as_u16().to_string(), String::new())
+	} else {
+		return Status::default();
+	};
+
+	if !attributes
+		.iter()
+		.any(|attribute| attribute.key.as_str() == "error.type")
+	{
+		attributes.push(KeyValue::new("error.type", error_type));
+	}
+	Status::error(description)
 }
 
 /// Policy-aware OTLP gRPC exporter that routes via `GrpcReferenceChannel`, ensuring
@@ -920,6 +919,125 @@ mod tests {
 		assert_eq!(span.parent_span_id, incoming.span_id.into());
 		assert!(span.parent_span_is_remote);
 		assert!(span.links.iter().next().is_none());
+	}
+
+	fn test_llm_request() -> crate::llm::LLMRequest {
+		crate::llm::LLMRequest {
+			input_tokens: None,
+			input_format: crate::llm::InputFormat::Responses,
+			cache_convention: Default::default(),
+			request_model: "test-model".into(),
+			provider: "test-provider".into(),
+			streaming: false,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		}
+	}
+
+	#[test]
+	fn send_exports_gen_ai_server_error_status() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.status = Some(http::StatusCode::INTERNAL_SERVER_ERROR);
+		request.llm_request = Some(test_llm_request());
+		let mut outgoing = TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing);
+
+		let filter = None;
+		let fields = LoggingFields::default();
+		let otlp_filter = None;
+		let otlp_fields = LoggingFields::default();
+		let metric_fields = Arc::new(MetricFields::default());
+		let database_fields = LoggingFields::default();
+		let cel_exec = CelLoggingExecutor {
+			executor: crate::cel::Executor::new_empty(),
+			filter: &filter,
+			fields: &fields,
+			otlp_filter: &otlp_filter,
+			otlp_fields: &otlp_fields,
+			metric_fields: &metric_fields,
+			database_fields: &database_fields,
+		};
+
+		tracer.send(&request, &Timestamp::now(), &cel_exec, None, &[]);
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		assert_eq!(spans.len(), 1);
+		assert_eq!(spans[0].status, Status::error(""));
+		assert!(
+			spans[0]
+				.attributes
+				.contains(&KeyValue::new("error.type", "500"))
+		);
+	}
+
+	#[test]
+	fn request_span_classifies_http_and_gen_ai_errors() {
+		for (status, gen_ai, expected, expected_error_type) in [
+			(http::StatusCode::OK, false, Status::default(), None),
+			(
+				http::StatusCode::TOO_MANY_REQUESTS,
+				false,
+				Status::default(),
+				None,
+			),
+			(
+				http::StatusCode::TOO_MANY_REQUESTS,
+				true,
+				Status::default(),
+				None,
+			),
+			(
+				http::StatusCode::INTERNAL_SERVER_ERROR,
+				false,
+				Status::error(""),
+				Some("500"),
+			),
+		] {
+			let mut request = test_request_log();
+			request.status = Some(status);
+			if gen_ai {
+				request.llm_request = Some(test_llm_request());
+			}
+			let mut attributes = Vec::new();
+
+			assert_eq!(
+				request_span_status(&request, &mut attributes),
+				expected,
+				"status {status}, gen_ai {gen_ai}",
+			);
+			assert_eq!(
+				attributes
+					.iter()
+					.find(|attribute| attribute.key.as_str() == "error.type")
+					.map(|attribute| attribute.value.as_str().into_owned()),
+				expected_error_type.map(str::to_string),
+			);
+		}
+	}
+
+	#[test]
+	fn request_span_preserves_recorded_error_and_custom_error_type() {
+		let mut request = test_request_log();
+		request.error = Some("connection failed".to_string());
+		request.reason = Some(crate::proxy::ProxyResponseReason::UpstreamFailure);
+		let mut attributes = vec![KeyValue::new("error.type", "custom")];
+
+		assert_eq!(
+			request_span_status(&request, &mut attributes),
+			Status::error("connection failed"),
+		);
+		assert_eq!(
+			attributes
+				.iter()
+				.filter(|attribute| attribute.key.as_str() == "error.type")
+				.count(),
+			1,
+		);
+		assert!(attributes.contains(&KeyValue::new("error.type", "custom")));
 	}
 
 	#[test]

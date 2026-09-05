@@ -142,6 +142,13 @@ impl LLMResponseAmend {
 			default_tokens,
 			exec,
 		);
+		if self.request.descriptors.is_empty() {
+			debug!(
+				domain = %self.request.domain,
+				"skipping remote rate limit token amendment because no descriptors remain"
+			);
+			return;
+		}
 		tokio::task::spawn(async move {
 			let _ = self.base.check_internal(self.client, self.request).await;
 		});
@@ -153,6 +160,7 @@ impl LLMResponseAmend {
 		default_tokens: i64,
 		exec: &Executor,
 	) {
+		let domain = request.domain.clone();
 		let descriptors = std::mem::take(&mut request.descriptors);
 		request.descriptors = descriptors
 			.into_iter()
@@ -160,9 +168,27 @@ impl LLMResponseAmend {
 			.filter_map(|(mut d, cost)| {
 				d.hits_addend = if let Some(cost) = cost.as_ref() {
 					// if there is a cost expression, run it.
-					let Some(cost) = exec.eval(cost).ok().and_then(|v| v.as_unsigned().ok()) else {
-						// Failed to evaluate: skip descriptor
-						return None;
+					let value = match exec.eval(cost) {
+						Ok(value) => value,
+						Err(error) => {
+							debug!(
+								domain = %domain,
+								%error,
+								"remote rate limit token cost expression evaluation failed; skipping descriptor"
+							);
+							return None;
+						},
+					};
+					let cost = match value.as_unsigned() {
+						Ok(cost) => cost,
+						Err(error) => {
+							debug!(
+								domain = %domain,
+								%error,
+								"remote rate limit token cost must be a non-negative integer; skipping descriptor"
+							);
+							return None;
+						},
 					};
 					Some(cost as u64)
 				} else {

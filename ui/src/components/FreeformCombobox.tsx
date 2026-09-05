@@ -21,10 +21,9 @@ export function FreeformCombobox(props: {
 	const popoverRef = useDismissiblePopover<HTMLDivElement>(open, () => setOpen(false));
 	const filteredOptions = useMemo(() => {
 		const query = browseAll ? '' : props.value.trim().toLowerCase();
-		const options = query
+		return query
 			? props.options.filter(option => option.toLowerCase().includes(query))
 			: props.options;
-		return options.slice(0, 80);
 	}, [browseAll, props.options, props.value]);
 
 	useEffect(() => {

@@ -22,13 +22,6 @@ pub struct Catalog {
 
 impl Catalog {
 	pub fn validate(&self) -> anyhow::Result<()> {
-		if self
-			.metadata
-			.as_ref()
-			.is_some_and(|metadata| metadata.source.is_empty())
-		{
-			anyhow::bail!("metadata source is required");
-		}
 		for (pid, p) in &self.providers {
 			for (mid, m) in &p.models {
 				let mut prev: Option<u64> = None;
@@ -77,8 +70,9 @@ impl Catalog {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CatalogMetadata {
-	/// Upstream used to generate this base catalog, such as `models.dev`.
-	pub source: String,
+	/// Legacy provenance field retained for compatibility with older generated catalogs.
+	#[serde(default, skip_serializing)]
+	pub source: Option<String>,
 	/// Time the generated catalog contents last changed.
 	pub generated_at: DateTime<Utc>,
 }

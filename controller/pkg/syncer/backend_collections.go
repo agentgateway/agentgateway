@@ -16,6 +16,9 @@ func AgwBackendReferencesCollection(agwPlugins plugins.AgwPlugin, krtopts krtuti
 	var allReferences []krt.Collection[*plugins.PolicyAttachment]
 
 	for _, plugin := range agwPlugins.ContributesBackends {
+		if plugin.BuildReferences == nil {
+			continue
+		}
 		refs := plugin.BuildReferences()
 		if refs != nil {
 			allReferences = append(allReferences, refs)

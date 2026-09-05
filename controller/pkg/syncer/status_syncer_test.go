@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	syncstatus "github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
@@ -159,6 +160,26 @@ func (c *inferencePoolStatusClient) Get(_, _ string) *inf.InferencePool {
 func (c *inferencePoolStatusClient) UpdateStatus(pool *inf.InferencePool) (*inf.InferencePool, error) {
 	c.updated = pool.DeepCopy()
 	return pool, nil
+}
+
+func TestMergeXBackendAncestorStatuses_SortsOurEntriesOnly(t *testing.T) {
+	our := "agentgateway.dev/agentgateway"
+	other := "other.example/controller"
+	existing := []gwxv1a1.BackendAncestorStatus{
+		{ControllerName: gwv1.GatewayController(other), AncestorRef: gwv1.ParentReference{Name: "b"}},
+		{ControllerName: gwv1.GatewayController(other), AncestorRef: gwv1.ParentReference{Name: "a"}},
+	}
+	desired := []gwxv1a1.BackendAncestorStatus{
+		{ControllerName: gwv1.GatewayController(our), AncestorRef: gwv1.ParentReference{Name: "z"}},
+		{ControllerName: gwv1.GatewayController(our), AncestorRef: gwv1.ParentReference{Name: "m"}},
+	}
+
+	out := mergeXBackendAncestorStatuses(our, existing, desired)
+	require.Len(t, out, 4)
+	require.Equal(t, "b", string(out[0].AncestorRef.Name))
+	require.Equal(t, "a", string(out[1].AncestorRef.Name))
+	require.Equal(t, "m", string(out[2].AncestorRef.Name))
+	require.Equal(t, "z", string(out[3].AncestorRef.Name))
 }
 
 func TestMergeGatewayAddresses_SortsOutput(t *testing.T) {

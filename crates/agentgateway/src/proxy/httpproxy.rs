@@ -71,6 +71,45 @@ struct SelectedRouteChain {
 	backend: Option<RouteBackendReference>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RequestProtocol {
+	Http,
+	Mcp,
+	AI,
+}
+
+fn classify_request_protocol(req: &Request, backend: &Backend) -> RequestProtocol {
+	match backend {
+		// Only JSON-RPC traffic is handled as MCP; transport and discovery endpoints
+		// continue through the ordinary HTTP path.
+		Backend::MCP(_, _)
+			if req.method() == ::http::Method::POST
+				&& req.uri().path() != "/sse"
+				&& !mcp::auth::is_well_known_endpoint(req.uri().path())
+				&& !req.uri().path().ends_with("client-registration")
+				&& !crate::http::is_grpc_request(req) =>
+		{
+			RequestProtocol::Mcp
+		},
+		Backend::AI(_, _) | Backend::LLMRouter(_, _) => RequestProtocol::AI,
+		_ => RequestProtocol::Http,
+	}
+}
+
+async fn set_mcp_cel_context(req: &mut Request, backend: &McpBackend) {
+	let Ok(http::BodyInspection::Complete(body)) = http::inspect_body(req).await else {
+		return;
+	};
+	let Ok(message) = serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&body) else {
+		return;
+	};
+	let info = mcp::MCPInfo::from_request(req.headers(), &message, backend);
+	req.extensions_mut().insert(info);
+	req
+		.extensions_mut()
+		.insert(mcp::CachedRequest::new(body, message));
+}
+
 fn select_route_chain(
 	inputs: &ProxyInputs,
 	target_address: SocketAddr,
@@ -116,6 +155,9 @@ fn select_route_chain(
 
 pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingPolicy) {
 	// Merge filter/fields into config for this request
+	if lp.preset.is_some() {
+		log.access_log_preset = lp.preset;
+	}
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();
 	}
@@ -213,10 +255,6 @@ async fn apply_request_policies(
 	pol
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
-		.await?;
-	pol
-		.substrate_egress
-		.apply_without_response("substrate egress", c, l, req, rp.headers())
 		.await?;
 	pol
 		.substrate_ingress
@@ -783,6 +821,8 @@ impl HTTPProxy {
 			.map(|s| s.to_string())
 			.snapshot_on_err(log, &mut req)?;
 		log.host = Some(host.clone());
+		log.server_port = req.uri().port_u16();
+		log.scheme = req.uri().scheme().cloned();
 		log.method = Some(req.method().clone());
 		log.path = Some(
 			if req.method() == ::http::Method::CONNECT && req.uri().path().is_empty() {
@@ -922,7 +962,7 @@ impl HTTPProxy {
 			service: selected_route_chain
 				.routes
 				.last()
-				.and_then(|r| r.service_key.as_ref()),
+				.and_then(|route| route.service_key.as_ref()),
 			routes: selected_route_chain
 				.routes
 				.iter()
@@ -936,6 +976,37 @@ impl HTTPProxy {
 		let explicit_route_retry = !route_policies.retry.is_empty();
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
+		// Resolve early so request policies can use the backend protocol. Defer any
+		// error because backendless policies such as redirects and direct responses
+		// must still be allowed to terminate the request successfully.
+		let selected_backend = selected_route_chain
+			.backend
+			.map(|backend| resolve_backend(backend, self.inputs.as_ref()))
+			.transpose();
+		let request_protocol = selected_backend
+			.as_ref()
+			.ok()
+			.and_then(Option::as_ref)
+			.map(|backend| classify_request_protocol(&req, &backend.backend.backend))
+			.unwrap_or(RequestProtocol::Http);
+		if let Ok(Some(selected_backend)) = selected_backend.as_ref() {
+			let backend = &selected_backend.backend.backend;
+			let info = backend.backend_info();
+			req.extensions_mut().insert(BackendContext {
+				name: info.backend_name,
+				backend_type: info.backend_type,
+				protocol: backend
+					.backend_protocol()
+					.unwrap_or(cel::BackendProtocol::http),
+			});
+			if request_protocol == RequestProtocol::Mcp
+				&& log.cel.ctx().needs_mcp()
+				&& let Backend::MCP(_, backend) = backend
+			{
+				set_mcp_cel_context(&mut req, backend).await;
+			}
+		}
+
 		let policy_client = self.policy_client().with_parent(&req);
 		let route_retry = apply_request_policies(
 			&route_policies,
@@ -945,13 +1016,7 @@ impl HTTPProxy {
 			response_policies,
 		)
 		.await;
-		let route_retry = mcp::maybe_convert_mcp_error(
-			route_retry,
-			self.inputs.as_ref(),
-			selected_route_chain.backend.as_ref(),
-			&mut req,
-		)
-		.await;
+		let route_retry = mcp::maybe_convert_mcp_error(route_retry, request_protocol, &mut req).await;
 		let route_retry = route_retry.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
 		// With no explicit retry policy, Substrate only retries stale actor assignments.
@@ -961,12 +1026,11 @@ impl HTTPProxy {
 				.get::<http::substrate::SubstrateRequestState>()
 				.is_some();
 
-		let selected_backend_ref = selected_route_chain
-			.backend
+		// No policy terminated the request, so forwarding now requires a valid backend.
+		let selected_backend = selected_backend
+			.snapshot_on_err(log, &mut req)?
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
-		let selected_backend =
-			resolve_backend(selected_backend_ref, self.inputs.as_ref()).snapshot_on_err(log, &mut req)?;
 		let backend_policies = Arc::new(get_backend_policies(
 			self.inputs.as_ref(),
 			&selected_backend.backend,
@@ -974,6 +1038,16 @@ impl HTTPProxy {
 			Some(route_path.clone()),
 		));
 		backend_policies.register_cel_expressions(log.cel.ctx());
+		// Backend-policy expressions are registered only after route policies run, so they may
+		// introduce an MCP dependency that was not known at the earlier parsing point. Avoid
+		// parsing again when a route-policy expression already required MCP context.
+		if request_protocol == RequestProtocol::Mcp
+			&& log.cel.ctx().needs_mcp()
+			&& req.extensions().get::<mcp::MCPInfo>().is_none()
+			&& let Backend::MCP(_, backend) = &selected_backend.backend.backend
+		{
+			set_mcp_cel_context(&mut req, backend).await;
+		}
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 		log.health_policy = backend_policies.health.clone();
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
@@ -1045,7 +1119,10 @@ impl HTTPProxy {
 		} else {
 			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
 		};
-		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
+		let retry_backoff = retries
+			.as_ref()
+			.and_then(|r| r.backoff)
+			.or_else(|| substrate_default_retry.then_some(std::time::Duration::from_millis(100)));
 		let request_timeout = response_policies
 			.timeout
 			.as_ref()
@@ -2294,7 +2371,23 @@ async fn make_backend_call(
 		},
 		_ => (backend, base_policies),
 	};
-	Box::pin(handle_substrate_backend_selection(&mut req, backend)).await?;
+	let substrate_selection = Box::pin(handle_substrate_backend_selection(&mut req, backend))
+		.await
+		.map(|_| ());
+	if let Some(state) = req
+		.extensions()
+		.get::<http::substrate::SubstrateRequestState>()
+	{
+		let resume = state.resume_disposition().as_str();
+		let actor_uid = state.actor_uid();
+		let route_duration = state.route_duration();
+		log.add(|l| {
+			l.ate_router_resume = Some(resume);
+			l.ate_actor_uid = actor_uid;
+			l.ate_router_route_duration = Some(route_duration);
+		});
+	}
+	substrate_selection?;
 
 	log.add(|l| {
 		l.backend_info = Some(backend.backend_info());
@@ -2556,6 +2649,16 @@ async fn make_backend_call(
 				.as_ref()
 				.map(|policy| policy.resolve_route(req.uri().path()))
 				.unwrap_or(llm::RouteType::Completions);
+			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
+				&& let Some(provider_model) = llm.provider.override_model()
+			{
+				Box::pin(model_router::rewrite_multipart_request_model(
+					&mut req,
+					provider_model.as_str(),
+				))
+				.await
+				.map_err(ProxyResponse::DirectResponse)?;
+			}
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			let llm_provider = llm.provider.provider().to_string();
 			dtrace::trace(|trace| {
@@ -2908,10 +3011,7 @@ async fn make_backend_call(
 	let resp = upstream.call(call).await;
 	if let Some(span) = span.as_deref_mut() {
 		match &resp {
-			Ok(response) => span.add_attribute(KeyValue::new(
-				"http.status",
-				i64::from(response.status().as_u16()),
-			)),
+			Ok(response) => span.record_http_client_status(response.status()),
 			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}
@@ -4725,12 +4825,7 @@ impl PolicyClient {
 			return;
 		};
 		match result {
-			Ok(response) => {
-				span.add_attribute(KeyValue::new(
-					"http.status",
-					i64::from(response.status().as_u16()),
-				));
-			},
+			Ok(response) => span.record_http_client_status(response.status()),
 			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}

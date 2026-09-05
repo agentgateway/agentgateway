@@ -1140,7 +1140,7 @@ mod tests {
 	fn newest_generated_base_wins_before_user_overlays() {
 		let generated = |day: u8, rate: &str| {
 			model::from_json(&format!(
-				r#"{{"metadata":{{"source":"models.dev","generatedAt":"2026-08-{day:02}T00:00:00Z"}},"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{rate}"}}}}}}}}}}}}"#
+				r#"{{"metadata":{{"generatedAt":"2026-08-{day:02}T00:00:00Z"}},"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{rate}"}}}}}}}}}}}}"#
 			))
 			.unwrap()
 		};

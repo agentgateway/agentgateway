@@ -483,6 +483,9 @@ message Azure {
     AzureDeveloperImplicit developer_implicit = 2;
     AzureImplicit implicit = 3;
   }
+  // Scopes requested for the Azure access token. If unset, the scope is
+  // inferred from the backend hostname.
+  repeated string scopes = 4;
 }
 
 // Explicit AWS credentials configuration
@@ -790,6 +793,11 @@ message FrontendPolicySpec {
   }
   // Logging configuration policy
   message Logging {
+    enum Preset {
+      PRESET_UNSPECIFIED = 0;
+      OTEL = 1;
+    }
+
     // CEL expression to filter out logs. If unset, all logs are considered.
     optional string filter = 1;
 
@@ -833,6 +841,9 @@ message FrontendPolicySpec {
 
     // Optional OTLP access log export configuration.
     OtlpAccessLog otlp_access_log = 3;
+
+    // Default stdout access log fields. Unspecified keeps the human-oriented legacy fields.
+    Preset preset = 4;
   }
 
   message Tracing {
@@ -1536,6 +1547,13 @@ message BackendPolicySpec {
     BackendReference endpoint_picker = 1;
     FailureMode failure_mode = 2;
   }
+  // Configures best-effort session affinity using an existing request attribute.
+  // Requests with the same value are consistently load balanced to the same healthy backend,
+  // but may be remapped when the available backends change.
+  message SessionAffinity {
+    // CEL expression evaluated against request state. It must return a string or bytes value.
+    string source = 1;
+  }
   message Eviction {
     // Base time to evict (e.g. 3s, 10s). The actual ejection time equals
     // base * times_ejected, growing without cap via multiplicative backoff.
@@ -1772,6 +1790,7 @@ message BackendPolicySpec {
     // AI failover providers use this to preserve the authorization policy of
     // the concrete model from which the provider was lowered.
     TrafficPolicySpec.RBAC authorization = 19;
+    SessionAffinity session_affinity = 20;
   }
 }
 

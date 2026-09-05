@@ -1,4 +1,4 @@
-use ::http::{HeaderName, HeaderValue, header};
+use ::http::{HeaderName, HeaderValue};
 use agent_core::prelude::Strng;
 use serde_with::serde_as;
 use tracing::debug;
@@ -359,8 +359,7 @@ impl Transformation {
 		if let Some(b) = &cfg.body {
 			// If it fails, set an empty body
 			let b = eval_body(&r, b, request).unwrap_or_default();
-			*r.body() = http::Body::from(b);
-			r.headers().remove(&header::CONTENT_LENGTH);
+			r.replace_body_bytes(b);
 		}
 	}
 
