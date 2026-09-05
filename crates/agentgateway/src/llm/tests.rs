@@ -125,6 +125,47 @@ fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 }
 
 #[test]
+fn non_gemini_completions_egress_strips_vertex_thought_signature() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let translation = provider
+		.chat_translation(InputFormat::Completions, Some("gpt-5"), None)
+		.expect("OpenAI completions translation");
+	let req: types::completions::Request = serde_json::from_value(json!({
+		"model": "gpt-5",
+		"messages": [
+			{
+				"role": "assistant",
+				"content": null,
+				"tool_calls": [{
+					"id": "call-1__thought__signature",
+					"type": "function",
+					"function": {"name": "lookup", "arguments": "{}"}
+				}]
+			},
+			{"role": "tool", "tool_call_id": "call-1__thought__signature", "content": "ok"}
+		]
+	}))
+	.unwrap();
+	let rendered = translation
+		.render_request(
+			types::ChatRequest::Completions(req),
+			&ChatRequestContext {
+				catalog: None,
+				provider: &provider,
+				headers: &HeaderMap::new(),
+				prompt_caching: None,
+			},
+		)
+		.expect("render");
+	let out: Value = serde_json::from_slice(&rendered.body).expect("valid body");
+	assert_eq!(out["messages"][0]["tool_calls"][0]["id"], "call-1");
+	assert_eq!(out["messages"][1]["tool_call_id"], "call-1");
+}
+
+#[test]
 fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	let provider = custom_provider(custom::ProviderFormat::GenerateContent);
 
