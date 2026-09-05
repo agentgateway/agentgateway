@@ -47,19 +47,14 @@ fn strip_thought_signature_fields(value: &mut serde_json::Value) {
 		return;
 	};
 
-	let item_type = object
-		.get("type")
-		.and_then(serde_json::Value::as_str)
-		.map(str::to_owned);
-	if (item_type.as_deref() == Some("function") && object.contains_key("function"))
-		|| item_type.as_deref() == Some("tool_use")
-	{
+	let item_type = object.get("type").and_then(serde_json::Value::as_str);
+	let is_function_call = item_type == Some("function") && object.contains_key("function");
+	let is_tool_use = item_type == Some("tool_use");
+	let is_responses_call = matches!(item_type, Some("function_call" | "function_call_output"));
+	if is_function_call || is_tool_use {
 		strip_string_field(object, "id");
 	}
-	if matches!(
-		item_type.as_deref(),
-		Some("function_call" | "function_call_output")
-	) {
+	if is_responses_call {
 		strip_string_field(object, "call_id");
 	}
 	if object.get("role").and_then(serde_json::Value::as_str) == Some("tool") {
@@ -131,7 +126,12 @@ mod tests {
 						"function": {"name": "lookup", "arguments": "{}"}
 					}]
 				},
-				{"role": "tool", "tool_call_id": "call-1__thought__signature"}
+				{
+					"role": "tool",
+					"tool_call_id": "call-1__thought__signature",
+					"tool_use_id": "call-2__thought__signature",
+					"toolUseId": "call-3__thought__signature"
+				}
 			],
 			"input": [
 				{"type": "function_call", "call_id": "call-1__thought__signature"},
@@ -145,6 +145,8 @@ mod tests {
 		let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 		assert_eq!(body["messages"][0]["tool_calls"][0]["id"], "call-1");
 		assert_eq!(body["messages"][1]["tool_call_id"], "call-1");
+		assert_eq!(body["messages"][1]["tool_use_id"], "call-2");
+		assert_eq!(body["messages"][1]["toolUseId"], "call-3");
 		assert_eq!(body["input"][0]["call_id"], "call-1");
 		assert_eq!(body["input"][1]["call_id"], "call-1");
 		assert_eq!(body["content"][0]["id"], "call-1");
