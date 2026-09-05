@@ -6,6 +6,7 @@ use azure_identity::UserAssignedId;
 use secrecy::{ExposeSecret, SecretString};
 use tracing::trace;
 
+use super::BackendAuthError;
 use crate::serdes::schema;
 use crate::util::ErrorContext;
 use crate::{apply, client, ser_redact};
@@ -157,6 +158,13 @@ struct DefaultAzureCredential {
 	cached_source_index: AtomicUsize,
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+struct AzureCredentialChainError {
+	provider_failure: bool,
+	message: String,
+}
+
 impl std::fmt::Debug for DefaultAzureCredential {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_str("DefaultAzureCredential")
@@ -194,23 +202,67 @@ impl TokenCredential for DefaultAzureCredential {
 			}
 		}
 
-		Err(azure_core::Error::with_message_fn(
+		let provider_failure = errors.iter().any(is_azure_credential_provider_error);
+		let mut message = format!(
+			"DefaultAzureCredential: all credentials failed:\n{}",
+			format_credential_errors(&errors)
+		);
+		if !self.construction_errors.is_empty() {
+			message.push_str(&format!(
+				"\nCredentials excluded because they could not be constructed:\n{}",
+				self.construction_errors.join("\n")
+			));
+		}
+		Err(azure_core::Error::new(
 			azure_core::error::ErrorKind::Credential,
-			|| {
-				let mut msg = format!(
-					"DefaultAzureCredential: all credentials failed:\n{}",
-					format_credential_errors(&errors)
-				);
-				if !self.construction_errors.is_empty() {
-					msg.push_str(&format!(
-						"\nCredentials excluded because they could not be constructed:\n{}",
-						self.construction_errors.join("\n")
-					));
-				}
-				msg
+			AzureCredentialChainError {
+				provider_failure,
+				message,
 			},
 		))
 	}
+}
+
+fn is_azure_credential_provider_error(error: &azure_core::Error) -> bool {
+	let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+	while let Some(error) = current {
+		if let Some(chain_error) = error.downcast_ref::<AzureCredentialChainError>() {
+			return chain_error.provider_failure;
+		}
+		if let Some(azure_error) = error.downcast_ref::<azure_core::Error>() {
+			match azure_error.kind() {
+				azure_core::error::ErrorKind::HttpResponse { status, .. } => {
+					return status.is_server_error()
+						|| matches!(
+							*status,
+							azure_core::http::StatusCode::RequestTimeout
+								| azure_core::http::StatusCode::TooManyRequests
+						);
+				},
+				azure_core::error::ErrorKind::Connection | azure_core::error::ErrorKind::DataConversion => {
+					return true;
+				},
+				_ => {},
+			}
+		}
+		current = error.source();
+	}
+	false
+}
+
+fn classify_azure_token_error(error: azure_core::Error) -> BackendAuthError {
+	if is_azure_credential_provider_error(&error) {
+		BackendAuthError::CredentialProvider(error.into())
+	} else {
+		BackendAuthError::Local(error.into())
+	}
+}
+
+fn azure_bearer_header(token: &str) -> Result<http::HeaderValue, BackendAuthError> {
+	let mut header = http::HeaderValue::from_str(&format!("Bearer {token}"))
+		.map_err(|error| BackendAuthError::CredentialProvider(error.into()))?;
+	header.set_sensitive(true);
+	Ok(header)
 }
 
 fn format_credential_errors(errors: &[azure_core::Error]) -> String {
@@ -470,7 +522,7 @@ pub(super) async fn get_token(
 	client: &client::Client,
 	auth: &AzureAuth,
 	target: &crate::types::agent::Target,
-) -> anyhow::Result<http::HeaderValue> {
+) -> Result<http::HeaderValue, BackendAuthError> {
 	let cache = match &auth.kind {
 		AzureAuthKind::Implicit { cached_cred, .. } => &cached_cred.0,
 		AzureAuthKind::DeveloperImplicit { cached_cred, .. } => &cached_cred.0,
@@ -478,21 +530,85 @@ pub(super) async fn get_token(
 	};
 	let cred = cache
 		.get_or_try_init(|| build_credential(client, auth))
-		.await?
+		.await
+		.map_err(BackendAuthError::Local)?
 		.clone();
 	let scopes = scopes_for_target(auth, target);
 	let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, cred.get_token(&scopes, None))
 		.await
-		.ctx("Azure token fetch timed out after 5s")??;
-	let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
-	hv.set_sensitive(true);
+		.ctx("Azure token fetch timed out after 5s")
+		.map_err(BackendAuthError::CredentialProvider)?
+		.map_err(classify_azure_token_error)?;
+	let hv = azure_bearer_header(token.token.secret())?;
 	trace!("attached Azure token (scope: {})", scopes[0]);
 	Ok(hv)
 }
 
 #[cfg(test)]
 mod tests {
+	use azure_core::error::ErrorKind;
+	use azure_core::http::StatusCode;
+
 	use super::*;
+
+	#[test]
+	fn classifies_azure_token_errors() {
+		let http_error = |status| {
+			azure_core::Error::with_message(
+				ErrorKind::HttpResponse {
+					status,
+					error_code: None,
+					raw_response: None,
+				},
+				"test error",
+			)
+		};
+		let cases = [
+			(
+				azure_core::Error::with_message(ErrorKind::Credential, "test error"),
+				false,
+			),
+			(http_error(StatusCode::BadRequest), false),
+			(http_error(StatusCode::Unauthorized), false),
+			(http_error(StatusCode::RequestTimeout), true),
+			(http_error(StatusCode::TooManyRequests), true),
+			(http_error(StatusCode::InternalServerError), true),
+			(
+				azure_core::Error::with_message(ErrorKind::Connection, "test error"),
+				true,
+			),
+			(
+				azure_core::Error::with_message(ErrorKind::DataConversion, "test error"),
+				true,
+			),
+			(
+				azure_core::Error::new(
+					ErrorKind::Credential,
+					AzureCredentialChainError {
+						provider_failure: true,
+						message: "test error".to_string(),
+					},
+				),
+				true,
+			),
+		];
+
+		for (error, expect_provider) in cases {
+			let classified = classify_azure_token_error(error);
+			assert_eq!(
+				matches!(classified, BackendAuthError::CredentialProvider(_)),
+				expect_provider
+			);
+		}
+	}
+
+	#[test]
+	fn classifies_malformed_azure_token_as_provider_failure() {
+		assert!(matches!(
+			azure_bearer_header("invalid\ntoken"),
+			Err(BackendAuthError::CredentialProvider(_))
+		));
+	}
 
 	#[test]
 	fn configured_scopes_are_siblings_of_the_auth_kind() {

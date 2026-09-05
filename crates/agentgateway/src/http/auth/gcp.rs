@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, anyhow};
 use google_cloud_auth::credentials::{self, AccessTokenCredentials};
+use google_cloud_auth::errors::CredentialsError;
 use headers::HeaderMapExt;
 use http::HeaderMap;
 use once_cell::sync::Lazy;
@@ -12,6 +13,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tracing::trace;
 
+use super::BackendAuthError;
 use crate::serdes::{FileOrInline, schema};
 use crate::types::agent::Target;
 use crate::util::ErrorContext;
@@ -334,7 +336,7 @@ pub(super) async fn insert_token(
 	g: &GcpAuth,
 	call_target: &Target,
 	hm: &mut HeaderMap,
-) -> anyhow::Result<()> {
+) -> Result<(), BackendAuthError> {
 	let token = match g {
 		GcpAuth::IdToken {
 			audience,
@@ -344,7 +346,11 @@ pub(super) async fn insert_token(
 			let aud = match (audience, call_target) {
 				(Some(aud), _) => Cow::Borrowed(aud.as_str()),
 				(None, Target::Hostname(host, _)) => Cow::Owned(format!("https://{host}")),
-				_ => anyhow::bail!("idToken auth requires a hostname target or explicit audience"),
+				_ => {
+					return Err(BackendAuthError::Local(anyhow!(
+						"idToken auth requires a hostname target or explicit audience"
+					)));
+				},
 			};
 			match credential {
 				Some(credential) => tokio::time::timeout(
@@ -352,30 +358,81 @@ pub(super) async fn insert_token(
 					explicit_id_token(aud.as_ref(), credential),
 				)
 				.await
-				.ctx("GCP ID token fetch timed out after 5s")??,
+				.ctx("GCP ID token fetch timed out after 5s")
+				.map_err(BackendAuthError::CredentialProvider)?
+				.map_err(classify_gcp_credential_error)?,
 				None => tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, fetch_id_token(aud.as_ref()))
 					.await
-					.ctx("GCP ID token fetch timed out after 5s")??,
+					.ctx("GCP ID token fetch timed out after 5s")
+					.map_err(BackendAuthError::CredentialProvider)?
+					.map_err(classify_gcp_credential_error)?,
 			}
 		},
 		GcpAuth::AccessToken { credential, .. } => match credential {
 			Some(credential) => {
 				tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, explicit_access_token(credential))
 					.await
-					.ctx("GCP access token fetch timed out after 5s")??
+					.ctx("GCP access token fetch timed out after 5s")
+					.map_err(BackendAuthError::CredentialProvider)?
+					.map_err(classify_gcp_credential_error)?
 			},
 			None => {
-				let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, creds()?.access_token())
+				let credentials = creds().map_err(BackendAuthError::Local)?;
+				let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, credentials.access_token())
 					.await
-					.ctx("GCP access token fetch timed out after 5s")??;
+					.ctx("GCP access token fetch timed out after 5s")
+					.map_err(BackendAuthError::CredentialProvider)?
+					.map_err(|error| classify_gcp_credential_error(error.into()))?;
 				token.token
 			},
 		},
 	};
-	let header = headers::Authorization::bearer(&token)?;
-	hm.typed_insert(header);
+	insert_provider_token(&token, hm)?;
 	trace!("attached GCP token");
 	Ok(())
+}
+
+fn insert_provider_token(token: &str, headers: &mut HeaderMap) -> Result<(), BackendAuthError> {
+	let header = headers::Authorization::bearer(token)
+		.map_err(|error| BackendAuthError::CredentialProvider(error.into()))?;
+	headers.typed_insert(header);
+	Ok(())
+}
+
+fn classify_gcp_credential_error(error: anyhow::Error) -> BackendAuthError {
+	if error
+		.downcast_ref::<CredentialsError>()
+		.is_some_and(CredentialsError::is_transient)
+	{
+		BackendAuthError::CredentialProvider(error)
+	} else {
+		BackendAuthError::Local(error)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn classifies_gcp_credential_errors() {
+		for (transient, expect_provider) in [(true, true), (false, false)] {
+			let error = anyhow::Error::new(CredentialsError::from_msg(transient, "test error"));
+			let classified = classify_gcp_credential_error(error);
+			assert_eq!(
+				matches!(classified, BackendAuthError::CredentialProvider(_)),
+				expect_provider
+			);
+		}
+	}
+
+	#[test]
+	fn classifies_malformed_gcp_token_as_provider_failure() {
+		assert!(matches!(
+			insert_provider_token("invalid\ntoken", &mut HeaderMap::new()),
+			Err(BackendAuthError::CredentialProvider(_))
+		));
+	}
 }
 
 // The SDK doesn't make it easy to use idtokens with user ADC. See https://github.com/googleapis/google-cloud-rust/issues/4215

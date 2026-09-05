@@ -8,7 +8,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use tracing::{debug, trace, warn};
 
-use super::AuthorizationLocation;
+use super::{AuthorizationLocation, BackendAuthError};
 use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT};
@@ -382,14 +382,24 @@ impl OAuthTokenExchangeAuth {
 		req: &mut Request,
 		access_token: &str,
 	) -> Result<bool, ProxyError> {
+		::http::HeaderValue::try_from(access_token)
+			.map_err(|error| BackendAuthError::CredentialProvider(error.into()))?;
+
 		// Replace the original credentials with the backend's.
-		self.subject_token.source.remove(req)?;
+		self
+			.subject_token
+			.source
+			.remove(req)
+			.map_err(|error| BackendAuthError::Local(error.into()))?;
 
 		if let Some(actor) = &self.actor_token {
-			actor.source.remove(req)?;
+			actor
+				.source
+				.remove(req)
+				.map_err(|error| BackendAuthError::Local(error.into()))?;
 		}
 
-		self.authorization_location.insert(req, access_token)?;
+		super::insert_local_auth(&self.authorization_location, req, access_token)?;
 
 		Ok(true)
 	}

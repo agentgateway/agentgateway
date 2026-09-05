@@ -7,6 +7,7 @@ use aws_config::sts::AssumeRoleProvider;
 use aws_config::{BehaviorVersion, SdkConfig};
 use aws_credential_types::Credentials;
 use aws_credential_types::provider::ProvideCredentials;
+use aws_credential_types::provider::error::CredentialsError;
 use aws_sigv4::http_request::{SignableBody, sign};
 use aws_sigv4::sign::v4::SigningParams;
 use aws_types::region::Region;
@@ -15,6 +16,7 @@ use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::{Mutex, OnceCell};
 
+use super::BackendAuthError;
 use crate::llm::bedrock::AwsRegion;
 use crate::util::ErrorContext;
 use crate::*;
@@ -555,18 +557,25 @@ fn signing_service_name<'a>(req: &'a http::Request, aws_auth: &'a AwsAuth) -> &'
 pub(super) async fn sign_request(
 	req: &mut http::Request,
 	aws_auth: &AwsAuth,
-) -> anyhow::Result<()> {
+) -> Result<(), BackendAuthError> {
 	// Resolve any dynamic (CEL) session tags and session name first, while the
 	// request is intact. The CEL context reads headers and extensions (JWT
 	// claims, etc.), which the proxy keeps on the request until after late
 	// backend auth. Fails closed: an expression that cannot produce a valid
 	// value rejects the request.
 	let resolved_tags = match aws_auth.assume_role() {
-		Some(assume_role) if assume_role.tags.has_dynamic() => Some(assume_role.tags.resolve(req)?),
+		Some(assume_role) if assume_role.tags.has_dynamic() => Some(
+			assume_role
+				.tags
+				.resolve(req)
+				.map_err(BackendAuthError::Local)?,
+		),
 		_ => None,
 	};
 	let resolved_session_name = match aws_auth.assume_role().and_then(|a| a.session_name.as_ref()) {
-		Some(name @ AwsSessionName::Dynamic { .. }) => Some(name.resolve(req)?),
+		Some(name @ AwsSessionName::Dynamic { .. }) => {
+			Some(name.resolve(req).map_err(BackendAuthError::Local)?)
+		},
 		_ => None,
 	};
 	let lim = crate::http::buffer_limit(req);
@@ -588,9 +597,13 @@ pub(super) async fn sign_request(
 			} else {
 				// Fall back to region from AWS config
 				let config = Box::pin(sdk_config()).await;
-				config.region().map(|r| r.as_ref()).ok_or(anyhow::anyhow!(
-					"No region found in AWS config or request extensions"
-				))?
+				config
+					.region()
+					.map(|r| r.as_ref())
+					.ok_or(anyhow::anyhow!(
+						"No region found in AWS config or request extensions"
+					))
+					.map_err(BackendAuthError::Local)?
 			}
 		},
 	};
@@ -604,7 +617,9 @@ pub(super) async fn sign_request(
 		)),
 	)
 	.await
-	.ctx("AWS credential fetch timed out after 5s")??
+	.ctx("AWS credential fetch timed out after 5s")
+	.map_err(BackendAuthError::CredentialProvider)?
+	.map_err(classify_aws_credentials_error)?
 	.into();
 
 	let service = signing_service_name(req, aws_auth);
@@ -617,10 +632,13 @@ pub(super) async fn sign_request(
 		.name(service)
 		.time(std::time::SystemTime::now())
 		.settings(aws_sigv4::http_request::SigningSettings::default())
-		.build()?
+		.build()
+		.map_err(|error| BackendAuthError::Local(error.into()))?
 		.into();
 
-	let body = http::read_body_with_limit(orig_body, lim).await?;
+	let body = http::read_body_with_limit(orig_body, lim)
+		.await
+		.map_err(|error| BackendAuthError::Local(error.into()))?;
 	let signable_request = aws_sigv4::http_request::SignableRequest::new(
 		req.method().as_str(),
 		req.uri().to_string().replace("http://", "https://"),
@@ -635,19 +653,41 @@ pub(super) async fn sign_request(
 			.filter(|(k, _)| should_sign_header(k)),
 		// SignableBody::UnsignedPayload,
 		SignableBody::Bytes(body.as_ref()),
-	)?;
+	)
+	.map_err(|error| BackendAuthError::Local(error.into()))?;
 
-	let (signature, _sig) = sign(signable_request, &signing_params)?.into_parts();
+	let (signature, _sig) = sign(signable_request, &signing_params)
+		.map_err(|error| BackendAuthError::Local(error.into()))?
+		.into_parts();
 	signature.apply_to_request_http1x(req);
 
 	req.headers_mut().insert(
 		http::header::CONTENT_LENGTH,
-		http::HeaderValue::from_str(&format!("{}", body.as_ref().len()))?,
+		http::HeaderValue::from_str(&format!("{}", body.as_ref().len()))
+			.map_err(|error| BackendAuthError::Local(error.into()))?,
 	);
 	*req.body_mut() = http::Body::from(body);
 
 	trace!("signed AWS request");
 	Ok(())
+}
+
+fn classify_aws_credentials_error(error: anyhow::Error) -> BackendAuthError {
+	let is_provider_failure = error
+		.downcast_ref::<CredentialsError>()
+		.is_some_and(|error| {
+			matches!(
+				error,
+				CredentialsError::ProviderTimedOut(_)
+					| CredentialsError::ProviderError(_)
+					| CredentialsError::Unhandled(_)
+			)
+		});
+	if is_provider_failure {
+		BackendAuthError::CredentialProvider(error)
+	} else {
+		BackendAuthError::Local(error)
+	}
 }
 
 fn should_sign_header(name: &str) -> bool {
@@ -830,6 +870,37 @@ fn credentials_valid(creds: &Credentials) -> bool {
 			.duration_since(SystemTime::now())
 			.is_ok_and(|ttl| ttl > ASSUMED_CREDENTIAL_REFRESH_BUFFER),
 		None => true,
+	}
+}
+
+#[cfg(test)]
+mod credential_error_tests {
+	use super::*;
+
+	#[test]
+	fn classifies_aws_credential_errors() {
+		let local = [
+			CredentialsError::not_loaded(std::io::Error::other("test error")),
+			CredentialsError::invalid_configuration(std::io::Error::other("test error")),
+		];
+		let provider = [
+			CredentialsError::provider_timed_out(Duration::from_secs(1)),
+			CredentialsError::provider_error(std::io::Error::other("test error")),
+			CredentialsError::unhandled(std::io::Error::other("test error")),
+		];
+
+		for error in local {
+			assert!(matches!(
+				classify_aws_credentials_error(error.into()),
+				BackendAuthError::Local(_)
+			));
+		}
+		for error in provider {
+			assert!(matches!(
+				classify_aws_credentials_error(error.into()),
+				BackendAuthError::CredentialProvider(_)
+			));
+		}
 	}
 }
 
