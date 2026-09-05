@@ -904,7 +904,8 @@ fn non_streaming_response_is_forwarded_and_usage_extracted() {
 			&body,
 			&crate::llm::ChatResponseContext {
 				model: "gemini-2.5-flash",
-				tool_name_map: None,
+				buffer_limit: 1024 * 1024,
+				provider_state: None,
 			},
 		)
 		.expect("response should parse");
@@ -937,9 +938,10 @@ async fn streaming_response_is_forwarded_byte_for_byte() {
 				logger: Default::default(),
 				model: "gemini-2.5-flash".to_string(),
 				log_content: Default::default(),
-				tool_name_map: None,
+				provider_state: None,
 			},
 		)
+		.expect("stream translation")
 		.into_body()
 		.collect()
 		.await
@@ -962,6 +964,7 @@ async fn count_tokens_errors_pass_through_unchanged() {
 	let buffered = BufferedResponse {
 		parts,
 		bytes: body.clone(),
+		buffer_limit: 1024 * 1024,
 	};
 
 	let resp = provider

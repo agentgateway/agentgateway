@@ -3650,7 +3650,6 @@ mod tests {
 		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
 		resolved_workload_target_hostname, select_service_target_port, spiffe_backend_alpns,
 	};
-
 	#[test]
 	fn spiffe_backend_alpns_explicit_alpn_is_fixed() {
 		// An explicit ALPN list is used verbatim and is NOT narrowed by a per-request version hint.
@@ -3696,7 +3695,6 @@ mod tests {
 			vec![b"h2".to_vec()]
 		);
 	}
-
 	use crate::http::filters::AutoHostname;
 	use crate::llm::policy::{
 		PromptGuard, PromptGuardStreamingMode, RegexRule, RegexRules, RequestRejection, ResponseGuard,
