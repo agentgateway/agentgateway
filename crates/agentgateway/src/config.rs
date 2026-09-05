@@ -302,6 +302,31 @@ pub fn parse_config(
 		.unwrap_or_default();
 	let termination_max_deadline =
 		parse_duration("CONNECTION_TERMINATION_DEADLINE")?.or(raw.connection_termination_deadline);
+	let termination_max_deadline = match termination_max_deadline {
+		Some(period) => period,
+		None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
+			// We want our drain period to be less than Kubernetes, so we can use the last few seconds
+			// to abruptly terminate anything remaining before Kubernetes SIGKILLs us.
+			// We could just take the SIGKILL, but it is even more abrupt (TCP RST vs RST_STREAM/TLS close, etc)
+			// Note: we do this in code instead of in configuration so that we can use downward API to expose this variable
+			// if it is added to Kubernetes (https://github.com/kubernetes/kubernetes/pull/125746).
+			Some(secs) => Duration::from_secs(cmp::max(
+				if secs > 10 {
+					secs - 5
+				} else {
+					// If the grace period is really low give less buffer
+					secs - 1
+				},
+				1,
+			)),
+			None => Duration::from_secs(5),
+		},
+	};
+	if termination_min_deadline > termination_max_deadline {
+		anyhow::bail!(
+			"connectionMinTerminationDeadline ({termination_min_deadline:?}) must not exceed connectionTerminationDeadline ({termination_max_deadline:?})"
+		);
+	}
 	let tracing_env = resolve_tracing_env_overrides().ctx("invalid tracing environment overrides")?;
 
 	let mut otlp_headers = raw
@@ -423,26 +448,7 @@ pub fn parse_config(
 		backend: raw.backend,
 		admin_runtime_handle: None,
 		budget_policy: Arc::new(crate::http::budget::BudgetPolicy::default()),
-		termination_max_deadline: match termination_max_deadline {
-				Some(period) => period,
-				None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
-				// We want our drain period to be less than Kubernetes, so we can use the last few seconds
-				// to abruptly terminate anything remaining before Kubernetes SIGKILLs us.
-				// We could just take the SIGKILL, but it is even more abrupt (TCP RST vs RST_STREAM/TLS close, etc)
-				// Note: we do this in code instead of in configuration so that we can use downward API to expose this variable
-				// if it is added to Kubernetes (https://github.com/kubernetes/kubernetes/pull/125746).
-				Some(secs) => Duration::from_secs(cmp::max(
-					if secs > 10 {
-						secs - 5
-					} else {
-						// If the grace period is really low give less buffer
-						secs - 1
-					},
-					1,
-				)),
-				None => Duration::from_secs(5),
-			},
-		},
+		termination_max_deadline,
 		tracing: raw
 			.tracing
 			.clone()
@@ -1252,6 +1258,51 @@ config:
 			Some(&"legacy".to_string())
 		);
 		assert_eq!(tracing.protocol, trc::Protocol::Grpc);
+	}
+
+	#[test]
+	fn min_termination_deadline_must_not_exceed_max() {
+		let _env_lock = lock_env();
+
+		let err = parse_config(
+			r#"
+config:
+  connectionMinTerminationDeadline: 10s
+  connectionTerminationDeadline: 5s
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("min above max should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("must not exceed connectionTerminationDeadline"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn min_termination_deadline_must_not_exceed_derived_max() {
+		let _env_lock = lock_env();
+
+		let err = parse_config(
+			r#"
+config:
+  connectionMinTerminationDeadline: 10s
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("min above the default 5s max should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("must not exceed connectionTerminationDeadline"),
+			"unexpected error: {err}"
+		);
 	}
 
 	#[test]
