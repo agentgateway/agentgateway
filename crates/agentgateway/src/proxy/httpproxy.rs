@@ -1137,10 +1137,7 @@ impl HTTPProxy {
 		} else {
 			Err(body)
 		};
-		let substrate_state = head
-			.extensions
-			.get::<http::substrate::SubstrateRequestState>()
-			.cloned();
+		let mut substrate_state = None;
 		let mut next = match body {
 			Ok(retry) => Some(retry),
 			Err(body) => {
@@ -1157,12 +1154,13 @@ impl HTTPProxy {
 						Some(route_path.clone()),
 						response_policies,
 						req,
+						&mut substrate_state,
 					)
 					.await;
 				// The body cannot be retried, but future requests must not reuse this assignment.
 				let stale_assignment = is_stale_assignment(&response);
-				if stale_assignment {
-					substrate_state.as_ref().inspect(|state| state.evict());
+				if stale_assignment && let Some(state) = substrate_state.as_mut() {
+					state.evict();
 				}
 				return if stale_assignment && substrate_state.is_some() {
 					Ok(http::substrate::stale_assignment_unavailable())
@@ -1186,6 +1184,9 @@ impl HTTPProxy {
 				next = Some(this.clone());
 			}
 			let mut head = head.clone();
+			if let Some(state) = substrate_state.as_ref() {
+				head.extensions.insert(state.clone());
+			}
 			if n > 0 {
 				log.retry_attempt = Some(n);
 				head.headers.insert(
@@ -1204,12 +1205,13 @@ impl HTTPProxy {
 					Some(route_path.clone()),
 					response_policies,
 					req,
+					&mut substrate_state,
 				)
 				.await;
 			let stale_assignment = is_stale_assignment(&res);
-			if stale_assignment {
+			if stale_assignment && let Some(state) = substrate_state.as_mut() {
 				// Clear the request-local assignment and evict the same generation from the shared cache.
-				substrate_state.as_ref().inspect(|state| state.evict());
+				state.evict();
 			}
 			let retryable = !last
 				&& if substrate_default_retry {
@@ -1508,6 +1510,7 @@ impl HTTPProxy {
 		route_path: Option<RoutePath<'_>>,
 		response_policies: &mut ResponsePolicies,
 		mut req: Request,
+		substrate_state: &mut Option<http::substrate::SubstrateRequestState>,
 	) -> Result<Response, SnapshottedProxyResponse> {
 		if let Some(backend_timeout) = response_policies
 			.timeout
@@ -1534,6 +1537,7 @@ impl HTTPProxy {
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
+			substrate_state,
 		)
 		.assert_size::<{ 7 * 1024 }>();
 
@@ -2315,6 +2319,7 @@ async fn make_backend_call(
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
+	substrate_state: &mut Option<http::substrate::SubstrateRequestState>,
 ) -> Result<Response, ProxyResponse> {
 	let resolved_backend;
 	let backend = if let Backend::LLMRouter(_, router) = backend {
@@ -2371,16 +2376,15 @@ async fn make_backend_call(
 		},
 		_ => (backend, base_policies),
 	};
-	let substrate_selection = Box::pin(handle_substrate_backend_selection(&mut req, backend))
-		.await
-		.map(|_| ());
+	let substrate_selection = Box::pin(handle_substrate_backend_selection(&mut req, backend)).await;
 	if let Some(state) = req
 		.extensions()
 		.get::<http::substrate::SubstrateRequestState>()
 	{
-		let resume = state.resume_disposition().as_str();
+		*substrate_state = Some(state.clone());
+		let resume = state.resume.as_str();
 		let actor_uid = state.actor_uid();
-		let route_duration = state.route_duration();
+		let route_duration = state.route_duration;
 		log.add(|l| {
 			l.ate_router_resume = Some(resume);
 			l.ate_actor_uid = actor_uid;
@@ -3107,11 +3111,11 @@ async fn make_backend_call(
 async fn handle_substrate_backend_selection(
 	req: &mut Request,
 	backend: &Backend,
-) -> Result<Option<http::substrate::SubstrateRequestState>, ProxyResponse> {
-	if let Some(state) = req
+) -> Result<(), ProxyResponse> {
+	if req
 		.extensions()
 		.get::<http::substrate::SubstrateRequestState>()
-		.cloned()
+		.is_some()
 	{
 		if !matches!(backend, Backend::Dynamic(_, _)) {
 			return Err(
@@ -3121,11 +3125,16 @@ async fn handle_substrate_backend_selection(
 				.into(),
 			);
 		}
+	}
+	if let Some(state) = req
+		.extensions_mut()
+		.get_mut::<http::substrate::SubstrateRequestState>()
+	{
 		let resolved_target = Box::pin(state.resolve_target()).await?;
 		req
 			.extensions_mut()
 			.insert(DynamicBackendOverride(resolved_target));
-		Ok(Some(state))
+		Ok(())
 	} else if req.extensions().get::<DynamicBackendOverride>().is_some()
 		&& !matches!(backend, Backend::Dynamic(_, _))
 	{
@@ -3134,7 +3143,7 @@ async fn handle_substrate_backend_selection(
 				.into(),
 		)
 	} else {
-		Ok(None)
+		Ok(())
 	}
 }
 
@@ -4978,6 +4987,7 @@ impl PolicyClient {
 		let mut req = Some(req);
 		Box::pin(async move {
 			let mut response_policies = Default::default();
+			let mut substrate_state = None;
 			let call = Box::pin(
 				make_backend_call(
 					self.inputs.clone(),
@@ -4990,6 +5000,7 @@ impl PolicyClient {
 					// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
 					None,
 					&mut response_policies,
+					&mut substrate_state,
 				)
 				.assert_size::<{ 7 * 1024 }>(),
 			);

@@ -1,7 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use ::http::StatusCode;
@@ -150,9 +150,9 @@ pub(crate) struct SubstrateRequestState {
 	actor_port: u16,
 	ingress: SubstrateIngress,
 	client: PolicyClient,
-	current: Arc<Mutex<Option<CachedAssignment>>>,
-	resume: Arc<Mutex<ResumeDisposition>>,
-	route_duration: Arc<Mutex<Duration>>,
+	current: Option<CachedAssignment>,
+	pub(crate) resume: ResumeDisposition,
+	pub(crate) route_duration: Duration,
 }
 
 fn default_cache_ttl() -> Duration {
@@ -469,37 +469,15 @@ impl SubstrateRequestState {
 		)
 	}
 
-	pub(crate) fn resume_disposition(&self) -> ResumeDisposition {
-		*self.resume.lock().unwrap()
-	}
-
 	pub(crate) fn actor_uid(&self) -> Option<String> {
 		self
 			.current
-			.lock()
-			.unwrap()
 			.as_ref()
 			.and_then(|current| current.uid.clone())
 	}
 
-	pub(crate) fn route_duration(&self) -> Duration {
-		*self.route_duration.lock().unwrap()
-	}
-
-	/// Policy events describe a single resolution attempt; this describes the request. A
-	/// stale-assignment retry can therefore log `triggered` while its last event says `none`.
-	fn record_resume(&self, observed: ResumeDisposition) {
-		let mut resume = self.resume.lock().unwrap();
-		*resume = (*resume).max(observed);
-	}
-
-	fn record_route_duration(&self, observed: Duration) {
-		let mut duration = self.route_duration.lock().unwrap();
-		*duration = duration.saturating_add(observed);
-	}
-
-	pub(crate) async fn resolve_target(&self) -> Result<Target, crate::proxy::ProxyResponse> {
-		if let Some(current) = self.current.lock().unwrap().as_ref() {
+	pub(crate) async fn resolve_target(&mut self) -> Result<Target, crate::proxy::ProxyResponse> {
+		if let Some(current) = self.current.as_ref() {
 			pol_event!(
 				TRACE_POLICY_KIND,
 				Severity::Info,
@@ -518,7 +496,7 @@ impl SubstrateRequestState {
 		}
 		let started = tokio::time::Instant::now();
 		let resolution = self.ingress.resolve(&self.client, self.actor.clone()).await;
-		self.record_route_duration(started.elapsed());
+		self.route_duration = self.route_duration.saturating_add(started.elapsed());
 		match resolution {
 			Ok(Resolved {
 				assignment,
@@ -540,8 +518,10 @@ impl SubstrateRequestState {
 						"target": target.to_string(),
 					}),
 				);
-				self.record_resume(resume);
-				*self.current.lock().unwrap() = Some(assignment);
+				// Policy events describe a single resolution attempt; this describes the request. A
+				// stale-assignment retry can therefore log `triggered` while its last event says `none`.
+				self.resume = self.resume.max(resume);
+				self.current = Some(assignment);
 				Ok(Target::Address(target))
 			},
 			Err((error, source)) => {
@@ -584,8 +564,8 @@ impl SubstrateRequestState {
 		}
 	}
 
-	pub(crate) fn evict(&self) {
-		if let Some(current) = self.current.lock().unwrap().take() {
+	pub(crate) fn evict(&mut self) {
+		if let Some(current) = self.current.take() {
 			self
 				.ingress
 				.cache
@@ -683,9 +663,9 @@ impl RequestPolicyTrait for SubstrateIngress {
 			actor_port,
 			ingress: self.clone(),
 			client: client.clone(),
-			current: Arc::new(Mutex::new(None)),
-			resume: Arc::new(Mutex::new(ResumeDisposition::None)),
-			route_duration: Arc::new(Mutex::new(Duration::ZERO)),
+			current: None,
+			resume: ResumeDisposition::None,
+			route_duration: Duration::ZERO,
 		});
 		Ok(PolicyResponse::default())
 	}
