@@ -133,7 +133,7 @@ gen: generate-apis generate-schema format
 
 .PHONY: refresh-model-catalog
 refresh-model-catalog:
-	go run ./controller/cmd/agctl catalog import --source models.dev --exclude-providers openrouter --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty
+	go run ./controller/cmd/agctl catalog import --source models.dev,aws-bedrock-mantle --exclude-providers openrouter --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty
 
 .PHONY: generate-schema
 generate-schema:

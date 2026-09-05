@@ -3,8 +3,15 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-/// Well-known chat-format tags, mirroring [`crate::ChatFormat::tag`].
+/// Well-known catalog tags: AWS Bedrock endpoint tags, plus format tags mirroring [`crate::ChatFormat::tag`].
 pub mod tags {
+	// AWS Bedrock endpoint tags.
+
+	/// AWS Bedrock model is served on the Runtime (Converse/Invoke) endpoint.
+	pub const RUNTIME: &str = "runtime";
+	/// AWS Bedrock model is served on the Mantle endpoint.
+	pub const MANTLE: &str = "mantle";
+
 	// Request formats.
 
 	/// Accepts Anthropic's native Messages request format.
@@ -49,6 +56,7 @@ pub(crate) fn anthropic_thinking_capabilities(
 
 /// Read handle to the model catalog; implemented in agentgateway on the cost `ModelCatalog`.
 pub trait ModelCatalogHandle: Send + Sync {
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool;
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>>;
 }
 
@@ -75,6 +83,10 @@ impl TestCatalog {
 
 #[cfg(test)]
 impl ModelCatalogHandle for TestCatalog {
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
+		self.models.get(model_id).is_some_and(|t| t.contains(tag))
+	}
+
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>> {
 		self.models.get(model_id).map(|t| Arc::new(t.clone()))
 	}

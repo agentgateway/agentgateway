@@ -923,6 +923,9 @@ pub struct LocalLLMParams {
 	api_key: Option<SecretFromFile>,
 	/// AWS region to use for the Bedrock provider.
 	aws_region: Option<Strng>,
+	/// Which Bedrock endpoint to prefer (Runtime vs Mantle).
+	#[serde(default)]
+	bedrock_endpoint_preference: crate::llm::bedrock::BedrockEndpointPreference,
 	/// Google Cloud region to use for the Vertex AI provider.
 	vertex_region: Option<Strng>,
 	/// Google Cloud project ID to use for the Vertex AI provider.
@@ -962,6 +965,7 @@ impl LocalLLMModels {
 			model: model_override,
 			api_key: None,
 			aws_region: None,
+			bedrock_endpoint_preference: crate::llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
 			vertex_region: None,
 			vertex_project: None,
 			azure_resource_name: None,
@@ -4442,6 +4446,7 @@ async fn convert_llm_config(
 					region: p.aws_region.context("bedrock requires aws_region")?,
 					guardrail_identifier: None,
 					guardrail_version: None,
+					endpoint_preference: p.bedrock_endpoint_preference,
 				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Azure) => {
