@@ -2088,3 +2088,100 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		"unexpected error: {err}"
 	);
 }
+
+#[test]
+fn test_reasoning_content_block_deserializes_redacted_content() {
+	// xAI Grok 4.6 on Bedrock Converse returns encrypted reasoning as
+	// { "reasoningContent": { "redactedContent": "<base64>" } } in
+	// non-streaming responses; this must parse, not 502.
+	let block: types::bedrock::ContentBlock = serde_json::from_value(json!({
+		"reasoningContent": { "redactedContent": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo" }
+	}))
+	.expect("redactedContent variant must deserialize");
+	match block {
+		types::bedrock::ContentBlock::ReasoningContent(
+			types::bedrock::ReasoningContentBlock::Redacted { redacted_content },
+		) => {
+			assert_eq!(
+				redacted_content,
+				"cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo"
+			);
+		},
+		other => panic!("expected Redacted variant, got {other:?}"),
+	}
+
+	// The pre-existing variants must still take priority.
+	let structured: types::bedrock::ContentBlock = serde_json::from_value(json!({
+		"reasoningContent": { "reasoningText": { "text": "thinking...", "signature": "sig" } }
+	}))
+	.expect("structured variant");
+	assert!(matches!(
+		structured,
+		types::bedrock::ContentBlock::ReasoningContent(
+			types::bedrock::ReasoningContentBlock::Structured { .. }
+		)
+	));
+}
+
+#[test]
+fn test_redacted_thinking_round_trips_to_bedrock_request() {
+	// A redacted_thinking block returned to the client must be forwarded back
+	// to Bedrock as ReasoningContentBlock::Redacted on the next turn, so
+	// multi-turn conversations can replay the opaque payload.
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+	let payload = "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo";
+	let req = messages::typed::Request {
+		model: "us.xai.grok-4.6".to_string(),
+		messages: vec![
+			messages::typed::Message {
+				role: messages::typed::Role::User,
+				content: vec![messages::typed::ContentBlock::Text(
+					messages::typed::ContentTextBlock {
+						text: "Say ok.".to_string(),
+						citations: None,
+						cache_control: None,
+					},
+				)],
+			},
+			messages::typed::Message {
+				role: messages::typed::Role::Assistant,
+				content: vec![
+					messages::typed::ContentBlock::RedactedThinking {
+						data: payload.to_string(),
+					},
+					messages::typed::ContentBlock::Text(messages::typed::ContentTextBlock {
+						text: "ok".to_string(),
+						citations: None,
+						cache_control: None,
+					}),
+				],
+			},
+		],
+		max_tokens: 100,
+		metadata: None,
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_k: None,
+		top_p: None,
+		tools: None,
+		tool_choice: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let assistant_content = &out.messages[1].content;
+	match &assistant_content[0] {
+		types::bedrock::ContentBlock::ReasoningContent(
+			types::bedrock::ReasoningContentBlock::Redacted { redacted_content },
+		) => assert_eq!(redacted_content, payload),
+		other => panic!("expected Redacted reasoning block first, got {other:?}"),
+	}
+}

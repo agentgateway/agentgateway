@@ -1765,7 +1765,14 @@ pub mod from_messages {
 						false,
 					),
 					messages::ContentBlock::WebSearchToolResult { .. } => continue,
-					messages::ContentBlock::RedactedThinking { .. } => continue,
+					// Round-trip encrypted reasoning so multi-turn clients can replay the
+					// opaque payload Bedrock returned (see to_anthropic's redacted_thinking).
+					messages::ContentBlock::RedactedThinking { data } => (
+						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Redacted {
+							redacted_content: data,
+						}),
+						false,
+					),
 					messages::ContentBlock::Document(_) => continue,
 					messages::ContentBlock::SearchResult(_) => continue,
 					messages::ContentBlock::ServerToolUse { .. } => continue,
@@ -3818,6 +3825,9 @@ impl ConverseResponseAdapter {
 							reasoning_text.text.clone(),
 							reasoning_text.signature.clone(),
 						),
+						// Match the streaming path: encrypted reasoning surfaces as an
+						// opaque marker, never the ciphertext.
+						bedrock::ReasoningContentBlock::Redacted { .. } => ("[REDACTED]".to_string(), None),
 						bedrock::ReasoningContentBlock::Simple { text } => (text.clone(), None),
 					};
 					reasoning_content = Some(text);
@@ -3945,6 +3955,8 @@ impl ConverseResponseAdapter {
 						bedrock::ReasoningContentBlock::Structured { reasoning_text } => {
 							reasoning_text.text.clone()
 						},
+						// Match the streaming path's opaque marker for encrypted reasoning.
+						bedrock::ReasoningContentBlock::Redacted { .. } => "[REDACTED]".to_string(),
 						bedrock::ReasoningContentBlock::Simple { text } => text.clone(),
 					};
 					text_parts.push(responsest::OutputMessageContent::OutputText(
@@ -4070,6 +4082,13 @@ impl ConverseResponseAdapter {
 							reasoning_text.text.clone(),
 							reasoning_text.signature.clone().unwrap_or_default(),
 						),
+						// Encrypted reasoning maps to Anthropic's native redacted_thinking
+						// block, preserving the opaque payload for turn replay.
+						bedrock::ReasoningContentBlock::Redacted { redacted_content } => {
+							return Some(messagest::ContentBlock::RedactedThinking {
+								data: redacted_content.clone(),
+							});
+						},
 						bedrock::ReasoningContentBlock::Simple { text } => (text.clone(), String::new()),
 					};
 					Some(messagest::ContentBlock::Thinking {
