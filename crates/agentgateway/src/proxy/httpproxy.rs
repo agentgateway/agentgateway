@@ -719,6 +719,12 @@ impl HTTPProxy {
 			Ok(_) => ProxyResponseReason::Upstream,
 			Err(e) => e.as_reason(),
 		};
+		let mut is_upstream_response = reason == ProxyResponseReason::Upstream;
+		let response_idle_timeout = response_policies
+			.timeout
+			.as_ref()
+			.and_then(|t| t.response_idle_timeout)
+			.filter(|d| !d.is_zero());
 		let mut resp = ret.unwrap_or_else(|err| match err {
 			ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
 			ProxyResponse::DirectResponse(dr) => *dr,
@@ -733,7 +739,6 @@ impl HTTPProxy {
 				});
 			}
 		}
-
 		if let Some(l) = log.as_mut() {
 			l.cel.ctx().maybe_buffer_response_body(&mut resp).await;
 		}
@@ -742,14 +747,17 @@ impl HTTPProxy {
 			.apply(
 				&mut resp,
 				log.as_mut().unwrap(),
-				reason == ProxyResponseReason::Upstream,
+				is_upstream_response,
 			)
 			.await
 		{
 			Ok(_) => resp,
-			Err(e) => match e {
-				ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
-				ProxyResponse::DirectResponse(dr) => *dr,
+			Err(e) => {
+				is_upstream_response = false;
+				match e {
+					ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
+					ProxyResponse::DirectResponse(dr) => *dr,
+				}
 			},
 		};
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
@@ -780,6 +788,11 @@ impl HTTPProxy {
 				.await
 				.unwrap_or_else(|e| e.into_response_with_grpc(is_grpc_request))
 		} else {
+			if is_upstream_response
+				&& let Some(idle_timeout) = response_idle_timeout
+			{
+				resp = http::timeout::apply_response_idle_timeout(resp, idle_timeout);
+			}
 			resp.map(move |b| http::Body::new(LogBody::new(b, log)))
 		}
 	}

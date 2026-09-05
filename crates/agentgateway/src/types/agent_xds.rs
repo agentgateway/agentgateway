@@ -2504,6 +2504,11 @@ fn traffic_policy_from_proto(
 				.as_ref()
 				.map(|d| (*d).try_into())
 				.transpose()?,
+			response_idle_timeout: t
+				.response_idle
+				.as_ref()
+				.map(|d| (*d).try_into())
+				.transpose()?,
 		}),
 		Some(tps::Kind::Retry(r)) => {
 			let attempts = std::num::NonZeroU8::new(r.attempts as u8)

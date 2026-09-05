@@ -265,7 +265,7 @@ spec:
   traffic:
     buffer: {}
 ---
-_err: 'at least one of the fields in [request] must be set'
+_err: 'at least one of the fields in [request responseIdle] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

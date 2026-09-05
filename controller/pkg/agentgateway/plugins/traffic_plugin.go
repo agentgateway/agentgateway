@@ -1028,16 +1028,20 @@ func processAPIKeyAuthenticationPolicy(
 }
 
 func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) *api.Policy {
-	if timeout.Request == nil {
+	if timeout.Request == nil && timeout.ResponseIdle == nil {
 		return nil
 	}
 	request := durationToProto(timeout.Request)
+	responseIdle := durationToProto(timeout.ResponseIdle)
 	timeoutPolicy := &api.Policy{
 		Key:  basePolicyName + timeoutPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{Request: request}},
+				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{
+					Request:      request,
+					ResponseIdle: responseIdle,
+				}},
 			},
 		},
 	}

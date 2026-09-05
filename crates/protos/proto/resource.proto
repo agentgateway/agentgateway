@@ -329,6 +329,7 @@ enum Protocol {
 message Timeout {
   google.protobuf.Duration request = 1;
   google.protobuf.Duration backend_request = 2;
+  google.protobuf.Duration response_idle = 3;
 }
 
 message Retry {
