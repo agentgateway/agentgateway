@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use agent_core::metrics::{
 	CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay, MetricRegistry,
+	OptionallyEncode,
 };
 use agent_core::strng::RichStrng;
 use agent_core::version;
@@ -123,6 +124,36 @@ pub struct GenAILabelsTokenUsage {
 
 	#[prometheus(flatten)]
 	pub common: EncodeArc<GenAILabels>,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct ErrorTypeLabel {
+	pub error_type: GenAIErrorType,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq)]
+pub enum GenAIErrorType {
+	Other,
+}
+
+impl prometheus_client::encoding::EncodeLabelValue for GenAIErrorType {
+	fn encode(
+		&self,
+		encoder: &mut prometheus_client::encoding::LabelValueEncoder,
+	) -> Result<(), std::fmt::Error> {
+		match self {
+			Self::Other => "_OTHER".encode(encoder),
+		}
+	}
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct GenAIRequestDurationLabels {
+	#[prometheus(flatten)]
+	pub common: EncodeArc<GenAILabels>,
+
+	#[prometheus(flatten)]
+	pub error: OptionallyEncode<ErrorTypeLabel>,
 }
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
@@ -271,7 +302,7 @@ pub struct Metrics {
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
 	pub gen_ai_cost: Family<GenAILabels, counter::Counter<f64>>,
-	pub gen_ai_request_duration: Histogram<GenAILabels>,
+	pub gen_ai_request_duration: Histogram<GenAIRequestDurationLabels>,
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
 
@@ -392,11 +423,10 @@ impl Metrics {
 			gen_ai_cost.clone(),
 		);
 
-		// TODO: add error attribute if it ends with an error
 		let gen_ai_request_duration = histogram_family(histogram_mode, &REQUEST_DURATION_BUCKET);
 		registry.register(
 			"gen_ai_server_request_duration",
-			"Duration of generative AI request",
+			"Duration of a generative AI request in seconds; failed operations have error_type=\"_OTHER\" and successful operations omit the label",
 			gen_ai_request_duration.clone(),
 		);
 
