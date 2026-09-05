@@ -503,6 +503,63 @@ pub async fn test_apply_strict_missing_token() {
 	assert!(matches!(res, Err(super::TokenError::Missing)));
 }
 
+// RFC 6750 §3: a request with no credentials is challenged, but without an error code.
+#[tokio::test]
+pub async fn test_missing_token_response_has_bare_bearer_challenge() {
+	let jwt = super::Jwt {
+		mode: super::Mode::Strict,
+		providers: vec![],
+		location: bearer_location(),
+		preserve_token: false,
+	};
+
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let mut req_log = make_min_req_log();
+
+	let err = jwt
+		.apply(Some(&mut req_log), &mut req)
+		.await
+		.expect_err("strict mode should reject a request without a token");
+	let resp = crate::proxy::ProxyError::JwtAuthenticationFailure(err).into_response_with_grpc(false);
+
+	assert_eq!(resp.status(), ::http::StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		resp
+			.headers()
+			.get(::http::header::WWW_AUTHENTICATE)
+			.unwrap(),
+		"Bearer"
+	);
+}
+
+// RFC 6750 §3.1: a rejected token is reported as `invalid_token` so clients know to refresh.
+#[test]
+pub fn test_expired_token_response_reports_invalid_token() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	let (jwt, kid, issuer, allowed_aud) = setup_test_jwt();
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	let expired = build_unsigned_token(kid, issuer, allowed_aud, now - 100_000);
+
+	let err = jwt
+		.validate_claims(&expired)
+		.expect_err("an expired token should be rejected");
+	assert!(matches!(err, TokenError::Invalid(_)));
+	let resp = crate::proxy::ProxyError::JwtAuthenticationFailure(err).into_response_with_grpc(false);
+
+	assert_eq!(resp.status(), ::http::StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		resp
+			.headers()
+			.get(::http::header::WWW_AUTHENTICATE)
+			.unwrap(),
+		r#"Bearer error="invalid_token""#
+	);
+}
+
 // Permissive mode: allow requests without a token and do not attach claims
 #[tokio::test]
 pub async fn test_apply_permissive_no_token_ok() {

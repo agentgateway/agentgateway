@@ -527,6 +527,17 @@ impl ProxyError {
 			}
 		}
 
+		// Add an authentication challenge for JWT failures. RFC 6750 §3 requires a `Bearer`
+		// challenge on the `401` returned by a bearer-protected resource; without it a client
+		// cannot tell that it should acquire or refresh a token. The MCP variant below carries
+		// its own challenge, pointing at the protected resource metadata.
+		if let ProxyError::JwtAuthenticationFailure(err) = &self {
+			rb = rb.header(
+				hyper::header::WWW_AUTHENTICATE,
+				HeaderValue::from_static(err.challenge()),
+			);
+		}
+
 		if let Some(grpc_status) = grpc_status {
 			return rb
 				.status(StatusCode::OK)
