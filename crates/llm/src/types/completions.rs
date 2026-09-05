@@ -476,7 +476,9 @@ impl super::RequestType for Request {
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
-		self.messages = messages.into_iter().map(convert_message).collect();
+		for (existing, incoming) in self.messages.iter_mut().zip(messages) {
+			set_request_message_text(existing, incoming.content.as_str());
+		}
 	}
 
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
@@ -1373,5 +1375,90 @@ mod tests {
 		});
 
 		assert!(llm_response.output_messages.is_none());
+	}
+}
+
+#[cfg(test)]
+mod repro_3331 {
+	use super::*;
+	use crate::types::RequestType;
+
+	// Reproduction for agentgateway#3331: a promptGuard webhook masking content in ONE
+	// message must not strip tool-call structure from the OTHER messages in the same request.
+	#[test]
+	fn repro_3331_completions_preserves_tool_structure() {
+		let json = r#"{"model":"m","messages":[
+			{"role":"system","content":"You help Alex Smith."},
+			{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"get_schema","arguments":"{}"}}]},
+			{"role":"tool","content":"{\"ok\":true}","tool_call_id":"call_1","name":"get_schema"}
+		]}"#;
+		let mut req: Request = serde_json::from_str(json).unwrap();
+		let mut view = req.get_messages();
+		view[0].content = strng::new("You help <REDACTED>.");
+		req.set_messages(view);
+		assert_eq!(req.messages[0].message_text(), Some("You help <REDACTED>."));
+		assert_eq!(
+			req.messages[1].tool_calls.as_ref().map(|t| t.len()),
+			Some(1),
+			"assistant tool_calls must survive a mask on an unrelated message"
+		);
+		assert!(
+			req.messages[1].content.is_none(),
+			"tool-only assistant content must stay absent, not become an empty string"
+		);
+		assert_eq!(
+			req.messages[2].tool_call_id.as_deref(),
+			Some("call_1"),
+			"tool_call_id must survive a mask on an unrelated message"
+		);
+		assert_eq!(
+			req.messages[2].name.as_deref(),
+			Some("get_schema"),
+			"tool message name must survive a mask on an unrelated message"
+		);
+	}
+}
+
+fn set_request_message_text(msg: &mut RequestMessage, text: &str) {
+	match &mut msg.content {
+		None => {},
+		Some(Content::Text(existing)) => {
+			if existing.as_str() != text {
+				*existing = text.to_string();
+			}
+		},
+		Some(Content::Array(parts)) => {
+			let joined = parts
+				.iter()
+				.filter_map(|p| p.text.as_deref())
+				.collect::<Vec<_>>()
+				.join(" ");
+			if joined.as_str() != text {
+				set_content_parts_text(parts, text);
+			}
+		},
+	}
+}
+
+fn set_content_parts_text(parts: &mut Vec<ContentPart>, text: &str) {
+	let mut replaced = false;
+	parts.retain_mut(|p| {
+		if p.text.is_some() {
+			let keep = !replaced && !text.is_empty();
+			replaced = true;
+			if keep {
+				p.text = Some(text.to_string());
+			}
+			keep
+		} else {
+			true
+		}
+	});
+	if !replaced && !text.is_empty() {
+		parts.push(ContentPart {
+			r#type: "text".to_string(),
+			text: Some(text.to_string()),
+			rest: Default::default(),
+		});
 	}
 }

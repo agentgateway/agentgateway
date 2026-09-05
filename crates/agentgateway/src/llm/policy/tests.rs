@@ -342,11 +342,14 @@ fn moderation_flagged_records_guardrail_info() {
 fn webhook_reject_records_guardrail_info() {
 	use crate::llm::policy::webhook::{RejectAction, RequestAction};
 
-	let (outcome, detail) = Policy::webhook_request_outcome(RequestAction::Reject(RejectAction {
-		body: "blocked".to_string(),
-		status_code: 403,
-		reason: Some("policy violation".to_string()),
-	}))
+	let (outcome, detail) = Policy::webhook_request_outcome(
+		RequestAction::Reject(RejectAction {
+			body: "blocked".to_string(),
+			status_code: 403,
+			reason: Some("policy violation".to_string()),
+		}),
+		&[],
+	)
 	.unwrap();
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 	assert_eq!(
@@ -3849,4 +3852,85 @@ fn test_zero_width_pattern_is_a_noop() {
 			"messages": [{"role": "user", "content": "hello world"}]
 		})
 	);
+}
+
+#[test]
+fn webhook_mask_rejects_message_count_mismatch() {
+	use crate::llm::policy::webhook::{MaskAction, MaskActionBody, PromptMessages, RequestAction};
+	let original = ["system".to_string(), "user".to_string()];
+	let body = MaskActionBody::PromptMessages(
+		serde_json::from_value::<PromptMessages>(serde_json::json!({
+			"messages": [{"role": "system", "content": "masked"}]
+		}))
+		.unwrap(),
+	);
+	let err = Policy::webhook_request_outcome(
+		RequestAction::Mask(MaskAction { body, reason: None }),
+		&original,
+	)
+	.err()
+	.unwrap();
+	assert!(err.to_string().contains("expected 2"), "{err}");
+}
+
+#[test]
+fn webhook_mask_rejects_role_change() {
+	use crate::llm::policy::webhook::{MaskAction, MaskActionBody, PromptMessages, RequestAction};
+	let original = ["system".to_string(), "user".to_string()];
+	let body = MaskActionBody::PromptMessages(
+		serde_json::from_value::<PromptMessages>(serde_json::json!({
+			"messages": [
+				{"role": "system", "content": "masked"},
+				{"role": "assistant", "content": "masked"}
+			]
+		}))
+		.unwrap(),
+	);
+	let err = Policy::webhook_request_outcome(
+		RequestAction::Mask(MaskAction { body, reason: None }),
+		&original,
+	)
+	.err()
+	.unwrap();
+	assert!(err.to_string().contains("role at index 1"), "{err}");
+}
+
+#[test]
+fn webhook_mask_rejects_wrong_body_variant() {
+	use crate::llm::policy::webhook::{MaskAction, MaskActionBody, RequestAction, ResponseChoices};
+	let original = ["user".to_string()];
+	let body = MaskActionBody::ResponseChoices(
+		serde_json::from_value::<ResponseChoices>(serde_json::json!({ "choices": [] })).unwrap(),
+	);
+	let err = Policy::webhook_request_outcome(
+		RequestAction::Mask(MaskAction { body, reason: None }),
+		&original,
+	)
+	.err()
+	.unwrap();
+	assert!(
+		err.to_string().contains("invalid webhook response"),
+		"{err}"
+	);
+}
+
+#[test]
+fn webhook_mask_accepts_matching_shape() {
+	use crate::llm::policy::webhook::{MaskAction, MaskActionBody, PromptMessages, RequestAction};
+	let original = ["system".to_string(), "user".to_string()];
+	let body = MaskActionBody::PromptMessages(
+		serde_json::from_value::<PromptMessages>(serde_json::json!({
+			"messages": [
+				{"role": "system", "content": "masked"},
+				{"role": "user", "content": "masked"}
+			]
+		}))
+		.unwrap(),
+	);
+	let (outcome, _) = Policy::webhook_request_outcome(
+		RequestAction::Mask(MaskAction { body, reason: None }),
+		&original,
+	)
+	.unwrap();
+	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
 }

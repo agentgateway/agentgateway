@@ -586,22 +586,37 @@ impl RequestType for Request {
 		messages
 	}
 
-	fn set_messages(&mut self, mut messages: Vec<SimpleChatCompletionMessage>) {
+	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
+		let mut iter = messages.into_iter();
 		if self.instructions.is_some() {
-			self.instructions = messages
-				.first()
-				.filter(|message| matches!(message.role.as_str(), "developer" | "system"))
-				.map(|message| message.content.to_string());
-			if self.instructions.is_some() {
-				messages.remove(0);
+			if let Some(system_msg) = iter.next() {
+				if let Some(instructions) = self.instructions.as_mut() {
+					if instructions.as_str() != system_msg.content.as_str() {
+						*instructions = system_msg.content.to_string();
+					}
+				}
 			}
 		}
-		self.input = RequestInput::Items(
-			messages
-				.into_iter()
-				.map(RawInputItem::from_simple_message)
-				.collect(),
-		);
+		match &mut self.input {
+			RequestInput::Text(text) => {
+				if let Some(msg) = iter.next() {
+					if text.as_str() != msg.content.as_str() {
+						*text = msg.content.to_string();
+					}
+				}
+			},
+			RequestInput::Items(items) => {
+				for item in items.iter_mut() {
+					if let Some(existing) = item.as_simple_message() {
+						if let Some(msg) = iter.next() {
+							if existing.content.as_str() != msg.content.as_str() {
+								item.set_message_text(msg.content.as_str());
+							}
+						}
+					}
+				}
+			},
+		}
 	}
 
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
@@ -1054,11 +1069,7 @@ mod tests {
 		};
 		assert_eq!(input.len(), 2);
 		assert_eq!(input[0].0["role"], "system");
-		assert_eq!(input[0].0["content"][0]["type"], "input_text");
-		assert_eq!(
-			input[0].0["content"][0]["text"],
-			"masked input system message"
-		);
+		assert_eq!(input[0].0["content"], "masked input system message");
 		assert_eq!(input[1].0["role"], "user");
 	}
 
@@ -1109,5 +1120,76 @@ mod tests {
 		let llm_response = response.to_llm_response(crate::LogContentFields::default());
 
 		assert!(llm_response.output_messages.is_none());
+	}
+}
+
+#[cfg(test)]
+mod repro_3331 {
+	use super::*;
+	use crate::types::RequestType;
+
+	// Reproduction for agentgateway#3331 (OpenAI Responses): masking a message must not drop
+	// sibling function_call / function_call_output items from the request input.
+	#[test]
+	fn repro_3331_responses_preserves_function_items() {
+		let json = r#"{"model":"m","input":[
+			{"role":"user","content":[{"type":"input_text","text":"look up Alex Smith"}]},
+			{"type":"function_call","call_id":"fc_1","name":"lookup","arguments":"{\"q\":1}","id":"item_1"},
+			{"type":"function_call_output","call_id":"fc_1","output":"42","id":"item_2"}
+		]}"#;
+		let mut req: Request = serde_json::from_str(json).unwrap();
+		let mut view = req.get_messages();
+		view[0].content = strng::new("look up <REDACTED>");
+		req.set_messages(view);
+		let s = serde_json::to_string(&req).unwrap();
+		assert!(
+			s.contains("\"function_call\""),
+			"function_call item must survive: {s}"
+		);
+		assert!(
+			s.contains("function_call_output"),
+			"function_call_output item must survive: {s}"
+		);
+		assert!(s.contains("fc_1"), "call_id must survive: {s}");
+	}
+}
+
+impl RawInputItem {
+	fn set_message_text(&mut self, text: &str) {
+		let Some(content) = self.0.get_mut("content") else {
+			return;
+		};
+		match content {
+			Value::String(existing) => {
+				if existing.as_str() != text {
+					*existing = text.to_string();
+				}
+			},
+			Value::Array(parts) => {
+				let mut replaced = false;
+				parts.retain_mut(|p| {
+					let is_text = p
+						.get("type")
+						.and_then(|t| t.as_str())
+						.is_some_and(|t| t == "input_text" || t == "output_text");
+					if is_text {
+						let keep = !replaced && !text.is_empty();
+						replaced = true;
+						if keep {
+							if let Some(obj) = p.as_object_mut() {
+								obj.insert("text".to_string(), Value::String(text.to_string()));
+							}
+						}
+						keep
+					} else {
+						true
+					}
+				});
+				if !replaced && !text.is_empty() {
+					parts.push(serde_json::json!({"type": "input_text", "text": text}));
+				}
+			},
+			_ => {},
+		}
 	}
 }

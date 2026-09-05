@@ -300,25 +300,17 @@ impl RequestType for Request {
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
-		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = messages
-			.into_iter()
-			.partition(|m| m.role.as_str() == "system");
-
-		self.system = if system_prompts.is_empty() {
-			None
-		} else {
-			Some(TextBlock::Array(
-				system_prompts
-					.into_iter()
-					.map(|p| TextPart::Text {
-						r#type: "text".to_string(),
-						text: p.content.to_string(),
-						rest: Default::default(),
-					})
-					.collect(),
-			))
-		};
-		self.messages = message_prompts.into_iter().map(Into::into).collect();
+		let mut iter = messages.into_iter();
+		if self.system.as_ref().is_some_and(system_block_has_text) {
+			if let Some(system_msg) = iter.next() {
+				if let Some(system) = self.system.as_mut() {
+					set_textblock_text(system, system_msg.content.as_str());
+				}
+			}
+		}
+		for (existing, incoming) in self.messages.iter_mut().zip(iter) {
+			set_anthropic_content(existing, incoming.content.as_str());
+		}
 	}
 
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
@@ -1583,5 +1575,137 @@ mod tests {
 			tool_calls[0].arguments,
 			serde_json::json!({"location":"San Francisco"})
 		);
+	}
+}
+
+#[cfg(test)]
+mod repro_3331 {
+	use super::*;
+	use crate::types::RequestType;
+
+	// Reproduction for agentgateway#3331 (Anthropic Messages): masking one text message must not
+	// destroy tool_use/tool_result blocks or system cache_control elsewhere in the request.
+	#[test]
+	fn repro_3331_anthropic_preserves_tool_blocks() {
+		let json = r#"{"model":"m","max_tokens":10,
+			"system":[{"type":"text","text":"sys","cache_control":{"type":"ephemeral"}}],
+			"messages":[
+				{"role":"assistant","content":[{"type":"tool_use","id":"tu_1","name":"lookup","input":{"q":1}}]},
+				{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_1","content":"42"}]},
+				{"role":"user","content":[{"type":"text","text":"about Alex Smith"}]}
+			]}"#;
+		let mut req: Request = serde_json::from_str(json).unwrap();
+		let mut view = req.get_messages();
+		let last = view.len() - 1;
+		view[last].content = strng::new("about <REDACTED>");
+		req.set_messages(view);
+		let s = serde_json::to_string(&req).unwrap();
+		assert!(s.contains("tool_use"), "tool_use block must survive: {s}");
+		assert!(
+			s.contains("tu_1"),
+			"tool_use id / tool_use_id must survive: {s}"
+		);
+		assert!(
+			s.contains("tool_result"),
+			"tool_result block must survive: {s}"
+		);
+		assert!(
+			s.contains("cache_control"),
+			"system cache_control must survive: {s}"
+		);
+	}
+}
+
+fn system_block_has_text(block: &TextBlock) -> bool {
+	match block {
+		TextBlock::Text(text) => !text.is_empty(),
+		TextBlock::Array(parts) => parts
+			.iter()
+			.any(|p| p.text().is_some_and(|t| !t.is_empty())),
+	}
+}
+
+fn set_textblock_text(block: &mut TextBlock, text: &str) {
+	match block {
+		TextBlock::Text(existing) => {
+			if existing.as_str() != text {
+				*existing = text.to_string();
+			}
+		},
+		TextBlock::Array(parts) => {
+			let joined = parts
+				.iter()
+				.filter_map(TextPart::text)
+				.collect::<Vec<_>>()
+				.join("\n");
+			if joined.as_str() != text {
+				set_textparts_text(parts, text);
+			}
+		},
+	}
+}
+
+fn set_textparts_text(parts: &mut Vec<TextPart>, text: &str) {
+	let mut replaced = false;
+	parts.retain_mut(|p| match p {
+		TextPart::Text { text: existing, .. } => {
+			let keep = !replaced && !text.is_empty();
+			replaced = true;
+			if keep {
+				*existing = text.to_string();
+			}
+			keep
+		},
+		TextPart::Unknown(_) => true,
+	});
+	if !replaced && !text.is_empty() {
+		parts.push(TextPart::Text {
+			r#type: "text".to_string(),
+			text: text.to_string(),
+			rest: Default::default(),
+		});
+	}
+}
+
+fn set_anthropic_content(msg: &mut RequestMessage, text: &str) {
+	match &mut msg.content {
+		None => {},
+		Some(ContentBlock::Text(existing)) => {
+			if existing.as_str() != text {
+				*existing = text.to_string();
+			}
+		},
+		Some(ContentBlock::Array(parts)) => {
+			let joined = parts
+				.iter()
+				.filter_map(ContentPart::text)
+				.collect::<Vec<_>>()
+				.join(" ");
+			if joined.as_str() != text {
+				set_contentparts_text(parts, text);
+			}
+		},
+	}
+}
+
+fn set_contentparts_text(parts: &mut Vec<ContentPart>, text: &str) {
+	let mut replaced = false;
+	parts.retain_mut(|p| match p {
+		ContentPart::Text { text: existing, .. } => {
+			let keep = !replaced && !text.is_empty();
+			replaced = true;
+			if keep {
+				*existing = text.to_string();
+			}
+			keep
+		},
+		ContentPart::Unknown(_) => true,
+	});
+	if !replaced && !text.is_empty() {
+		parts.push(ContentPart::Text {
+			r#type: "text".to_string(),
+			text: text.to_string(),
+			rest: Default::default(),
+		});
 	}
 }
