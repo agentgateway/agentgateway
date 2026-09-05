@@ -24,6 +24,9 @@ pub struct ImportPlan {
 	pub models: Vec<ImportedModel>,
 	pub routes: IndexMap<String, ImportedRoute>,
 	pub findings: Vec<ImportFinding>,
+	/// Outlier-detection policy applied to every emitted model backend. Populated from
+	/// source-wide health settings (for example LiteLLM `router_settings.cooldown_time`).
+	pub model_health: Option<Value>,
 }
 
 #[derive(Debug)]
@@ -142,6 +145,7 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		models,
 		routes,
 		findings,
+		model_health,
 	} = plan;
 	let model_by_name: HashMap<_, _> = models
 		.iter()
@@ -190,6 +194,9 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 					"defaults".to_string(),
 					Value::Object(model.defaults.clone()),
 				);
+			}
+			if let Some(health) = &model_health {
+				value.insert("health".to_string(), health.clone());
 			}
 			Value::Object(value)
 		})
@@ -409,8 +416,12 @@ impl ConfigImporter for LiteLlmImporter {
 				message,
 			});
 		}
+		apply_litellm_health(&config.router_settings, &mut plan);
 		for setting in config.router_settings.keys() {
-			if matches!(setting.as_str(), "fallbacks" | "routing_strategy") {
+			if matches!(
+				setting.as_str(),
+				"fallbacks" | "routing_strategy" | "allowed_fails" | "cooldown_time" | "disable_cooldowns"
+			) {
 				continue;
 			}
 			plan.findings.push(ImportFinding {
@@ -468,6 +479,114 @@ fn report_litellm_database(findings: &mut Vec<ImportFinding>, source_path: &str)
 		status: ImportStatus::Manual,
 		message: "LiteLLM database configuration was not reused; generated config uses a new agentgateway SQLite database. Configure PostgreSQL manually if desired"
 			.to_string(),
+	});
+}
+
+/// Maps LiteLLM router-level cooldown settings onto an agentgateway health eviction policy.
+///
+/// LiteLLM cools a deployment down globally, whereas agentgateway attaches outlier detection to
+/// each model backend, so the resolved policy is applied to every emitted model via
+/// [`ImportPlan::model_health`].
+fn apply_litellm_health(router_settings: &Map<String, Value>, plan: &mut ImportPlan) {
+	if let Some(disabled) = router_settings.get("disable_cooldowns") {
+		match disabled.as_bool() {
+			Some(true) => {
+				plan.findings.push(ImportFinding {
+					source_path: "router_settings.disable_cooldowns".to_string(),
+					status: ImportStatus::Exact,
+					message: "LiteLLM cooldowns are disabled; no model health eviction policy was emitted"
+						.to_string(),
+				});
+				return;
+			},
+			Some(false) => plan.findings.push(ImportFinding {
+				source_path: "router_settings.disable_cooldowns".to_string(),
+				status: ImportStatus::Exact,
+				message: "LiteLLM cooldowns remain enabled".to_string(),
+			}),
+			None => {
+				plan.findings.push(ImportFinding {
+					source_path: "router_settings.disable_cooldowns".to_string(),
+					status: ImportStatus::Manual,
+					message:
+						"LiteLLM disable_cooldowns must be a boolean; model health settings were not mapped"
+							.to_string(),
+				});
+				return;
+			},
+		}
+	}
+
+	let allowed_fails = router_settings.get("allowed_fails");
+	let cooldown_time = router_settings.get("cooldown_time");
+	let (Some(allowed_fails), Some(cooldown_time)) = (allowed_fails, cooldown_time) else {
+		if allowed_fails.is_some() {
+			plan.findings.push(ImportFinding {
+				source_path: "router_settings.allowed_fails".to_string(),
+				status: ImportStatus::Manual,
+				message: "LiteLLM allowed_fails requires cooldown_time before a model health eviction policy can be mapped"
+					.to_string(),
+			});
+		}
+		if cooldown_time.is_some() {
+			plan.findings.push(ImportFinding {
+				source_path: "router_settings.cooldown_time".to_string(),
+				status: ImportStatus::Manual,
+				message: "LiteLLM cooldown_time requires allowed_fails before a model health eviction policy can be mapped"
+					.to_string(),
+			});
+		}
+		return;
+	};
+
+	let consecutive_failures = allowed_fails
+		.as_i64()
+		.and_then(|value| i32::try_from(value).ok())
+		.filter(|count| *count > 0)
+		.and_then(|count| count.checked_add(1));
+	let cooldown_seconds = cooldown_time.as_i64().filter(|seconds| *seconds > 0);
+	if consecutive_failures.is_none() || cooldown_seconds.is_none() {
+		plan.findings.push(ImportFinding {
+			source_path: "router_settings.allowed_fails".to_string(),
+			status: ImportStatus::Manual,
+			message: if consecutive_failures.is_none() {
+				"LiteLLM allowed_fails must be a positive integer whose value plus one fits the agentgateway threshold and was not mapped"
+					.to_string()
+			} else {
+				"LiteLLM allowed_fails was not mapped because cooldown_time is invalid".to_string()
+			},
+		});
+		plan.findings.push(ImportFinding {
+			source_path: "router_settings.cooldown_time".to_string(),
+			status: ImportStatus::Manual,
+			message: if cooldown_seconds.is_none() {
+				"LiteLLM cooldown_time must be a positive integer number of seconds and was not mapped"
+					.to_string()
+			} else {
+				"LiteLLM cooldown_time was not mapped because allowed_fails is invalid".to_string()
+			},
+		});
+		return;
+	}
+
+	let consecutive_failures = consecutive_failures.expect("validated above");
+	let cooldown_seconds = cooldown_seconds.expect("validated above");
+	plan.model_health = Some(json!({
+		"eviction": {
+			"consecutiveFailures": consecutive_failures,
+			"duration": format!("{cooldown_seconds}s"),
+		}
+	}));
+	plan.findings.push(ImportFinding {
+		source_path: "router_settings.allowed_fails".to_string(),
+		status: ImportStatus::Approximate,
+		message: "Mapped LiteLLM allowed_fails + 1 to the model health eviction consecutiveFailures threshold; agentgateway counts consecutive failures rather than failures within a window"
+			.to_string(),
+	});
+	plan.findings.push(ImportFinding {
+		source_path: "router_settings.cooldown_time".to_string(),
+		status: ImportStatus::Approximate,
+		message: "Mapped LiteLLM cooldown_time to the model health eviction duration".to_string(),
 	});
 }
 
@@ -1216,6 +1335,60 @@ mod tests {
 	#[test]
 	fn keeps_routing_for_a_single_model_with_fallbacks() {
 		assert_litellm_golden("single-model-fallback");
+	}
+
+	#[test]
+	fn maps_litellm_cooldown_settings_to_model_health_eviction() {
+		assert_litellm_golden("cooldown-eviction");
+	}
+
+	#[test]
+	fn does_not_emit_litellm_health_for_partial_or_invalid_pairs() {
+		let mut partial = ImportPlan::default();
+		apply_litellm_health(
+			json!({ "allowed_fails": 3 })
+				.as_object()
+				.expect("router settings object"),
+			&mut partial,
+		);
+		assert!(partial.model_health.is_none());
+		assert_eq!(partial.findings.len(), 1);
+		assert_eq!(partial.findings[0].status, ImportStatus::Manual);
+
+		let mut invalid = ImportPlan::default();
+		apply_litellm_health(
+			json!({ "allowed_fails": i32::MAX, "cooldown_time": 60 })
+				.as_object()
+				.expect("router settings object"),
+			&mut invalid,
+		);
+		assert!(invalid.model_health.is_none());
+		assert_eq!(
+			invalid
+				.findings
+				.iter()
+				.map(|finding| finding.status)
+				.collect::<Vec<_>>(),
+			vec![ImportStatus::Manual, ImportStatus::Manual]
+		);
+	}
+
+	#[test]
+	fn disable_cooldowns_suppresses_litellm_health() {
+		let mut plan = ImportPlan::default();
+		apply_litellm_health(
+			json!({
+				"allowed_fails": 3,
+				"cooldown_time": 60,
+				"disable_cooldowns": true,
+			})
+			.as_object()
+			.expect("router settings object"),
+			&mut plan,
+		);
+		assert!(plan.model_health.is_none());
+		assert_eq!(plan.findings.len(), 1);
+		assert_eq!(plan.findings[0].status, ImportStatus::Exact);
 	}
 
 	#[test]
