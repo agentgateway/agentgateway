@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-04T08:34:50Z"
+    "generatedAt": "2026-09-05T08:30:32Z"
   },
   "providers": {
     "anthropic": {
@@ -2300,19 +2300,19 @@
         },
         "gpt-5.6-sol": {
           "rates": {
-            "input": "2",
-            "output": "10",
-            "cacheRead": "0.2",
-            "cacheWrite": "2.5"
+            "input": "4",
+            "output": "20",
+            "cacheRead": "0.4",
+            "cacheWrite": "5"
           },
           "tiers": [
             {
               "contextOver": 272000,
               "rates": {
-                "input": "4",
-                "output": "15",
-                "cacheRead": "0.4",
-                "cacheWrite": "5"
+                "input": "8",
+                "output": "30",
+                "cacheRead": "0.8",
+                "cacheWrite": "10"
               }
             }
           ]
@@ -2332,6 +2332,25 @@
                 "output": "18",
                 "cacheRead": "0.4",
                 "cacheWrite": "5"
+              }
+            }
+          ]
+        },
+        "gpt-6-astra": {
+          "rates": {
+            "input": "10",
+            "output": "50",
+            "cacheRead": "1",
+            "cacheWrite": "12.5"
+          },
+          "tiers": [
+            {
+              "contextOver": 272000,
+              "rates": {
+                "input": "20",
+                "output": "75",
+                "cacheRead": "2",
+                "cacheWrite": "25"
               }
             }
           ]
@@ -3012,6 +3031,13 @@
             "input": "0.4",
             "output": "1.6",
             "cacheRead": "0.08"
+          }
+        },
+        "accounts/fireworks/models/qwen3p8-2p4t-a95b": {
+          "rates": {
+            "input": "2",
+            "output": "6",
+            "cacheRead": "0.25"
           }
         },
         "accounts/fireworks/models/qwen3p8-max": {
@@ -4610,6 +4636,25 @@
                 "output": "18",
                 "cacheRead": "0.4",
                 "cacheWrite": "5"
+              }
+            }
+          ]
+        },
+        "gpt-6-astra": {
+          "rates": {
+            "input": "10",
+            "output": "50",
+            "cacheRead": "1",
+            "cacheWrite": "12.5"
+          },
+          "tiers": [
+            {
+              "contextOver": 272000,
+              "rates": {
+                "input": "20",
+                "output": "75",
+                "cacheRead": "2",
+                "cacheWrite": "25"
               }
             }
           ]
