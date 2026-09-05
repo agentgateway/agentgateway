@@ -866,6 +866,8 @@ func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_Pro
 		return api.AIBackend_PROVIDER_PRESET_MISTRAL, true
 	case agentgateway.ModelProviderOpenrouter:
 		return api.AIBackend_PROVIDER_PRESET_OPENROUTER, true
+	case agentgateway.ModelProviderOrcarouter:
+		return api.AIBackend_PROVIDER_PRESET_ORCAROUTER, true
 	case agentgateway.ModelProviderTogetherAI:
 		return api.AIBackend_PROVIDER_PRESET_TOGETHERAI, true
 	case agentgateway.ModelProviderXAI:

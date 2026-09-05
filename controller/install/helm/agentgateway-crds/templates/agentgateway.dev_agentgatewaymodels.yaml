@@ -5112,6 +5112,7 @@ spec:
                 - Ollama
                 - OpenAI
                 - Openrouter
+                - Orcarouter
                 - TogetherAI
                 - VertexAI
                 - XAI
