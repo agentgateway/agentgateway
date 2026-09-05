@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use http_body_util::BodyExt;
+
 use super::*;
 use crate::cel;
 use crate::http::jwt;
@@ -667,6 +669,51 @@ fn apply_over_limit_response_returns_429() {
 	let direct = err.into_response_with_grpc(false);
 	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
 	assert_eq!(direct.headers().get("retry-after").unwrap(), "60");
+}
+
+#[tokio::test]
+async fn apply_over_limit_without_body_returns_actionable_json_and_retry_after() {
+	use ::http::StatusCode;
+
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+		statuses: vec![proto::rate_limit_response::DescriptorStatus {
+			code: proto::rate_limit_response::Code::OverLimit as i32,
+			current_limit: Some(proto::rate_limit_response::RateLimit {
+				name: "hourly".to_string(),
+				requests_per_unit: 60,
+				unit: proto::rate_limit_response::rate_limit::Unit::Hour as i32,
+			}),
+			limit_remaining: 0,
+			duration_until_reset: Some(prost_types::Duration {
+				seconds: 2712,
+				nanos: 0,
+			}),
+			quota: None,
+		}],
+		response_headers_to_add: vec![],
+		request_headers_to_add: vec![],
+		raw_body: vec![],
+		dynamic_metadata: None,
+		quota: None,
+	};
+
+	let err = RemoteRateLimit::apply(&mut req, response).unwrap_err();
+	let direct = err.into_response_with_grpc(false);
+	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(direct.headers().get("retry-after").unwrap(), "2712");
+	assert_eq!(
+		direct.headers().get("content-type").unwrap(),
+		"application/json"
+	);
+	let body = direct.into_body().collect().await.unwrap().to_bytes();
+	let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["error"]["message"], "rate limit exceeded");
+	assert_eq!(body["error"]["type"], "rate_limit_error");
+	assert_eq!(body["error"]["code"], "rate_limit_exceeded");
 }
 
 #[test]

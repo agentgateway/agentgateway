@@ -439,13 +439,39 @@ impl ProxyError {
 			ProxyError::SubstrateIngressFailed(status, _) => status,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::RemoteRateLimitExceeded {
+				status,
 				response_headers,
-				raw_body,
+				mut raw_body,
 				..
 			} => {
+				let retry_after = status.map(|status| status.reset_seconds);
+				let body_missing = raw_body.is_empty();
 				let mut rb = ::http::Response::builder().status(StatusCode::TOO_MANY_REQUESTS);
 				if let Some(hm) = rb.headers_mut() {
 					*hm = *response_headers;
+					if body_missing {
+						hm.insert(
+							hyper::header::CONTENT_TYPE,
+							HeaderValue::from_static("application/json"),
+						);
+					}
+					if !hm.contains_key(hyper::header::RETRY_AFTER)
+						&& let Some(retry_after) = retry_after
+						&& let Ok(value) = HeaderValue::try_from(retry_after.to_string())
+					{
+						hm.insert(hyper::header::RETRY_AFTER, value);
+					}
+				}
+				if body_missing {
+					raw_body = serde_json::json!({
+						"error": {
+							"message": "rate limit exceeded",
+							"type": "rate_limit_error",
+							"code": "rate_limit_exceeded",
+						}
+					})
+					.to_string()
+					.into_bytes();
 				}
 				return rb
 					.body(http::Body::from(raw_body))
