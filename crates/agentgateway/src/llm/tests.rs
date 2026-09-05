@@ -1440,6 +1440,7 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		endpoint_preference: Default::default(),
 	});
 	let req = LLMRequest {
 		input_tokens: None,
