@@ -11,6 +11,7 @@ use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use super::session::BrowserSessionStore;
 use super::*;
 use crate::http::jwt;
 use crate::proxy::ProxyError;
@@ -93,7 +94,37 @@ fn provider_endpoint(value: impl AsRef<str>) -> ProviderEndpoint {
 	value.as_ref().parse().expect("provider endpoint")
 }
 
+#[derive(Debug)]
+enum TestBrowserSessionStore {
+	LoadMissing,
+	LoadInvalid,
+	SaveValue(&'static str),
+}
+
+#[async_trait::async_trait]
+impl BrowserSessionStore for TestBrowserSessionStore {
+	async fn load(&self, _value: &str) -> Result<BrowserSession, Error> {
+		match self {
+			TestBrowserSessionStore::LoadMissing => Err(Error::MissingSession),
+			TestBrowserSessionStore::LoadInvalid => Err(Error::InvalidSession),
+			TestBrowserSessionStore::SaveValue(_) => {
+				panic!("unexpected browser session load")
+			},
+		}
+	}
+
+	async fn save(&self, _session: &BrowserSession) -> Result<String, Error> {
+		match self {
+			TestBrowserSessionStore::SaveValue(value) => Ok(value.to_string()),
+			TestBrowserSessionStore::LoadMissing | TestBrowserSessionStore::LoadInvalid => {
+				panic!("unexpected browser session save")
+			},
+		}
+	}
+}
+
 fn test_policy() -> OidcPolicy {
+	let encoder = test_oidc_cookie_encoder();
 	let session = SessionConfig {
 		cookie_name: "agw_oidc_s_test".into(),
 		transaction_cookie_prefix: "agw_oidc_t_test".into(),
@@ -101,7 +132,7 @@ fn test_policy() -> OidcPolicy {
 		secure: CookieSecureMode::Never,
 		ttl: Duration::from_secs(3600),
 		transaction_ttl: Duration::from_secs(300),
-		encoder: test_oidc_cookie_encoder(),
+		encoder: encoder.clone(),
 	};
 
 	OidcPolicy {
@@ -119,6 +150,7 @@ fn test_policy() -> OidcPolicy {
 		},
 		redirect_uri: test_redirect_uri(),
 		session,
+		browser_session_store: Arc::new(encoder),
 		scopes: vec!["openid".into(), "profile".into()],
 	}
 }
@@ -312,17 +344,65 @@ fn explicit_provider_config_rejects_relative_endpoints_during_deserialization() 
 }
 
 #[tokio::test]
+async fn cookie_browser_session_store_round_trips() {
+	let store = test_oidc_cookie_encoder();
+	let expected = BrowserSession {
+		policy_id: PolicyId::policy("policy"),
+		raw_id_token: SecretString::new("raw-id-token".into()),
+		expires_at_unix: Some(now_unix() + 300),
+	};
+
+	let value = store.save(&expected).await.expect("save browser session");
+	let actual = store.load(&value).await.expect("load browser session");
+
+	assert_eq!(actual.policy_id, expected.policy_id);
+	assert_eq!(
+		actual.raw_id_token.expose_secret(),
+		expected.raw_id_token.expose_secret()
+	);
+	assert_eq!(actual.expires_at_unix, expected.expires_at_unix);
+}
+
+#[tokio::test]
+async fn cookie_browser_session_store_rejects_expired_values() {
+	let store = test_oidc_cookie_encoder();
+	let expired = BrowserSession {
+		policy_id: PolicyId::policy("policy"),
+		raw_id_token: SecretString::new("raw-id-token".into()),
+		expires_at_unix: Some(now_unix().saturating_sub(1)),
+	};
+
+	let value = store.save(&expired).await.expect("save browser session");
+	let error = store.load(&value).await.expect_err("expired session");
+	assert!(matches!(error, Error::InvalidSession));
+}
+
+#[tokio::test]
+async fn cookie_browser_session_store_preserves_cookie_size_limit() {
+	let store = test_oidc_cookie_encoder();
+	let oversized = BrowserSession {
+		policy_id: PolicyId::policy("policy"),
+		raw_id_token: SecretString::new("x".repeat(4_000).into()),
+		expires_at_unix: Some(now_unix() + 300),
+	};
+
+	let error = store.save(&oversized).await.expect_err("oversized session");
+	assert!(matches!(error, Error::SessionCookieTooLarge));
+}
+
+#[tokio::test]
 async fn apply_derives_claims_from_stored_id_token() {
 	let policy = test_policy();
 	let id_token = signed_id_token(TEST_NONCE);
-	let encoded = policy
-		.session
-		.encode_browser_session(&BrowserSession {
+	let session_cookie = policy
+		.browser_session_store
+		.save(&BrowserSession {
 			policy_id: policy.policy_id.clone(),
 			raw_id_token: SecretString::new(id_token.clone().into()),
 			expires_at_unix: Some(now_unix() + 300),
 		})
-		.expect("encode session");
+		.await
+		.expect("save browser session");
 	let mut req = request(
 		Method::GET,
 		"https://app.example.com/protected",
@@ -330,7 +410,7 @@ async fn apply_derives_claims_from_stored_id_token() {
 	);
 	add_cookie(
 		&mut req,
-		format!("{}={encoded}", policy.session.cookie_name),
+		format!("{}={session_cookie}", policy.session.cookie_name),
 	);
 
 	let response = test_helpers::test_policy(&policy, &mut req)
@@ -343,6 +423,56 @@ async fn apply_derives_claims_from_stored_id_token() {
 		.expect("claims extension");
 	assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")));
 	assert_eq!(claims.jwt.expose_secret(), id_token);
+}
+
+#[tokio::test]
+async fn apply_treats_missing_or_invalid_stored_session_as_unauthenticated() {
+	let cases = [
+		("missing session", TestBrowserSessionStore::LoadMissing),
+		("invalid session", TestBrowserSessionStore::LoadInvalid),
+	];
+	for (name, store) in cases {
+		let mut policy = test_policy();
+		policy.browser_session_store = Arc::new(store);
+		let mut req = request(
+			Method::GET,
+			"https://app.example.com/protected",
+			Some("text/html"),
+		);
+		add_cookie(
+			&mut req,
+			format!("{}=opaque-ticket", policy.session.cookie_name),
+		);
+		let response = test_helpers::test_policy(&policy, &mut req)
+			.await
+			.expect(name)
+			.direct_response
+			.expect("login redirect");
+		assert_eq!(response.status(), ::http::StatusCode::FOUND, "{name}");
+		assert!(response.headers().contains_key(header::LOCATION), "{name}");
+		assert!(
+			response.headers().contains_key(header::SET_COOKIE),
+			"{name}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn apply_does_not_load_store_without_browser_cookie() {
+	let mut policy = test_policy();
+	policy.browser_session_store = Arc::new(TestBrowserSessionStore::SaveValue("unused"));
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/protected",
+		Some("text/html"),
+	);
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("login begins without loading browser session")
+		.direct_response
+		.expect("login redirect");
+	assert_eq!(response.status(), ::http::StatusCode::FOUND);
 }
 
 #[tokio::test]
@@ -680,8 +810,9 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		.mount(&mock)
 		.await;
 
-	let policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
-	let mut policy = policy;
+	let mut policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
+	policy.browser_session_store =
+		Arc::new(TestBrowserSessionStore::SaveValue("opaque-session-ticket"));
 	policy.session.secure = CookieSecureMode::Auto;
 	let transaction_id = "tx-1";
 	let callback_state = encoded_callback_state(transaction_id, "test-state");
@@ -718,11 +849,12 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		.iter()
 		.map(|h| h.to_str().unwrap().to_string())
 		.collect();
-	assert!(
-		cookies
-			.iter()
-			.any(|cookie| cookie.starts_with(&policy.session.cookie_name))
-	);
+	let session_cookie = cookies
+		.iter()
+		.map(|value| parse_set_cookie(value))
+		.find(|cookie| cookie.name() == policy.session.cookie_name.as_str())
+		.expect("authenticated session cookie");
+	assert_eq!(session_cookie.value(), "opaque-session-ticket");
 	assert!(cookies.iter().all(|cookie| cookie.contains("Secure")));
 	assert!(cookies.iter().any(|cookie| {
 		cookie.starts_with(&policy.session.transaction_cookie_name(transaction_id))
