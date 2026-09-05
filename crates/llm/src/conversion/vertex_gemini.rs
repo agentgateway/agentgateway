@@ -22,6 +22,10 @@ fn split_tool_call_id(raw: &str) -> (&str, Option<&str>) {
 	}
 }
 
+pub(crate) fn strip_thought_signature(raw: &str) -> &str {
+	split_tool_call_id(raw).0
+}
+
 /// Embed an optional thoughtSignature into a tool_call id for the client to echo back. A call with
 /// no signature keeps a plain id (no trailing separator), matching faithful passthrough.
 fn join_tool_call_id(base: String, signature: Option<&str>) -> String {

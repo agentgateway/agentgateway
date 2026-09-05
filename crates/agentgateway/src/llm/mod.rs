@@ -351,7 +351,7 @@ fn render_openai_completions(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
-	match req {
+	let body = match req {
 		types::ChatRequest::Completions(mut req) => {
 			apply_openai_moderation(&mut req.moderation, ctx)?;
 			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
@@ -370,14 +370,15 @@ fn render_openai_completions(
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to completions"
 		))),
-	}
+	}?;
+	conversion::strip_vertex_thought_signatures(body)
 }
 
 fn render_openai_responses(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
-	match req {
+	let body = match req {
 		types::ChatRequest::Responses(mut req) => {
 			apply_openai_moderation(&mut req.moderation, ctx)?;
 			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
@@ -386,7 +387,8 @@ fn render_openai_responses(
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"expected responses request"
 		))),
-	}
+	}?;
+	conversion::strip_vertex_thought_signatures(body)
 }
 
 fn apply_openai_moderation(
@@ -480,7 +482,7 @@ fn render_bedrock_converse(
 		})
 	};
 	Ok(RenderedChatRequest {
-		body: bedrock.body,
+		body: conversion::strip_vertex_thought_signatures(bedrock.body)?,
 		provider_state,
 	})
 }
@@ -514,8 +516,11 @@ impl ChatTranslation {
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
 				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+					.and_then(conversion::strip_vertex_thought_signatures)
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
+			ChatFormat::AnthropicMessages => {
+				conversion::strip_vertex_thought_signatures(render_anthropic_messages(req, ctx.catalog)?)
+			},
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
