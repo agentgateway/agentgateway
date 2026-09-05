@@ -167,7 +167,7 @@ export function PolicyCatalogPage(props: {
 	}, [help, props.policyKeys, props.schemaRoot]);
 	const selectedMeta = policyCatalog.find(policy => policy.key === selected);
 	const selectedFileOwned = Boolean(
-		selected && filePolicies && Object.prototype.hasOwnProperty.call(filePolicies, selected)
+		selected && filePolicies && Object.hasOwn(filePolicies, selected)
 	);
 	const saving = upsertPolicy.isPending || deleteResource.isPending;
 	const saveError = upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;
@@ -217,6 +217,7 @@ export function PolicyCatalogPage(props: {
 		};
 	}, [deleteResource, upsertPolicy]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useLayoutEffect(() => {
 		const scroll = pendingScrollRestore.current;
 		if (!scroll) return;

@@ -129,6 +129,7 @@ export function DumpPoliciesPage() {
 }
 
 function FieldLabel(props: { children: string }) {
+	// biome-ignore lint/a11y/noLabelWithoutControl: See ui/BIOME.md for why this exception exists and how to remove it.
 	return <label className="field-label">{props.children}</label>;
 }
 

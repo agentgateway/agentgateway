@@ -244,6 +244,7 @@ const queryClient = new QueryClient({
 	}
 });
 
+// biome-ignore lint/style/noNonNullAssertion: See ui/BIOME.md for why this exception exists and how to remove it.
 createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>

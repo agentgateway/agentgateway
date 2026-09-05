@@ -151,6 +151,7 @@ export function McpGuardrailsPolicyEditor(props: {
 					{processors.map((processor, index) => (
 						<section
 							className={errors[index] ? 'mcp-processor-card invalid' : 'mcp-processor-card'}
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 							key={index}
 						>
 							<div className="mcp-processor-header">

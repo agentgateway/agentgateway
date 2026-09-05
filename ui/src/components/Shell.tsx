@@ -117,6 +117,7 @@ export function Shell() {
 		document.documentElement.dataset.theme = theme;
 	}, [theme]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		setMobileNavOpen(false);
 	}, [router.location.pathname]);
@@ -138,7 +139,7 @@ export function Shell() {
 						/>
 					))}
 				</nav>
-				<div className="sidebar-links" aria-label="Project links">
+				<div className="sidebar-links">
 					{projectLinks.map(link => {
 						const Icon = link.icon;
 						return (
@@ -164,7 +165,6 @@ export function Shell() {
 							<button
 								className="mobile-nav-trigger"
 								type="button"
-								aria-haspopup="menu"
 								aria-expanded={mobileNavOpen}
 								onClick={() => setMobileNavOpen(open => !open)}
 							>
@@ -173,7 +173,7 @@ export function Shell() {
 								<span>{currentNav.label}</span>
 							</button>
 							{mobileNavOpen ? (
-								<nav className="mobile-nav-menu" aria-label="Primary" role="menu">
+								<nav className="mobile-nav-menu" aria-label="Primary">
 									{navGroups.map(group => (
 										<MobileNavSection
 											key={group.title}
@@ -205,7 +205,7 @@ export function Shell() {
 					</div>
 				</header>
 				<main className="content">
-					{runtime.data?.ui.configStoreMode == 'readOnly' && (
+					{runtime.data?.ui.configStoreMode === 'readOnly' && (
 						<StatusBanner state="info" title="Read-only mode">
 							The UI is configured as read-only. Editing is disabled.
 						</StatusBanner>
@@ -391,7 +391,6 @@ function MobileNavItem(props: {
 			<button
 				type="button"
 				className={props.groupStart ? 'mobile-nav-item nav-group-start' : 'mobile-nav-item'}
-				role="menuitem"
 				onClick={() => void navigate({ to: props.to })}
 			>
 				<Icon size={16} />
@@ -403,7 +402,6 @@ function MobileNavItem(props: {
 		<Link
 			to={props.to}
 			className={`${active ? 'mobile-nav-item active' : 'mobile-nav-item'}${props.groupStart ? ' nav-group-start' : ''}`}
-			role="menuitem"
 		>
 			<Icon size={16} />
 			<span>{props.label}</span>
