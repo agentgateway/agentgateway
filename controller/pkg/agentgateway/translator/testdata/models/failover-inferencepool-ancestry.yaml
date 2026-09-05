@@ -116,6 +116,10 @@ spec:
       - modelRef:
           name: local-llama
         priority: 0
+      # Invalid targets are omitted without suppressing valid failover providers.
+      - modelRef:
+          name: missing-backup
+        priority: 1
 
 ---
 # Output
@@ -392,9 +396,9 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: ""
-        reason: ResolvedRefs
-        status: "True"
+        message: model target default/missing-backup not found
+        reason: Invalid
+        status: "False"
         type: ResolvedRefs
       controllerName: agentgateway.dev/agentgateway
       parentRef:

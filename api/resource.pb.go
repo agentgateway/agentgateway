@@ -17822,8 +17822,11 @@ type ModelRoute_VirtualModel_Weighted_Target struct {
 	// control plane sets this to target.model when specified; otherwise it
 	// uses the referenced model's effective match.model, defaulting to the
 	// referenced resource name when match.model is omitted.
-	Model         string `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	Weight        uint32 `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
+	Model  string `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	Weight uint32 `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
+	// The control plane could not resolve this target. If selected, the
+	// request fails instead of resolving model against wildcard routes.
+	Invalid       bool `protobuf:"varint,3,opt,name=invalid,proto3" json:"invalid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -17872,6 +17875,13 @@ func (x *ModelRoute_VirtualModel_Weighted_Target) GetWeight() uint32 {
 	return 0
 }
 
+func (x *ModelRoute_VirtualModel_Weighted_Target) GetInvalid() bool {
+	if x != nil {
+		return x.Invalid
+	}
+	return false
+}
+
 type ModelRoute_VirtualModel_Conditional_Target struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Concrete model name selected by this virtual model target.
@@ -17879,8 +17889,11 @@ type ModelRoute_VirtualModel_Conditional_Target struct {
 	// This has the same contract as Weighted.Target.model: it is the model
 	// name used for request rewriting and concrete model-pattern resolution,
 	// not a ModelRoute resource key.
-	Model         string  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
-	When          *string `protobuf:"bytes,2,opt,name=when,proto3,oneof" json:"when,omitempty"`
+	Model string  `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
+	When  *string `protobuf:"bytes,2,opt,name=when,proto3,oneof" json:"when,omitempty"`
+	// The control plane could not resolve this target. If its condition
+	// matches, the request fails instead of falling through.
+	Invalid       bool `protobuf:"varint,3,opt,name=invalid,proto3" json:"invalid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -17927,6 +17940,13 @@ func (x *ModelRoute_VirtualModel_Conditional_Target) GetWhen() string {
 		return *x.When
 	}
 	return ""
+}
+
+func (x *ModelRoute_VirtualModel_Conditional_Target) GetInvalid() bool {
+	if x != nil {
+		return x.Invalid
+	}
+	return false
 }
 
 var File_resource_proto protoreflect.FileDescriptor
@@ -19405,7 +19425,7 @@ const file_resource_proto_rawDesc = "" +
 	"\fSubjectToken\x12H\n" +
 	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\x12\x1d\n" +
 	"\n" +
-	"token_type\x18\x02 \x01(\tR\ttokenType\"\xf2\f\n" +
+	"token_type\x18\x02 \x01(\tR\ttokenType\"\xa6\r\n" +
 	"\n" +
 	"ModelRoute\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
@@ -19419,21 +19439,23 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"router_key\x18\t \x01(\tR\trouterKey\x1a\x1d\n" +
 	"\x05Match\x12\x14\n" +
-	"\x05model\x18\x01 \x01(\tR\x05model\x1a\xdc\x05\n" +
+	"\x05model\x18\x01 \x01(\tR\x05model\x1a\x90\x06\n" +
 	"\fVirtualModel\x12Y\n" +
 	"\bweighted\x18\x01 \x01(\v2;.agentgateway.dev.resource.ModelRoute.VirtualModel.WeightedH\x00R\bweighted\x12b\n" +
 	"\vconditional\x18\x02 \x01(\v2>.agentgateway.dev.resource.ModelRoute.VirtualModel.ConditionalH\x00R\vconditional\x12Y\n" +
-	"\bfailover\x18\x03 \x01(\v2;.agentgateway.dev.resource.ModelRoute.VirtualModel.FailoverH\x00R\bfailover\x1a\xa0\x01\n" +
+	"\bfailover\x18\x03 \x01(\v2;.agentgateway.dev.resource.ModelRoute.VirtualModel.FailoverH\x00R\bfailover\x1a\xba\x01\n" +
 	"\bWeighted\x12\\\n" +
-	"\atargets\x18\x01 \x03(\v2B.agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.TargetR\atargets\x1a6\n" +
+	"\atargets\x18\x01 \x03(\v2B.agentgateway.dev.resource.ModelRoute.VirtualModel.Weighted.TargetR\atargets\x1aP\n" +
 	"\x06Target\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x12\x16\n" +
-	"\x06weight\x18\x02 \x01(\rR\x06weight\x1a\xb0\x01\n" +
+	"\x06weight\x18\x02 \x01(\rR\x06weight\x12\x18\n" +
+	"\ainvalid\x18\x03 \x01(\bR\ainvalid\x1a\xca\x01\n" +
 	"\vConditional\x12_\n" +
-	"\atargets\x18\x01 \x03(\v2E.agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.TargetR\atargets\x1a@\n" +
+	"\atargets\x18\x01 \x03(\v2E.agentgateway.dev.resource.ModelRoute.VirtualModel.Conditional.TargetR\atargets\x1aZ\n" +
 	"\x06Target\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x12\x17\n" +
-	"\x04when\x18\x02 \x01(\tH\x00R\x04when\x88\x01\x01B\a\n" +
+	"\x04when\x18\x02 \x01(\tH\x00R\x04when\x88\x01\x01\x12\x18\n" +
+	"\ainvalid\x18\x03 \x01(\bR\ainvalidB\a\n" +
 	"\x05_when\x1aQ\n" +
 	"\bFailover\x12E\n" +
 	"\abackend\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackendB\t\n" +

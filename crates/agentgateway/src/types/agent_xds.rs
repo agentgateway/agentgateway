@@ -1701,6 +1701,7 @@ impl ModelRoute {
 								.map(|target| llm::model_router::WeightedTarget {
 									model: target.model.clone(),
 									weight: target.weight as usize,
+									invalid: target.invalid,
 								})
 								.collect(),
 						)
@@ -1728,6 +1729,7 @@ impl ModelRoute {
 										expr.clone(),
 									)
 								}),
+								invalid: target.invalid,
 							});
 						}
 						llm::model_router::VirtualModelRouting::Conditional(targets)
@@ -5315,10 +5317,12 @@ mod tests {
 						weighted::Target {
 							model: "openai/gpt-5-mini".to_string(),
 							weight: 40,
+							invalid: true,
 						},
 						weighted::Target {
 							model: "anthropic/claude-haiku-4-5".to_string(),
 							weight: 60,
+							invalid: false,
 						},
 					],
 				})),
@@ -5341,8 +5345,10 @@ mod tests {
 		assert_eq!(targets.len(), 2);
 		assert_eq!(targets[0].model, "openai/gpt-5-mini");
 		assert_eq!(targets[0].weight, 40);
+		assert!(targets[0].invalid);
 		assert_eq!(targets[1].model, "anthropic/claude-haiku-4-5");
 		assert_eq!(targets[1].weight, 60);
+		assert!(!targets[1].invalid);
 		Ok(())
 	}
 
@@ -5365,10 +5371,12 @@ mod tests {
 						conditional::Target {
 							model: "gpt-5-large".to_string(),
 							when: Some(r#"request.headers["x-tier"] == "premium""#.to_string()),
+							invalid: true,
 						},
 						conditional::Target {
 							model: "gpt-5-mini".to_string(),
 							when: None,
+							invalid: false,
 						},
 					],
 				})),
@@ -5388,8 +5396,10 @@ mod tests {
 		assert_eq!(targets.len(), 2);
 		assert_eq!(targets[0].model, "gpt-5-large");
 		assert!(targets[0].when.is_some());
+		assert!(targets[0].invalid);
 		assert_eq!(targets[1].model, "gpt-5-mini");
 		assert!(targets[1].when.is_none());
+		assert!(!targets[1].invalid);
 		Ok(())
 	}
 
@@ -5412,10 +5422,12 @@ mod tests {
 						conditional::Target {
 							model: "gpt-5-mini".to_string(),
 							when: None,
+							invalid: false,
 						},
 						conditional::Target {
 							model: "gpt-5-large".to_string(),
 							when: Some("true".to_string()),
+							invalid: false,
 						},
 					],
 				})),

@@ -2231,6 +2231,9 @@ message ModelRoute {
         // referenced resource name when match.model is omitted.
         string model = 1;
         uint32 weight = 2;
+        // The control plane could not resolve this target. If selected, the
+        // request fails instead of resolving model against wildcard routes.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }
@@ -2244,6 +2247,9 @@ message ModelRoute {
         // not a ModelRoute resource key.
         string model = 1;
         optional string when = 2;
+        // The control plane could not resolve this target. If its condition
+        // matches, the request fails instead of falling through.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }
