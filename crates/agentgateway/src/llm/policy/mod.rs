@@ -2689,14 +2689,15 @@ fn default_server_tool_keepalive() -> Duration {
 }
 
 /// Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an
-/// MCP tool and continuing the turn. This applies to Anthropic Messages and OpenAI Responses
-/// requests, and only to tools the client declared as server-executed: Anthropic server tools,
-/// Responses built-in tools, and Responses `mcp` servers. Client tools are never touched.
+/// MCP tool and continuing the turn. This applies to Anthropic Messages, OpenAI Responses and
+/// OpenAI Chat Completions requests, and only to what the client declared as server-executed:
+/// Anthropic server tools, Responses built-in tools and `mcp` servers, and the Chat Completions
+/// `web_search_options` field. Client tools are never touched.
 #[apply(schema!)]
 pub struct ServerToolsConfig {
 	/// Server tools to fulfil, matched by the tool `type` the client declares, for example
-	/// `web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`
-	/// (Responses).
+	/// `web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`
+	/// (Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tools: Vec<ServerToolMapping>,
 	/// Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to

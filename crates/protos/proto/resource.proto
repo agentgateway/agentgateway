@@ -1527,7 +1527,8 @@ message BackendPolicySpec {
         FAIL_OPEN = 1;
       }
       message Tool {
-        // The server tool type to fulfil, such as "web_search_20250305". A trailing '*' matches a prefix.
+        // The server tool type to fulfil, such as "web_search_20250305" (Messages), "web_search"
+        // (Responses) or "web_search_options" (Chat Completions). A trailing '*' matches a prefix.
         string type = 1;
         // The MCP backend to call. Only Backend references are supported.
         BackendReference backend = 2;

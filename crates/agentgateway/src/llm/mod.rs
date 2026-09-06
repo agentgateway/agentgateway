@@ -1566,7 +1566,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, mut req) = self
+		let (mut parts, mut req) = self
 			.read_body_and_default_model::<types::completions::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1588,6 +1588,14 @@ impl AIProvider {
 			AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_)
 		) {
 			req.normalize_openai_token_limit();
+		}
+		if let Some(policy) = policies
+			&& let Some(config) = policy.server_tools.as_ref()
+			&& let Some(interception) =
+				server_tools::intercept_completions(config, policy, &mut req, &backend_info.inputs, &parts)
+					.await
+		{
+			parts.extensions.insert(interception);
 		}
 		self
 			.process_chat_request(

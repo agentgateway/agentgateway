@@ -4561,7 +4561,8 @@ spec:
                                           tools:
                                             description: |-
                                               Server tools to fulfil, matched by the tool `type` the client declares, for example
-                                              `web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter` (Responses).
+                                              `web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter` (Responses),
+                                              or `web_search_options` (Chat Completions, exposed to the model as `web_search`).
                                             items:
                                               description: Maps one server tool type
                                                 to the MCP tool that fulfils it.
@@ -13934,7 +13935,8 @@ spec:
                           tools:
                             description: |-
                               Server tools to fulfil, matched by the tool `type` the client declares, for example
-                              `web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter` (Responses).
+                              `web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter` (Responses),
+                              or `web_search_options` (Chat Completions, exposed to the model as `web_search`).
                             items:
                               description: Maps one server tool type to the MCP tool
                                 that fulfils it.

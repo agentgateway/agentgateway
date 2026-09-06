@@ -15808,7 +15808,8 @@ func (x *BackendPolicySpec_Ai_ServerTools) GetMcpServers() []*BackendPolicySpec_
 
 type BackendPolicySpec_Ai_ServerTools_Tool struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The server tool type to fulfil, such as "web_search_20250305". A trailing '*' matches a prefix.
+	// The server tool type to fulfil, such as "web_search_20250305" (Messages), "web_search"
+	// (Responses) or "web_search_options" (Chat Completions). A trailing '*' matches a prefix.
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// The MCP backend to call. Only Backend references are supported.
 	Backend *BackendReference `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
