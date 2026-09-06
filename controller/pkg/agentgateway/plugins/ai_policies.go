@@ -374,6 +374,20 @@ func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.Server
 		}
 		out.Tools = append(out.Tools, t)
 	}
+	for _, server := range st.MCPServers {
+		be, err := BuildBackendRef(ctx, server.BackendRef, namespace)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("serverTools mcpServer %q: %v", ptr.OrEmpty(server.Label), err))
+			continue
+		}
+		out.McpServers = append(out.McpServers, &api.BackendPolicySpec_Ai_ServerTools_McpServer{
+			Label:        server.Label,
+			Url:          server.URL,
+			Backend:      be,
+			Target:       server.Target,
+			SkipApproval: ptr.OrEmpty(server.SkipApproval),
+		})
+	}
 	if st.MaxIterations != nil {
 		out.MaxIterations = new(uint32(*st.MaxIterations)) //nolint:gosec // G115: MaxIterations is validated by kubebuilder to be >= 1
 	}

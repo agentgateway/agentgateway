@@ -99,6 +99,12 @@ backends:
                   required:
                     - url
                   type: object
+            mcpServers:
+              - label: search
+                url: "https://mcp.example.com/mcp"
+                backend: searxng
+                target: search
+                skipApproval: true
             maxIterations: 4
             maxResultBytes: 65536
             keepaliveInterval: 10s

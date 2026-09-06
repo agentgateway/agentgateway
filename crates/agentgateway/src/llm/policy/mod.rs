@@ -2668,12 +2668,20 @@ fn default_server_tool_keepalive() -> Duration {
 }
 
 /// Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an
-/// MCP tool and continuing the turn. This applies to Anthropic Messages requests only and only to
-/// tools the client declared as server-executed; client tools are never touched.
+/// MCP tool and continuing the turn. This applies to Anthropic Messages and OpenAI Responses
+/// requests, and only to tools the client declared as server-executed: Anthropic server tools,
+/// Responses built-in tools, and Responses `mcp` servers. Client tools are never touched.
 #[apply(schema!)]
 pub struct ServerToolsConfig {
-	/// Server tools to fulfil, matched by the tool `type` the client declares.
+	/// Server tools to fulfil, matched by the tool `type` the client declares, for example
+	/// `web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`
+	/// (Responses).
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tools: Vec<ServerToolMapping>,
+	/// Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to
+	/// configured MCP backends. The backend's tools are exposed to the model by name.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub mcp_servers: Vec<ServerToolMcpServer>,
 	/// Maximum number of follow-up model calls for one client request. The client's `max_uses` is
 	/// honoured as a lower cap.
 	#[serde(default = "default_server_tool_iterations")]
@@ -2695,6 +2703,7 @@ impl ServerToolsConfig {
 	pub fn defaults() -> Self {
 		Self {
 			tools: Vec::new(),
+			mcp_servers: Vec::new(),
 			max_iterations: default_server_tool_iterations(),
 			max_result_bytes: default_server_tool_result_bytes(),
 			keepalive_interval: default_server_tool_keepalive(),
@@ -2738,6 +2747,35 @@ pub struct ServerToolMcpTarget {
 	pub target: Option<Strng>,
 	/// Name of the tool on the MCP backend.
 	pub tool: Strng,
+}
+
+/// Maps a remote MCP server a Responses client declares to a configured MCP backend.
+#[apply(schema!)]
+pub struct ServerToolMcpServer {
+	/// Matches the client's `server_label`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub label: Option<Strng>,
+	/// Matches the client's `server_url`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub url: Option<Strng>,
+	/// Name of the MCP backend to call.
+	pub backend: Strng,
+	/// Target within the backend. Required when the backend has more than one target.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub target: Option<Strng>,
+	/// Run tools even when the client asks for approval before each call, which is the Responses
+	/// API default. Off by default, in which case such requests are rejected with a 400, since
+	/// the gateway cannot pause a turn for approval.
+	#[serde(default)]
+	pub skip_approval: bool,
+}
+
+impl ServerToolMcpServer {
+	/// Whether this entry is the one the client's descriptor refers to.
+	pub fn matches(&self, server_label: &str, server_url: Option<&str>) -> bool {
+		self.label.as_deref().is_some_and(|l| l == server_label)
+			|| (self.url.is_some() && self.url.as_deref() == server_url)
+	}
 }
 
 /// What happens when a server tool call fails.
