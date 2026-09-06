@@ -2273,7 +2273,14 @@ fn backend_policy_from_proto(
 ) -> Result<BackendTrafficPolicy, ProtoError> {
 	use crate::types::proto::agent::backend_policy_spec as bps;
 	Ok(match &spec.kind {
-		Some(bps::Kind::A2a(_)) => BackendTrafficPolicy::A2a(A2aPolicy {}),
+		Some(bps::Kind::A2a(a2a)) => {
+			let agent_card_path = if a2a.agent_card_path.is_empty() {
+				None
+			} else {
+				Some(agent_core::strng::Strng::from(a2a.agent_card_path.clone()))
+			};
+			BackendTrafficPolicy::A2a(A2aPolicy { agent_card_path })
+		},
 		Some(bps::Kind::InferenceRouting(ir)) => {
 			let failure_mode = match bps::inference_routing::FailureMode::try_from(ir.failure_mode)? {
 				bps::inference_routing::FailureMode::Unknown

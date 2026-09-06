@@ -8,56 +8,73 @@ use crate::http::{Body, BodyInspection, Response, filters};
 use crate::json;
 use crate::types::agent::A2aPolicy;
 
-pub async fn apply_to_request(_: &A2aPolicy, req: &mut Request<Body>) -> RequestType {
-	// Possible options are POST a JSON-RPC message or GET /.well-known/agent.json
+pub async fn apply_to_request(pol: &A2aPolicy, req: &mut Request<Body>) -> RequestType {
+	// Possible options are POST a JSON-RPC message or GET agent card
 	// For agent card, we will process only on the response
-	classify_request(req).await
+	classify_request(pol, req).await
 }
 
-async fn classify_request(req: &mut Request<Body>) -> RequestType {
-	// Possible options are POST a JSON-RPC message or GET /.well-known/agent.json
+async fn classify_request(pol: &A2aPolicy, req: &mut Request<Body>) -> RequestType {
+	// Possible options are POST a JSON-RPC message or GET agent card
 	// For agent card, we will process only on the response
-	match (req.method(), req.uri().path()) {
+	let agent_card_suffix: Option<String> = match (req.method(), req.uri().path()) {
+		// Standard agent card paths:
 		// agent-card.json: v0.3.0+
-		// agent.json: older versions
-		(m, path)
-			if m == http::Method::GET
-				&& (path.ends_with("/.well-known/agent.json")
-					|| path.ends_with("/.well-known/agent-card.json")) =>
-		{
-			// In case of rewrite, use the original so we know where to send them back to
-			let uri = req
-				.extensions()
-				.get::<filters::OriginalUrl>()
-				.map(|u| u.0.clone())
-				.unwrap_or_else(|| req.uri().clone());
-			let uri = crate::http::x_headers::apply_forwarded_scheme(uri, req.headers());
-			// Also record the (possibly rewritten) backend path so we can compute
-			// relative interface URLs on the response side.
-			let backend_path = req.uri().path().to_string();
-			let rewrite = req
-				.extensions()
-				.get::<filters::AppliedUrlRewrite>()
-				.cloned();
-			RequestType::AgentCard(uri, backend_path, rewrite)
+		(m, path) if m == http::Method::GET && path.ends_with("/.well-known/agent-card.json") => {
+			Some("/.well-known/agent-card.json".to_string())
 		},
-		(m, _) if m == http::Method::POST => {
-			let method = match crate::http::classify_content_type(req.headers()) {
-				crate::http::WellKnownContentTypes::Json => match inspect_method(req).await {
-					Ok(method) => method,
-					Err(e) => {
-						warn!("failed to read a2a request: {e}");
-						Strng::from("unknown")
-					},
-				},
-				_ => {
-					warn!("unknown content type from A2A");
+		// agent.json: older versions
+		(m, path) if m == http::Method::GET && path.ends_with("/.well-known/agent.json") => {
+			Some("/.well-known/agent.json".to_string())
+		},
+		// Custom agent card path
+		(m, path) if m == http::Method::GET => {
+			if let Some(custom_path) = &pol.agent_card_path {
+				if path.ends_with(custom_path.as_str()) {
+					Some(custom_path.to_string())
+				} else {
+					None
+				}
+			} else {
+				None
+			}
+		},
+		_ => None,
+	};
+
+	if let Some(suffix) = agent_card_suffix {
+		// In case of rewrite, use the original so we know where to send them back to
+		let uri = req
+			.extensions()
+			.get::<filters::OriginalUrl>()
+			.map(|u| u.0.clone())
+			.unwrap_or_else(|| req.uri().clone());
+		let uri = crate::http::x_headers::apply_forwarded_scheme(uri, req.headers());
+		// Also record the (possibly rewritten) backend path so we can compute
+		// relative interface URLs on the response side.
+		let backend_path = req.uri().path().to_string();
+		let rewrite = req
+			.extensions()
+			.get::<filters::AppliedUrlRewrite>()
+			.cloned();
+		RequestType::AgentCard(uri, backend_path, rewrite, suffix)
+	} else if req.method() == http::Method::POST {
+		let method = match crate::http::classify_content_type(req.headers()) {
+			crate::http::WellKnownContentTypes::Json => match inspect_method(req).await {
+				Ok(method) => method,
+				Err(e) => {
+					warn!("failed to read a2a request: {e}");
 					Strng::from("unknown")
 				},
-			};
-			RequestType::Call(method)
-		},
-		_ => RequestType::Unknown,
+			},
+			_ => {
+				warn!("unknown content type from A2A");
+				Strng::from("unknown")
+			},
+		};
+		RequestType::Call(method)
+	} else {
+		RequestType::Unknown
 	}
 }
 
@@ -65,7 +82,17 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 pub enum RequestType {
 	#[default]
 	Unknown,
-	AgentCard(http::Uri, String, Option<filters::AppliedUrlRewrite>),
+	/// Agent card request with:
+	/// - The original (gateway-facing) URI
+	/// - The backend request path
+	/// - The applied URL rewrite (if any)
+	/// - The agent card path suffix (for stripping when computing base URL)
+	AgentCard(
+		http::Uri,
+		String,
+		Option<filters::AppliedUrlRewrite>,
+		String,
+	),
 	Call(Strng),
 }
 
@@ -163,7 +190,7 @@ pub async fn apply_to_response(
 		return Ok(None);
 	};
 	match a2a_type {
-		RequestType::AgentCard(uri, backend_path, rewrite) => {
+		RequestType::AgentCard(uri, backend_path, rewrite, agent_card_suffix) => {
 			// For agent card, we need to mutate the request to insert the proper URL to reach it
 			// through the gateway.
 			let buffer_limit = crate::http::response_buffer_limit(resp);
@@ -171,13 +198,13 @@ pub async fn apply_to_response(
 			let Ok(mut agent_card) = json::from_body_with_limit::<Value>(body, buffer_limit).await else {
 				anyhow::bail!("agent card invalid JSON");
 			};
-			let gateway_base = build_agent_path(uri);
+			let gateway_base = build_agent_path(uri, &agent_card_suffix);
 
 			// Compute the backend agent base by stripping the agent-card suffix from the
 			// (possibly rewritten) backend request path. This lets us compute the *relative*
 			// part of interface URLs so they are anchored at the gateway path instead of
 			// being naively appended.
-			let backend_agent_path = strip_agent_card_suffix(&backend_path);
+			let backend_agent_path = strip_agent_card_suffix(&backend_path, &agent_card_suffix);
 
 			if let Some(interfaces) = agent_card.get_mut("supportedInterfaces") {
 				// A2A v1.0: rewrite url inside each AgentInterface entry.
@@ -257,16 +284,20 @@ async fn inspect_method(req: &mut Request<Body>) -> anyhow::Result<Strng> {
 	Ok(json::inspect_body::<JsonRpcMethod>(req).await?.method)
 }
 
-fn build_agent_path(uri: Uri) -> String {
+fn build_agent_path(uri: Uri, agent_card_suffix: &str) -> String {
 	// Keep the original URL the found the agent at, but strip the agent card suffix.
 	// Note: this won't work in the case they are hosting their agent in other locations.
-	let path = strip_agent_card_suffix(uri.path());
+	let path = strip_agent_card_suffix(uri.path(), agent_card_suffix);
 	uri.to_string().replace(uri.path(), path)
 }
 
-/// Strip the agent-card well-known suffix from a path, returning the base path
-/// where the agent is hosted.
-fn strip_agent_card_suffix(path: &str) -> &str {
+/// Strip the agent-card suffix from a path, returning the base path.
+fn strip_agent_card_suffix<'a>(path: &'a str, agent_card_suffix: &str) -> &'a str {
+	// Try the provided suffix first
+	if let Some(stripped) = path.strip_suffix(agent_card_suffix) {
+		return stripped;
+	}
+	// Fall back to standard suffixes
 	let path = path.strip_suffix("/.well-known/agent.json").unwrap_or(path);
 	path
 		.strip_suffix("/.well-known/agent-card.json")

@@ -533,6 +533,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`binds[].listeners[].routes[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
@@ -7089,6 +7090,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`binds[].listeners[].routes[].backends[].ai.policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -10488,6 +10490,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -13850,6 +13853,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`binds[].listeners[].routes[].backends[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -19421,6 +19425,7 @@
 |`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`policies[].policy.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
 |`policies[].policy.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
@@ -25977,6 +25982,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`backends[].ai.policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`backends[].ai.policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`backends[].ai.policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -29376,6 +29382,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`backends[].ai.groups[].providers[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -32736,6 +32743,7 @@
 |`backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`backends[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`backends[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -35184,6 +35192,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routeGroups[].routes[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
 |`routeGroups[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
@@ -41740,6 +41749,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routeGroups[].routes[].backends[].ai.policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -45139,6 +45149,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -48501,6 +48512,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routeGroups[].routes[].backends[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -53597,6 +53609,7 @@
 |`routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routes[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
 |`routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
@@ -60153,6 +60166,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routes[].backends[].ai.policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`routes[].backends[].ai.policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -63552,6 +63566,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routes[].backends[].ai.groups[].providers[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -66914,6 +66929,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`routes[].backends[].policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
 |`routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Endpoint picker backend that selects the destination endpoint.<br>Exactly one of service, host, or backend may be set.|
 |`routes[].backends[].policies.inferenceRouting.endpointPicker.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -77081,6 +77097,7 @@
 |`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
+|`mcp.policies.a2a.agentCardPath`|string|Custom path suffix for agent card requests (e.g., "/agent.json").<br>Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
 |`mcp.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
