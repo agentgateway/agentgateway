@@ -110,6 +110,7 @@ backends:
             keepaliveInterval: 10s
             failureMode: failOpen
             unmapped: reject
+            clientExecuted: []
   - backend:
       llmRouter:
         name: "llm:router"

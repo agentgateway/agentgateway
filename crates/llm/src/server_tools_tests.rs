@@ -40,7 +40,7 @@ fn find_server_tools_matches_only_mapped_server_tools() {
 		{"type": "bash_20250124", "name": "bash"},
 		{"type": "custom", "name": "Edit", "input_schema": {"type": "object"}},
 	]));
-	let found = find_server_tools(&req, &web_search_matchers());
+	let found = find_server_tools(&req, &web_search_matchers(), &[]);
 	assert_eq!(
 		found,
 		vec![InterceptedTool {
@@ -50,8 +50,8 @@ fn find_server_tools_matches_only_mapped_server_tools() {
 			max_uses: Some(8),
 		}]
 	);
-	assert!(find_server_tools(&request(json!([])), &web_search_matchers()).is_empty());
-	assert!(find_server_tools(&request(Value::Null), &web_search_matchers()).is_empty());
+	assert!(find_server_tools(&request(json!([])), &web_search_matchers(), &[]).is_empty());
+	assert!(find_server_tools(&request(Value::Null), &web_search_matchers(), &[]).is_empty());
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn rewrite_server_tools_keeps_name_and_cache_control() {
 		{"type": "web_search_20250305", "name": "web_search", "max_uses": 8, "cache_control": {"type": "ephemeral"}},
 		{"type": "bash_20250124", "name": "bash"},
 	]));
-	let tools = find_server_tools(&req, &web_search_matchers());
+	let tools = find_server_tools(&req, &web_search_matchers(), &[]);
 	let definitions = vec![ToolDefinition {
 		description: Some("Search the web".to_string()),
 		input_schema: json!({"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
@@ -429,13 +429,27 @@ fn keepalive_and_error_events_are_anthropic_shaped() {
 	assert_eq!(data["error"]["message"], json!("tool failed"));
 }
 
+fn default_client_executed() -> Vec<TypeMatch> {
+	DEFAULT_CLIENT_EXECUTED_TOOL_TYPES
+		.iter()
+		.map(|p| TypeMatch::parse(p))
+		.collect()
+}
+
 #[test]
-fn client_executed_vendor_tools_are_never_intercepted() {
-	assert!(is_client_executed("bash_20250124"));
-	assert!(is_client_executed("text_editor_20250728"));
-	assert!(is_client_executed("computer_20251124"));
-	assert!(is_client_executed("memory_20250818"));
-	assert!(!is_client_executed("web_search_20250305"));
+fn client_executed_list_is_configurable_with_the_vendor_defaults() {
+	let defaults = default_client_executed();
+	assert!(is_client_executed("bash_20250124", &defaults));
+	assert!(is_client_executed("text_editor_20250728", &defaults));
+	assert!(is_client_executed("computer_20251124", &defaults));
+	assert!(is_client_executed("memory_20250818", &defaults));
+	assert!(is_client_executed("local_shell", &defaults));
+	assert!(!is_client_executed("web_search_20250305", &defaults));
+	// An empty list trusts the mapping; a longer one guards more.
+	assert!(!is_client_executed("bash_20250124", &[]));
+	let stricter = vec![TypeMatch::parse("web_fetch_*")];
+	assert!(is_client_executed("web_fetch_20250910", &stricter));
+	assert!(!is_client_executed("bash_20250124", &stricter));
 	let req: Request = serde_json::from_value(json!({
 		"model": "m",
 		"max_tokens": 1,
@@ -447,16 +461,24 @@ fn client_executed_vendor_tools_are_never_intercepted() {
 		],
 	}))
 	.unwrap();
-	// A mapping that would match bash is ignored for it.
+	// A mapping that would match bash is ignored for it under the defaults...
 	let matchers = vec![TypeMatch::parse("*")];
-	let found = find_server_tools(&req, &matchers);
+	let found = find_server_tools(&req, &matchers, &defaults);
 	let names: Vec<&str> = found.iter().map(|t| t.name.as_str()).collect();
 	assert_eq!(names, ["web_search", "web_fetch"]);
+	// ... and honoured when the operator empties the list.
+	let found = find_server_tools(&req, &matchers, &[]);
+	let names: Vec<&str> = found.iter().map(|t| t.name.as_str()).collect();
+	assert_eq!(names, ["bash", "web_search", "web_fetch"]);
 	// Unmapped server tools exclude client-executed ones.
 	let only_search = vec![TypeMatch::parse("web_search*")];
 	assert_eq!(
-		unmapped_server_tools(&req, &only_search),
+		unmapped_server_tools(&req, &only_search, &defaults),
 		["web_fetch_20250910"]
+	);
+	assert_eq!(
+		unmapped_server_tools(&req, &only_search, &[]),
+		["bash_20250124", "web_fetch_20250910"]
 	);
 }
 

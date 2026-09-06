@@ -402,5 +402,8 @@ func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.Server
 	if st.Unmapped == agentgateway.UnmappedServerToolsReject {
 		out.Unmapped = api.BackendPolicySpec_Ai_ServerTools_REJECT
 	}
+	if st.ClientExecuted != nil {
+		out.ClientExecuted = &api.BackendPolicySpec_Ai_ServerTools_TypeList{Types: *st.ClientExecuted}
+	}
 	return out, errors.Join(errs...)
 }
