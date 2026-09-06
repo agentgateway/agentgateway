@@ -188,6 +188,19 @@ impl ToolRuntime {
 
 	/// Look the tool up with `tools/list`, following pagination.
 	pub(crate) async fn tool_definition(&self, tool: &str) -> anyhow::Result<Option<ToolDefinition>> {
+		Ok(
+			self
+				.tool_definitions()
+				.await?
+				.into_iter()
+				.find(|(name, _)| name == tool)
+				.map(|(_, def)| def),
+		)
+	}
+
+	/// Every tool the MCP backend serves, in list order.
+	pub(crate) async fn tool_definitions(&self) -> anyhow::Result<Vec<(String, ToolDefinition)>> {
+		let mut out = Vec::new();
 		let mut cursor: Option<String> = None;
 		loop {
 			let params = cursor
@@ -200,15 +213,18 @@ impl ToolRuntime {
 			let Some(ServerResult::ListToolsResult(result)) = self.request(request).await? else {
 				anyhow::bail!("MCP backend did not answer tools/list");
 			};
-			if let Some(found) = result.tools.iter().find(|t| t.name == tool) {
-				return Ok(Some(ToolDefinition {
-					description: found.description.as_deref().map(str::to_string),
-					input_schema: Value::Object((*found.input_schema).clone()),
-				}));
-			}
+			out.extend(result.tools.iter().map(|t| {
+				(
+					t.name.to_string(),
+					ToolDefinition {
+						description: t.description.as_deref().map(str::to_string),
+						input_schema: Value::Object((*t.input_schema).clone()),
+					},
+				)
+			}));
 			match result.next_cursor {
 				Some(next) if !next.is_empty() => cursor = Some(next),
-				_ => return Ok(None),
+				_ => return Ok(out),
 			}
 		}
 	}

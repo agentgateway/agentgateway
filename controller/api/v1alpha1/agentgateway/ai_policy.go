@@ -513,14 +513,22 @@ type PromptCachingConfig struct {
 }
 
 // Fulfils server tools that the client declared, such as a coding agent's `web_search`, by calling an
-// MCP tool and continuing the turn. This applies to Anthropic Messages requests only and only to
-// tools the client declared as server-executed; client tools are never touched.
+// MCP tool and continuing the turn. This applies to Anthropic Messages and OpenAI Responses requests,
+// and only to tools the client declared as server-executed: Anthropic server tools, Responses built-in
+// tools, and Responses `mcp` servers. Client tools are never touched.
+// +kubebuilder:validation:XValidation:rule="(has(self.tools) && size(self.tools) > 0) || (has(self.mcpServers) && size(self.mcpServers) > 0)",message="serverTools needs at least one tool or mcpServer"
 type ServerTools struct {
-	// Server tools to fulfil, matched by the tool `type` the client declares.
-	// +kubebuilder:validation:MinItems=1
+	// Server tools to fulfil, matched by the tool `type` the client declares, for example
+	// `web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter` (Responses).
 	// +kubebuilder:validation:MaxItems=16
-	// +required
-	Tools []ServerToolMapping `json:"tools"`
+	// +optional
+	Tools []ServerToolMapping `json:"tools,omitempty"`
+
+	// Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to
+	// configured MCP backends. The backend's tools are exposed to the model by name.
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	MCPServers []ServerToolMCPServer `json:"mcpServers,omitempty"`
 
 	// Maximum number of follow-up model calls for one client request.
 	// The client's `max_uses` is honoured as a lower cap.
@@ -569,6 +577,39 @@ type ServerToolMapping struct {
 	// JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.
 	// +optional
 	InputSchema *apiextensionsv1.JSON `json:"inputSchema,omitempty"`
+}
+
+// Maps a remote MCP server a Responses client declares to a configured MCP backend.
+// +kubebuilder:validation:XValidation:rule="has(self.label) || has(self.url)",message="an mcpServer needs a label or a url to match"
+type ServerToolMCPServer struct {
+	// Matches the client's `server_label`.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +optional
+	Label *string `json:"label,omitempty"`
+
+	// Matches the client's `server_url`.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	URL *string `json:"url,omitempty"`
+
+	// The MCP backend to call.
+	//
+	// Supported types: Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Target within the backend. Required when the backend has more than one target.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Target *string `json:"target,omitempty"`
+
+	// Run tools even when the client asks for approval before each call, which is the Responses API
+	// default. Off by default, in which case such requests are rejected with a 400, since the gateway
+	// cannot pause a turn for approval.
+	// +optional
+	SkipApproval *bool `json:"skipApproval,omitempty"`
 }
 
 // An MCP tool on a configured MCP backend.
