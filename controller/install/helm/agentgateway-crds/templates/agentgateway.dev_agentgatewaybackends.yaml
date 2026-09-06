@@ -6421,6 +6421,69 @@ spec:
                                     description: Settings for passive and active health
                                       checking.
                                     properties:
+                                      active:
+                                        description: |-
+                                          Settings for probing the backend on a timer. A backend that fails unhealthyThreshold probes
+                                          in a row is evicted and stays evicted while probes keep failing; it is restored after
+                                          healthyThreshold successful probes. Only LLM provider backends are probed.
+                                        properties:
+                                          expectedStatuses:
+                                            description: HTTP status codes that count
+                                              as healthy. When unset, any 2xx status
+                                              is healthy.
+                                            items:
+                                              format: int32
+                                              maximum: 599
+                                              minimum: 100
+                                              type: integer
+                                            maxItems: 16
+                                            type: array
+                                          healthyThreshold:
+                                            default: 1
+                                            description: Consecutive successful probes
+                                              before an evicted backend is restored.
+                                            format: int32
+                                            minimum: 1
+                                            type: integer
+                                          interval:
+                                            default: 10s
+                                            description: Time between probes of one
+                                              backend.
+                                            maxLength: 32
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
+                                            x-kubernetes-validations:
+                                            - message: interval must be at least 1
+                                                second
+                                              rule: duration(self) >= duration('1s')
+                                          path:
+                                            default: /health
+                                            description: HTTP path to probe.
+                                            maxLength: 2048
+                                            minLength: 1
+                                            type: string
+                                            x-kubernetes-validations:
+                                            - message: path must start with /
+                                              rule: self.startsWith('/')
+                                          timeout:
+                                            default: 3s
+                                            description: How long to wait for a probe
+                                              response before counting it as a failure.
+                                            maxLength: 32
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
+                                            x-kubernetes-validations:
+                                            - message: timeout must be at least 100
+                                                milliseconds
+                                              rule: duration(self) >= duration('100ms')
+                                          unhealthyThreshold:
+                                            default: 3
+                                            description: Consecutive failed probes
+                                              before the backend is evicted.
+                                            format: int32
+                                            minimum: 1
+                                            type: integer
+                                        type: object
                                       eviction:
                                         description: Settings for evicting unhealthy
                                           backends.
@@ -15602,6 +15665,65 @@ spec:
                   health:
                     description: Settings for passive and active health checking.
                     properties:
+                      active:
+                        description: |-
+                          Settings for probing the backend on a timer. A backend that fails unhealthyThreshold probes
+                          in a row is evicted and stays evicted while probes keep failing; it is restored after
+                          healthyThreshold successful probes. Only LLM provider backends are probed.
+                        properties:
+                          expectedStatuses:
+                            description: HTTP status codes that count as healthy.
+                              When unset, any 2xx status is healthy.
+                            items:
+                              format: int32
+                              maximum: 599
+                              minimum: 100
+                              type: integer
+                            maxItems: 16
+                            type: array
+                          healthyThreshold:
+                            default: 1
+                            description: Consecutive successful probes before an evicted
+                              backend is restored.
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          interval:
+                            default: 10s
+                            description: Time between probes of one backend.
+                            maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                            type: string
+                            x-kubernetes-validations:
+                            - message: interval must be at least 1 second
+                              rule: duration(self) >= duration('1s')
+                          path:
+                            default: /health
+                            description: HTTP path to probe.
+                            maxLength: 2048
+                            minLength: 1
+                            type: string
+                            x-kubernetes-validations:
+                            - message: path must start with /
+                              rule: self.startsWith('/')
+                          timeout:
+                            default: 3s
+                            description: How long to wait for a probe response before
+                              counting it as a failure.
+                            maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                            type: string
+                            x-kubernetes-validations:
+                            - message: timeout must be at least 100 milliseconds
+                              rule: duration(self) >= duration('100ms')
+                          unhealthyThreshold:
+                            default: 3
+                            description: Consecutive failed probes before the backend
+                              is evicted.
+                            format: int32
+                            minimum: 1
+                            type: integer
+                        type: object
                       eviction:
                         description: Settings for evicting unhealthy backends.
                         properties:

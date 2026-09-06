@@ -1513,6 +1513,17 @@ func (this *BackendPolicySpec_Eviction) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendPolicySpec_ActiveHealthCheck
+func (this *BackendPolicySpec_ActiveHealthCheck) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_ActiveHealthCheck
+func (this *BackendPolicySpec_ActiveHealthCheck) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendPolicySpec_Health
 func (this *BackendPolicySpec_Health) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

@@ -1604,6 +1604,22 @@ message BackendPolicySpec {
     // either condition is met. When neither is set, a single unhealthy response triggers eviction.
     optional double health_threshold = 6;
   }
+  message ActiveHealthCheck {
+    // HTTP path to probe. When empty, defaults to /health.
+    string path = 1;
+    // Time between probes of one backend. When unset, defaults to 10s.
+    google.protobuf.Duration interval = 2;
+    // How long to wait for a probe response before counting it as a failure.
+    // When unset, defaults to 3s.
+    google.protobuf.Duration timeout = 3;
+    // Consecutive successful probes before an evicted backend is restored.
+    // When zero, defaults to 1.
+    uint32 healthy_threshold = 4;
+    // Consecutive failed probes before the backend is evicted. When zero, defaults to 3.
+    uint32 unhealthy_threshold = 5;
+    // HTTP status codes that count as healthy. When empty, any 2xx status is healthy.
+    repeated uint32 expected_statuses = 6;
+  }
   message Health {
     // cel expression evaluated per request to determine if eviction should be triggered
     // `true`: treat this response as **unhealthy** (candidate for eviction).
@@ -1612,6 +1628,9 @@ message BackendPolicySpec {
     // This default lowers the backend's health score but does not trigger eviction on its own.
     string unhealthy_condition = 1;
     Eviction eviction = 2;
+    // Probe the backend on a timer, evicting it while probes fail and restoring it once they
+    // pass. Only LLM provider backends are probed.
+    ActiveHealthCheck active = 3;
   }
   message BackendTLS {
     enum VerificationMode {

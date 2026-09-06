@@ -9295,6 +9295,17 @@
               "type": "null"
             }
           ]
+        },
+        "active": {
+          "description": "Settings for probing the backend on a timer.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActiveHealthCheck"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -9333,6 +9344,52 @@
             "null"
           ],
           "format": "double"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActiveHealthCheck": {
+      "description": "Active health check: probe the backend on a timer instead of waiting for real traffic to fail.\n\nA backend that fails `unhealthy_threshold` probes in a row is evicted and stays evicted while\nit keeps failing; it is restored after `healthy_threshold` successful probes. Only LLM provider\nbackends are probed. Every field has a default, so `active: {}` probes with the defaults.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "HTTP path to probe. Defaults to `/health`.",
+          "type": "string",
+          "default": "/health"
+        },
+        "interval": {
+          "description": "Time between probes of one backend. Defaults to `10s`.",
+          "type": "string",
+          "default": "10s"
+        },
+        "timeout": {
+          "description": "How long to wait for a probe response before counting it as a failure. Defaults to `3s`.",
+          "type": "string",
+          "default": "3s"
+        },
+        "healthyThreshold": {
+          "description": "Consecutive successful probes before an evicted backend is restored. Defaults to 1.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 1
+        },
+        "unhealthyThreshold": {
+          "description": "Consecutive failed probes before the backend is evicted. Defaults to 3.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 3
+        },
+        "expectedStatuses": {
+          "description": "HTTP status codes that count as healthy. When empty, any 2xx status is healthy.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          }
         }
       },
       "additionalProperties": false

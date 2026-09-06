@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::cel::{ContextBuilder, Expression};
-use crate::{serde_dur_option, *};
+use crate::{serde_dur, serde_dur_option, *};
 
 /// Eviction sub-policy: how long to remove a backend from the active set after an unhealthy response.
 #[apply(schema_ser!)]
@@ -42,6 +42,96 @@ pub struct Eviction {
 	pub health_threshold: Option<f64>,
 }
 
+pub const DEFAULT_ACTIVE_PATH: &str = "/health";
+pub const DEFAULT_ACTIVE_INTERVAL: Duration = Duration::from_secs(10);
+pub const DEFAULT_ACTIVE_TIMEOUT: Duration = Duration::from_secs(3);
+pub const DEFAULT_HEALTHY_THRESHOLD: u32 = 1;
+pub const DEFAULT_UNHEALTHY_THRESHOLD: u32 = 3;
+
+/// Active health check: probe the backend on a timer instead of waiting for real traffic to fail.
+///
+/// A backend that fails `unhealthy_threshold` probes in a row is evicted and stays evicted while
+/// it keeps failing; it is restored after `healthy_threshold` successful probes. Only LLM provider
+/// backends are probed. Every field has a default, so `active: {}` probes with the defaults.
+#[apply(schema!)]
+#[serde(default)]
+pub struct ActiveHealthCheck {
+	/// HTTP path to probe. Defaults to `/health`.
+	pub path: Strng,
+	/// Time between probes of one backend. Defaults to `10s`.
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub interval: Duration,
+	/// How long to wait for a probe response before counting it as a failure. Defaults to `3s`.
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub timeout: Duration,
+	/// Consecutive successful probes before an evicted backend is restored. Defaults to 1.
+	pub healthy_threshold: u32,
+	/// Consecutive failed probes before the backend is evicted. Defaults to 3.
+	pub unhealthy_threshold: u32,
+	/// HTTP status codes that count as healthy. When empty, any 2xx status is healthy.
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub expected_statuses: Vec<u16>,
+}
+
+impl Default for ActiveHealthCheck {
+	fn default() -> Self {
+		Self {
+			path: DEFAULT_ACTIVE_PATH.into(),
+			interval: DEFAULT_ACTIVE_INTERVAL,
+			timeout: DEFAULT_ACTIVE_TIMEOUT,
+			healthy_threshold: DEFAULT_HEALTHY_THRESHOLD,
+			unhealthy_threshold: DEFAULT_UNHEALTHY_THRESHOLD,
+			expected_statuses: Vec::new(),
+		}
+	}
+}
+
+impl ActiveHealthCheck {
+	/// Whether a probe response with this status counts as healthy.
+	pub fn accepts(&self, status: ::http::StatusCode) -> bool {
+		if self.expected_statuses.is_empty() {
+			status.is_success()
+		} else {
+			self.expected_statuses.contains(&status.as_u16())
+		}
+	}
+
+	fn validate(&self) -> Result<(), crate::cel::Error> {
+		let invalid = |msg: &str| crate::cel::Error::Variable(format!("health.active.{msg}"));
+		let checks = [
+			(self.path.starts_with('/'), "path must start with /"),
+			(
+				!self.interval.is_zero(),
+				"interval must be greater than zero",
+			),
+			(!self.timeout.is_zero(), "timeout must be greater than zero"),
+			(
+				self.healthy_threshold > 0,
+				"healthyThreshold must be at least 1",
+			),
+			(
+				self.unhealthy_threshold > 0,
+				"unhealthyThreshold must be at least 1",
+			),
+		];
+		if let Some((_, msg)) = checks.iter().find(|(ok, _)| !ok) {
+			return Err(invalid(msg));
+		}
+		if let Some(code) = self
+			.expected_statuses
+			.iter()
+			.find(|c| !(100..=599).contains(*c))
+		{
+			return Err(invalid(&format!(
+				"expectedStatuses contains an invalid HTTP status code: {code}"
+			)));
+		}
+		Ok(())
+	}
+}
+
 /// Health policy: determines when a backend is unhealthy and how to evict it.
 ///
 /// Maps to the proto `Health` message containing an `unhealthy_condition` CEL expression
@@ -58,6 +148,10 @@ pub struct Policy {
 	/// Eviction settings. When absent, falls back to defaults.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub eviction: Option<Eviction>,
+
+	/// Active health check. When absent, health is only observed from real traffic.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub active: Option<ActiveHealthCheck>,
 }
 
 const DEFAULT_EVICTION_SECS: u64 = 3;
@@ -170,6 +264,9 @@ pub struct LocalHealthPolicy {
 	/// Settings for temporarily removing unhealthy backends.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub eviction: Option<LocalEviction>,
+	/// Settings for probing the backend on a timer.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub active: Option<ActiveHealthCheck>,
 }
 
 impl TryFrom<LocalHealthPolicy> for Policy {
@@ -203,9 +300,13 @@ impl TryFrom<LocalHealthPolicy> for Policy {
 			Some(s) if !s.trim().is_empty() => Some(Arc::new(Expression::new_strict(&s)?)),
 			_ => None,
 		};
+		if let Some(active) = &local.active {
+			active.validate()?;
+		}
 		Ok(Policy {
 			unhealthy_expression,
 			eviction,
+			active: local.active,
 		})
 	}
 }
@@ -563,5 +664,76 @@ mod tests {
 			eviction.is_some(),
 			"consecutive_failures=3 after uneviction → immediate re-eviction"
 		);
+	}
+
+	// --- active health check config ---
+
+	#[test]
+	fn active_check_accepts_2xx_by_default() {
+		let check = ActiveHealthCheck::default();
+		assert!(check.accepts(::http::StatusCode::OK));
+		assert!(check.accepts(::http::StatusCode::NO_CONTENT));
+		assert!(!check.accepts(::http::StatusCode::SERVICE_UNAVAILABLE));
+		assert!(!check.accepts(::http::StatusCode::NOT_FOUND));
+	}
+
+	#[test]
+	fn active_check_accepts_only_listed_statuses() {
+		let check = ActiveHealthCheck {
+			expected_statuses: vec![200, 404],
+			..Default::default()
+		};
+		assert!(check.accepts(::http::StatusCode::OK));
+		assert!(check.accepts(::http::StatusCode::NOT_FOUND));
+		assert!(!check.accepts(::http::StatusCode::NO_CONTENT));
+	}
+
+	#[test]
+	fn local_active_check_fills_defaults() {
+		let local: LocalHealthPolicy =
+			serde_json::from_value(serde_json::json!({"active": {"interval": "5s"}})).unwrap();
+		let active = Policy::try_from(local).unwrap().active.unwrap();
+		assert_eq!(active.path.as_str(), DEFAULT_ACTIVE_PATH);
+		assert_eq!(active.interval, Duration::from_secs(5));
+		assert_eq!(active.timeout, DEFAULT_ACTIVE_TIMEOUT);
+		assert_eq!(active.healthy_threshold, DEFAULT_HEALTHY_THRESHOLD);
+		assert_eq!(active.unhealthy_threshold, DEFAULT_UNHEALTHY_THRESHOLD);
+	}
+
+	#[test]
+	fn local_active_check_rejects_invalid_values() {
+		for (name, check) in [
+			(
+				"path",
+				ActiveHealthCheck {
+					path: "health".into(),
+					..Default::default()
+				},
+			),
+			(
+				"interval",
+				ActiveHealthCheck {
+					interval: Duration::ZERO,
+					..Default::default()
+				},
+			),
+			(
+				"threshold",
+				ActiveHealthCheck {
+					unhealthy_threshold: 0,
+					..Default::default()
+				},
+			),
+			(
+				"status",
+				ActiveHealthCheck {
+					expected_statuses: vec![900],
+					..Default::default()
+				},
+			),
+		] {
+			let err = check.validate().unwrap_err();
+			assert!(err.to_string().contains("health.active"), "{name}: {err}");
+		}
 	}
 }

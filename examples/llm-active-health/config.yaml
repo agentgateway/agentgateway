@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+llm:
+  port: 4000
+  models:
+  # Two replicas of one self-hosted model. Each replica is probed on a timer: after three
+  # failed probes in a row it is evicted, and it stays evicted until a probe passes again,
+  # so a replica that is down for days never receives a request. Passive eviction still
+  # applies to failures seen on real traffic.
+  - name: qwen3-a
+    visibility: internal
+    provider:
+      custom:
+        formats:
+        - type: completions
+    params:
+      baseUrl: http://vllm-a.internal:8000/v1
+      model: Qwen/Qwen3-32B
+    health:
+      eviction:
+        duration: 30s
+        restoreHealth: 1.0
+      active:
+        path: /health
+        interval: 10s
+        timeout: 3s
+        unhealthyThreshold: 3
+        healthyThreshold: 1
+  - name: qwen3-b
+    visibility: internal
+    provider:
+      custom:
+        formats:
+        - type: completions
+    params:
+      baseUrl: http://vllm-b.internal:8000/v1
+      model: Qwen/Qwen3-32B
+    health:
+      eviction:
+        duration: 30s
+        restoreHealth: 1.0
+      active:
+        path: /health
+        interval: 10s
+        timeout: 3s
+        unhealthyThreshold: 3
+        healthyThreshold: 1
+  virtualModels:
+  # Clients ask for `qwen3`; requests go to whichever replicas are currently healthy.
+  - name: qwen3
+    routing:
+      failover:
+        targets:
+        - model: qwen3-a
+          priority: 0
+        - model: qwen3-b
+          priority: 0
