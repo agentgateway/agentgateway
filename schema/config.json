@@ -5814,14 +5814,21 @@
       ]
     },
     "ServerToolsConfig": {
-      "description": "Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an\nMCP tool and continuing the turn. This applies to Anthropic Messages requests only and only to\ntools the client declared as server-executed; client tools are never touched.",
+      "description": "Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an\nMCP tool and continuing the turn. This applies to Anthropic Messages and OpenAI Responses\nrequests, and only to tools the client declared as server-executed: Anthropic server tools,\nResponses built-in tools, and Responses `mcp` servers. Client tools are never touched.",
       "type": "object",
       "properties": {
         "tools": {
-          "description": "Server tools to fulfil, matched by the tool `type` the client declares.",
+          "description": "Server tools to fulfil, matched by the tool `type` the client declares, for example\n`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`\n(Responses).",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ServerToolMapping"
+          }
+        },
+        "mcpServers": {
+          "description": "Remote MCP servers a Responses client may declare as `{\"type\": \"mcp\"}` tools, mapped to\nconfigured MCP backends. The backend's tools are exposed to the model by name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerToolMcpServer"
           }
         },
         "maxIterations": {
@@ -5849,10 +5856,7 @@
           "default": "failClosed"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "tools"
-      ]
+      "additionalProperties": false
     },
     "ServerToolMapping": {
       "description": "Maps one server tool type to the MCP tool that fulfils it.",
@@ -5907,6 +5911,46 @@
       "required": [
         "backend",
         "tool"
+      ]
+    },
+    "ServerToolMcpServer": {
+      "description": "Maps a remote MCP server a Responses client declares to a configured MCP backend.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "description": "Matches the client's `server_label`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "Matches the client's `server_url`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "backend": {
+          "description": "Name of the MCP backend to call.",
+          "type": "string"
+        },
+        "target": {
+          "description": "Target within the backend. Required when the backend has more than one target.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skipApproval": {
+          "description": "Run tools even when the client asks for approval before each call, which is the Responses\nAPI default. Off by default, in which case such requests are rejected with a 400, since\nthe gateway cannot pause a turn for approval.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "backend"
       ]
     },
     "ServerToolFailureMode": {

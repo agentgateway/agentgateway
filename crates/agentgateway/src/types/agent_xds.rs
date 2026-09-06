@@ -4091,6 +4091,28 @@ fn convert_server_tools(
 			})
 		})
 		.collect::<Result<Vec<_>, ProtoError>>()?;
+	let mcp_servers = st
+		.mcp_servers
+		.iter()
+		.map(|m| {
+			let backend = match m.backend.as_ref().and_then(|b| b.kind.as_ref()) {
+				Some(proto::agent::backend_reference::Kind::Backend(key)) => strng::new(key),
+				_ => {
+					return Err(ProtoError::Generic(format!(
+						"serverTools.mcpServers[{}].backend must reference a Backend",
+						m.label.as_deref().or(m.url.as_deref()).unwrap_or("")
+					)));
+				},
+			};
+			Ok(llm::policy::ServerToolMcpServer {
+				label: m.label.as_deref().map(strng::new),
+				url: m.url.as_deref().map(strng::new),
+				backend,
+				target: m.target.as_deref().map(strng::new),
+				skip_approval: m.skip_approval,
+			})
+		})
+		.collect::<Result<Vec<_>, ProtoError>>()?;
 	let failure_mode = match server_tools::FailureMode::try_from(st.failure_mode)
 		.map_err(|_| ProtoError::EnumParse("invalid server tools failure mode".to_string()))?
 	{
@@ -4100,6 +4122,7 @@ fn convert_server_tools(
 	let defaults = llm::policy::ServerToolsConfig::defaults();
 	Ok(llm::policy::ServerToolsConfig {
 		tools,
+		mcp_servers,
 		max_iterations: st.max_iterations.unwrap_or(defaults.max_iterations),
 		max_result_bytes: st
 			.max_result_bytes

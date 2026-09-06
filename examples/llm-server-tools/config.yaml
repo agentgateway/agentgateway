@@ -28,7 +28,15 @@ llm:
       keepaliveInterval: 15s
       failureMode: failClosed
       tools:
-      - type: web_search_*
+      # Anthropic Messages clients declare `{"type": "web_search_20250305", ...}`; OpenAI Responses
+      # clients declare `{"type": "web_search"}`. Both are fulfilled by the MCP `search` tool.
+      - type: web_search*
         mcp:
           backend: search
           tool: search
+      # A Responses client may also declare the server itself as
+      # `{"type": "mcp", "server_label": "search", "require_approval": "never"}`; every tool the
+      # backend serves is then offered to the model by name.
+      mcpServers:
+      - label: search
+        backend: search

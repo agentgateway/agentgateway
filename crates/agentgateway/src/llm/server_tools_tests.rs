@@ -11,7 +11,8 @@ use wiremock::{Mock, MockServer, Request as MockRequest, Respond, ResponseTempla
 
 use crate::llm::custom::ProviderFormat;
 use crate::llm::policy::{
-	ServerToolFailureMode, ServerToolMapping, ServerToolMcpTarget, ServerToolsConfig,
+	ServerToolFailureMode, ServerToolMapping, ServerToolMcpServer, ServerToolMcpTarget,
+	ServerToolsConfig,
 };
 use crate::llm::{Policy, RouteType};
 use crate::test_helpers::proxymock::{
@@ -104,6 +105,8 @@ enum Model {
 	MixedTools,
 	/// Answers without calling any tool.
 	AnswerOnly,
+	/// Calls the MCP server's `search` tool by its own name, then answers.
+	McpSearchThenAnswer,
 }
 
 /// An OpenAI chat completions server.
@@ -113,12 +116,16 @@ struct LlmUpstream {
 	streaming: bool,
 }
 
-fn tool_call_json(id: &str, query: &str) -> Value {
+fn named_call_json(id: &str, name: &str, query: &str) -> Value {
 	json!({
 		"id": id,
 		"type": "function",
-		"function": {"name": "web_search", "arguments": json!({"query": query}).to_string()},
+		"function": {"name": name, "arguments": json!({"query": query}).to_string()},
 	})
+}
+
+fn tool_call_json(id: &str, query: &str) -> Value {
+	named_call_json(id, "web_search", query)
 }
 
 impl LlmUpstream {
@@ -128,6 +135,14 @@ impl LlmUpstream {
 			Model::SearchThenAnswer if !has_tool_result => {
 				(search("super bowl lx winner".to_string()), None)
 			},
+			Model::McpSearchThenAnswer if !has_tool_result => (
+				vec![named_call_json(
+					&format!("call_{calls}"),
+					"search",
+					"super bowl lx winner",
+				)],
+				None,
+			),
 			Model::RepeatSearch => (search("super bowl lx winner".to_string()), None),
 			Model::EndlessSearch => (search(format!("query {calls}")), None),
 			Model::MixedTools if !has_tool_result => (
@@ -270,6 +285,7 @@ async fn setup(
 			description: None,
 			input_schema: None,
 		}],
+		mcp_servers: vec![],
 		max_iterations,
 		max_result_bytes: 64 * 1024,
 		keepalive_interval: Duration::from_millis(20),
@@ -641,4 +657,249 @@ async fn requests_without_server_tools_are_untouched() {
 		recorded(&s.llm_requests)[0]["tools"][0]["function"]["name"],
 		json!("Read")
 	);
+}
+
+// --- OpenAI Responses clients ---
+
+/// The Responses route with a `web_search*` mapping and the MCP server declared as `search`.
+async fn setup_responses(model: Model, streaming: bool, skip_approval: bool) -> Setup {
+	let (llm, llm_requests) = llm_server(model, streaming).await;
+	let (mcp, mcp_calls) = mcp_server(false).await;
+	let config = ServerToolsConfig {
+		tools: vec![ServerToolMapping {
+			tool_type: "web_search*".to_string(),
+			mcp: ServerToolMcpTarget {
+				backend: strng::format!("/{}", mcp.address()),
+				target: None,
+				tool: strng::literal!("search"),
+			},
+			description: None,
+			input_schema: None,
+		}],
+		mcp_servers: vec![ServerToolMcpServer {
+			label: Some(strng::literal!("search")),
+			url: None,
+			backend: strng::format!("/{}", mcp.address()),
+			target: None,
+			skip_approval,
+		}],
+		max_iterations: 3,
+		max_result_bytes: 64 * 1024,
+		keepalive_interval: Duration::from_millis(20),
+		failure_mode: ServerToolFailureMode::FailClosed,
+	};
+	let policy = Policy {
+		routes: [(strng::literal!("/v1/responses"), RouteType::Responses)]
+			.into_iter()
+			.collect(),
+		server_tools: Some(Arc::new(config)),
+		..Default::default()
+	};
+	let mut backend = custom_llm_backend(
+		"llm",
+		SimpleBackendReference::Backend(strng::format!("/{}", llm.address())),
+		vec![ProviderFormat::Completions],
+	);
+	backend.inline_policies = vec![BackendTrafficPolicy::AI(Arc::new(policy))];
+	let bind = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*llm.address())
+		.with_mcp_backend(*mcp.address(), true, false)
+		.with_raw_backend(backend)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/llm")));
+	Setup {
+		llm_requests,
+		mcp_calls,
+		_llm: llm,
+		_mcp: mcp,
+		bind,
+	}
+}
+
+fn responses_request(streaming: bool, tools: Value) -> Vec<u8> {
+	json!({
+		"model": "mock-model",
+		"input": "Who won Super Bowl LX?",
+		"stream": streaming,
+		"tools": tools,
+	})
+	.to_string()
+	.into_bytes()
+}
+
+async fn send_responses(
+	setup: &Setup,
+	body: Vec<u8>,
+) -> (http::StatusCode, http::HeaderMap, bytes::Bytes) {
+	let io = setup.bind.serve_http(BIND_KEY);
+	let resp = send_request_body(io, Method::POST, "http://localhost/v1/responses", &body).await;
+	let status = resp.status();
+	let headers = resp.headers().clone();
+	let body = resp.into_body().collect().await.unwrap().to_bytes();
+	(status, headers, body)
+}
+
+fn output_text(response: &Value) -> Vec<String> {
+	response["output"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.filter(|item| item["type"] == "message")
+		.flat_map(|item| item["content"].as_array().cloned().unwrap_or_default())
+		.filter_map(|part| part["text"].as_str().map(str::to_string))
+		.collect()
+}
+
+#[tokio::test]
+async fn responses_builtin_tool_is_fulfilled() {
+	let s = setup_responses(Model::SearchThenAnswer, false, false).await;
+	let (status, _, body) = send_responses(
+		&s,
+		responses_request(false, json!([{"type": "web_search"}])),
+	)
+	.await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let response: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(response["status"], json!("completed"));
+	assert_eq!(output_text(&response), ["Seattle won Super Bowl LX."]);
+	assert!(
+		response["output"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.all(|item| item["type"] != "function_call"),
+		"{response}"
+	);
+	// Usage is summed across both model calls (100 + 200 in, 10 + 20 out).
+	assert_eq!(response["usage"]["input_tokens"], json!(300));
+	assert_eq!(response["usage"]["output_tokens"], json!(30));
+
+	let calls = recorded(&s.mcp_calls);
+	assert_eq!(calls.len(), 1);
+	assert_eq!(calls[0]["name"], json!("search"));
+	assert_eq!(
+		calls[0]["arguments"],
+		json!({"query": "super bowl lx winner"})
+	);
+
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 2);
+	// The built-in reached the model as a function tool named after its type, with the MCP schema.
+	assert_eq!(requests[0]["tools"][0]["type"], json!("function"));
+	assert_eq!(
+		requests[0]["tools"][0]["function"]["name"],
+		json!("web_search")
+	);
+	assert_eq!(
+		requests[0]["tools"][0]["function"]["parameters"]["properties"]["query"]["type"],
+		json!("string")
+	);
+	// The follow-up carries the model's call and the MCP result.
+	let messages = requests[1]["messages"].as_array().unwrap();
+	assert!(
+		messages.iter().any(|m| m["role"] == "tool"),
+		"{}",
+		requests[1]
+	);
+	assert!(
+		requests[1]
+			.to_string()
+			.contains("Seattle won Super Bowl LX 24-17."),
+		"{}",
+		requests[1]
+	);
+}
+
+#[tokio::test]
+async fn responses_stream_is_held_back_and_completed() {
+	let s = setup_responses(Model::SearchThenAnswer, true, false).await;
+	let (status, headers, body) =
+		send_responses(&s, responses_request(true, json!([{"type": "web_search"}]))).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	assert!(
+		headers
+			.get(http::header::CONTENT_TYPE)
+			.and_then(|v| v.to_str().ok())
+			.is_some_and(|v| v.starts_with("text/event-stream")),
+		"{headers:?}"
+	);
+	let events = parse_sse(&body);
+	let final_response = agent_llm::responses_tools::final_response(&events)
+		.unwrap_or_else(|| panic!("no terminal event in {}", String::from_utf8_lossy(&body)));
+	assert_eq!(output_text(&final_response), ["Seattle won Super Bowl LX."]);
+	assert_eq!(final_response["usage"]["input_tokens"], json!(300));
+	assert_eq!(final_response["usage"]["output_tokens"], json!(30));
+	assert!(
+		events.iter().any(|e| {
+			e.event.as_deref() == Some("response.output_text.delta")
+				|| e.data.contains("\"response.output_text.delta\"")
+		}),
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+	assert_eq!(recorded(&s.mcp_calls).len(), 1);
+	assert_eq!(recorded(&s.llm_requests).len(), 2);
+}
+
+#[tokio::test]
+async fn responses_mcp_server_tools_are_exposed_by_name() {
+	let s = setup_responses(Model::McpSearchThenAnswer, false, false).await;
+	let tools = json!([{
+		"type": "mcp",
+		"server_label": "search",
+		"server_url": "https://mcp.example.com/mcp",
+		"require_approval": "never",
+	}]);
+	let (status, _, body) = send_responses(&s, responses_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let response: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(output_text(&response), ["Seattle won Super Bowl LX."]);
+
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 2);
+	assert_eq!(
+		requests[0]["tools"][0]["function"]["name"],
+		json!("search"),
+		"{}",
+		requests[0]
+	);
+	assert_eq!(
+		requests[0]["tools"][0]["function"]["description"],
+		json!("Search the web")
+	);
+	let calls = recorded(&s.mcp_calls);
+	assert_eq!(calls.len(), 1);
+	assert_eq!(calls[0]["name"], json!("search"));
+}
+
+#[tokio::test]
+async fn responses_mcp_server_needing_approval_is_rejected_unless_skipped() {
+	let s = setup_responses(Model::McpSearchThenAnswer, false, false).await;
+	let tools = json!([{"type": "mcp", "server_label": "search"}]);
+	let (status, _, body) = send_responses(&s, responses_request(false, tools.clone())).await;
+	assert_eq!(status, 400, "{}", String::from_utf8_lossy(&body));
+	assert!(
+		String::from_utf8_lossy(&body).contains("requires approval"),
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+	assert!(recorded(&s.llm_requests).is_empty());
+
+	let s = setup_responses(Model::McpSearchThenAnswer, false, true).await;
+	let (status, _, body) = send_responses(&s, responses_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	assert_eq!(recorded(&s.mcp_calls).len(), 1);
+}
+
+#[tokio::test]
+async fn responses_without_server_tools_are_untouched() {
+	let s = setup_responses(Model::AnswerOnly, false, false).await;
+	let tools = json!([{"type": "function", "name": "read", "parameters": {"type": "object"}}]);
+	let (status, _, body) = send_responses(&s, responses_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0]["tools"][0]["function"]["name"], json!("read"));
+	assert!(recorded(&s.mcp_calls).is_empty());
 }

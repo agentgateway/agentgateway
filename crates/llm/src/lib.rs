@@ -18,6 +18,7 @@ pub mod gemini;
 pub mod model_catalog;
 pub mod openai;
 pub mod parse;
+pub mod responses_tools;
 pub mod server_tools;
 pub mod tokenizer;
 pub mod types;
@@ -572,6 +573,8 @@ pub enum AIError {
 	JoinError(#[from] tokio::task::JoinError),
 	#[error("server tool: {0}")]
 	ServerTool(Strng),
+	#[error("server tool request: {0}")]
+	ServerToolRequest(Strng),
 }
 
 #[apply(schema!)]

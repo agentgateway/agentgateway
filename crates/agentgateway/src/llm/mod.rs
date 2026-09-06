@@ -1748,6 +1748,14 @@ impl AIProvider {
 			.read_body_and_default_model::<types::responses::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
+		if let Some(policy) = policies
+			&& let Some(config) = policy.server_tools.as_ref()
+			&& let Some(interception) =
+				server_tools::intercept_responses(config, policy, &mut req, &backend_info.inputs, &parts)
+					.await?
+		{
+			parts.extensions.insert(interception);
+		}
 
 		// Strip client-specific headers that cause AWS signature mismatches for Bedrock
 		if matches!(self, AIProvider::Bedrock(_)) {

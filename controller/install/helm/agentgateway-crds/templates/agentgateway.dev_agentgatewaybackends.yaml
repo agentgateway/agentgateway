@@ -4458,9 +4458,110 @@ spec:
                                             format: int32
                                             minimum: 1024
                                             type: integer
+                                          mcpServers:
+                                            description: |-
+                                              Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to
+                                              configured MCP backends. The backend's tools are exposed to the model by name.
+                                            items:
+                                              description: Maps a remote MCP server
+                                                a Responses client declares to a configured
+                                                MCP backend.
+                                              properties:
+                                                backendRef:
+                                                  description: |-
+                                                    The MCP backend to call.
+
+                                                    Supported types: Backend.
+                                                  properties:
+                                                    group:
+                                                      default: ""
+                                                      description: Group of the referent,
+                                                        for example `gateway.networking.k8s.io`.
+                                                        Empty selects the core API
+                                                        group
+                                                      maxLength: 253
+                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                      type: string
+                                                    kind:
+                                                      default: Service
+                                                      description: Kubernetes resource
+                                                        kind of the referent, for
+                                                        example `Service`. Defaults
+                                                        to `Service`
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                      type: string
+                                                    name:
+                                                      description: Name is the name
+                                                        of the referent.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    namespace:
+                                                      description: Namespace of the
+                                                        referent. Defaults to the
+                                                        local namespace. A cross-namespace
+                                                        reference requires a ReferenceGrant
+                                                        in the referent namespace
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                      type: string
+                                                    port:
+                                                      description: Destination port
+                                                        number. Required when the
+                                                        referent is a Kubernetes `Service`
+                                                      format: int32
+                                                      maximum: 65535
+                                                      minimum: 1
+                                                      type: integer
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: Must have port for Service
+                                                      reference
+                                                    rule: '(size(self.group) == 0
+                                                      && self.kind == ''Service'')
+                                                      ? has(self.port) : true'
+                                                label:
+                                                  description: Matches the client's
+                                                    `server_label`.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                skipApproval:
+                                                  description: |-
+                                                    Run tools even when the client asks for approval before each call, which is the Responses API
+                                                    default. Off by default, in which case such requests are rejected with a 400, since the gateway
+                                                    cannot pause a turn for approval.
+                                                  type: boolean
+                                                target:
+                                                  description: Target within the backend.
+                                                    Required when the backend has
+                                                    more than one target.
+                                                  minLength: 1
+                                                  type: string
+                                                url:
+                                                  description: Matches the client's
+                                                    `server_url`.
+                                                  maxLength: 2048
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - backendRef
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: an mcpServer needs a label
+                                                  or a url to match
+                                                rule: has(self.label) || has(self.url)
+                                            maxItems: 16
+                                            type: array
                                           tools:
-                                            description: Server tools to fulfil, matched
-                                              by the tool `type` the client declares.
+                                            description: |-
+                                              Server tools to fulfil, matched by the tool `type` the client declares, for example
+                                              `web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter` (Responses).
                                             items:
                                               description: Maps one server tool type
                                                 to the MCP tool that fulfils it.
@@ -4570,11 +4671,14 @@ spec:
                                               - type
                                               type: object
                                             maxItems: 16
-                                            minItems: 1
                                             type: array
-                                        required:
-                                        - tools
                                         type: object
+                                        x-kubernetes-validations:
+                                        - message: serverTools needs at least one
+                                            tool or mcpServer
+                                          rule: (has(self.tools) && size(self.tools)
+                                            > 0) || (has(self.mcpServers) && size(self.mcpServers)
+                                            > 0)
                                       transformations:
                                         description: |-
                                           CEL transformations to compute and set fields in the request body.
@@ -13739,9 +13843,98 @@ spec:
                             format: int32
                             minimum: 1024
                             type: integer
+                          mcpServers:
+                            description: |-
+                              Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to
+                              configured MCP backends. The backend's tools are exposed to the model by name.
+                            items:
+                              description: Maps a remote MCP server a Responses client
+                                declares to a configured MCP backend.
+                              properties:
+                                backendRef:
+                                  description: |-
+                                    The MCP backend to call.
+
+                                    Supported types: Backend.
+                                  properties:
+                                    group:
+                                      default: ""
+                                      description: Group of the referent, for example
+                                        `gateway.networking.k8s.io`. Empty selects
+                                        the core API group
+                                      maxLength: 253
+                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                      type: string
+                                    kind:
+                                      default: Service
+                                      description: Kubernetes resource kind of the
+                                        referent, for example `Service`. Defaults
+                                        to `Service`
+                                      maxLength: 63
+                                      minLength: 1
+                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                      type: string
+                                    name:
+                                      description: Name is the name of the referent.
+                                      maxLength: 253
+                                      minLength: 1
+                                      type: string
+                                    namespace:
+                                      description: Namespace of the referent. Defaults
+                                        to the local namespace. A cross-namespace
+                                        reference requires a ReferenceGrant in the
+                                        referent namespace
+                                      maxLength: 63
+                                      minLength: 1
+                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                      type: string
+                                    port:
+                                      description: Destination port number. Required
+                                        when the referent is a Kubernetes `Service`
+                                      format: int32
+                                      maximum: 65535
+                                      minimum: 1
+                                      type: integer
+                                  required:
+                                  - name
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: Must have port for Service reference
+                                    rule: '(size(self.group) == 0 && self.kind ==
+                                      ''Service'') ? has(self.port) : true'
+                                label:
+                                  description: Matches the client's `server_label`.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                                skipApproval:
+                                  description: |-
+                                    Run tools even when the client asks for approval before each call, which is the Responses API
+                                    default. Off by default, in which case such requests are rejected with a 400, since the gateway
+                                    cannot pause a turn for approval.
+                                  type: boolean
+                                target:
+                                  description: Target within the backend. Required
+                                    when the backend has more than one target.
+                                  minLength: 1
+                                  type: string
+                                url:
+                                  description: Matches the client's `server_url`.
+                                  maxLength: 2048
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - backendRef
+                              type: object
+                              x-kubernetes-validations:
+                              - message: an mcpServer needs a label or a url to match
+                                rule: has(self.label) || has(self.url)
+                            maxItems: 16
+                            type: array
                           tools:
-                            description: Server tools to fulfil, matched by the tool
-                              `type` the client declares.
+                            description: |-
+                              Server tools to fulfil, matched by the tool `type` the client declares, for example
+                              `web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter` (Responses).
                             items:
                               description: Maps one server tool type to the MCP tool
                                 that fulfils it.
@@ -13836,11 +14029,12 @@ spec:
                               - type
                               type: object
                             maxItems: 16
-                            minItems: 1
                             type: array
-                        required:
-                        - tools
                         type: object
+                        x-kubernetes-validations:
+                        - message: serverTools needs at least one tool or mcpServer
+                          rule: (has(self.tools) && size(self.tools) > 0) || (has(self.mcpServers)
+                            && size(self.mcpServers) > 0)
                       transformations:
                         description: |-
                           CEL transformations to compute and set fields in the request body.

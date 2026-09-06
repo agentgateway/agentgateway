@@ -1540,6 +1540,18 @@ message BackendPolicySpec {
         // JSON schema of the tool input shown to the model, as a JSON document. Defaults to the MCP tool's schema.
         optional string input_schema = 6;
       }
+      message McpServer {
+        // Matches the client's server_label.
+        optional string label = 1;
+        // Matches the client's server_url.
+        optional string url = 2;
+        // The MCP backend to call. Only Backend references are supported.
+        BackendReference backend = 3;
+        // Target within the backend; required when the backend has more than one target.
+        optional string target = 4;
+        // Run tools even when the client asks for approval before each call.
+        bool skip_approval = 5;
+      }
       repeated Tool tools = 1;
       // Maximum number of follow-up model calls for one client request. Defaults to 3.
       optional uint32 max_iterations = 2;
@@ -1548,6 +1560,8 @@ message BackendPolicySpec {
       // Interval between keepalive ping events while a streaming turn is held back. Defaults to 15s.
       google.protobuf.Duration keepalive_interval = 4;
       FailureMode failure_mode = 5;
+      // Remote MCP servers a Responses client may declare as "mcp" tools, mapped to MCP backends.
+      repeated McpServer mcp_servers = 6;
     }
     ServerTools server_tools = 10;
 
