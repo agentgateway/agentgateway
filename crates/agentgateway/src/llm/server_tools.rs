@@ -20,6 +20,7 @@ use tokio::sync::mpsc;
 
 use super::policy::{
 	ServerToolFailureMode, ServerToolMapping, ServerToolMcpServer, ServerToolsConfig,
+	UnmappedServerTools,
 };
 use super::*;
 use crate::mcp::{MCPInfo, ToolRuntime};
@@ -196,6 +197,15 @@ impl Conversation {
 		}
 	}
 
+	/// Withdraw the gateway's tools, so the model has to answer with what it has.
+	fn remove_tools(&mut self, names: &HashSet<&str>) {
+		match self {
+			Conversation::Messages(req) => st::remove_tools(req, names),
+			Conversation::Responses(req) => rt::remove_function_tools(req, names),
+			Conversation::Completions(req) => ct::remove_function_tools(req, names),
+		}
+	}
+
 	/// Append the model's turn and the tool results, ready to be sent again.
 	fn append(&mut self, message: &Value, results: Vec<Value>) {
 		match self {
@@ -280,6 +290,9 @@ struct BoundTool {
 	mcp_tool: String,
 	/// Index into `Interception::runtimes`.
 	runtime: usize,
+	/// The client declared a native web search, so it gets `server_tool_use` and
+	/// `web_search_tool_result` blocks back when the search output can be read as results.
+	native_search: bool,
 }
 
 /// Per-request interception state, built when the request is parsed.
@@ -356,6 +369,7 @@ impl<'a> Binder<'a> {
 		&mut self,
 		name: &str,
 		mapping: &ServerToolMapping,
+		native_search: bool,
 	) -> Option<ToolDefinition> {
 		let runtime = match self.runtime(&mapping.mcp.backend, mapping.mcp.target.as_ref()) {
 			Ok(idx) => idx,
@@ -398,6 +412,7 @@ impl<'a> Binder<'a> {
 			name: name.to_string(),
 			mcp_tool: mapping.mcp.tool.to_string(),
 			runtime,
+			native_search,
 		});
 		Some(definition)
 	}
@@ -424,15 +439,37 @@ impl<'a> Binder<'a> {
 				return Ok(Vec::new());
 			},
 		};
+		let prefix: String = descriptor
+			.server_label
+			.chars()
+			.map(|c| {
+				if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+					c
+				} else {
+					'_'
+				}
+			})
+			.collect();
 		let mut out = Vec::new();
 		for (name, def) in definitions {
 			if !descriptor.allows(&name) {
 				continue;
 			}
-			if taken.contains(&name) || self.bound.iter().any(|b| b.name == name) {
-				warn!(server = %descriptor.server_label, tool = %name, "mcp tool skipped: the name is already taken");
-				continue;
-			}
+			let is_taken = |candidate: &str| {
+				taken.contains(candidate) || self.bound.iter().any(|b| b.name == candidate)
+			};
+			// The model calls the tool by its own name; when that name is already in use, the
+			// server label is prepended so the tool stays available under a distinct name.
+			let exposed = if !is_taken(&name) {
+				name.clone()
+			} else {
+				let prefixed = format!("{prefix}_{name}");
+				if prefix.is_empty() || is_taken(&prefixed) {
+					warn!(server = %descriptor.server_label, tool = %name, "mcp tool skipped: the name is already taken");
+					continue;
+				}
+				prefixed
+			};
 			if descriptor.requires_approval(&name) && !server.skip_approval {
 				return Err(AIError::ServerToolRequest(strng::format!(
 					"mcp server {} requires approval for tool {name}; set require_approval to \"never\" or enable skipApproval on the gateway",
@@ -440,11 +477,12 @@ impl<'a> Binder<'a> {
 				)));
 			}
 			self.bound.push(BoundTool {
-				name: name.clone(),
+				name: exposed.clone(),
 				mcp_tool: name.clone(),
 				runtime,
+				native_search: false,
 			});
-			out.push((name, def));
+			out.push((exposed, def));
 		}
 		Ok(out)
 	}
@@ -473,25 +511,47 @@ impl<'a> Binder<'a> {
 	}
 }
 
+fn reject_unmapped(kind: &str, types: &[String]) -> Result<(), AIError> {
+	if types.is_empty() {
+		return Ok(());
+	}
+	Err(AIError::ServerToolRequest(strng::format!(
+		"{kind} {} cannot be executed by this provider and no serverTools mapping covers it",
+		types.join(", ")
+	)))
+}
+
 /// Rewrite a Messages client's server tools when the policy maps them. Returns `None`, leaving
 /// the request untouched, when nothing applies or the MCP tool definitions cannot be resolved.
+/// Fails when an unmapped server tool is declared and the policy rejects those.
 pub async fn intercept(
 	config: &Arc<ServerToolsConfig>,
 	policy: &Policy,
 	req: &mut types::messages::Request,
 	inputs: &Arc<ProxyInputs>,
 	parts: &Parts,
-) -> Option<Arc<Interception>> {
-	let found = st::find_server_tools(req, &config.matchers());
+) -> Result<Option<Arc<Interception>>, AIError> {
+	// Results the gateway synthesised on an earlier turn come back as history; make them
+	// readable for a provider that never ran the search.
+	st::flatten_replayed_search_results(req);
+	let matchers = config.matchers();
+	if config.unmapped == UnmappedServerTools::Reject {
+		reject_unmapped("server tool", &st::unmapped_server_tools(req, &matchers))?;
+	}
+	let found = st::find_server_tools(req, &matchers);
 	if found.is_empty() {
-		return None;
+		return Ok(None);
 	}
 	let mut binder = Binder::new(inputs, parts);
 	let mut tools: Vec<InterceptedTool> = Vec::with_capacity(found.len());
 	let mut definitions = Vec::with_capacity(found.len());
 	for tool in found {
 		let mapping = &config.tools[tool.mapping];
-		if let Some(def) = binder.bind_mapping(&tool.name, mapping).await {
+		let native_search = tool.tool_type.starts_with("web_search");
+		if let Some(def) = binder
+			.bind_mapping(&tool.name, mapping, native_search)
+			.await
+		{
 			tools.push(tool);
 			definitions.push(def);
 		}
@@ -505,13 +565,13 @@ pub async fn intercept(
 		.map(|m| m.min(u64::from(config.max_iterations)) as u32)
 		.unwrap_or(config.max_iterations)
 		.max(1);
-	binder.finish(
+	Ok(binder.finish(
 		config,
 		policy,
 		Conversation::Messages(req.clone()),
 		parts.headers.clone(),
 		max_iterations,
-	)
+	))
 }
 
 /// Rewrite a Responses client's built-in tools and `mcp` servers when the policy maps them.
@@ -524,13 +584,24 @@ pub async fn intercept_responses(
 	inputs: &Arc<ProxyInputs>,
 	parts: &Parts,
 ) -> Result<Option<Arc<Interception>>, AIError> {
-	let builtins = rt::find_builtin_tools(req, &config.matchers());
-	let descriptors = if config.mcp_servers.is_empty() {
-		Vec::new()
-	} else {
-		rt::find_mcp_descriptors(req)
-	};
-	if builtins.is_empty() && descriptors.is_empty() {
+	let matchers = config.matchers();
+	let builtins = rt::find_builtin_tools(req, &matchers);
+	let descriptors = rt::find_mcp_descriptors(req);
+	if config.unmapped == UnmappedServerTools::Reject {
+		reject_unmapped("built-in tool", &rt::unmapped_builtin_tools(req, &matchers))?;
+		let unmapped_servers: Vec<String> = descriptors
+			.iter()
+			.filter(|d| {
+				!config
+					.mcp_servers
+					.iter()
+					.any(|s| s.matches(&d.server_label, d.server_url.as_deref()))
+			})
+			.map(|d| d.server_label.clone())
+			.collect();
+		reject_unmapped("mcp server", &unmapped_servers)?;
+	}
+	if builtins.is_empty() && (descriptors.is_empty() || config.mcp_servers.is_empty()) {
 		return Ok(None);
 	}
 	let taken = rt::client_tool_names(req);
@@ -540,7 +611,7 @@ pub async fn intercept_responses(
 	let mut definitions = Vec::with_capacity(builtins.len());
 	for tool in builtins {
 		let mapping = &config.tools[tool.mapping];
-		if let Some(def) = binder.bind_mapping(&tool.name, mapping).await {
+		if let Some(def) = binder.bind_mapping(&tool.name, mapping, false).await {
 			tools.push(tool);
 			definitions.push(def);
 		}
@@ -582,27 +653,42 @@ pub async fn intercept_responses(
 }
 
 /// Rewrite a Chat Completions client's `web_search_options` into a function tool when a
-/// `web_search*` mapping exists. Returns `None`, leaving the request untouched, otherwise.
+/// `web_search*` mapping exists. Returns `None`, leaving the request untouched, otherwise, or
+/// fails when the policy rejects unmapped server tools.
 pub async fn intercept_completions(
 	config: &Arc<ServerToolsConfig>,
 	policy: &Policy,
 	req: &mut types::completions::Request,
 	inputs: &Arc<ProxyInputs>,
 	parts: &Parts,
-) -> Option<Arc<Interception>> {
-	let tool = ct::find_web_search(req, &config.matchers())?;
+) -> Result<Option<Arc<Interception>>, AIError> {
+	let matchers = config.matchers();
+	let Some(tool) = ct::find_web_search(req, &matchers) else {
+		if config.unmapped == UnmappedServerTools::Reject
+			&& req.rest.get("web_search_options").is_some()
+			&& !matchers
+				.iter()
+				.any(|m| m.matches(ct::WEB_SEARCH_OPTIONS_TYPE))
+		{
+			reject_unmapped("server tool", &[ct::WEB_SEARCH_OPTIONS_TYPE.to_string()])?;
+		}
+		return Ok(None);
+	};
 	let mut binder = Binder::new(inputs, parts);
-	let def = binder
-		.bind_mapping(&tool.name, &config.tools[tool.mapping])
-		.await?;
+	let Some(def) = binder
+		.bind_mapping(&tool.name, &config.tools[tool.mapping], false)
+		.await
+	else {
+		return Ok(None);
+	};
 	ct::rewrite_web_search(req, &tool, &def);
-	binder.finish(
+	Ok(binder.finish(
 		config,
 		policy,
 		Conversation::Completions(req.clone()),
 		parts.headers.clone(),
 		config.max_iterations.max(1),
-	)
+	))
 }
 
 /// What the proxy needs to send a follow-up request to the same upstream.
@@ -651,11 +737,19 @@ enum TurnOutcome {
 	Failed(BufferedResponse),
 }
 
+/// What the model is told when the loop has to stop before it is done.
+const LIMIT_REACHED: &str = "tool call limit reached; answer with the information gathered so far";
+
 struct LoopState {
 	conversation: Conversation,
 	totals: Totals,
 	iteration: u32,
 	last_fingerprint: Option<String>,
+	/// Native web searches that ran, with their output, for the result blocks a Messages client
+	/// gets back.
+	searches: Vec<(ToolUse, String)>,
+	/// The tools have been withdrawn and the next response ends the turn.
+	concluding: bool,
 }
 
 impl LoopState {
@@ -665,7 +759,32 @@ impl LoopState {
 			totals: Totals::new(interception.wire()),
 			iteration: 0,
 			last_fingerprint: None,
+			searches: Vec::new(),
+			concluding: false,
 		}
+	}
+
+	/// Add the `server_tool_use` and `web_search_tool_result` pairs for the searches that ran to a
+	/// Messages response. Returns whether anything was added.
+	fn add_native_search_blocks(&self, wire: Wire, message: &mut Value) -> bool {
+		if wire != Wire::Messages || self.searches.is_empty() {
+			return false;
+		}
+		let mut blocks = Vec::new();
+		for (call, output) in &self.searches {
+			let results = st::extract_search_results(output);
+			if results.is_empty() {
+				continue;
+			}
+			let (use_block, result_block) = st::web_search_blocks(call, &results);
+			blocks.push(use_block);
+			blocks.push(result_block);
+		}
+		if blocks.is_empty() {
+			return false;
+		}
+		st::prepend_blocks(message, blocks);
+		true
 	}
 }
 
@@ -675,6 +794,16 @@ enum Next {
 		strip: bool,
 	},
 	Execute(Vec<ToolUse>),
+	/// The loop must stop: tell the model its calls were not run, withdraw the tools, and let it
+	/// answer with what it has.
+	Conclude(Vec<ToolUse>),
+}
+
+/// What one round of tool execution produced.
+struct Executed {
+	results: Vec<Value>,
+	/// Successful native web searches and their output text.
+	searches: Vec<(ToolUse, String)>,
 }
 
 impl AIProvider {
@@ -769,6 +898,10 @@ fn decide(interception: &Interception, state: &LoopState, message: &Value) -> Ne
 	if ours.is_empty() {
 		return Next::Finish { strip: false };
 	}
+	if state.concluding {
+		debug!("model called a withdrawn server tool; ending the turn");
+		return Next::Finish { strip: true };
+	}
 	if ours.len() != calls.len() {
 		debug!("model mixed server tools with client tools; returning the client tools");
 		return Next::Finish { strip: true };
@@ -776,13 +909,13 @@ fn decide(interception: &Interception, state: &LoopState, message: &Value) -> Ne
 	if state.iteration >= interception.max_iterations {
 		debug!(
 			iterations = state.iteration,
-			"server tool iteration cap reached; ending the turn"
+			"server tool iteration cap reached; asking the model to conclude"
 		);
-		return Next::Finish { strip: true };
+		return Next::Conclude(ours);
 	}
 	if state.last_fingerprint.as_deref() == Some(st::fingerprint(&ours).as_str()) {
-		debug!("model repeated the same server tool call; ending the turn");
-		return Next::Finish { strip: true };
+		debug!("model repeated the same server tool call; asking the model to conclude");
+		return Next::Conclude(ours);
 	}
 	Next::Execute(ours)
 }
@@ -791,9 +924,10 @@ async fn execute(
 	interception: &Interception,
 	calls: &[ToolUse],
 	mcp_log: Option<&AsyncLog<MCPInfo>>,
-) -> Result<Vec<Value>, AIError> {
+) -> Result<Executed, AIError> {
 	let wire = interception.wire();
 	let mut results = Vec::with_capacity(calls.len());
+	let mut searches = Vec::new();
 	for call in calls {
 		let tool = interception
 			.tool(&call.name)
@@ -804,12 +938,20 @@ async fn execute(
 			.ok_or_else(|| server_tool_error(format!("no runtime for tool {}", call.name)))?;
 		let outcome = runtime.call(&tool.mcp_tool, &call.input, mcp_log).await;
 		let item = match outcome {
-			Ok(outcome) => wire.tool_result(
-				call,
-				&outcome.content,
-				outcome.is_error,
-				interception.config.max_result_bytes,
-			),
+			Ok(outcome) => {
+				if tool.native_search && !outcome.is_error {
+					searches.push((
+						call.clone(),
+						rt::mcp_content_to_output(&outcome.content, usize::MAX),
+					));
+				}
+				wire.tool_result(
+					call,
+					&outcome.content,
+					outcome.is_error,
+					interception.config.max_result_bytes,
+				)
+			},
 			Err(e) => match interception.config.failure_mode {
 				ServerToolFailureMode::FailClosed => {
 					return Err(server_tool_error(format!("tool {} failed: {e}", call.name)));
@@ -822,7 +964,27 @@ async fn execute(
 		};
 		results.push(item);
 	}
-	Ok(results)
+	Ok(Executed { results, searches })
+}
+
+/// Feed the model error results for calls the loop will not run, withdraw the gateway's tools,
+/// and prepare the follow-up that ends the turn.
+fn conclude(
+	interception: &Interception,
+	state: &mut LoopState,
+	message: &Value,
+	calls: &[ToolUse],
+) {
+	let wire = interception.wire();
+	let results = calls
+		.iter()
+		.map(|call| wire.error_result(call, LIMIT_REACHED))
+		.collect();
+	state.totals.add(message);
+	state.iteration += 1;
+	state.concluding = true;
+	state.conversation.append(message, results);
+	state.conversation.remove_tools(&interception.names());
 }
 
 async fn close_runtimes(interception: &Interception) {
@@ -930,6 +1092,7 @@ impl AIProvider {
 					if strip {
 						wire.strip(&mut message, &interception.names());
 					}
+					state.add_native_search_blocks(wire, &mut message);
 					state.totals.add(&message);
 					state.totals.set(&mut message);
 					let translated = wire.parse_final(message)?;
@@ -947,11 +1110,21 @@ impl AIProvider {
 						.await;
 				},
 				Next::Execute(calls) => {
-					let results = execute(&interception, &calls, resend.mcp_log.as_ref()).await?;
+					let executed = execute(&interception, &calls, resend.mcp_log.as_ref()).await?;
+					state.searches.extend(executed.searches);
 					state.last_fingerprint = Some(st::fingerprint(&calls));
 					state.totals.add(&turn.message);
 					state.iteration += 1;
-					state.conversation.append(&turn.message, results);
+					state.conversation.append(&turn.message, executed.results);
+					let body =
+						self.render_follow_up(&interception, &state.conversation, &req, model_catalog)?;
+					resp = resend
+						.send(body)
+						.await
+						.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
+				},
+				Next::Conclude(calls) => {
+					conclude(&interception, &mut state, &turn.message, &calls);
 					let body =
 						self.render_follow_up(&interception, &state.conversation, &req, model_catalog)?;
 					resp = resend
@@ -1107,10 +1280,15 @@ impl AIProvider {
 					if !strip && state.iteration == 0 {
 						return Ok(Some((turn.events, message)));
 					}
+					if strip {
+						wire.strip(&mut message, &interception.names());
+					}
+					let added = state.add_native_search_blocks(wire, &mut message);
 					state.totals.add(&message);
 					state.totals.set(&mut message);
-					let events = if strip {
-						wire.strip(&mut message, &interception.names());
+					// Added or removed blocks change the block numbering, so the stream is rebuilt;
+					// otherwise the final turn's own events are replayed with the summed usage.
+					let events = if strip || added {
 						wire.synthesize(&message)
 					} else {
 						let mut events = turn.events;
@@ -1120,7 +1298,7 @@ impl AIProvider {
 					return Ok(Some((events, message)));
 				},
 				Next::Execute(calls) => {
-					let Some(results) = with_keepalive(
+					let Some(executed) = with_keepalive(
 						tx,
 						keepalive,
 						wire,
@@ -1130,11 +1308,20 @@ impl AIProvider {
 					else {
 						return Ok(None);
 					};
-					let results = results?;
+					let executed = executed?;
+					state.searches.extend(executed.searches);
 					state.last_fingerprint = Some(st::fingerprint(&calls));
 					state.totals.add(&turn.message);
 					state.iteration += 1;
-					state.conversation.append(&turn.message, results);
+					state.conversation.append(&turn.message, executed.results);
+					let body = self.render_follow_up(interception, &state.conversation, req, catalog)?;
+					let Some(sent) = with_keepalive(tx, keepalive, wire, resend.send(body)).await else {
+						return Ok(None);
+					};
+					resp = sent.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
+				},
+				Next::Conclude(calls) => {
+					conclude(interception, &mut state, &turn.message, &calls);
 					let body = self.render_follow_up(interception, &state.conversation, req, catalog)?;
 					let Some(sent) = with_keepalive(tx, keepalive, wire, resend.send(body)).await else {
 						return Ok(None);

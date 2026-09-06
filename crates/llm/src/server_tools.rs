@@ -9,7 +9,7 @@
 //! Everything in this module is plain data manipulation. Executing the tool and re-sending the
 //! request belong to the caller.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use bytes::{Bytes, BytesMut};
 use serde_json::{Map, Value, json};
@@ -44,6 +44,20 @@ impl TypeMatch {
 	}
 }
 
+/// Vendor-defined tools that share the server tool shape but are executed by the client, such as
+/// Anthropic's `bash`, `text_editor`, `computer` and `memory` tools. They are never intercepted,
+/// even when a mapping matches them: taking them over would swallow calls the client expected to
+/// run itself.
+pub const CLIENT_EXECUTED_TOOL_TYPES: &[&str] =
+	&["bash_*", "text_editor_*", "computer_*", "memory_*"];
+
+/// Whether a declared tool type is one the client executes itself.
+pub fn is_client_executed(tool_type: &str) -> bool {
+	CLIENT_EXECUTED_TOOL_TYPES
+		.iter()
+		.any(|pattern| TypeMatch::parse(pattern).matches(tool_type))
+}
+
 /// A server tool the client declared and the gateway will fulfil.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterceptedTool {
@@ -76,8 +90,8 @@ fn server_tool_parts(tool: &Value) -> Option<(&str, &str)> {
 
 /// Find the client-declared server tools that have an operator mapping.
 ///
-/// A server tool is a `tools[]` entry carrying a `type` and no `input_schema`. Custom tools and
-/// server tools without a mapping are left alone.
+/// A server tool is a `tools[]` entry carrying a `type` and no `input_schema`. Custom tools,
+/// client-executed vendor tools and server tools without a mapping are left alone.
 pub fn find_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<InterceptedTool> {
 	let Some(tools) = req.rest.get("tools").and_then(Value::as_array) else {
 		return Vec::new();
@@ -87,6 +101,13 @@ pub fn find_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercept
 		.filter_map(|tool| {
 			let (tool_type, name) = server_tool_parts(tool)?;
 			let mapping = matchers.iter().position(|m| m.matches(tool_type))?;
+			if is_client_executed(tool_type) {
+				tracing::warn!(
+					tool_type,
+					"server tool mapping matches a client-executed tool; leaving it to the client"
+				);
+				return None;
+			}
 			Some(InterceptedTool {
 				name: name.to_string(),
 				tool_type: tool_type.to_string(),
@@ -95,6 +116,47 @@ pub fn find_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercept
 			})
 		})
 		.collect()
+}
+
+/// The types of declared server tools that no mapping covers and that the client does not
+/// execute itself, so a provider without them will drop or reject them.
+pub fn unmapped_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<String> {
+	req
+		.rest
+		.get("tools")
+		.and_then(Value::as_array)
+		.into_iter()
+		.flatten()
+		.filter_map(|tool| {
+			let (tool_type, _) = server_tool_parts(tool)?;
+			if is_client_executed(tool_type) || matchers.iter().any(|m| m.matches(tool_type)) {
+				return None;
+			}
+			Some(tool_type.to_string())
+		})
+		.collect()
+}
+
+/// Remove the named tools from the request, and a `tool_choice` that forces one of them, so the
+/// model has to answer without them.
+pub fn remove_tools(req: &mut Request, names: &HashSet<&str>) {
+	if let Some(list) = req.rest.get_mut("tools").and_then(Value::as_array_mut) {
+		list.retain(|tool| {
+			!tool
+				.get("name")
+				.and_then(Value::as_str)
+				.is_some_and(|n| names.contains(n))
+		});
+	}
+	let forced = req
+		.rest
+		.get("tool_choice")
+		.and_then(|c| c.get("name"))
+		.and_then(Value::as_str)
+		.is_some_and(|n| names.contains(n));
+	if forced && let Some(rest) = req.rest.as_object_mut() {
+		rest.remove("tool_choice");
+	}
 }
 
 /// Replace each intercepted server tool with the custom tool definition, keeping the client's name
@@ -373,6 +435,330 @@ pub fn mcp_content_to_tool_result(items: &[Value], max_bytes: usize) -> Vec<Valu
 		out.push(json!({"type": "text", "text": text}));
 	}
 	out
+}
+
+/// One result extracted from a search tool's output.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SearchResult {
+	pub url: String,
+	pub title: String,
+	pub snippet: String,
+}
+
+fn string_field<'a>(obj: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a str> {
+	keys
+		.iter()
+		.find_map(|k| obj.get(*k).and_then(Value::as_str))
+}
+
+fn result_from_object(obj: &Map<String, Value>) -> Option<SearchResult> {
+	let url = string_field(obj, &["url", "link", "href"])?;
+	if !url.starts_with("http://") && !url.starts_with("https://") {
+		return None;
+	}
+	Some(SearchResult {
+		url: url.to_string(),
+		title: string_field(obj, &["title", "name"])
+			.unwrap_or_default()
+			.to_string(),
+		snippet: string_field(
+			obj,
+			&["snippet", "content", "description", "text", "summary"],
+		)
+		.unwrap_or_default()
+		.to_string(),
+	})
+}
+
+fn results_from_json(value: &Value) -> Vec<SearchResult> {
+	const LIST_KEYS: &[&str] = &[
+		"results",
+		"items",
+		"data",
+		"organic",
+		"web",
+		"hits",
+		"documents",
+	];
+	let from_list = |items: &Vec<Value>| -> Vec<SearchResult> {
+		items
+			.iter()
+			.filter_map(Value::as_object)
+			.filter_map(result_from_object)
+			.collect()
+	};
+	match value {
+		Value::Array(items) => from_list(items),
+		Value::Object(obj) => {
+			if let Some(single) = result_from_object(obj) {
+				return vec![single];
+			}
+			for key in LIST_KEYS {
+				match obj.get(*key) {
+					Some(Value::Array(items)) => {
+						let found = from_list(items);
+						if !found.is_empty() {
+							return found;
+						}
+					},
+					Some(Value::Object(inner)) => {
+						let found = results_from_json(&Value::Object(inner.clone()));
+						if !found.is_empty() {
+							return found;
+						}
+					},
+					_ => {},
+				}
+			}
+			Vec::new()
+		},
+		_ => Vec::new(),
+	}
+}
+
+fn labelled_line<'a>(line: &'a str, labels: &[&str]) -> Option<&'a str> {
+	let (label, value) = line.split_once(':')?;
+	let label = label.trim().to_ascii_lowercase();
+	labels.contains(&label.as_str()).then(|| value.trim())
+}
+
+fn results_from_text(text: &str) -> Vec<SearchResult> {
+	let mut out = Vec::new();
+	let mut current = SearchResult::default();
+	let flush = |current: &mut SearchResult, out: &mut Vec<SearchResult>| {
+		if !current.url.is_empty() {
+			out.push(std::mem::take(current));
+		} else {
+			*current = SearchResult::default();
+		}
+	};
+	for line in text.lines() {
+		if line.trim().is_empty() {
+			flush(&mut current, &mut out);
+			continue;
+		}
+		if let Some(title) = labelled_line(line, &["title", "name"]) {
+			if !current.url.is_empty() {
+				flush(&mut current, &mut out);
+			}
+			current.title = title.to_string();
+		} else if let Some(url) = labelled_line(line, &["url", "link", "source"]) {
+			if !current.url.is_empty() {
+				flush(&mut current, &mut out);
+			}
+			current.url = url.to_string();
+		} else if let Some(snippet) =
+			labelled_line(line, &["snippet", "content", "description", "summary"])
+		{
+			current.snippet = snippet.to_string();
+		} else if !current.url.is_empty() && current.snippet.is_empty() {
+			current.snippet = line.trim().to_string();
+		}
+	}
+	flush(&mut current, &mut out);
+	if !out.is_empty() {
+		return out;
+	}
+	// Last resort: bare links.
+	text
+		.split_whitespace()
+		.filter(|word| word.starts_with("http://") || word.starts_with("https://"))
+		.map(|word| SearchResult {
+			url: word
+				.trim_end_matches(['.', ',', ')', ']', ';', '\'', '"'])
+				.to_string(),
+			..Default::default()
+		})
+		.collect()
+}
+
+/// Pull search results out of a search tool's text output.
+///
+/// JSON is tried first: an array, or an object with a `results`, `items`, `data`, `organic`,
+/// `web`, `hits` or `documents` list, of objects carrying a `url` or `link`, with `title` or
+/// `name`, and `snippet`, `content`, `description`, `text` or `summary`. Otherwise `Title:`,
+/// `URL:` and `Snippet:` lines are read, and as a last resort bare links are collected. Returns
+/// nothing when the output does not look like search results.
+pub fn extract_search_results(text: &str) -> Vec<SearchResult> {
+	let trimmed = text.trim();
+	if (trimmed.starts_with('{') || trimmed.starts_with('['))
+		&& let Ok(value) = serde_json::from_str::<Value>(trimmed)
+	{
+		let found = results_from_json(&value);
+		if !found.is_empty() {
+			return found;
+		}
+	}
+	results_from_text(text)
+}
+
+/// The `server_tool_use` and `web_search_tool_result` pair a native client expects for one
+/// executed search. The result items carry no `encrypted_content`, which only the vendor can
+/// mint, and the snippet rides in an additional `snippet` field so the evidence survives a replay.
+pub fn web_search_blocks(call: &ToolUse, results: &[SearchResult]) -> (Value, Value) {
+	let use_block = json!({
+		"type": "server_tool_use",
+		"id": call.id,
+		"name": call.name,
+		"input": call.input,
+	});
+	let items: Vec<Value> = results
+		.iter()
+		.map(|r| {
+			let mut item = json!({
+				"type": "web_search_result",
+				"url": r.url,
+				"title": r.title,
+				"page_age": Value::Null,
+				"encrypted_content": "",
+			});
+			if !r.snippet.is_empty() {
+				item["snippet"] = Value::String(r.snippet.clone());
+			}
+			item
+		})
+		.collect();
+	let result_block = json!({
+		"type": "web_search_tool_result",
+		"tool_use_id": call.id,
+		"content": items,
+	});
+	(use_block, result_block)
+}
+
+/// Insert blocks at the start of a message's content, ahead of the final text.
+pub fn prepend_blocks(message: &mut Value, blocks: Vec<Value>) {
+	if blocks.is_empty() {
+		return;
+	}
+	let content = match message.get_mut("content") {
+		Some(Value::Array(content)) => content,
+		_ => {
+			message["content"] = Value::Array(Vec::new());
+			message["content"].as_array_mut().expect("just set")
+		},
+	};
+	content.splice(0..0, blocks);
+}
+
+fn render_search_results(items: &[Value]) -> String {
+	items
+		.iter()
+		.filter_map(Value::as_object)
+		.map(|item| {
+			let field = |k: &str| item.get(k).and_then(Value::as_str).unwrap_or("");
+			let mut line = format!("Title: {}\nURL: {}", field("title"), field("url"));
+			let snippet = field("snippet");
+			if !snippet.is_empty() {
+				line.push_str("\nSnippet: ");
+				line.push_str(snippet);
+			}
+			line
+		})
+		.collect::<Vec<_>>()
+		.join("\n\n")
+}
+
+/// Rewrite replayed `server_tool_use` and `web_search_tool_result` pairs whose results carry no
+/// `encrypted_content`, the shape the gateway synthesises, into one assistant text block that
+/// carries the query and the results. Both blocks sit in the assistant turn, where a provider
+/// that never ran the search has no tool call to pair them with, so text is the form every
+/// backend reads. Blocks with vendor-encrypted content are left alone.
+pub fn flatten_replayed_search_results(req: &mut Request) -> usize {
+	let mut rewritten = 0;
+	for message in &mut req.messages {
+		let Some(ContentBlock::Array(parts)) = message.content.as_mut() else {
+			continue;
+		};
+		// Queries by tool use id, so the text can say what was searched.
+		let queries: HashMap<String, String> = parts
+			.iter()
+			.filter_map(|part| match part {
+				ContentPart::Unknown(block)
+					if block.get("type").and_then(Value::as_str) == Some("server_tool_use") =>
+				{
+					Some((
+						block.get("id")?.as_str()?.to_string(),
+						block
+							.get("input")
+							.and_then(|i| i.get("query"))
+							.and_then(Value::as_str)
+							.unwrap_or_default()
+							.to_string(),
+					))
+				},
+				_ => None,
+			})
+			.collect();
+		let mut flattened_ids: HashSet<String> = HashSet::new();
+		for part in parts.iter_mut() {
+			let ContentPart::Unknown(block) = part else {
+				continue;
+			};
+			if block.get("type").and_then(Value::as_str) != Some("web_search_tool_result") {
+				continue;
+			}
+			let Some(tool_use_id) = block
+				.get("tool_use_id")
+				.and_then(Value::as_str)
+				.map(str::to_string)
+			else {
+				continue;
+			};
+			let body = match block.get("content") {
+				Some(Value::Array(items)) => {
+					let encrypted = items.iter().any(|item| {
+						item
+							.get("encrypted_content")
+							.and_then(Value::as_str)
+							.is_some_and(|c| !c.is_empty())
+					});
+					if encrypted {
+						continue;
+					}
+					if items.is_empty() {
+						"No results.".to_string()
+					} else {
+						render_search_results(items)
+					}
+				},
+				Some(Value::Object(error)) => format!(
+					"Search failed: {}",
+					error
+						.get("error_code")
+						.and_then(Value::as_str)
+						.unwrap_or("unknown error")
+				),
+				_ => continue,
+			};
+			let query = queries.get(&tool_use_id).cloned().unwrap_or_default();
+			let heading = if query.is_empty() {
+				"Web search results:".to_string()
+			} else {
+				format!("Web search for \"{query}\":")
+			};
+			*part = ContentPart::Text {
+				r#type: "text".to_string(),
+				text: format!("{heading}\n{body}"),
+				rest: Default::default(),
+			};
+			flattened_ids.insert(tool_use_id);
+			rewritten += 1;
+		}
+		if !flattened_ids.is_empty() {
+			parts.retain(|part| match part {
+				ContentPart::Unknown(block) => {
+					!(block.get("type").and_then(Value::as_str) == Some("server_tool_use")
+						&& block
+							.get("id")
+							.and_then(Value::as_str)
+							.is_some_and(|id| flattened_ids.contains(id)))
+				},
+				_ => true,
+			});
+		}
+	}
+	rewritten
 }
 
 /// One server-sent event, as parsed from a buffered stream.
@@ -662,7 +1048,7 @@ pub fn synthesize_sse(message: &Value) -> Vec<SseEvent> {
 				b["text"] = Value::String(String::new());
 				b
 			},
-			Some("tool_use") => {
+			Some("tool_use" | "server_tool_use") => {
 				deltas.push(json!({
 					"type": "input_json_delta",
 					"partial_json": block.get("input").map(Value::to_string).unwrap_or_else(|| "{}".to_string()),

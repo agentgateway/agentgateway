@@ -2705,7 +2705,9 @@ pub struct ServerToolsConfig {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub mcp_servers: Vec<ServerToolMcpServer>,
 	/// Maximum number of follow-up model calls for one client request. The client's `max_uses` is
-	/// honoured as a lower cap.
+	/// honoured as a lower cap. At the cap, and when the model repeats an identical call, the
+	/// gateway answers the pending calls with an error result, withdraws its tools, and makes one
+	/// more model call so the turn ends with an answer.
 	#[serde(default = "default_server_tool_iterations")]
 	pub max_iterations: u32,
 	/// Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
@@ -2718,6 +2720,11 @@ pub struct ServerToolsConfig {
 	/// What happens when a tool call fails.
 	#[serde(default)]
 	pub failure_mode: ServerToolFailureMode,
+	/// What happens to a declared server tool that no mapping covers. By default it is left to the
+	/// provider, which usually drops it; `reject` answers the request with a 400 that names the
+	/// tool type instead.
+	#[serde(default)]
+	pub unmapped: UnmappedServerTools,
 }
 
 impl ServerToolsConfig {
@@ -2730,6 +2737,7 @@ impl ServerToolsConfig {
 			max_result_bytes: default_server_tool_result_bytes(),
 			keepalive_interval: default_server_tool_keepalive(),
 			failure_mode: ServerToolFailureMode::default(),
+			unmapped: UnmappedServerTools::default(),
 		}
 	}
 
@@ -2798,6 +2806,17 @@ impl ServerToolMcpServer {
 		self.label.as_deref().is_some_and(|l| l == server_label)
 			|| (self.url.is_some() && self.url.as_deref() == server_url)
 	}
+}
+
+/// What happens to a declared server tool that no mapping covers.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum UnmappedServerTools {
+	/// Leave it to the provider. Providers without the tool drop it.
+	#[default]
+	Drop,
+	/// Reject the request with a 400 that names the tool type.
+	Reject,
 }
 
 /// What happens when a server tool call fails.

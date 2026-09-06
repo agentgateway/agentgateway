@@ -109,6 +109,7 @@ backends:
             maxResultBytes: 65536
             keepaliveInterval: 10s
             failureMode: failOpen
+            unmapped: reject
   - backend:
       llmRouter:
         name: "llm:router"

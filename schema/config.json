@@ -5832,7 +5832,7 @@
           }
         },
         "maxIterations": {
-          "description": "Maximum number of follow-up model calls for one client request. The client's `max_uses` is\nhonoured as a lower cap.",
+          "description": "Maximum number of follow-up model calls for one client request. The client's `max_uses` is\nhonoured as a lower cap. At the cap, and when the model repeats an identical call, the\ngateway answers the pending calls with an error result, withdraws its tools, and makes one\nmore model call so the turn ends with an answer.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0,
@@ -5854,6 +5854,11 @@
           "description": "What happens when a tool call fails.",
           "$ref": "#/$defs/ServerToolFailureMode",
           "default": "failClosed"
+        },
+        "unmapped": {
+          "description": "What happens to a declared server tool that no mapping covers. By default it is left to the\nprovider, which usually drops it; `reject` answers the request with a 400 that names the\ntool type instead.",
+          "$ref": "#/$defs/UnmappedServerTools",
+          "default": "drop"
         }
       },
       "additionalProperties": false
@@ -5965,6 +5970,21 @@
           "description": "Report the failure to the model as an error tool result and let it continue.",
           "type": "string",
           "const": "failOpen"
+        }
+      ]
+    },
+    "UnmappedServerTools": {
+      "description": "What happens to a declared server tool that no mapping covers.",
+      "oneOf": [
+        {
+          "description": "Leave it to the provider. Providers without the tool drop it.",
+          "type": "string",
+          "const": "drop"
+        },
+        {
+          "description": "Reject the request with a 400 that names the tool type.",
+          "type": "string",
+          "const": "reject"
         }
       ]
     },

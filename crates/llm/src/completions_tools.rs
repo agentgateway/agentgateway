@@ -78,6 +78,30 @@ pub fn rewrite_web_search(req: &mut Request, tool: &InterceptedTool, def: &ToolD
 		.push(json!({"type": "function", "function": function}));
 }
 
+/// Remove the named function tools, and a `tool_choice` that forces one of them, so the model has
+/// to answer without them.
+pub fn remove_function_tools(req: &mut Request, names: &HashSet<&str>) {
+	if let Some(list) = req.tools.as_mut() {
+		list.retain(|tool| {
+			!tool
+				.get("function")
+				.and_then(|f| f.get("name"))
+				.and_then(Value::as_str)
+				.is_some_and(|n| names.contains(n))
+		});
+	}
+	let forced = req
+		.tool_choice
+		.as_ref()
+		.and_then(|c| c.get("function"))
+		.and_then(|f| f.get("name"))
+		.and_then(Value::as_str)
+		.is_some_and(|n| names.contains(n));
+	if forced {
+		req.tool_choice = None;
+	}
+}
+
 fn first_choice(message: &Value) -> Option<&Value> {
 	message.get("choices")?.as_array()?.first()
 }

@@ -1526,6 +1526,12 @@ message BackendPolicySpec {
         // Report the failure to the model as an error tool result and let it continue.
         FAIL_OPEN = 1;
       }
+      enum UnmappedMode {
+        // Leave a declared server tool without a mapping to the provider.
+        DROP = 0;
+        // Reject the request with a 400 that names the tool type.
+        REJECT = 1;
+      }
       message Tool {
         // The server tool type to fulfil, such as "web_search_20250305" (Messages), "web_search"
         // (Responses) or "web_search_options" (Chat Completions). A trailing '*' matches a prefix.
@@ -1563,6 +1569,8 @@ message BackendPolicySpec {
       FailureMode failure_mode = 5;
       // Remote MCP servers a Responses client may declare as "mcp" tools, mapped to MCP backends.
       repeated McpServer mcp_servers = 6;
+      // What happens to a declared server tool that no mapping covers.
+      UnmappedMode unmapped = 7;
     }
     ServerTools server_tools = 10;
 

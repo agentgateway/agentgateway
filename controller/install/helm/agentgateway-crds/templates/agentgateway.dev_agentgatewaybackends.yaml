@@ -4673,6 +4673,15 @@ spec:
                                               type: object
                                             maxItems: 16
                                             type: array
+                                          unmapped:
+                                            description: |-
+                                              What happens to a declared server tool that no mapping covers. `Drop` (default) leaves it to
+                                              the provider, which usually drops it; `Reject` answers the request with a 400 that names the
+                                              tool type.
+                                            enum:
+                                            - Drop
+                                            - Reject
+                                            type: string
                                         type: object
                                         x-kubernetes-validations:
                                         - message: serverTools needs at least one
@@ -14032,6 +14041,15 @@ spec:
                               type: object
                             maxItems: 16
                             type: array
+                          unmapped:
+                            description: |-
+                              What happens to a declared server tool that no mapping covers. `Drop` (default) leaves it to
+                              the provider, which usually drops it; `Reject` answers the request with a 400 that names the
+                              tool type.
+                            enum:
+                            - Drop
+                            - Reject
+                            type: string
                         type: object
                         x-kubernetes-validations:
                         - message: serverTools needs at least one tool or mcpServer

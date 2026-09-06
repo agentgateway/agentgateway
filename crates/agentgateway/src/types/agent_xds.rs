@@ -4119,6 +4119,12 @@ fn convert_server_tools(
 		server_tools::FailureMode::FailClosed => llm::policy::ServerToolFailureMode::FailClosed,
 		server_tools::FailureMode::FailOpen => llm::policy::ServerToolFailureMode::FailOpen,
 	};
+	let unmapped = match server_tools::UnmappedMode::try_from(st.unmapped)
+		.map_err(|_| ProtoError::EnumParse("invalid server tools unmapped mode".to_string()))?
+	{
+		server_tools::UnmappedMode::Drop => llm::policy::UnmappedServerTools::Drop,
+		server_tools::UnmappedMode::Reject => llm::policy::UnmappedServerTools::Reject,
+	};
 	let defaults = llm::policy::ServerToolsConfig::defaults();
 	Ok(llm::policy::ServerToolsConfig {
 		tools,
@@ -4134,6 +4140,7 @@ fn convert_server_tools(
 			.transpose()?
 			.unwrap_or(defaults.keepalive_interval),
 		failure_mode,
+		unmapped,
 	})
 }
 

@@ -12,7 +12,7 @@ use wiremock::{Mock, MockServer, Request as MockRequest, Respond, ResponseTempla
 use crate::llm::custom::ProviderFormat;
 use crate::llm::policy::{
 	ServerToolFailureMode, ServerToolMapping, ServerToolMcpServer, ServerToolMcpTarget,
-	ServerToolsConfig,
+	ServerToolsConfig, UnmappedServerTools,
 };
 use crate::llm::{Policy, RouteType};
 use crate::test_helpers::proxymock::{
@@ -26,6 +26,8 @@ type Recorded = Arc<Mutex<Vec<Value>>>;
 struct McpUpstream {
 	calls: Recorded,
 	fail_calls: bool,
+	/// Answer searches with structured JSON results instead of a sentence.
+	json_results: bool,
 }
 
 impl Respond for McpUpstream {
@@ -59,8 +61,18 @@ impl Respond for McpUpstream {
 					.as_str()
 					.unwrap_or_default()
 					.to_string();
+				let text = if self.json_results {
+					json!({"results": [{
+						"title": "Super Bowl LX",
+						"url": "https://example.com/super-bowl-lx",
+						"content": format!("Result for '{query}': Seattle won Super Bowl LX 24-17."),
+					}]})
+					.to_string()
+				} else {
+					format!("Result for '{query}': Seattle won Super Bowl LX 24-17.")
+				};
 				json!({
-					"content": [{"type": "text", "text": format!("Result for '{query}': Seattle won Super Bowl LX 24-17.")}],
+					"content": [{"type": "text", "text": text}],
 					"isError": false,
 				})
 			},
@@ -77,12 +89,17 @@ impl Respond for McpUpstream {
 }
 
 async fn mcp_server(fail_calls: bool) -> (MockServer, Recorded) {
+	mcp_server_with(fail_calls, false).await
+}
+
+async fn mcp_server_with(fail_calls: bool, json_results: bool) -> (MockServer, Recorded) {
 	let calls = Recorded::default();
 	let server = MockServer::start().await;
 	Mock::given(method("POST"))
 		.respond_with(McpUpstream {
 			calls: calls.clone(),
 			fail_calls,
+			json_results,
 		})
 		.mount(&server)
 		.await;
@@ -265,6 +282,23 @@ struct Setup {
 	bind: crate::test_helpers::proxymock::TestBind,
 }
 
+/// Knobs the Messages tests vary beyond the common ones.
+struct SetupOpts {
+	tool_type: &'static str,
+	unmapped: UnmappedServerTools,
+	json_results: bool,
+}
+
+impl Default for SetupOpts {
+	fn default() -> Self {
+		Self {
+			tool_type: "web_search_*",
+			unmapped: UnmappedServerTools::Drop,
+			json_results: false,
+		}
+	}
+}
+
 async fn setup(
 	model: Model,
 	streaming: bool,
@@ -272,11 +306,30 @@ async fn setup(
 	failure_mode: ServerToolFailureMode,
 	fail_calls: bool,
 ) -> Setup {
+	setup_with(
+		model,
+		streaming,
+		max_iterations,
+		failure_mode,
+		fail_calls,
+		SetupOpts::default(),
+	)
+	.await
+}
+
+async fn setup_with(
+	model: Model,
+	streaming: bool,
+	max_iterations: u32,
+	failure_mode: ServerToolFailureMode,
+	fail_calls: bool,
+	opts: SetupOpts,
+) -> Setup {
 	let (llm, llm_requests) = llm_server(model, streaming).await;
-	let (mcp, mcp_calls) = mcp_server(fail_calls).await;
+	let (mcp, mcp_calls) = mcp_server_with(fail_calls, opts.json_results).await;
 	let config = ServerToolsConfig {
 		tools: vec![ServerToolMapping {
-			tool_type: "web_search_*".to_string(),
+			tool_type: opts.tool_type.to_string(),
 			mcp: ServerToolMcpTarget {
 				backend: strng::format!("/{}", mcp.address()),
 				target: None,
@@ -290,6 +343,7 @@ async fn setup(
 		max_result_bytes: 64 * 1024,
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode,
+		unmapped: opts.unmapped,
 	};
 	let policy = Policy {
 		routes: [(strng::literal!("/v1/messages"), RouteType::Messages)]
@@ -488,10 +542,30 @@ async fn repeated_call_ends_the_turn_without_a_tool_use() {
 			.any(|b| b["type"] == "tool_use"),
 		"{message}"
 	);
-	// One search was executed; the identical second request ended the turn.
+	// One search was executed; the identical second request was answered with an error result and
+	// the tools withdrawn, and the model was asked once more to conclude.
 	assert_eq!(recorded(&s.mcp_calls).len(), 1);
-	assert_eq!(recorded(&s.llm_requests).len(), 2);
-	assert_eq!(message["usage"]["input_tokens"], json!(300));
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 3);
+	assert!(
+		requests[2]
+			.get("tools")
+			.is_none_or(|t| t.as_array().is_some_and(Vec::is_empty)),
+		"{}",
+		requests[2]
+	);
+	let last = requests[2]["messages"]
+		.as_array()
+		.unwrap()
+		.last()
+		.unwrap()
+		.clone();
+	assert_eq!(last["role"], json!("tool"));
+	assert!(
+		last["content"].to_string().contains("limit reached"),
+		"{last}"
+	);
+	assert_eq!(message["usage"]["input_tokens"], json!(600));
 }
 
 #[tokio::test]
@@ -518,10 +592,20 @@ async fn iteration_cap_ends_the_turn() {
 			.any(|b| b["type"] == "tool_use"),
 		"{message}"
 	);
+	// Two searches ran, then the cap answered the third call with an error and the model was
+	// asked to conclude without the tool.
 	assert_eq!(recorded(&s.mcp_calls).len(), 2);
-	assert_eq!(recorded(&s.llm_requests).len(), 3);
-	assert_eq!(message["usage"]["input_tokens"], json!(600));
-	assert_eq!(message["usage"]["output_tokens"], json!(60));
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 4);
+	assert!(
+		requests[3]
+			.get("tools")
+			.is_none_or(|t| t.as_array().is_some_and(Vec::is_empty)),
+		"{}",
+		requests[3]
+	);
+	assert_eq!(message["usage"]["input_tokens"], json!(1000));
+	assert_eq!(message["usage"]["output_tokens"], json!(100));
 }
 
 #[tokio::test]
@@ -537,8 +621,9 @@ async fn client_max_uses_caps_iterations() {
 	let tools = json!([{"type": "web_search_20250305", "name": "web_search", "max_uses": 1}]);
 	let (status, _, body) = send(&s, client_request(false, tools)).await;
 	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	// One search, then the second call hits max_uses and the model concludes.
 	assert_eq!(recorded(&s.mcp_calls).len(), 1);
-	assert_eq!(recorded(&s.llm_requests).len(), 2);
+	assert_eq!(recorded(&s.llm_requests).len(), 3);
 }
 
 #[tokio::test]
@@ -687,6 +772,7 @@ async fn setup_responses(model: Model, streaming: bool, skip_approval: bool) -> 
 		max_result_bytes: 64 * 1024,
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode: ServerToolFailureMode::FailClosed,
+		unmapped: UnmappedServerTools::Drop,
 	};
 	let policy = Policy {
 		routes: [(strng::literal!("/v1/responses"), RouteType::Responses)]
@@ -926,6 +1012,7 @@ async fn setup_completions(model: Model, streaming: bool) -> Setup {
 		max_result_bytes: 64 * 1024,
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode: ServerToolFailureMode::FailClosed,
+		unmapped: UnmappedServerTools::Drop,
 	};
 	let policy = Policy {
 		routes: [(
@@ -1085,4 +1172,238 @@ async fn completions_without_web_search_options_are_untouched() {
 	assert_eq!(requests.len(), 1);
 	assert!(requests[0].get("tools").is_none(), "{}", requests[0]);
 	assert!(recorded(&s.mcp_calls).is_empty());
+}
+
+// --- interception guards and native result blocks ---
+
+#[tokio::test]
+async fn client_executed_tool_types_are_never_intercepted() {
+	// A mapping broad enough to match everything still leaves bash to the client.
+	let s = setup_with(
+		Model::AnswerOnly,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			tool_type: "*",
+			..Default::default()
+		},
+	)
+	.await;
+	let tools = json!([
+		{"type": "bash_20250124", "name": "bash"},
+		{"type": "web_search_20250305", "name": "web_search"},
+	]);
+	let (status, _, body) = send(&s, client_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 1);
+	let names: Vec<&str> = requests[0]["tools"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|t| t["function"]["name"].as_str().unwrap())
+		.collect();
+	assert_eq!(names, ["web_search"], "{}", requests[0]);
+}
+
+#[tokio::test]
+async fn unmapped_server_tools_are_rejected_when_configured() {
+	let tools = json!([{"type": "web_fetch_20250910", "name": "web_fetch"}]);
+	let s = setup_with(
+		Model::AnswerOnly,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			unmapped: UnmappedServerTools::Reject,
+			..Default::default()
+		},
+	)
+	.await;
+	let (status, _, body) = send(&s, client_request(false, tools.clone())).await;
+	assert_eq!(status, 400, "{}", String::from_utf8_lossy(&body));
+	assert!(
+		String::from_utf8_lossy(&body).contains("web_fetch_20250910"),
+		"{}",
+		String::from_utf8_lossy(&body)
+	);
+	assert!(recorded(&s.llm_requests).is_empty());
+
+	// By default the tool is left to the provider.
+	let s = setup(
+		Model::AnswerOnly,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+	)
+	.await;
+	let (status, _, _) = send(&s, client_request(false, tools)).await;
+	assert_eq!(status, 200);
+	assert_eq!(recorded(&s.llm_requests).len(), 1);
+}
+
+fn block_types(message: &Value) -> Vec<String> {
+	message["content"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|b| b["type"].as_str().unwrap().to_string())
+		.collect()
+}
+
+#[tokio::test]
+async fn native_search_result_blocks_are_synthesised() {
+	let s = setup_with(
+		Model::SearchThenAnswer,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			json_results: true,
+			..Default::default()
+		},
+	)
+	.await;
+	let (status, _, body) = send(&s, client_request(false, web_search_tool())).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let message: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		block_types(&message),
+		["server_tool_use", "web_search_tool_result", "text"],
+		"{message}"
+	);
+	let content = message["content"].as_array().unwrap();
+	assert_eq!(content[0]["name"], json!("web_search"));
+	assert_eq!(content[0]["input"]["query"], json!("super bowl lx winner"));
+	assert_eq!(content[1]["tool_use_id"], content[0]["id"]);
+	assert_eq!(
+		content[1]["content"][0]["url"],
+		json!("https://example.com/super-bowl-lx")
+	);
+	assert_eq!(content[1]["content"][0]["title"], json!("Super Bowl LX"));
+	assert_eq!(content[2]["text"], json!("Seattle won Super Bowl LX."));
+
+	// Streaming rebuilds the same message.
+	let s = setup_with(
+		Model::SearchThenAnswer,
+		true,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			json_results: true,
+			..Default::default()
+		},
+	)
+	.await;
+	let (status, _, body) = send(&s, client_request(true, web_search_tool())).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let mut acc = MessageAccumulator::default();
+	acc.feed_all(&parse_sse(&body));
+	let message = acc.finish().unwrap();
+	assert_eq!(
+		block_types(&message),
+		["server_tool_use", "web_search_tool_result", "text"],
+		"{message}"
+	);
+	assert_eq!(
+		message["content"][0]["input"]["query"],
+		json!("super bowl lx winner")
+	);
+}
+
+#[tokio::test]
+async fn plain_text_search_output_keeps_the_text_only_answer() {
+	let s = setup(
+		Model::SearchThenAnswer,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+	)
+	.await;
+	let (status, _, body) = send(&s, client_request(false, web_search_tool())).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let message: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(block_types(&message), ["text"], "{message}");
+}
+
+#[tokio::test]
+async fn replayed_search_results_are_flattened_for_the_provider() {
+	let s = setup(
+		Model::AnswerOnly,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+	)
+	.await;
+	let body = json!({
+		"model": "mock-model",
+		"max_tokens": 256,
+		"messages": [
+			{"role": "user", "content": "Who won Super Bowl LX?"},
+			{"role": "assistant", "content": [
+				{"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "super bowl lx winner"}},
+				{"type": "web_search_tool_result", "tool_use_id": "srvtoolu_1", "content": [
+					{"type": "web_search_result", "url": "https://example.com/sb", "title": "Super Bowl LX", "page_age": null, "encrypted_content": "", "snippet": "Seattle won 24-17."}
+				]},
+				{"type": "text", "text": "Seattle won."},
+			]},
+			{"role": "user", "content": "By how much?"},
+		],
+		"tools": web_search_tool(),
+	})
+	.to_string()
+	.into_bytes();
+	let (status, _, body) = send(&s, body).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 1);
+	let messages = requests[0]["messages"].as_array().unwrap();
+	// The pair became assistant text the provider can read; nothing dangles.
+	let assistant = messages
+		.iter()
+		.find(|m| m["role"] == "assistant")
+		.unwrap_or_else(|| panic!("no assistant message in {}", requests[0]));
+	let content = assistant["content"].to_string();
+	assert!(
+		content.contains("Web search for \\\"super bowl lx winner\\\":")
+			&& content.contains("URL: https://example.com/sb")
+			&& content.contains("Snippet: Seattle won 24-17.")
+			&& content.contains("Seattle won."),
+		"{content}"
+	);
+	assert!(assistant.get("tool_calls").is_none(), "{assistant}");
+	assert!(
+		messages.iter().all(|m| m["role"] != "tool"),
+		"{}",
+		requests[0]
+	);
+}
+
+#[tokio::test]
+async fn responses_colliding_mcp_tool_names_are_prefixed() {
+	let s = setup_responses(Model::AnswerOnly, false, false).await;
+	let tools = json!([
+		{"type": "function", "name": "search", "parameters": {"type": "object"}},
+		{"type": "mcp", "server_label": "search", "require_approval": "never"},
+	]);
+	let (status, _, body) = send_responses(&s, responses_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 1);
+	let mut names: Vec<&str> = requests[0]["tools"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|t| t["function"]["name"].as_str().unwrap())
+		.collect();
+	names.sort_unstable();
+	assert_eq!(names, ["search", "search_search"], "{}", requests[0]);
 }

@@ -556,7 +556,22 @@ type ServerTools struct {
 	// `FailOpen` reports the failure to the model as an error tool result and lets it continue.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// What happens to a declared server tool that no mapping covers. `Drop` (default) leaves it to
+	// the provider, which usually drops it; `Reject` answers the request with a 400 that names the
+	// tool type.
+	// +kubebuilder:validation:Enum=Drop;Reject
+	// +optional
+	Unmapped UnmappedServerTools `json:"unmapped,omitempty"`
 }
+
+// What happens to a declared server tool that no mapping covers.
+type UnmappedServerTools string
+
+const (
+	UnmappedServerToolsDrop   UnmappedServerTools = "Drop"
+	UnmappedServerToolsReject UnmappedServerTools = "Reject"
+)
 
 // Maps one server tool type to the MCP tool that fulfils it.
 type ServerToolMapping struct {

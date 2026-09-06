@@ -229,3 +229,19 @@ fn usage_is_patched_or_added() {
 		"{err}"
 	);
 }
+
+#[test]
+fn function_tools_and_forced_choice_are_removed() {
+	let mut req = request(json!({
+		"tools": [
+			{"type": "function", "function": {"name": "web_search", "parameters": {}}},
+			{"type": "function", "function": {"name": "read", "parameters": {}}},
+		],
+		"tool_choice": {"type": "function", "function": {"name": "web_search"}},
+	}));
+	remove_function_tools(&mut req, &HashSet::from(["web_search"]));
+	let tools = req.tools.as_ref().unwrap();
+	assert_eq!(tools.len(), 1);
+	assert_eq!(tools[0]["function"]["name"], json!("read"));
+	assert!(req.tool_choice.is_none());
+}

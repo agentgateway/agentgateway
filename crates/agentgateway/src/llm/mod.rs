@@ -1593,7 +1593,7 @@ impl AIProvider {
 			&& let Some(config) = policy.server_tools.as_ref()
 			&& let Some(interception) =
 				server_tools::intercept_completions(config, policy, &mut req, &backend_info.inputs, &parts)
-					.await
+					.await?
 		{
 			parts.extensions.insert(interception);
 		}
@@ -1628,7 +1628,7 @@ impl AIProvider {
 		if let Some(policy) = policies
 			&& let Some(config) = policy.server_tools.as_ref()
 			&& let Some(interception) =
-				server_tools::intercept(config, policy, &mut req, &backend_info.inputs, &parts).await
+				server_tools::intercept(config, policy, &mut req, &backend_info.inputs, &parts).await?
 		{
 			parts.extensions.insert(interception);
 		}
