@@ -1132,7 +1132,7 @@ impl sse_stream::Timer for TokioSseTimer {
 	}
 }
 
-fn get_client_info() -> ClientConfig {
+pub(crate) fn get_client_info() -> ClientConfig {
 	let mut client_info = ClientConfig::default();
 	client_info.protocol_version = ProtocolVersion::V_2025_11_25;
 	client_info.capabilities = rmcp::model::ClientCapabilities::default();
