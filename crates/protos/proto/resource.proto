@@ -1546,6 +1546,9 @@ message BackendPolicySpec {
         optional string description = 5;
         // JSON schema of the tool input shown to the model, as a JSON document. Defaults to the MCP tool's schema.
         optional string input_schema = 6;
+        // Arguments added to every call, as CEL over serverTool.input, serverTool.declaration,
+        // serverTool.name and serverTool.type.
+        map<string, string> arguments = 7;
       }
       message McpServer {
         // Matches the client's server_label.
@@ -1558,6 +1561,14 @@ message BackendPolicySpec {
         optional string target = 4;
         // Run tools even when the client asks for approval before each call.
         bool skip_approval = 5;
+        // Arguments added to every call of this server's tools, as CEL over serverTool.*.
+        map<string, string> arguments = 6;
+      }
+      enum ResultsMode {
+        // Add the wire format's own items for executed calls ahead of the answer.
+        NATIVE = 0;
+        // Return the answer alone.
+        STRIP = 1;
       }
       repeated Tool tools = 1;
       // Maximum number of follow-up model calls for one client request. Defaults to 3.
@@ -1578,6 +1589,8 @@ message BackendPolicySpec {
       // '*' matches a prefix. When unset, the vendor-defined client tools are guarded; an empty
       // list guards nothing.
       TypeList client_executed = 8;
+      // How executed calls appear in the response.
+      ResultsMode results = 9;
     }
     ServerTools server_tools = 10;
 

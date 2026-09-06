@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use ::http::HeaderMap;
@@ -7,7 +8,7 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::cel::GuardDetail;
+use crate::cel::{Expression, GuardDetail};
 use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
 use crate::http::{HeaderOrPseudo, Response, StatusCode};
@@ -2725,6 +2726,13 @@ pub struct ServerToolsConfig {
 	/// tool type instead.
 	#[serde(default)]
 	pub unmapped: UnmappedServerTools,
+	/// How executed calls appear in the response the client gets. `native` (default) adds the wire
+	/// format's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a
+	/// web search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other
+	/// Messages calls, `web_search_call` and `mcp_call` items on Responses. `strip` removes every
+	/// trace of the gateway's calls and returns the text alone.
+	#[serde(default)]
+	pub results: ServerToolResults,
 	/// Tool types that share the server tool shape but are executed by the client, so a mapping
 	/// that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined
 	/// client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the
@@ -2752,6 +2760,7 @@ impl ServerToolsConfig {
 			keepalive_interval: default_server_tool_keepalive(),
 			failure_mode: ServerToolFailureMode::default(),
 			unmapped: UnmappedServerTools::default(),
+			results: ServerToolResults::default(),
 			client_executed: default_client_executed(),
 		}
 	}
@@ -2801,6 +2810,13 @@ pub struct ServerToolMcpTarget {
 	pub target: Option<Strng>,
 	/// Name of the tool on the MCP backend.
 	pub tool: Strng,
+	/// Arguments added to every call, as CEL over `serverTool.input` (the model's arguments),
+	/// `serverTool.declaration` (the client's tool entry as declared, with fields such as
+	/// `allowed_domains`, `user_location` or `max_uses`), `serverTool.name` and `serverTool.type`.
+	/// A value that fails to evaluate or is null is left out. This is how a declared option
+	/// reaches the MCP tool.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub arguments: Option<BTreeMap<String, Arc<Expression>>>,
 }
 
 /// Maps a remote MCP server a Responses client declares to a configured MCP backend.
@@ -2822,6 +2838,11 @@ pub struct ServerToolMcpServer {
 	/// the gateway cannot pause a turn for approval.
 	#[serde(default)]
 	pub skip_approval: bool,
+	/// Arguments added to every call of this server's tools, as CEL over `serverTool.input`,
+	/// `serverTool.declaration` (the client's `mcp` descriptor), `serverTool.name` and
+	/// `serverTool.type`. A value that fails to evaluate or is null is left out.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub arguments: Option<BTreeMap<String, Arc<Expression>>>,
 }
 
 impl ServerToolMcpServer {
@@ -2830,6 +2851,17 @@ impl ServerToolMcpServer {
 		self.label.as_deref().is_some_and(|l| l == server_label)
 			|| (self.url.is_some() && self.url.as_deref() == server_url)
 	}
+}
+
+/// How executed server tool calls appear in the response.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ServerToolResults {
+	/// Add the wire format's own items for the calls ahead of the answer.
+	#[default]
+	Native,
+	/// Return the answer alone.
+	Strip,
 }
 
 /// What happens to a declared server tool that no mapping covers.

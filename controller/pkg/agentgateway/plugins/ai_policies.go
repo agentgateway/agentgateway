@@ -368,6 +368,7 @@ func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.Server
 			Target:      tool.MCP.Target,
 			Tool:        tool.MCP.Tool,
 			Description: tool.Description,
+			Arguments:   serverToolArguments(tool.MCP.Arguments, "tool "+tool.Type, &errs),
 		}
 		if tool.InputSchema != nil {
 			schema := string(tool.InputSchema.Raw)
@@ -387,6 +388,7 @@ func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.Server
 			Backend:      be,
 			Target:       server.Target,
 			SkipApproval: ptr.OrEmpty(server.SkipApproval),
+			Arguments:    serverToolArguments(server.Arguments, "mcpServer "+ptr.OrEmpty(server.Label), &errs),
 		})
 	}
 	if st.MaxIterations != nil {
@@ -405,5 +407,24 @@ func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.Server
 	if st.ClientExecuted != nil {
 		out.ClientExecuted = &api.BackendPolicySpec_Ai_ServerTools_TypeList{Types: *st.ClientExecuted}
 	}
+	if st.Results == agentgateway.ServerToolResultsStrip {
+		out.Results = api.BackendPolicySpec_Ai_ServerTools_STRIP
+	}
 	return out, errors.Join(errs...)
+}
+
+// serverToolArguments validates argument templates and returns them keyed by argument name.
+func serverToolArguments(arguments map[string]agentgateway.CELExpression, what string, errs *[]error) map[string]string {
+	if len(arguments) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(arguments))
+	for name, expr := range arguments {
+		if !isCEL(expr) {
+			*errs = append(*errs, fmt.Errorf("serverTools %s: argument %q is not a valid CEL expression: %s", what, name, expr))
+			continue
+		}
+		out[name] = string(expr)
+	}
+	return out
 }

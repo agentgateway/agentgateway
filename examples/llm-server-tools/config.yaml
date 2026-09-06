@@ -38,6 +38,12 @@ llm:
         mcp:
           backend: search
           tool: search
+          # Options the client declared on the tool reach the MCP tool through argument
+          # templates. `serverTool.input` is what the model asked for, `serverTool.declaration`
+          # is the client's tool entry as sent.
+          arguments:
+            allowed_domains: serverTool.declaration.allowed_domains
+            blocked_domains: serverTool.declaration.blocked_domains
       # A Responses client may also declare the server itself as
       # `{"type": "mcp", "server_label": "search", "require_approval": "never"}`; every tool the
       # backend serves is then offered to the model by name.

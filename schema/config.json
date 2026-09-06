@@ -5860,6 +5860,11 @@
           "$ref": "#/$defs/UnmappedServerTools",
           "default": "drop"
         },
+        "results": {
+          "description": "How executed calls appear in the response the client gets. `native` (default) adds the wire\nformat's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a\nweb search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other\nMessages calls, `web_search_call` and `mcp_call` items on Responses. `strip` removes every\ntrace of the gateway's calls and returns the text alone.",
+          "$ref": "#/$defs/ServerToolResults",
+          "default": "native"
+        },
         "clientExecuted": {
           "description": "Tool types that share the server tool shape but are executed by the client, so a mapping\nthat matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined\nclient tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the\nResponses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`\ntools. Set it to an empty list to let every mapping apply, or add entries to guard more.",
           "type": "array",
@@ -5928,6 +5933,16 @@
         "tool": {
           "description": "Name of the tool on the MCP backend.",
           "type": "string"
+        },
+        "arguments": {
+          "description": "Arguments added to every call, as CEL over `serverTool.input` (the model's arguments),\n`serverTool.declaration` (the client's tool entry as declared, with fields such as\n`allowed_domains`, `user_location` or `max_uses`), `serverTool.name` and `serverTool.type`.\nA value that fails to evaluate or is null is left out. This is how a declared option\nreaches the MCP tool.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
         }
       },
       "additionalProperties": false,
@@ -5969,6 +5984,16 @@
           "description": "Run tools even when the client asks for approval before each call, which is the Responses\nAPI default. Off by default, in which case such requests are rejected with a 400, since\nthe gateway cannot pause a turn for approval.",
           "type": "boolean",
           "default": false
+        },
+        "arguments": {
+          "description": "Arguments added to every call of this server's tools, as CEL over `serverTool.input`,\n`serverTool.declaration` (the client's `mcp` descriptor), `serverTool.name` and\n`serverTool.type`. A value that fails to evaluate or is null is left out.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
         }
       },
       "additionalProperties": false,
@@ -6003,6 +6028,21 @@
           "description": "Reject the request with a 400 that names the tool type.",
           "type": "string",
           "const": "reject"
+        }
+      ]
+    },
+    "ServerToolResults": {
+      "description": "How executed server tool calls appear in the response.",
+      "oneOf": [
+        {
+          "description": "Add the wire format's own items for the calls ahead of the answer.",
+          "type": "string",
+          "const": "native"
+        },
+        {
+          "description": "Return the answer alone.",
+          "type": "string",
+          "const": "strip"
         }
       ]
     },

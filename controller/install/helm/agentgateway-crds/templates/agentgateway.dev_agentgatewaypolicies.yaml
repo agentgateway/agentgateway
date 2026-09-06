@@ -3584,6 +3584,19 @@ spec:
                               description: Maps a remote MCP server a Responses client
                                 declares to a configured MCP backend.
                               properties:
+                                arguments:
+                                  additionalProperties:
+                                    description: A Common Expression Language (CEL)
+                                      expression.
+                                    maxLength: 16384
+                                    minLength: 1
+                                    type: string
+                                  description: |-
+                                    Arguments added to every call of this server's tools, as CEL expressions over
+                                    `serverTool.input`, `serverTool.declaration` (the client's `mcp` descriptor), `serverTool.name`
+                                    and `serverTool.type`. A value that fails to evaluate or is null is left out.
+                                  maxProperties: 32
+                                  type: object
                                 backendRef:
                                   description: |-
                                     The MCP backend to call.
@@ -3664,6 +3677,17 @@ spec:
                                 rule: has(self.label) || has(self.url)
                             maxItems: 16
                             type: array
+                          results:
+                            description: |-
+                              How executed calls appear in the response the client gets. `Native` (default) adds the wire
+                              format's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a
+                              web search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other
+                              Messages calls, `web_search_call` and `mcp_call` items on Responses. `Strip` removes every trace
+                              of the gateway's calls and returns the text alone.
+                            enum:
+                            - Native
+                            - Strip
+                            type: string
                           tools:
                             description: |-
                               Server tools to fulfil, matched by the tool `type` the client declares, for example
@@ -3687,6 +3711,21 @@ spec:
                                   description: The MCP tool that fulfils the server
                                     tool.
                                   properties:
+                                    arguments:
+                                      additionalProperties:
+                                        description: A Common Expression Language
+                                          (CEL) expression.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                      description: |-
+                                        Arguments added to every call, as CEL expressions over `serverTool.input` (the model's
+                                        arguments), `serverTool.declaration` (the client's tool entry as declared, with fields such as
+                                        `allowed_domains`, `user_location` or `max_uses`), `serverTool.name` and `serverTool.type`. A
+                                        value that fails to evaluate or is null is left out. This is how a declared option reaches the
+                                        MCP tool.
+                                      maxProperties: 32
+                                      type: object
                                     backendRef:
                                       description: |-
                                         The MCP backend to call.

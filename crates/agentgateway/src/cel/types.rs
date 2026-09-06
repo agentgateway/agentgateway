@@ -64,6 +64,11 @@ pub struct Executor<'a> {
 	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
+	/// The server tool call being fulfilled: `input` (the model's arguments), `declaration` (the
+	/// client's tool entry), `name` and `type`. Set for `serverTools` argument templates.
+	#[dynamic(rename = "serverTool")]
+	pub server_tool: Option<&'a serde_json::Value>,
+
 	pub mcp: Option<&'a MCPInfo>,
 
 	pub backend: ExtensionOrDirect<'a, BackendContext>,
@@ -648,6 +653,12 @@ impl<'a> Executor<'a> {
 		let mut this = Self::new_empty();
 		this.set_request(req);
 		this.llm_request = Some(llm_body);
+		this
+	}
+	/// An executor for `serverTools` argument templates, with only the `serverTool` variable.
+	pub fn new_server_tool(call: &'a serde_json::Value) -> Self {
+		let mut this = Self::new_empty();
+		this.server_tool = Some(call);
 		this
 	}
 	pub fn new_logger(
