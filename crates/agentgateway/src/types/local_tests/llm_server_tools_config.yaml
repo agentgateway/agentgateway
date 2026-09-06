@@ -18,6 +18,7 @@ llm:
       maxIterations: 4
       keepaliveInterval: 10s
       failureMode: failOpen
+      unmapped: reject
       tools:
       - type: web_search_*
         mcp:

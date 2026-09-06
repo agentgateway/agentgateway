@@ -428,3 +428,174 @@ fn keepalive_and_error_events_are_anthropic_shaped() {
 	assert_eq!(data["error"]["type"], json!("api_error"));
 	assert_eq!(data["error"]["message"], json!("tool failed"));
 }
+
+#[test]
+fn client_executed_vendor_tools_are_never_intercepted() {
+	assert!(is_client_executed("bash_20250124"));
+	assert!(is_client_executed("text_editor_20250728"));
+	assert!(is_client_executed("computer_20251124"));
+	assert!(is_client_executed("memory_20250818"));
+	assert!(!is_client_executed("web_search_20250305"));
+	let req: Request = serde_json::from_value(json!({
+		"model": "m",
+		"max_tokens": 1,
+		"messages": [{"role": "user", "content": "hi"}],
+		"tools": [
+			{"type": "bash_20250124", "name": "bash"},
+			{"type": "web_search_20250305", "name": "web_search"},
+			{"type": "web_fetch_20250910", "name": "web_fetch"},
+		],
+	}))
+	.unwrap();
+	// A mapping that would match bash is ignored for it.
+	let matchers = vec![TypeMatch::parse("*")];
+	let found = find_server_tools(&req, &matchers);
+	let names: Vec<&str> = found.iter().map(|t| t.name.as_str()).collect();
+	assert_eq!(names, ["web_search", "web_fetch"]);
+	// Unmapped server tools exclude client-executed ones.
+	let only_search = vec![TypeMatch::parse("web_search*")];
+	assert_eq!(
+		unmapped_server_tools(&req, &only_search),
+		["web_fetch_20250910"]
+	);
+}
+
+#[test]
+fn tools_and_forced_choice_are_removed() {
+	let mut req: Request = serde_json::from_value(json!({
+		"model": "m",
+		"max_tokens": 1,
+		"messages": [{"role": "user", "content": "hi"}],
+		"tools": [
+			{"name": "web_search", "input_schema": {"type": "object"}},
+			{"name": "read", "input_schema": {"type": "object"}},
+		],
+		"tool_choice": {"type": "tool", "name": "web_search"},
+	}))
+	.unwrap();
+	remove_tools(&mut req, &HashSet::from(["web_search"]));
+	assert_eq!(req.rest["tools"].as_array().unwrap().len(), 1);
+	assert_eq!(req.rest["tools"][0]["name"], json!("read"));
+	assert!(req.rest.get("tool_choice").is_none());
+}
+
+#[test]
+fn search_results_are_extracted_from_json_text_and_links() {
+	let json_text = json!({"results": [
+		{"title": "Super Bowl LX", "url": "https://example.com/sb", "content": "Seattle won 24-17."},
+		{"name": "no url here"},
+	]})
+	.to_string();
+	let found = extract_search_results(&json_text);
+	assert_eq!(found.len(), 1);
+	assert_eq!(found[0].url, "https://example.com/sb");
+	assert_eq!(found[0].title, "Super Bowl LX");
+	assert_eq!(found[0].snippet, "Seattle won 24-17.");
+
+	let nested =
+		json!({"web": {"results": [{"url": "https://a.example", "title": "A", "description": "d"}]}})
+			.to_string();
+	assert_eq!(extract_search_results(&nested)[0].title, "A");
+
+	let array = json!([{"link": "https://b.example", "name": "B"}]).to_string();
+	assert_eq!(extract_search_results(&array)[0].url, "https://b.example");
+
+	let text = "Title: First\nURL: https://one.example\nSnippet: one\n\nTitle: Second\nURL: https://two.example\nsome text";
+	let found = extract_search_results(text);
+	assert_eq!(found.len(), 2);
+	assert_eq!(found[1].url, "https://two.example");
+	assert_eq!(found[1].snippet, "some text");
+
+	let bare = "See https://x.example/a, and https://y.example/b.";
+	let found = extract_search_results(bare);
+	assert_eq!(found.len(), 2);
+	assert_eq!(found[0].url, "https://x.example/a");
+	assert_eq!(found[1].url, "https://y.example/b");
+
+	assert!(extract_search_results("Seattle won.").is_empty());
+	assert!(extract_search_results("{\"answer\": 42}").is_empty());
+}
+
+#[test]
+fn native_search_blocks_are_built_and_flattened_on_replay() {
+	let call = ToolUse {
+		id: "srvtoolu_1".to_string(),
+		name: "web_search".to_string(),
+		input: json!({"query": "super bowl lx"}),
+	};
+	let results = vec![SearchResult {
+		url: "https://example.com/sb".to_string(),
+		title: "Super Bowl LX".to_string(),
+		snippet: "Seattle won 24-17.".to_string(),
+	}];
+	let (use_block, result_block) = web_search_blocks(&call, &results);
+	assert_eq!(use_block["type"], json!("server_tool_use"));
+	assert_eq!(use_block["input"]["query"], json!("super bowl lx"));
+	assert_eq!(result_block["type"], json!("web_search_tool_result"));
+	assert_eq!(result_block["tool_use_id"], json!("srvtoolu_1"));
+	assert_eq!(
+		result_block["content"][0]["url"],
+		json!("https://example.com/sb")
+	);
+	assert_eq!(result_block["content"][0]["encrypted_content"], json!(""));
+	assert_eq!(
+		result_block["content"][0]["snippet"],
+		json!("Seattle won 24-17.")
+	);
+
+	let mut message = json!({"content": [{"type": "text", "text": "Seattle won."}]});
+	prepend_blocks(&mut message, vec![use_block.clone(), result_block.clone()]);
+	assert_eq!(message["content"].as_array().unwrap().len(), 3);
+	assert_eq!(message["content"][2]["type"], json!("text"));
+
+	// The stream shape carries the search input as a delta, like a tool_use block.
+	let events = synthesize_sse(&json!({"content": [use_block.clone()], "usage": {}}));
+	assert!(events.iter().any(|e| e.data.contains("input_json_delta")));
+
+	// A replay of the synthesised pair becomes one assistant text block with the query and results.
+	let mut req: Request = serde_json::from_value(json!({
+		"model": "m",
+		"max_tokens": 1,
+		"messages": [
+			{"role": "user", "content": "Who won?"},
+			{"role": "assistant", "content": [use_block, result_block, {"type": "text", "text": "Seattle won."}]},
+			{"role": "assistant", "content": [
+				{"type": "server_tool_use", "id": "real", "name": "web_search", "input": {"query": "q"}},
+				{"type": "web_search_tool_result", "tool_use_id": "real",
+				 "content": [{"type": "web_search_result", "url": "https://r", "title": "R", "encrypted_content": "opaque"}]}]},
+			{"role": "assistant", "content": [{"type": "web_search_tool_result", "tool_use_id": "err",
+				"content": {"type": "web_search_tool_result_error", "error_code": "max_uses_exceeded"}}]},
+		],
+	}))
+	.unwrap();
+	assert_eq!(flatten_replayed_search_results(&mut req), 2);
+	let replay = serde_json::to_value(&req.messages[1]).unwrap();
+	let blocks = replay["content"].as_array().unwrap();
+	assert_eq!(blocks.len(), 2, "{replay}");
+	assert_eq!(blocks[0]["type"], json!("text"));
+	let text = blocks[0]["text"].as_str().unwrap();
+	assert!(
+		text.starts_with("Web search for \"super bowl lx\":"),
+		"{text}"
+	);
+	assert!(
+		text.contains("URL: https://example.com/sb") && text.contains("Snippet: Seattle won 24-17."),
+		"{text}"
+	);
+	assert_eq!(blocks[1]["text"], json!("Seattle won."));
+	// Vendor-encrypted results are left untouched, with their server_tool_use.
+	let encrypted = serde_json::to_value(&req.messages[2]).unwrap();
+	assert_eq!(encrypted["content"][0]["type"], json!("server_tool_use"));
+	assert_eq!(
+		encrypted["content"][1]["type"],
+		json!("web_search_tool_result")
+	);
+	let errored = serde_json::to_value(&req.messages[3]).unwrap();
+	assert_eq!(errored["content"][0]["type"], json!("text"));
+	assert!(
+		errored["content"][0]["text"]
+			.as_str()
+			.unwrap()
+			.contains("max_uses_exceeded")
+	);
+}

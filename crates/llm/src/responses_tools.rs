@@ -28,6 +28,21 @@ mod tests;
 /// Tool entry types the client executes itself. They are never rewritten.
 const CLIENT_TOOL_TYPES: &[&str] = &["function", "custom"];
 
+/// Built-in tool types that share the shape but are executed by the client, such as Codex's
+/// shell and patch tools. They are never intercepted, even when a mapping matches them.
+pub const CLIENT_EXECUTED_TOOL_TYPES: &[&str] = &[
+	"local_shell",
+	"shell",
+	"apply_patch",
+	"computer_use_preview",
+	"computer",
+];
+
+/// Whether a built-in tool type is one the client executes itself.
+pub fn is_client_executed(tool_type: &str) -> bool {
+	CLIENT_EXECUTED_TOOL_TYPES.contains(&tool_type)
+}
+
 fn tools_array(req: &Request) -> Option<&Vec<Value>> {
 	req.rest.get("tools").and_then(Value::as_array)
 }
@@ -74,6 +89,13 @@ pub fn find_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercep
 				return None;
 			}
 			let mapping = matchers.iter().position(|m| m.matches(ty))?;
+			if is_client_executed(ty) {
+				tracing::warn!(
+					tool_type = ty,
+					"server tool mapping matches a client-executed tool; leaving it to the client"
+				);
+				return None;
+			}
 			if taken.contains(ty) || !seen.insert(ty.to_string()) {
 				return None;
 			}
@@ -85,6 +107,48 @@ pub fn find_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercep
 			})
 		})
 		.collect()
+}
+
+/// The built-in tool types that no mapping covers and the client does not execute itself.
+pub fn unmapped_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<String> {
+	tools_array(req)
+		.into_iter()
+		.flatten()
+		.filter_map(|tool| {
+			let ty = tool_type(tool)?;
+			if CLIENT_TOOL_TYPES.contains(&ty)
+				|| ty == "mcp"
+				|| is_client_executed(ty)
+				|| matchers.iter().any(|m| m.matches(ty))
+			{
+				return None;
+			}
+			Some(ty.to_string())
+		})
+		.collect()
+}
+
+/// Remove the named function tools, and a `tool_choice` that forces one of them, so the model has
+/// to answer without them.
+pub fn remove_function_tools(req: &mut Request, names: &HashSet<&str>) {
+	if let Some(list) = req.rest.get_mut("tools").and_then(Value::as_array_mut) {
+		list.retain(|tool| {
+			!(tool_type(tool) == Some("function")
+				&& tool
+					.get("name")
+					.and_then(Value::as_str)
+					.is_some_and(|n| names.contains(n)))
+		});
+	}
+	let forced = req
+		.rest
+		.get("tool_choice")
+		.and_then(|c| c.get("name"))
+		.and_then(Value::as_str)
+		.is_some_and(|n| names.contains(n));
+	if forced && let Some(rest) = req.rest.as_object_mut() {
+		rest.remove("tool_choice");
+	}
 }
 
 /// How a client wants calls to a remote MCP server approved.

@@ -399,5 +399,8 @@ func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.Server
 	if st.FailureMode == agentgateway.FailOpen {
 		out.FailureMode = api.BackendPolicySpec_Ai_ServerTools_FAIL_OPEN
 	}
+	if st.Unmapped == agentgateway.UnmappedServerToolsReject {
+		out.Unmapped = api.BackendPolicySpec_Ai_ServerTools_REJECT
+	}
 	return out, errors.Join(errs...)
 }
