@@ -378,6 +378,7 @@ impl BackendPolicies {
 #[serde(rename_all = "camelCase")]
 pub struct RoutePolicies {
 	pub local_rate_limit: RequestPolicy<Vec<http::localratelimit::RateLimit>>,
+	pub concurrency_limit: RequestPolicy<Vec<http::concurrencylimit::ConcurrencyLimit>>,
 	pub remote_rate_limit: RequestPolicy<remoteratelimit::RemoteRateLimit>,
 	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
@@ -452,6 +453,7 @@ impl RoutePolicies {
 	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
 		[
 			&self.local_rate_limit as &dyn PolicyExpressions,
+			&self.concurrency_limit as &dyn PolicyExpressions,
 			&self.remote_rate_limit as &dyn PolicyExpressions,
 			&self.authorization as &dyn PolicyExpressions,
 			&self.jwt as &dyn PolicyExpressions,
@@ -489,6 +491,7 @@ impl RoutePolicies {
 #[derive(Debug, Default, Clone)]
 pub struct LLMRequestPolicies {
 	pub local_rate_limit: Option<Arc<Vec<http::localratelimit::RateLimit>>>,
+	pub concurrency_limit: Option<Arc<Vec<http::concurrencylimit::ConcurrencyLimit>>>,
 	pub remote_rate_limit: Option<Arc<http::remoteratelimit::RemoteRateLimit>>,
 	pub llm: Option<Arc<llm::Policy>>,
 }
@@ -1087,6 +1090,11 @@ impl Store {
 				TrafficPolicy::LocalRateLimit(p) => {
 					pol
 						.local_rate_limit
+						.merge_with_inheritance(p, lock_inheritance);
+				},
+				TrafficPolicy::ConcurrencyLimit(p) => {
+					pol
+						.concurrency_limit
 						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::ExtAuthz(p) => {

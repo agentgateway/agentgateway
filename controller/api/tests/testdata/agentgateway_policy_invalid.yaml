@@ -702,7 +702,7 @@ spec:
               - requests: 1
                 unit: Minutes
 ---
-_err: 'at least one of the fields in [global local] must be set'
+_err: 'at least one of the fields in [concurrency global local] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

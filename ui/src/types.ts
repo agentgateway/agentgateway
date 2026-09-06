@@ -9,7 +9,7 @@ import type {
 	FileOrInline,
 	FilterOrPolicy,
 	CustomProvider as GeneratedCustomProvider,
-	LocalRateLimitPolicy as GeneratedLocalRateLimitPolicy,
+	LocalPolicyList_RateLimitSpec as GeneratedLocalRateLimitPolicy,
 	McpPrefixMode as GeneratedMcpPrefixMode,
 	McpStatefulMode as GeneratedMcpStatefulMode,
 	ProviderFormatConfig as GeneratedProviderFormatConfig,

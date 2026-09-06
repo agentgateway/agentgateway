@@ -322,6 +322,11 @@ impl Expression {
 		self.attributes.contains(Attributes::LlmRequest)
 	}
 
+	/// Whether the expression reads the `llm` context, which exists once the LLM request is parsed.
+	pub fn needs_llm(&self) -> bool {
+		self.attributes.contains(Attributes::Llm)
+	}
+
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
 	/// with an expression that always fails to evaluate. The returned error is the compilation error
 	/// from the original expression, if one was suppressed.

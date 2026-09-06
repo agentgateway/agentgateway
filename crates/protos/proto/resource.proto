@@ -997,6 +997,40 @@ message TrafficPolicySpec {
     // Inline backend policies (e.g. TLS, auth) for the remote rate limit backend.
     repeated BackendPolicySpec inline_policies = 5;
   }
+  // ConcurrencyLimit bounds the number of in-flight requests per key on each proxy instance.
+  message ConcurrencyLimit {
+    message Rule {
+      // Maximum number of in-flight requests allowed per key.
+      uint32 max_concurrent = 1;
+      // CEL expression selecting the counter. Requests without a key share one counter.
+      // Keys that use `llm` are evaluated once the LLM request is parsed.
+      optional string key = 2;
+      // CEL expression computing the limit for this request instead of max_concurrent.
+      optional string limit_override = 3;
+      // Keeps the rule's slots in a store every proxy instance shares.
+      Shared shared = 4;
+    }
+    // Slots kept in a shared store, so the limit holds across proxy instances.
+    message Shared {
+      // Redis connection URL.
+      string redis_url = 1;
+      // How long a slot stays counted without renewal. Defaults to 60s.
+      google.protobuf.Duration lease = 2;
+      // How long a store call may take before failure_mode applies. Defaults to 1s.
+      google.protobuf.Duration timeout = 3;
+      // Prefix of the store keys. Defaults to agentgateway:concurrency.
+      optional string key_prefix = 4;
+      enum FailureMode {
+        // The request goes through without taking a slot.
+        ALLOW = 0;
+        // The request is rejected with a 503.
+        DENY = 1;
+      }
+      // What happens to a request when the store cannot be reached.
+      FailureMode failure_mode = 5;
+    }
+    repeated Rule rules = 1;
+  }
   message LocalRateLimit {
     enum Type {
       REQUEST = 0;
@@ -1281,6 +1315,7 @@ message TrafficPolicySpec {
     HostRewrite host_rewrite = 21;
     Buffer buffer = 22;
     Delay delay = 23;
+    ConcurrencyLimit concurrency_limit = 24;
   }
 }
 

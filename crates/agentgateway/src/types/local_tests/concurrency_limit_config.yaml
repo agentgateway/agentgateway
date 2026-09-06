@@ -1,0 +1,40 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        concurrencyLimit:
+        - maxConcurrent: 16
+        - maxConcurrent: 2
+          key: request.headers["x-user"]
+          limitOverride: 'request.headers["x-tier"] == "gold" ? 8 : 2'
+      backends:
+      - host: localhost:8080
+    - policies:
+        concurrencyLimit:
+          conditional:
+          - condition: 'request.headers["x-tier"] == "gold"'
+            maxConcurrent: 8
+          - maxConcurrent: 1
+      backends:
+      - host: localhost:8081
+
+llm:
+  policies:
+    concurrencyLimit:
+    - maxConcurrent: 4
+      key: jwt.sub
+    - maxConcurrent: 1
+      key: jwt.sub + "/" + llm.requestModel
+    - maxConcurrent: 16
+      key: jwt.team
+      shared:
+        redis:
+          url: redis://redis.internal:6379/0
+        lease: 30s
+        failureMode: deny
+  models:
+  - name: qwen3
+    provider: openai
+    params:
+      baseUrl: http://vllm.internal:8000/v1

@@ -10008,6 +10008,94 @@ spec:
                       Rate limiting configuration for the policy.
                       This limits the rate at which requests are processed.
                     properties:
+                      concurrency:
+                        description: |-
+                          Limits on in-flight requests, counted per key on each proxy instance.
+                          Every rule must admit the request.
+                        items:
+                          description: |-
+                            Limits how many requests may be in flight at once for a key. A slot is taken when a request is
+                            admitted and released when its response has been fully sent. Counts are kept on each proxy
+                            instance, without coordination between instances.
+                          properties:
+                            key:
+                              description: |-
+                                CEL expression selecting the counter, for example `jwt.sub` or
+                                `jwt.sub + "/" + llm.requestModel`. Requests without a key share one counter.
+                                Keys that use `llm` are evaluated once the LLM request has been parsed.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            limitOverride:
+                              description: |-
+                                CEL expression computing the limit for this request instead of `maxConcurrent`.
+                                It must evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxConcurrent:
+                              description: |-
+                                Maximum number of in-flight requests allowed per key. Requests over the limit fail with a
+                                `429` error. `0` rejects every request the rule applies to.
+                              format: int32
+                              minimum: 0
+                              type: integer
+                            shared:
+                              description: |-
+                                Keeps the rule's slots in a store every proxy instance shares, so the limit holds across
+                                instances instead of once per instance.
+                              properties:
+                                failureMode:
+                                  description: |-
+                                    What happens to a request when the store cannot be reached. "FailOpen" (default) lets it
+                                    through without taking a slot. "FailClosed" rejects it with a 503.
+                                  enum:
+                                  - FailClosed
+                                  - FailOpen
+                                  type: string
+                                keyPrefix:
+                                  description: |-
+                                    Prefix of the store keys. Rules with the same settings and prefix count together, so give
+                                    gateways that must not share their slots different prefixes. Defaults to
+                                    `agentgateway:concurrency`.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                                lease:
+                                  description: |-
+                                    How long a slot stays counted without renewal. Slots are renewed while their request runs
+                                    and dropped when it ends, so this only bounds how long a slot taken by an instance that went
+                                    away is counted. Defaults to 60s.
+                                  maxLength: 32
+                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                  type: string
+                                redis:
+                                  description: The Redis store that keeps the counters.
+                                  properties:
+                                    url:
+                                      description: Connection URL, such as `redis://redis.default.svc:6379/0`,
+                                        or `rediss://` for TLS.
+                                      maxLength: 2048
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - url
+                                  type: object
+                                timeout:
+                                  description: How long a store call may take before
+                                    `failureMode` applies. Defaults to 1s.
+                                  maxLength: 32
+                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                  type: string
+                              required:
+                              - redis
+                              type: object
+                          required:
+                          - maxConcurrent
+                          type: object
+                        maxItems: 16
+                        minItems: 1
+                        type: array
                       conditional:
                         description: |-
                           Conditional policy execution. Set this or the top-level rateLimit fields.
@@ -10025,6 +10113,97 @@ spec:
                             policy:
                               description: Policy to apply when the condition matches.
                               properties:
+                                concurrency:
+                                  description: |-
+                                    Limits on in-flight requests, counted per key on each proxy instance.
+                                    Every rule must admit the request.
+                                  items:
+                                    description: |-
+                                      Limits how many requests may be in flight at once for a key. A slot is taken when a request is
+                                      admitted and released when its response has been fully sent. Counts are kept on each proxy
+                                      instance, without coordination between instances.
+                                    properties:
+                                      key:
+                                        description: |-
+                                          CEL expression selecting the counter, for example `jwt.sub` or
+                                          `jwt.sub + "/" + llm.requestModel`. Requests without a key share one counter.
+                                          Keys that use `llm` are evaluated once the LLM request has been parsed.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                      limitOverride:
+                                        description: |-
+                                          CEL expression computing the limit for this request instead of `maxConcurrent`.
+                                          It must evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                      maxConcurrent:
+                                        description: |-
+                                          Maximum number of in-flight requests allowed per key. Requests over the limit fail with a
+                                          `429` error. `0` rejects every request the rule applies to.
+                                        format: int32
+                                        minimum: 0
+                                        type: integer
+                                      shared:
+                                        description: |-
+                                          Keeps the rule's slots in a store every proxy instance shares, so the limit holds across
+                                          instances instead of once per instance.
+                                        properties:
+                                          failureMode:
+                                            description: |-
+                                              What happens to a request when the store cannot be reached. "FailOpen" (default) lets it
+                                              through without taking a slot. "FailClosed" rejects it with a 503.
+                                            enum:
+                                            - FailClosed
+                                            - FailOpen
+                                            type: string
+                                          keyPrefix:
+                                            description: |-
+                                              Prefix of the store keys. Rules with the same settings and prefix count together, so give
+                                              gateways that must not share their slots different prefixes. Defaults to
+                                              `agentgateway:concurrency`.
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                          lease:
+                                            description: |-
+                                              How long a slot stays counted without renewal. Slots are renewed while their request runs
+                                              and dropped when it ends, so this only bounds how long a slot taken by an instance that went
+                                              away is counted. Defaults to 60s.
+                                            maxLength: 32
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
+                                          redis:
+                                            description: The Redis store that keeps
+                                              the counters.
+                                            properties:
+                                              url:
+                                                description: Connection URL, such
+                                                  as `redis://redis.default.svc:6379/0`,
+                                                  or `rediss://` for TLS.
+                                                maxLength: 2048
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - url
+                                            type: object
+                                          timeout:
+                                            description: How long a store call may
+                                              take before `failureMode` applies. Defaults
+                                              to 1s.
+                                            maxLength: 32
+                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                            type: string
+                                        required:
+                                        - redis
+                                        type: object
+                                    required:
+                                    - maxConcurrent
+                                    type: object
+                                  maxItems: 16
+                                  minItems: 1
+                                  type: array
                                 global:
                                   description: Global rate limiting policy using an
                                     external service.
@@ -10245,9 +10424,9 @@ spec:
                                   type: array
                               type: object
                               x-kubernetes-validations:
-                              - message: at least one of the fields in [global local]
-                                  must be set
-                                rule: '[has(self.global),has(self.local)].filter(x,x==true).size()
+                              - message: at least one of the fields in [concurrency
+                                  global local] must be set
+                                rule: '[has(self.concurrency),has(self.global),has(self.local)].filter(x,x==true).size()
                                   >= 1'
                           required:
                           - policy
@@ -10476,12 +10655,12 @@ spec:
                         type: array
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [conditional global local]
-                        must be set
-                      rule: '[has(self.conditional),has(self.global),has(self.local)].filter(x,x==true).size()
+                    - message: at least one of the fields in [concurrency conditional
+                        global local] must be set
+                      rule: '[has(self.concurrency),has(self.conditional),has(self.global),has(self.local)].filter(x,x==true).size()
                         >= 1'
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.global),has(self.local)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.concurrency),has(self.global),has(self.local)].filter(x,x==true).size()
                         == 0 : true'
                   retry:
                     description: Retry policy.

@@ -224,6 +224,7 @@ subtle = "2"
 tempfile = "3.27"
 thiserror = "2.0"
 tiktoken-rs = "0.12"
+redis = { version = "1.7", default-features = false, features = ["tokio-comp", "connection-manager", "script", "tokio-rustls-comp"] }
 tokio = { version = "1.53", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "logging"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }

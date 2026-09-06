@@ -3238,6 +3238,29 @@
 |`binds[].listeners[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit`|object|Limits on in-flight requests, counted per key on this proxy instance.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].shared.redis`|object|The store that keeps the counters.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit.conditional[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].shared.redis`|object|The store that keeps the counters.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`binds[].listeners[].routes[].policies.concurrencyLimit[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -22408,6 +22431,29 @@
 |`policies[].policy.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`policies[].policy.concurrencyLimit`|object|Limits on in-flight requests, counted per key on this proxy instance.|
+|`policies[].policy.concurrencyLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.concurrencyLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.concurrencyLimit.conditional[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`policies[].policy.concurrencyLimit.conditional[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`policies[].policy.concurrencyLimit.conditional[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`policies[].policy.concurrencyLimit.conditional[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`policies[].policy.concurrencyLimit.conditional[].shared.redis`|object|The store that keeps the counters.|
+|`policies[].policy.concurrencyLimit.conditional[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`policies[].policy.concurrencyLimit.conditional[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`policies[].policy.concurrencyLimit.conditional[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`policies[].policy.concurrencyLimit.conditional[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`policies[].policy.concurrencyLimit.conditional[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
+|`policies[].policy.concurrencyLimit[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`policies[].policy.concurrencyLimit[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`policies[].policy.concurrencyLimit[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`policies[].policy.concurrencyLimit[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`policies[].policy.concurrencyLimit[].shared.redis`|object|The store that keeps the counters.|
+|`policies[].policy.concurrencyLimit[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`policies[].policy.concurrencyLimit[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`policies[].policy.concurrencyLimit[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`policies[].policy.concurrencyLimit[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`policies[].policy.concurrencyLimit[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
 |`policies[].policy.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`policies[].policy.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -38452,6 +38498,29 @@
 |`routeGroups[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routeGroups[].routes[].policies.concurrencyLimit`|object|Limits on in-flight requests, counted per key on this proxy instance.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].shared.redis`|object|The store that keeps the counters.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`routeGroups[].routes[].policies.concurrencyLimit.conditional[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].shared.redis`|object|The store that keeps the counters.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`routeGroups[].routes[].policies.concurrencyLimit[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
 |`routeGroups[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -57147,6 +57216,29 @@
 |`routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routes[].policies.concurrencyLimit`|object|Limits on in-flight requests, counted per key on this proxy instance.|
+|`routes[].policies.concurrencyLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routes[].policies.concurrencyLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routes[].policies.concurrencyLimit.conditional[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`routes[].policies.concurrencyLimit.conditional[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`routes[].policies.concurrencyLimit.conditional[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`routes[].policies.concurrencyLimit.conditional[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`routes[].policies.concurrencyLimit.conditional[].shared.redis`|object|The store that keeps the counters.|
+|`routes[].policies.concurrencyLimit.conditional[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`routes[].policies.concurrencyLimit.conditional[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`routes[].policies.concurrencyLimit.conditional[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`routes[].policies.concurrencyLimit.conditional[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`routes[].policies.concurrencyLimit.conditional[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
+|`routes[].policies.concurrencyLimit[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`routes[].policies.concurrencyLimit[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`routes[].policies.concurrencyLimit[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`routes[].policies.concurrencyLimit[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`routes[].policies.concurrencyLimit[].shared.redis`|object|The store that keeps the counters.|
+|`routes[].policies.concurrencyLimit[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`routes[].policies.concurrencyLimit[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`routes[].policies.concurrencyLimit[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`routes[].policies.concurrencyLimit[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`routes[].policies.concurrencyLimit[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
 |`routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -77228,6 +77320,17 @@
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`llm.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`llm.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`llm.policies.concurrencyLimit`|[]object|Limits on in-flight requests, counted per key on this proxy instance.|
+|`llm.policies.concurrencyLimit[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`llm.policies.concurrencyLimit[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`llm.policies.concurrencyLimit[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`llm.policies.concurrencyLimit[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`llm.policies.concurrencyLimit[].shared.redis`|object|The store that keeps the counters.|
+|`llm.policies.concurrencyLimit[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`llm.policies.concurrencyLimit[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`llm.policies.concurrencyLimit[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`llm.policies.concurrencyLimit[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`llm.policies.concurrencyLimit[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
 |`llm.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`llm.policies.remoteRateLimit.service`|object|Service reference. Service must be defined in the top level services list.|
 |`llm.policies.remoteRateLimit.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -80917,6 +81020,29 @@
 |`mcp.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.policies.concurrencyLimit`|object|Limits on in-flight requests, counted per key on this proxy instance.|
+|`mcp.policies.concurrencyLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.concurrencyLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.concurrencyLimit.conditional[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`mcp.policies.concurrencyLimit.conditional[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`mcp.policies.concurrencyLimit.conditional[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`mcp.policies.concurrencyLimit.conditional[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`mcp.policies.concurrencyLimit.conditional[].shared.redis`|object|The store that keeps the counters.|
+|`mcp.policies.concurrencyLimit.conditional[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`mcp.policies.concurrencyLimit.conditional[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`mcp.policies.concurrencyLimit.conditional[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`mcp.policies.concurrencyLimit.conditional[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`mcp.policies.concurrencyLimit.conditional[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
+|`mcp.policies.concurrencyLimit[].maxConcurrent`|integer|Maximum number of in-flight requests allowed per key. Requests over the limit are rejected<br>with a 429.|
+|`mcp.policies.concurrencyLimit[].key`|string|CEL expression selecting the counter, for example `jwt.sub` or<br>`jwt.sub + "/" + llm.requestModel`. Requests without a key, or whose key cannot be<br>evaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has<br>been parsed.|
+|`mcp.policies.concurrencyLimit[].limitOverride`|string|CEL expression computing the limit for this request instead of `maxConcurrent`. It must<br>evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.|
+|`mcp.policies.concurrencyLimit[].shared`|object|Keep the slots in a store every proxy instance shares, instead of on this instance.|
+|`mcp.policies.concurrencyLimit[].shared.redis`|object|The store that keeps the counters.|
+|`mcp.policies.concurrencyLimit[].shared.redis.url`|string|Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.|
+|`mcp.policies.concurrencyLimit[].shared.lease`|string|How long a slot stays counted without renewal. Slots are renewed while their request runs<br>and dropped when it ends, so this only bounds how long a slot taken by an instance that went<br>away is counted. Defaults to 60s.|
+|`mcp.policies.concurrencyLimit[].shared.timeout`|string|How long a store call may take before `failureMode` applies. Defaults to 1s.|
+|`mcp.policies.concurrencyLimit[].shared.keyPrefix`|string|Prefix of the store keys. Rules with the same settings and prefix count together, so give<br>gateways that must not share their slots different prefixes. Defaults to<br>`agentgateway:concurrency`.|
+|`mcp.policies.concurrencyLimit[].shared.failureMode`|enum|What happens to a request when the store cannot be reached. Defaults to `allow`.<br>Possible values: `allow`, `deny`.|
 |`mcp.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`mcp.policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|

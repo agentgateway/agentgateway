@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 127.0.0.1:19001
+  statsAddr: 127.0.0.1:19002
+
+llm:
+  port: 4000
+  policies:
+    jwtAuth:
+      issuer: agentgateway.dev
+      audiences: [test.agentgateway.dev]
+      jwks: '{"keys":[]}'
+    # In-flight limits, counted on this proxy instance. Every rule must admit the request.
+    concurrencyLimit:
+    # At most 32 requests in flight on the whole listener.
+    - maxConcurrent: 32
+    # At most 4 in flight per caller.
+    - maxConcurrent: 4
+      key: jwt.sub
+    # At most 2 in flight per caller and model, except that the "research" team gets 8 on its own
+    # model and nothing on the others.
+    - maxConcurrent: 2
+      key: jwt.sub + "/" + llm.requestModel
+      limitOverride: >-
+        jwt.team == "research" ? (llm.requestModel == "qwen3-research" ? 8 : 0) : 2
+    # At most 16 in flight per team across every proxy instance: the slots are kept in Redis. A
+    # slot an instance took before it went away is dropped once the lease runs out.
+    - maxConcurrent: 16
+      key: jwt.team
+      shared:
+        redis:
+          url: redis://redis.internal:6379/0
+        lease: 60s
+  models:
+  - name: qwen3
+    provider: openAI
+    params:
+      baseUrl: http://vllm.internal:8000/v1
+  - name: qwen3-research
+    provider: openAI
+    params:
+      baseUrl: http://vllm-research.internal:8000/v1
