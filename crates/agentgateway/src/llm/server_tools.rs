@@ -7,7 +7,7 @@
 //! after each model response decides whether to execute a tool and continue the same turn or hand
 //! the finished message to the client.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,8 +19,8 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 
 use super::policy::{
-	ServerToolFailureMode, ServerToolMapping, ServerToolMcpServer, ServerToolsConfig,
-	UnmappedServerTools,
+	ServerToolFailureMode, ServerToolMapping, ServerToolMcpServer, ServerToolResults,
+	ServerToolsConfig, UnmappedServerTools,
 };
 use super::*;
 use crate::mcp::{MCPInfo, ToolRuntime};
@@ -281,6 +281,16 @@ impl Totals {
 	}
 }
 
+/// How an executed call is shown to the client in the wire format's own items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeKind {
+	/// A declared web search: `server_tool_use` with `web_search_tool_result`, or
+	/// `web_search_call`, when the output reads as results.
+	WebSearch,
+	/// Anything else: `mcp_tool_use` with `mcp_tool_result`, or `mcp_call`.
+	Mcp,
+}
+
 /// A tool the model can call, bound to the MCP tool that fulfils it.
 #[derive(Debug, Clone)]
 struct BoundTool {
@@ -290,9 +300,14 @@ struct BoundTool {
 	mcp_tool: String,
 	/// Index into `Interception::runtimes`.
 	runtime: usize,
-	/// The client declared a native web search, so it gets `server_tool_use` and
-	/// `web_search_tool_result` blocks back when the search output can be read as results.
-	native_search: bool,
+	kind: NativeKind,
+	/// The client's declaration, for `serverTool.declaration` in argument templates.
+	declaration: Value,
+	/// The declared type, for `serverTool.type`.
+	tool_type: String,
+	/// Label shown as the server in native items: the descriptor's label or the backend name.
+	server_label: String,
+	arguments: Option<Arc<BTreeMap<String, Arc<crate::cel::Expression>>>>,
 }
 
 /// Per-request interception state, built when the request is parsed.
@@ -369,7 +384,8 @@ impl<'a> Binder<'a> {
 		&mut self,
 		name: &str,
 		mapping: &ServerToolMapping,
-		native_search: bool,
+		tool_type: &str,
+		declaration: Value,
 	) -> Option<ToolDefinition> {
 		let runtime = match self.runtime(&mapping.mcp.backend, mapping.mcp.target.as_ref()) {
 			Ok(idx) => idx,
@@ -412,7 +428,15 @@ impl<'a> Binder<'a> {
 			name: name.to_string(),
 			mcp_tool: mapping.mcp.tool.to_string(),
 			runtime,
-			native_search,
+			kind: if tool_type.starts_with("web_search") {
+				NativeKind::WebSearch
+			} else {
+				NativeKind::Mcp
+			},
+			declaration,
+			tool_type: tool_type.to_string(),
+			server_label: mapping.mcp.backend.to_string(),
+			arguments: mapping.mcp.arguments.clone().map(Arc::new),
 		});
 		Some(definition)
 	}
@@ -422,6 +446,7 @@ impl<'a> Binder<'a> {
 	async fn bind_server(
 		&mut self,
 		descriptor: &rt::McpDescriptor,
+		declaration: Value,
 		server: &ServerToolMcpServer,
 		taken: &HashSet<String>,
 	) -> Result<Vec<(String, ToolDefinition)>, AIError> {
@@ -480,7 +505,11 @@ impl<'a> Binder<'a> {
 				name: exposed.clone(),
 				mcp_tool: name.clone(),
 				runtime,
-				native_search: false,
+				kind: NativeKind::Mcp,
+				declaration: declaration.clone(),
+				tool_type: "mcp".to_string(),
+				server_label: descriptor.server_label.clone(),
+				arguments: server.arguments.clone().map(Arc::new),
 			});
 			out.push((exposed, def));
 		}
@@ -551,9 +580,9 @@ pub async fn intercept(
 	let mut definitions = Vec::with_capacity(found.len());
 	for tool in found {
 		let mapping = &config.tools[tool.mapping];
-		let native_search = tool.tool_type.starts_with("web_search");
+		let declaration = st::declared_tool(req, &tool);
 		if let Some(def) = binder
-			.bind_mapping(&tool.name, mapping, native_search)
+			.bind_mapping(&tool.name, mapping, &tool.tool_type, declaration)
 			.await
 		{
 			tools.push(tool);
@@ -588,6 +617,9 @@ pub async fn intercept_responses(
 	inputs: &Arc<ProxyInputs>,
 	parts: &Parts,
 ) -> Result<Option<Arc<Interception>>, AIError> {
+	// Items the gateway added on an earlier turn come back as history; make them readable for a
+	// provider that never ran the calls.
+	rt::flatten_replayed_calls(req);
 	let matchers = config.matchers();
 	let client_executed = config.client_executed_matchers();
 	let builtins = rt::find_builtin_tools(req, &matchers, &client_executed);
@@ -619,7 +651,11 @@ pub async fn intercept_responses(
 	let mut definitions = Vec::with_capacity(builtins.len());
 	for tool in builtins {
 		let mapping = &config.tools[tool.mapping];
-		if let Some(def) = binder.bind_mapping(&tool.name, mapping, false).await {
+		let declaration = rt::declared_tool(req, &tool.tool_type);
+		if let Some(def) = binder
+			.bind_mapping(&tool.name, mapping, &tool.tool_type, declaration)
+			.await
+		{
 			tools.push(tool);
 			definitions.push(def);
 		}
@@ -637,7 +673,10 @@ pub async fn intercept_responses(
 			debug!(server = %descriptor.server_label, "mcp server not mapped; leaving it to the provider");
 			continue;
 		};
-		let exposed = binder.bind_server(descriptor, server, &taken).await?;
+		let declaration = rt::declared_descriptor(req, descriptor.index);
+		let exposed = binder
+			.bind_server(descriptor, declaration, server, &taken)
+			.await?;
 		if exposed.is_empty() {
 			continue;
 		}
@@ -683,8 +722,14 @@ pub async fn intercept_completions(
 		return Ok(None);
 	};
 	let mut binder = Binder::new(inputs, parts);
+	let declaration = ct::declared_web_search_options(req);
 	let Some(def) = binder
-		.bind_mapping(&tool.name, &config.tools[tool.mapping], false)
+		.bind_mapping(
+			&tool.name,
+			&config.tools[tool.mapping],
+			&tool.tool_type,
+			declaration,
+		)
 		.await
 	else {
 		return Ok(None);
@@ -748,14 +793,26 @@ enum TurnOutcome {
 /// What the model is told when the loop has to stop before it is done.
 const LIMIT_REACHED: &str = "tool call limit reached; answer with the information gathered so far";
 
+/// One call the gateway ran, kept for the native items the client gets back.
+struct ExecutedCall {
+	call: ToolUse,
+	kind: NativeKind,
+	server_label: String,
+	mcp_tool: String,
+	/// The result as text.
+	output: String,
+	/// The result as Anthropic content blocks.
+	content: Vec<Value>,
+	is_error: bool,
+}
+
 struct LoopState {
 	conversation: Conversation,
 	totals: Totals,
 	iteration: u32,
 	last_fingerprint: Option<String>,
-	/// Native web searches that ran, with their output, for the result blocks a Messages client
-	/// gets back.
-	searches: Vec<(ToolUse, String)>,
+	/// Every call that ran, in order.
+	executed: Vec<ExecutedCall>,
 	/// The tools have been withdrawn and the next response ends the turn.
 	concluding: bool,
 }
@@ -767,31 +824,72 @@ impl LoopState {
 			totals: Totals::new(interception.wire()),
 			iteration: 0,
 			last_fingerprint: None,
-			searches: Vec::new(),
+			executed: Vec::new(),
 			concluding: false,
 		}
 	}
 
-	/// Add the `server_tool_use` and `web_search_tool_result` pairs for the searches that ran to a
-	/// Messages response. Returns whether anything was added.
-	fn add_native_search_blocks(&self, wire: Wire, message: &mut Value) -> bool {
-		if wire != Wire::Messages || self.searches.is_empty() {
+	/// Add the wire format's own items for the calls that ran ahead of the answer. With
+	/// `handing_back`, the model has not seen the results, so every call is shown even when a
+	/// search did not read as results. Returns whether anything was added.
+	fn add_native_items(
+		&self,
+		interception: &Interception,
+		message: &mut Value,
+		handing_back: bool,
+	) -> bool {
+		if interception.config.results == ServerToolResults::Strip || self.executed.is_empty() {
 			return false;
 		}
-		let mut blocks = Vec::new();
-		for (call, output) in &self.searches {
-			let results = st::extract_search_results(output);
-			if results.is_empty() {
-				continue;
+		let wire = interception.wire();
+		let mut items = Vec::new();
+		for done in &self.executed {
+			let results = match done.kind {
+				NativeKind::WebSearch if !done.is_error => st::extract_search_results(&done.output),
+				_ => Vec::new(),
+			};
+			match wire {
+				Wire::Messages => {
+					if !results.is_empty() {
+						let (use_block, result_block) = st::web_search_blocks(&done.call, &results);
+						items.push(use_block);
+						items.push(result_block);
+					} else if done.kind == NativeKind::Mcp || handing_back {
+						let (use_block, result_block) = st::mcp_tool_blocks(
+							&done.call,
+							&done.server_label,
+							&done.mcp_tool,
+							done.content.clone(),
+							done.is_error,
+						);
+						items.push(use_block);
+						items.push(result_block);
+					}
+				},
+				Wire::Responses => {
+					if !results.is_empty() {
+						items.push(rt::web_search_call_item(&done.call, &results));
+					} else if done.kind == NativeKind::Mcp || handing_back {
+						items.push(rt::mcp_call_item(
+							&done.call,
+							&done.server_label,
+							&done.mcp_tool,
+							&done.output,
+							done.is_error.then_some(done.output.as_str()),
+						));
+					}
+				},
+				Wire::Completions => {},
 			}
-			let (use_block, result_block) = st::web_search_blocks(call, &results);
-			blocks.push(use_block);
-			blocks.push(result_block);
 		}
-		if blocks.is_empty() {
+		if items.is_empty() {
 			return false;
 		}
-		st::prepend_blocks(message, blocks);
+		match wire {
+			Wire::Messages => st::prepend_blocks(message, items),
+			Wire::Responses => rt::prepend_output_items(message, items),
+			Wire::Completions => {},
+		}
 		true
 	}
 }
@@ -802,6 +900,9 @@ enum Next {
 		strip: bool,
 	},
 	Execute(Vec<ToolUse>),
+	/// The model also called client tools: run the gateway's calls, show their results in the
+	/// wire format's own items, and hand the turn back for the client's calls.
+	ExecuteAndReturn(Vec<ToolUse>),
 	/// The loop must stop: tell the model its calls were not run, withdraw the tools, and let it
 	/// answer with what it has.
 	Conclude(Vec<ToolUse>),
@@ -810,8 +911,7 @@ enum Next {
 /// What one round of tool execution produced.
 struct Executed {
 	results: Vec<Value>,
-	/// Successful native web searches and their output text.
-	searches: Vec<(ToolUse, String)>,
+	calls: Vec<ExecutedCall>,
 }
 
 impl AIProvider {
@@ -911,8 +1011,14 @@ fn decide(interception: &Interception, state: &LoopState, message: &Value) -> Ne
 		return Next::Finish { strip: true };
 	}
 	if ours.len() != calls.len() {
-		debug!("model mixed server tools with client tools; returning the client tools");
-		return Next::Finish { strip: true };
+		if interception.config.results == ServerToolResults::Strip
+			|| interception.wire() == Wire::Completions
+		{
+			debug!("model mixed server tools with client tools; returning the client tools");
+			return Next::Finish { strip: true };
+		}
+		debug!("model mixed server tools with client tools; running ours and handing back");
+		return Next::ExecuteAndReturn(ours);
 	}
 	if state.iteration >= interception.max_iterations {
 		debug!(
@@ -928,51 +1034,110 @@ fn decide(interception: &Interception, state: &LoopState, message: &Value) -> Ne
 	Next::Execute(ours)
 }
 
+/// The model's arguments, extended with the mapping's argument templates.
+fn call_arguments(tool: &BoundTool, call: &ToolUse) -> Value {
+	let Some(templates) = tool.arguments.as_deref() else {
+		return call.input.clone();
+	};
+	let context = serde_json::json!({
+		"input": call.input,
+		"declaration": tool.declaration,
+		"name": call.name,
+		"type": tool.tool_type,
+	});
+	let exec = cel::Executor::new_server_tool(&context);
+	let mut input = match &call.input {
+		Value::Object(obj) => obj.clone(),
+		_ => serde_json::Map::new(),
+	};
+	for (key, expr) in templates.iter() {
+		let value = match exec.eval(expr) {
+			Ok(value) => value,
+			Err(e) => {
+				debug!(argument = %key, tool = %call.name, "argument template failed to evaluate: {e}");
+				continue;
+			},
+		};
+		match value.json() {
+			Ok(Value::Null) => {},
+			Ok(value) => {
+				input.insert(key.clone(), value);
+			},
+			Err(e) => {
+				debug!(argument = %key, tool = %call.name, "argument template is not JSON: {e}");
+			},
+		}
+	}
+	Value::Object(input)
+}
+
+/// Run one call. The tool result the model reads and the record for the client's native items.
+async fn execute_one(
+	interception: &Interception,
+	call: &ToolUse,
+	mcp_log: Option<&AsyncLog<MCPInfo>>,
+) -> Result<(Value, Option<ExecutedCall>), AIError> {
+	let wire = interception.wire();
+	let tool = interception
+		.tool(&call.name)
+		.ok_or_else(|| server_tool_error(format!("unmapped tool {}", call.name)))?;
+	let runtime = interception
+		.runtimes
+		.get(tool.runtime)
+		.ok_or_else(|| server_tool_error(format!("no runtime for tool {}", call.name)))?;
+	let arguments = call_arguments(tool, call);
+	match runtime.call(&tool.mcp_tool, &arguments, mcp_log).await {
+		Ok(outcome) => {
+			let max_bytes = interception.config.max_result_bytes;
+			let record = ExecutedCall {
+				call: call.clone(),
+				kind: tool.kind,
+				server_label: tool.server_label.clone(),
+				mcp_tool: tool.mcp_tool.clone(),
+				output: rt::mcp_content_to_output(&outcome.content, usize::MAX),
+				content: st::mcp_content_to_tool_result(&outcome.content, max_bytes),
+				is_error: outcome.is_error,
+			};
+			Ok((
+				wire.tool_result(call, &outcome.content, outcome.is_error, max_bytes),
+				Some(record),
+			))
+		},
+		Err(e) => match interception.config.failure_mode {
+			ServerToolFailureMode::FailClosed => {
+				Err(server_tool_error(format!("tool {} failed: {e}", call.name)))
+			},
+			ServerToolFailureMode::FailOpen => {
+				warn!(tool = %call.name, "server tool failed; reporting the error to the model: {e}");
+				Ok((wire.error_result(call, &e.to_string()), None))
+			},
+		},
+	}
+}
+
+/// Run every call of a turn at once, keeping the model's order.
 async fn execute(
 	interception: &Interception,
 	calls: &[ToolUse],
 	mcp_log: Option<&AsyncLog<MCPInfo>>,
 ) -> Result<Executed, AIError> {
-	let wire = interception.wire();
+	let outcomes = futures_util::future::join_all(
+		calls
+			.iter()
+			.map(|call| execute_one(interception, call, mcp_log)),
+	)
+	.await;
 	let mut results = Vec::with_capacity(calls.len());
-	let mut searches = Vec::new();
-	for call in calls {
-		let tool = interception
-			.tool(&call.name)
-			.ok_or_else(|| server_tool_error(format!("unmapped tool {}", call.name)))?;
-		let runtime = interception
-			.runtimes
-			.get(tool.runtime)
-			.ok_or_else(|| server_tool_error(format!("no runtime for tool {}", call.name)))?;
-		let outcome = runtime.call(&tool.mcp_tool, &call.input, mcp_log).await;
-		let item = match outcome {
-			Ok(outcome) => {
-				if tool.native_search && !outcome.is_error {
-					searches.push((
-						call.clone(),
-						rt::mcp_content_to_output(&outcome.content, usize::MAX),
-					));
-				}
-				wire.tool_result(
-					call,
-					&outcome.content,
-					outcome.is_error,
-					interception.config.max_result_bytes,
-				)
-			},
-			Err(e) => match interception.config.failure_mode {
-				ServerToolFailureMode::FailClosed => {
-					return Err(server_tool_error(format!("tool {} failed: {e}", call.name)));
-				},
-				ServerToolFailureMode::FailOpen => {
-					warn!(tool = %call.name, "server tool failed; reporting the error to the model: {e}");
-					wire.error_result(call, &e.to_string())
-				},
-			},
-		};
-		results.push(item);
+	let mut records = Vec::new();
+	for outcome in outcomes {
+		let (result, record) = outcome?;
+		results.push(result);
+		records.extend(record);
 	}
-	Ok(Executed { results, searches })
+	Ok(Executed {
+		results,
+		calls: records,
+	})
 }
 
 /// Feed the model error results for calls the loop will not run, withdraw the gateway's tools,
@@ -1100,7 +1265,7 @@ impl AIProvider {
 					if strip {
 						wire.strip(&mut message, &interception.names());
 					}
-					state.add_native_search_blocks(wire, &mut message);
+					state.add_native_items(&interception, &mut message, false);
 					state.totals.add(&message);
 					state.totals.set(&mut message);
 					let translated = wire.parse_final(message)?;
@@ -1119,7 +1284,7 @@ impl AIProvider {
 				},
 				Next::Execute(calls) => {
 					let executed = execute(&interception, &calls, resend.mcp_log.as_ref()).await?;
-					state.searches.extend(executed.searches);
+					state.executed.extend(executed.calls);
 					state.last_fingerprint = Some(st::fingerprint(&calls));
 					state.totals.add(&turn.message);
 					state.iteration += 1;
@@ -1130,6 +1295,28 @@ impl AIProvider {
 						.send(body)
 						.await
 						.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
+				},
+				Next::ExecuteAndReturn(calls) => {
+					let executed = execute(&interception, &calls, resend.mcp_log.as_ref()).await?;
+					state.executed.extend(executed.calls);
+					let mut message = turn.message;
+					wire.strip(&mut message, &interception.names());
+					state.add_native_items(&interception, &mut message, true);
+					state.totals.add(&message);
+					state.totals.set(&mut message);
+					let translated = wire.parse_final(message)?;
+					break self
+						.finish_translated_response(
+							client,
+							req,
+							rate_limit,
+							req_snapshot,
+							logging,
+							model_catalog.map(Arc::as_ref),
+							turn.parts,
+							translated,
+						)
+						.await;
 				},
 				Next::Conclude(calls) => {
 					conclude(&interception, &mut state, &turn.message, &calls);
@@ -1291,7 +1478,7 @@ impl AIProvider {
 					if strip {
 						wire.strip(&mut message, &interception.names());
 					}
-					let added = state.add_native_search_blocks(wire, &mut message);
+					let added = state.add_native_items(interception, &mut message, false);
 					state.totals.add(&message);
 					state.totals.set(&mut message);
 					// Added or removed blocks change the block numbering, so the stream is rebuilt;
@@ -1317,7 +1504,7 @@ impl AIProvider {
 						return Ok(None);
 					};
 					let executed = executed?;
-					state.searches.extend(executed.searches);
+					state.executed.extend(executed.calls);
 					state.last_fingerprint = Some(st::fingerprint(&calls));
 					state.totals.add(&turn.message);
 					state.iteration += 1;
@@ -1327,6 +1514,26 @@ impl AIProvider {
 						return Ok(None);
 					};
 					resp = sent.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
+				},
+				Next::ExecuteAndReturn(calls) => {
+					let Some(executed) = with_keepalive(
+						tx,
+						keepalive,
+						wire,
+						execute(interception, &calls, resend.mcp_log.as_ref()),
+					)
+					.await
+					else {
+						return Ok(None);
+					};
+					let executed = executed?;
+					state.executed.extend(executed.calls);
+					let mut message = turn.message;
+					wire.strip(&mut message, &interception.names());
+					state.add_native_items(interception, &mut message, true);
+					state.totals.add(&message);
+					state.totals.set(&mut message);
+					return Ok(Some((wire.synthesize(&message), message)));
 				},
 				Next::Conclude(calls) => {
 					conclude(interception, &mut state, &turn.message, &calls);

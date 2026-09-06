@@ -12,7 +12,7 @@ use wiremock::{Mock, MockServer, Request as MockRequest, Respond, ResponseTempla
 use crate::llm::custom::ProviderFormat;
 use crate::llm::policy::{
 	ServerToolFailureMode, ServerToolMapping, ServerToolMcpServer, ServerToolMcpTarget,
-	ServerToolsConfig, UnmappedServerTools,
+	ServerToolResults, ServerToolsConfig, UnmappedServerTools,
 };
 use crate::llm::{Policy, RouteType};
 use crate::test_helpers::proxymock::{
@@ -289,6 +289,9 @@ struct SetupOpts {
 	json_results: bool,
 	/// `None` keeps the default guard list.
 	client_executed: Option<Vec<String>>,
+	results: ServerToolResults,
+	/// Argument templates on the mapping, as CEL.
+	arguments: Vec<(&'static str, &'static str)>,
 }
 
 impl Default for SetupOpts {
@@ -298,6 +301,8 @@ impl Default for SetupOpts {
 			unmapped: UnmappedServerTools::Drop,
 			json_results: false,
 			client_executed: None,
+			results: ServerToolResults::Native,
+			arguments: Vec::new(),
 		}
 	}
 }
@@ -330,6 +335,18 @@ async fn setup_with(
 ) -> Setup {
 	let (llm, llm_requests) = llm_server(model, streaming).await;
 	let (mcp, mcp_calls) = mcp_server_with(fail_calls, opts.json_results).await;
+	let arguments = (!opts.arguments.is_empty()).then(|| {
+		opts
+			.arguments
+			.iter()
+			.map(|(k, expr)| {
+				(
+					k.to_string(),
+					Arc::new(crate::cel::Expression::new_strict(*expr).unwrap()),
+				)
+			})
+			.collect()
+	});
 	let config = ServerToolsConfig {
 		tools: vec![ServerToolMapping {
 			tool_type: opts.tool_type.to_string(),
@@ -337,6 +354,7 @@ async fn setup_with(
 				backend: strng::format!("/{}", mcp.address()),
 				target: None,
 				tool: strng::literal!("search"),
+				arguments,
 			},
 			description: None,
 			input_schema: None,
@@ -347,6 +365,7 @@ async fn setup_with(
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode,
 		unmapped: opts.unmapped,
+		results: opts.results,
 		client_executed: opts
 			.client_executed
 			.unwrap_or_else(crate::llm::policy::default_client_executed),
@@ -633,7 +652,7 @@ async fn client_max_uses_caps_iterations() {
 }
 
 #[tokio::test]
-async fn mixed_client_tools_are_returned_untouched() {
+async fn mixed_client_tools_get_the_gateway_results_beside_them() {
 	let s = setup(
 		Model::MixedTools,
 		false,
@@ -646,20 +665,46 @@ async fn mixed_client_tools_are_returned_untouched() {
 		{"type": "web_search_20250305", "name": "web_search"},
 		{"name": "Read", "description": "read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}},
 	]);
-	let (status, _, body) = send(&s, client_request(false, tools)).await;
+	let (status, _, body) = send(&s, client_request(false, tools.clone())).await;
 	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
 	let message: Value = serde_json::from_slice(&body).unwrap();
 	assert_eq!(message["stop_reason"], json!("tool_use"));
-	let tool_uses: Vec<&str> = message["content"]
-		.as_array()
-		.unwrap()
-		.iter()
-		.filter(|b| b["type"] == "tool_use")
-		.map(|b| b["name"].as_str().unwrap())
-		.collect();
-	assert_eq!(tool_uses, vec!["Read"]);
-	assert_eq!(recorded(&s.mcp_calls).len(), 0);
+	// The gateway ran its search and hands its result back beside the client's call, so the
+	// evidence is in the history when the client continues.
+	assert_eq!(
+		block_types(&message),
+		["mcp_tool_use", "mcp_tool_result", "tool_use"],
+		"{message}"
+	);
+	assert_eq!(message["content"][0]["name"], json!("search"));
+	assert!(
+		message["content"][1]["content"][0]["text"]
+			.as_str()
+			.unwrap()
+			.contains("Seattle won Super Bowl LX 24-17.")
+	);
+	assert_eq!(message["content"][2]["name"], json!("Read"));
+	assert_eq!(recorded(&s.mcp_calls).len(), 1);
 	assert_eq!(recorded(&s.llm_requests).len(), 1);
+
+	// With `results: strip` the old behaviour holds: nothing runs, the client's call is returned.
+	let s = setup_with(
+		Model::MixedTools,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			results: ServerToolResults::Strip,
+			..Default::default()
+		},
+	)
+	.await;
+	let (status, _, body) = send(&s, client_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let message: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(block_types(&message), ["tool_use"], "{message}");
+	assert_eq!(recorded(&s.mcp_calls).len(), 0);
 }
 
 #[tokio::test]
@@ -763,6 +808,7 @@ async fn setup_responses(model: Model, streaming: bool, skip_approval: bool) -> 
 				backend: strng::format!("/{}", mcp.address()),
 				target: None,
 				tool: strng::literal!("search"),
+				arguments: None,
 			},
 			description: None,
 			input_schema: None,
@@ -773,12 +819,14 @@ async fn setup_responses(model: Model, streaming: bool, skip_approval: bool) -> 
 			backend: strng::format!("/{}", mcp.address()),
 			target: None,
 			skip_approval,
+			arguments: None,
 		}],
 		max_iterations: 3,
 		max_result_bytes: 64 * 1024,
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode: ServerToolFailureMode::FailClosed,
 		unmapped: UnmappedServerTools::Drop,
+		results: ServerToolResults::Native,
 		client_executed: crate::llm::policy::default_client_executed(),
 	};
 	let policy = Policy {
@@ -1010,6 +1058,7 @@ async fn setup_completions(model: Model, streaming: bool) -> Setup {
 				backend: strng::format!("/{}", mcp.address()),
 				target: None,
 				tool: strng::literal!("search"),
+				arguments: None,
 			},
 			description: None,
 			input_schema: None,
@@ -1020,6 +1069,7 @@ async fn setup_completions(model: Model, streaming: bool) -> Setup {
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode: ServerToolFailureMode::FailClosed,
 		unmapped: UnmappedServerTools::Drop,
+		results: ServerToolResults::Native,
 		client_executed: crate::llm::policy::default_client_executed(),
 	};
 	let policy = Policy {
@@ -1439,4 +1489,119 @@ async fn responses_colliding_mcp_tool_names_are_prefixed() {
 		.collect();
 	names.sort_unstable();
 	assert_eq!(names, ["search", "search_search"], "{}", requests[0]);
+}
+
+#[tokio::test]
+async fn argument_templates_forward_declared_options() {
+	let s = setup_with(
+		Model::SearchThenAnswer,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			arguments: vec![
+				("allowed_domains", "serverTool.declaration.allowed_domains"),
+				("context", "serverTool.declaration.search_context_size"),
+				("caller", "serverTool.name + \":\" + serverTool.type"),
+				("q", "serverTool.input.query"),
+			],
+			..Default::default()
+		},
+	)
+	.await;
+	let tools = json!([{
+		"type": "web_search_20250305",
+		"name": "web_search",
+		"allowed_domains": ["example.com", "example.org"],
+	}]);
+	let (status, _, body) = send(&s, client_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let calls = recorded(&s.mcp_calls);
+	assert_eq!(calls.len(), 1);
+	let arguments = &calls[0]["arguments"];
+	assert_eq!(arguments["query"], json!("super bowl lx winner"));
+	assert_eq!(arguments["q"], json!("super bowl lx winner"));
+	assert_eq!(
+		arguments["allowed_domains"],
+		json!(["example.com", "example.org"])
+	);
+	assert_eq!(arguments["caller"], json!("web_search:web_search_20250305"));
+	// A template that does not evaluate is left out rather than failing the call.
+	assert!(arguments.get("context").is_none(), "{arguments}");
+}
+
+#[tokio::test]
+async fn results_strip_returns_the_text_alone() {
+	let s = setup_with(
+		Model::SearchThenAnswer,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			json_results: true,
+			results: ServerToolResults::Strip,
+			..Default::default()
+		},
+	)
+	.await;
+	let (status, _, body) = send(&s, client_request(false, web_search_tool())).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let message: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(block_types(&message), ["text"], "{message}");
+}
+
+#[tokio::test]
+async fn responses_native_items_show_the_calls_that_ran() {
+	// A descriptor call becomes an mcp_call item ahead of the answer.
+	let s = setup_responses(Model::McpSearchThenAnswer, false, false).await;
+	let tools = json!([{"type": "mcp", "server_label": "search", "require_approval": "never"}]);
+	let (status, _, body) = send_responses(&s, responses_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let response: Value = serde_json::from_slice(&body).unwrap();
+	let types: Vec<&str> = response["output"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|i| i["type"].as_str().unwrap())
+		.collect();
+	assert_eq!(types, ["mcp_call", "message"], "{response}");
+	let call = &response["output"][0];
+	let answer = &response["output"][1];
+	assert_eq!(call["server_label"], json!("search"));
+	assert_eq!(call["name"], json!("search"));
+	assert!(
+		call["output"]
+			.as_str()
+			.unwrap()
+			.contains("Seattle won Super Bowl LX 24-17."),
+		"{call}"
+	);
+	assert_eq!(output_text(&response), ["Seattle won Super Bowl LX."]);
+
+	// The same items in a later request's history are readable by the provider.
+	let replay = json!({
+		"model": "mock-model",
+		"input": [
+			{"type": "message", "role": "user", "content": "Who won Super Bowl LX?"},
+			call,
+			answer,
+			{"type": "message", "role": "user", "content": "By how much?"},
+		],
+		"tools": [{"type": "mcp", "server_label": "search", "require_approval": "never"}],
+	})
+	.to_string()
+	.into_bytes();
+	let s = setup_responses(Model::AnswerOnly, false, false).await;
+	let (status, _, body) = send_responses(&s, replay).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let requests = recorded(&s.llm_requests);
+	assert!(
+		requests[0]["messages"]
+			.to_string()
+			.contains("Called MCP tool search on search"),
+		"{}",
+		requests[0]
+	);
 }

@@ -17,7 +17,7 @@ use bytes::Bytes;
 use serde_json::{Map, Value, json};
 
 use crate::server_tools::{
-	InterceptedTool, SseEvent, TRUNCATION_MARKER, ToolDefinition, ToolUse, TypeMatch,
+	InterceptedTool, SearchResult, SseEvent, TRUNCATION_MARKER, ToolDefinition, ToolUse, TypeMatch,
 };
 use crate::types::responses::{RawInputItem, Request, RequestInput};
 
@@ -286,6 +286,137 @@ pub fn replace_tools(req: &mut Request, mut edits: Vec<(usize, Vec<Value>)>) {
 			list.splice(index..=index, replacements);
 		}
 	}
+}
+
+/// The client's declaration of a built-in tool, as sent.
+pub fn declared_tool(req: &Request, tool_type_name: &str) -> Value {
+	tools_array(req)
+		.into_iter()
+		.flatten()
+		.find(|tool| tool_type(tool) == Some(tool_type_name))
+		.cloned()
+		.unwrap_or(Value::Null)
+}
+
+/// The client's `mcp` descriptor at `index`, as sent.
+pub fn declared_descriptor(req: &Request, index: usize) -> Value {
+	tools_array(req)
+		.and_then(|tools| tools.get(index))
+		.cloned()
+		.unwrap_or(Value::Null)
+}
+
+/// An `mcp_call` output item for a call the gateway ran through MCP.
+pub fn mcp_call_item(
+	call: &ToolUse,
+	server_label: &str,
+	mcp_tool: &str,
+	output: &str,
+	error: Option<&str>,
+) -> Value {
+	json!({
+		"type": "mcp_call",
+		"id": format!("mcp_{}", call.id),
+		"status": "completed",
+		"server_label": server_label,
+		"name": mcp_tool,
+		"arguments": call.input.to_string(),
+		"output": if error.is_some() { Value::Null } else { Value::String(output.to_string()) },
+		"error": error.map(|e| Value::String(e.to_string())).unwrap_or(Value::Null),
+	})
+}
+
+/// A `web_search_call` output item with the sources the search found.
+pub fn web_search_call_item(call: &ToolUse, results: &[SearchResult]) -> Value {
+	let query = call
+		.input
+		.get("query")
+		.and_then(Value::as_str)
+		.map(str::to_string)
+		.unwrap_or_else(|| call.input.to_string());
+	json!({
+		"type": "web_search_call",
+		"id": format!("ws_{}", call.id),
+		"status": "completed",
+		"action": {
+			"type": "search",
+			"query": query,
+			"sources": results.iter().map(|r| json!({"type": "url", "url": r.url})).collect::<Vec<_>>(),
+		},
+	})
+}
+
+/// Insert output items at the start of a response's output, ahead of the answer.
+pub fn prepend_output_items(response: &mut Value, items: Vec<Value>) {
+	if items.is_empty() {
+		return;
+	}
+	let output = match response.get_mut("output") {
+		Some(Value::Array(output)) => output,
+		_ => {
+			response["output"] = Value::Array(Vec::new());
+			response["output"].as_array_mut().expect("just set")
+		},
+	};
+	output.splice(0..0, items);
+}
+
+/// A plain assistant message, in the input shape every provider accepts.
+fn assistant_text_item(text: String) -> Value {
+	json!({"type": "message", "role": "assistant", "content": text})
+}
+
+/// Rewrite replayed `mcp_call` and `web_search_call` input items into assistant messages that
+/// carry what was called and what came back. A provider that never ran the call has nothing to
+/// pair those items with, so text is the form it reads.
+pub fn flatten_replayed_calls(req: &mut Request) -> usize {
+	let RequestInput::Items(items) = &mut req.input else {
+		return 0;
+	};
+	let mut rewritten = 0;
+	for item in items.iter_mut() {
+		let value = item.as_value();
+		let text = match tool_type(value) {
+			Some("mcp_call") => {
+				let field = |k: &str| value.get(k).and_then(Value::as_str).unwrap_or("");
+				let outcome = match value.get("error") {
+					Some(Value::String(error)) if !error.is_empty() => format!("error: {error}"),
+					_ => field("output").to_string(),
+				};
+				format!(
+					"Called MCP tool {} on {} with {}:\n{}",
+					field("name"),
+					field("server_label"),
+					field("arguments"),
+					outcome
+				)
+			},
+			Some("web_search_call") => {
+				let action = value.get("action");
+				let query = action
+					.and_then(|a| a.get("query"))
+					.and_then(Value::as_str)
+					.unwrap_or("");
+				let sources: Vec<String> = action
+					.and_then(|a| a.get("sources"))
+					.and_then(Value::as_array)
+					.into_iter()
+					.flatten()
+					.filter_map(|s| s.get("url").and_then(Value::as_str))
+					.map(str::to_string)
+					.collect();
+				if sources.is_empty() {
+					format!("Web search for \"{query}\".")
+				} else {
+					format!("Web search for \"{query}\" found:\n{}", sources.join("\n"))
+				}
+			},
+			_ => continue,
+		};
+		*item = RawInputItem::from_value(assistant_text_item(text));
+		rewritten += 1;
+	}
+	rewritten
 }
 
 /// All `function_call` items in a response, in output order.

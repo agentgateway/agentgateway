@@ -378,3 +378,73 @@ fn function_tools_and_forced_choice_are_removed() {
 	assert_eq!(tools[1]["type"], json!("web_search"));
 	assert!(req.rest.get("tool_choice").is_none());
 }
+
+#[test]
+fn native_items_are_built_and_flattened_on_replay() {
+	let call = ToolUse {
+		id: "call_1".to_string(),
+		name: "search".to_string(),
+		input: json!({"query": "super bowl lx"}),
+	};
+	let item = mcp_call_item(&call, "docs", "search", "Seattle won.", None);
+	assert_eq!(item["type"], json!("mcp_call"));
+	assert_eq!(item["server_label"], json!("docs"));
+	assert_eq!(item["arguments"], json!("{\"query\":\"super bowl lx\"}"));
+	assert_eq!(item["output"], json!("Seattle won."));
+	assert_eq!(item["error"], Value::Null);
+	let failed = mcp_call_item(&call, "docs", "search", "", Some("boom"));
+	assert_eq!(failed["error"], json!("boom"));
+	assert_eq!(failed["output"], Value::Null);
+
+	let results = vec![SearchResult {
+		url: "https://example.com/sb".to_string(),
+		title: "Super Bowl LX".to_string(),
+		snippet: String::new(),
+	}];
+	let search = web_search_call_item(&call, &results);
+	assert_eq!(search["type"], json!("web_search_call"));
+	assert_eq!(search["action"]["query"], json!("super bowl lx"));
+	assert_eq!(
+		search["action"]["sources"][0]["url"],
+		json!("https://example.com/sb")
+	);
+
+	let mut response = json!({"output": [{"type": "message", "role": "assistant", "content": []}]});
+	prepend_output_items(&mut response, vec![item.clone(), search.clone()]);
+	assert_eq!(response["output"][0]["type"], json!("mcp_call"));
+	assert_eq!(response["output"][2]["type"], json!("message"));
+
+	// Replayed items become assistant text a provider can read.
+	let mut req = request(
+		json!([{"type": "message", "role": "user", "content": "hi"}, item, search]),
+		json!([]),
+	);
+	assert_eq!(flatten_replayed_calls(&mut req), 2);
+	let RequestInput::Items(items) = &req.input else {
+		panic!("items");
+	};
+	let second = items[1].as_value();
+	assert_eq!(second["type"], json!("message"));
+	assert_eq!(second["role"], json!("assistant"));
+	let text = second["content"].as_str().unwrap();
+	assert!(
+		text.contains("Called MCP tool search on docs") && text.contains("Seattle won."),
+		"{text}"
+	);
+	let third = items[2].as_value();
+	let text = third["content"].as_str().unwrap();
+	assert!(
+		text.contains("Web search for \"super bowl lx\"") && text.contains("https://example.com/sb"),
+		"{text}"
+	);
+	// Declarations are looked up by type and by position.
+	let req = request(
+		json!("hi"),
+		json!([{"type": "web_search", "search_context_size": "low"}, {"type": "mcp", "server_label": "docs"}]),
+	);
+	assert_eq!(
+		declared_tool(&req, "web_search")["search_context_size"],
+		json!("low")
+	);
+	assert_eq!(declared_descriptor(&req, 1)["server_label"], json!("docs"));
+}

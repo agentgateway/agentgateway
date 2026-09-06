@@ -33,6 +33,10 @@ impl RawInputItem {
 		Self(item)
 	}
 
+	pub(crate) fn as_value(&self) -> &Value {
+		&self.0
+	}
+
 	fn from_user_text(text: String) -> Self {
 		Self::from_typed(InputItem::from(InputMessage {
 			content: vec![InputContent::InputText(InputTextContent {

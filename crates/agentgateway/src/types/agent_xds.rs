@@ -1167,7 +1167,7 @@ fn convert_backend_ai_policy(
 		server_tools: ai
 			.server_tools
 			.as_ref()
-			.map(convert_server_tools)
+			.map(|st| convert_server_tools(st, diagnostics))
 			.transpose()?
 			.map(Arc::new),
 		routes: ai
@@ -4119,8 +4119,29 @@ fn convert_prompt_caching(
 	}
 }
 
+fn convert_server_tool_arguments(
+	arguments: &std::collections::HashMap<String, String>,
+	diagnostics: &mut Diagnostics,
+) -> Option<std::collections::BTreeMap<String, Arc<crate::cel::Expression>>> {
+	if arguments.is_empty() {
+		return None;
+	}
+	Some(
+		arguments
+			.iter()
+			.map(|(k, v)| {
+				(
+					k.clone(),
+					permissive_cel_expression_arc(diagnostics, "serverTools.arguments", v),
+				)
+			})
+			.collect(),
+	)
+}
+
 fn convert_server_tools(
 	st: &proto::agent::backend_policy_spec::ai::ServerTools,
+	diagnostics: &mut Diagnostics,
 ) -> Result<llm::policy::ServerToolsConfig, ProtoError> {
 	use proto::agent::backend_policy_spec::ai::server_tools;
 	let tools = st
@@ -4153,6 +4174,7 @@ fn convert_server_tools(
 					backend,
 					target: t.target.as_deref().map(strng::new),
 					tool: strng::new(&t.tool),
+					arguments: convert_server_tool_arguments(&t.arguments, diagnostics),
 				},
 				description: t.description.clone(),
 				input_schema,
@@ -4178,6 +4200,7 @@ fn convert_server_tools(
 				backend,
 				target: m.target.as_deref().map(strng::new),
 				skip_approval: m.skip_approval,
+				arguments: convert_server_tool_arguments(&m.arguments, diagnostics),
 			})
 		})
 		.collect::<Result<Vec<_>, ProtoError>>()?;
@@ -4192,6 +4215,12 @@ fn convert_server_tools(
 	{
 		server_tools::UnmappedMode::Drop => llm::policy::UnmappedServerTools::Drop,
 		server_tools::UnmappedMode::Reject => llm::policy::UnmappedServerTools::Reject,
+	};
+	let results = match server_tools::ResultsMode::try_from(st.results)
+		.map_err(|_| ProtoError::EnumParse("invalid server tools results mode".to_string()))?
+	{
+		server_tools::ResultsMode::Native => llm::policy::ServerToolResults::Native,
+		server_tools::ResultsMode::Strip => llm::policy::ServerToolResults::Strip,
 	};
 	let defaults = llm::policy::ServerToolsConfig::defaults();
 	let client_executed = match st.client_executed.as_ref() {
@@ -4213,6 +4242,7 @@ fn convert_server_tools(
 			.unwrap_or(defaults.keepalive_interval),
 		failure_mode,
 		unmapped,
+		results,
 		client_executed,
 	})
 }
