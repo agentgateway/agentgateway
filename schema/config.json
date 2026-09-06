@@ -5859,6 +5859,24 @@
           "description": "What happens to a declared server tool that no mapping covers. By default it is left to the\nprovider, which usually drops it; `reject` answers the request with a 400 that names the\ntool type instead.",
           "$ref": "#/$defs/UnmappedServerTools",
           "default": "drop"
+        },
+        "clientExecuted": {
+          "description": "Tool types that share the server tool shape but are executed by the client, so a mapping\nthat matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined\nclient tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the\nResponses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`\ntools. Set it to an empty list to let every mapping apply, or add entries to guard more.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "bash_*",
+            "text_editor_*",
+            "computer_*",
+            "memory_*",
+            "local_shell",
+            "shell",
+            "apply_patch",
+            "computer_use_preview",
+            "computer"
+          ]
         }
       },
       "additionalProperties": false

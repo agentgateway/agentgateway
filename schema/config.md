@@ -2588,6 +2588,7 @@
 |`binds[].listeners[].routes[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`binds[].listeners[].routes[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`binds[].listeners[].routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.key`|string|Private key file for the client certificate.|
@@ -9455,6 +9456,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -12874,6 +12876,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`binds[].listeners[].routes[].backends[].aws`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -16256,6 +16259,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`binds[].listeners[].routes[].backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`binds[].listeners[].tcpRoutes`|[]object|TCP routes attached directly to this listener.|
 |`binds[].listeners[].tcpRoutes[].name`|string|Name identifying this route.|
 |`binds[].listeners[].tcpRoutes[].namespace`|string|Namespace scoping this route.|
@@ -21838,6 +21842,7 @@
 |`policies[].policy.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`policies[].policy.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`policies[].policy.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`policies[].policy.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`policies[].policy.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`policies[].policy.backendTLS.key`|string|Private key file for the client certificate.|
@@ -28705,6 +28710,7 @@
 |`backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`backends[].ai.policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`backends[].ai.groups`|[]object||
 |`backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -32124,6 +32130,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups[].providers[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`backends[].aws`|object||
 |`backends[].aws.agentCore`|object||
 |`backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -35504,6 +35511,7 @@
 |`backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`backends[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`routeGroups`|[]object|routeGroups provides a set of route groups used for route delegation. This is an advanced feature<br>primarily used for testing.|
 |`routeGroups[].name`|string|Identifier for this route group, referenced by delegating routes.|
 |`routeGroups[].routes`|[]object|HTTP routes grouped together for delegation and reuse.|
@@ -37962,6 +37970,7 @@
 |`routeGroups[].routes[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routeGroups[].routes[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routeGroups[].routes[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`routeGroups[].routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`routeGroups[].routes[].policies.backendTLS.key`|string|Private key file for the client certificate.|
@@ -44829,6 +44838,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`routeGroups[].routes[].backends[].ai.groups`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -48248,6 +48258,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`routeGroups[].routes[].backends[].aws`|object||
 |`routeGroups[].routes[].backends[].aws.agentCore`|object||
 |`routeGroups[].routes[].backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -51630,6 +51641,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routeGroups[].routes[].backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`gateways`|object|gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.<br>Each gateway defines a port that proxy will listen on, and optionally TLS settings for that port.|
 |`gateways.*.port`|integer|port is the port to listen on for this gateway.|
 |`gateways.*.bindAddress`|string|bindAddress is the IPv4 or IPv6 address to listen on. Use `127.0.0.1` or `::1` for loopback.<br>When omitted, listens on all interfaces (`::` on Unix with IPv6 enabled, otherwise `0.0.0.0`).|
@@ -56737,6 +56749,7 @@
 |`routes[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routes[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routes[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`routes[].policies.backendTLS.key`|string|Private key file for the client certificate.|
@@ -63604,6 +63617,7 @@
 |`routes[].backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routes[].backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].ai.policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routes[].backends[].ai.policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`routes[].backends[].ai.groups`|[]object||
 |`routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`routes[].backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -67023,6 +67037,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`routes[].backends[].aws`|object||
 |`routes[].backends[].aws.agentCore`|object||
 |`routes[].backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -70405,6 +70420,7 @@
 |`routes[].backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`routes[].backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`routes[].backends[].policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`tcpRoutes`|[]object|tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.|
 |`tcpRoutes[].gateways`|string|gateways attaches this route to named TCP/TLS gateways or gateway listeners.<br>This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>If unset, the 'default' gateway will be used.|
 |`tcpRoutes[].name`|string|Name identifying this route.|
@@ -71475,6 +71491,7 @@
 |`llm.providers[].defaults.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`llm.providers[].defaults.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.providers[].defaults.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`llm.providers[].defaults.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].id`|string|id is a stable identity for this model config entry. The name field remains the model match pattern.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
@@ -74239,6 +74256,7 @@
 |`llm.models[].serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`llm.models[].serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.models[].serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`llm.models[].serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`llm.models[].matches`|[]object|matches specifies the conditions under which this model should be used in addition to matching the model name.|
 |`llm.models[].matches[].headers`|[]object|Request headers to match for conditional model routing.|
 |`llm.models[].matches[].headers[].name`|string|HTTP header or pseudo-header name (such as `:method`) to match.|
@@ -80627,6 +80645,7 @@
 |`mcp.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
 |`mcp.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.ai.serverTools.unmapped`|enum|What happens to a declared server tool that no mapping covers. By default it is left to the<br>provider, which usually drops it; `reject` answers the request with a 400 that names the<br>tool type instead.<br>Possible values: `drop`, `reject`.|
+|`mcp.policies.ai.serverTools.clientExecuted`|[]string|Tool types that share the server tool shape but are executed by the client, so a mapping<br>that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined<br>client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the<br>Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`<br>tools. Set it to an empty list to let every mapping apply, or add entries to guard more.|
 |`mcp.policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`mcp.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`mcp.policies.backendTLS.key`|string|Private key file for the client certificate.|

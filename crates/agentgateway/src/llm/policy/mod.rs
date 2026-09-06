@@ -2725,6 +2725,20 @@ pub struct ServerToolsConfig {
 	/// tool type instead.
 	#[serde(default)]
 	pub unmapped: UnmappedServerTools,
+	/// Tool types that share the server tool shape but are executed by the client, so a mapping
+	/// that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined
+	/// client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the
+	/// Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`
+	/// tools. Set it to an empty list to let every mapping apply, or add entries to guard more.
+	#[serde(default = "default_client_executed")]
+	pub client_executed: Vec<String>,
+}
+
+pub fn default_client_executed() -> Vec<String> {
+	agent_llm::server_tools::DEFAULT_CLIENT_EXECUTED_TOOL_TYPES
+		.iter()
+		.map(|t| t.to_string())
+		.collect()
 }
 
 impl ServerToolsConfig {
@@ -2738,6 +2752,7 @@ impl ServerToolsConfig {
 			keepalive_interval: default_server_tool_keepalive(),
 			failure_mode: ServerToolFailureMode::default(),
 			unmapped: UnmappedServerTools::default(),
+			client_executed: default_client_executed(),
 		}
 	}
 
@@ -2746,6 +2761,15 @@ impl ServerToolsConfig {
 			.tools
 			.iter()
 			.map(|t| agent_llm::server_tools::TypeMatch::parse(&t.tool_type))
+			.collect()
+	}
+
+	/// The types a mapping must never take over, as matchers.
+	pub fn client_executed_matchers(&self) -> Vec<agent_llm::server_tools::TypeMatch> {
+		self
+			.client_executed
+			.iter()
+			.map(|t| agent_llm::server_tools::TypeMatch::parse(t))
 			.collect()
 	}
 }

@@ -4126,6 +4126,10 @@ fn convert_server_tools(
 		server_tools::UnmappedMode::Reject => llm::policy::UnmappedServerTools::Reject,
 	};
 	let defaults = llm::policy::ServerToolsConfig::defaults();
+	let client_executed = match st.client_executed.as_ref() {
+		Some(list) => list.types.clone(),
+		None => defaults.client_executed.clone(),
+	};
 	Ok(llm::policy::ServerToolsConfig {
 		tools,
 		mcp_servers,
@@ -4141,6 +4145,7 @@ fn convert_server_tools(
 			.unwrap_or(defaults.keepalive_interval),
 		failure_mode,
 		unmapped,
+		client_executed,
 	})
 }
 

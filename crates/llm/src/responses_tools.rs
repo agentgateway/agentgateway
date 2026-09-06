@@ -28,20 +28,7 @@ mod tests;
 /// Tool entry types the client executes itself. They are never rewritten.
 const CLIENT_TOOL_TYPES: &[&str] = &["function", "custom"];
 
-/// Built-in tool types that share the shape but are executed by the client, such as Codex's
-/// shell and patch tools. They are never intercepted, even when a mapping matches them.
-pub const CLIENT_EXECUTED_TOOL_TYPES: &[&str] = &[
-	"local_shell",
-	"shell",
-	"apply_patch",
-	"computer_use_preview",
-	"computer",
-];
-
-/// Whether a built-in tool type is one the client executes itself.
-pub fn is_client_executed(tool_type: &str) -> bool {
-	CLIENT_EXECUTED_TOOL_TYPES.contains(&tool_type)
-}
+use crate::server_tools::is_client_executed;
 
 fn tools_array(req: &Request) -> Option<&Vec<Value>> {
 	req.rest.get("tools").and_then(Value::as_array)
@@ -76,8 +63,13 @@ pub fn client_tool_names(req: &Request) -> HashSet<String> {
 ///
 /// A built-in tool is a `tools[]` entry whose `type` is neither a client tool type nor `mcp`. The
 /// model calls the replacement by the built-in's type name, so a built-in whose type collides with
-/// one of the client's function names is left alone.
-pub fn find_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<InterceptedTool> {
+/// one of the client's function names is left alone, and so is any type in the `client_executed`
+/// list.
+pub fn find_builtin_tools(
+	req: &Request,
+	matchers: &[TypeMatch],
+	client_executed: &[TypeMatch],
+) -> Vec<InterceptedTool> {
 	let taken = client_tool_names(req);
 	let mut seen = HashSet::new();
 	tools_array(req)
@@ -89,7 +81,7 @@ pub fn find_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercep
 				return None;
 			}
 			let mapping = matchers.iter().position(|m| m.matches(ty))?;
-			if is_client_executed(ty) {
+			if is_client_executed(ty, client_executed) {
 				tracing::warn!(
 					tool_type = ty,
 					"server tool mapping matches a client-executed tool; leaving it to the client"
@@ -109,8 +101,13 @@ pub fn find_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercep
 		.collect()
 }
 
-/// The built-in tool types that no mapping covers and the client does not execute itself.
-pub fn unmapped_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<String> {
+/// The built-in tool types that no mapping covers and that are not in the `client_executed`
+/// list.
+pub fn unmapped_builtin_tools(
+	req: &Request,
+	matchers: &[TypeMatch],
+	client_executed: &[TypeMatch],
+) -> Vec<String> {
 	tools_array(req)
 		.into_iter()
 		.flatten()
@@ -118,7 +115,7 @@ pub fn unmapped_builtin_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Stri
 			let ty = tool_type(tool)?;
 			if CLIENT_TOOL_TYPES.contains(&ty)
 				|| ty == "mcp"
-				|| is_client_executed(ty)
+				|| is_client_executed(ty, client_executed)
 				|| matchers.iter().any(|m| m.matches(ty))
 			{
 				return None;

@@ -563,6 +563,17 @@ type ServerTools struct {
 	// +kubebuilder:validation:Enum=Drop;Reject
 	// +optional
 	Unmapped UnmappedServerTools `json:"unmapped,omitempty"`
+
+	// Tool types that share the server tool shape but are executed by the client, so a mapping
+	// that matches them is ignored. A trailing `*` matches a prefix. When unset, the vendor-defined
+	// client tools are guarded: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`,
+	// and the Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and
+	// `computer` tools. An empty list lets every mapping apply; more entries guard more.
+	// +kubebuilder:validation:MaxItems=32
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:MaxLength=253
+	// +optional
+	ClientExecuted *[]string `json:"clientExecuted,omitempty"`
 }
 
 // What happens to a declared server tool that no mapping covers.

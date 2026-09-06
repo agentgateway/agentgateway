@@ -1571,6 +1571,13 @@ message BackendPolicySpec {
       repeated McpServer mcp_servers = 6;
       // What happens to a declared server tool that no mapping covers.
       UnmappedMode unmapped = 7;
+      message TypeList {
+        repeated string types = 1;
+      }
+      // Tool types a mapping must never take over because the client executes them. A trailing
+      // '*' matches a prefix. When unset, the vendor-defined client tools are guarded; an empty
+      // list guards nothing.
+      TypeList client_executed = 8;
     }
     ServerTools server_tools = 10;
 
