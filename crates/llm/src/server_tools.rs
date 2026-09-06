@@ -644,6 +644,46 @@ pub fn web_search_blocks(call: &ToolUse, results: &[SearchResult]) -> (Value, Va
 	(use_block, result_block)
 }
 
+/// The `mcp_tool_use` and `mcp_tool_result` pair that represents an MCP call the gateway ran on
+/// the client's behalf. `content` is the result as Anthropic content blocks.
+pub fn mcp_tool_blocks(
+	call: &ToolUse,
+	server_name: &str,
+	mcp_tool: &str,
+	content: Vec<Value>,
+	is_error: bool,
+) -> (Value, Value) {
+	let use_block = json!({
+		"type": "mcp_tool_use",
+		"id": call.id,
+		"name": mcp_tool,
+		"server_name": server_name,
+		"input": call.input,
+	});
+	let result_block = json!({
+		"type": "mcp_tool_result",
+		"tool_use_id": call.id,
+		"is_error": is_error,
+		"content": content,
+	});
+	(use_block, result_block)
+}
+
+/// The client's declaration of a server tool, as sent.
+pub fn declared_tool(req: &Request, tool: &InterceptedTool) -> Value {
+	req
+		.rest
+		.get("tools")
+		.and_then(Value::as_array)
+		.into_iter()
+		.flatten()
+		.find(|entry| {
+			server_tool_parts(entry).is_some_and(|(ty, name)| ty == tool.tool_type && name == tool.name)
+		})
+		.cloned()
+		.unwrap_or(Value::Null)
+}
+
 /// Insert blocks at the start of a message's content, ahead of the final text.
 pub fn prepend_blocks(message: &mut Value, blocks: Vec<Value>) {
 	if blocks.is_empty() {
@@ -1066,7 +1106,7 @@ pub fn synthesize_sse(message: &Value) -> Vec<SseEvent> {
 				b["text"] = Value::String(String::new());
 				b
 			},
-			Some("tool_use" | "server_tool_use") => {
+			Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
 				deltas.push(json!({
 					"type": "input_json_delta",
 					"partial_json": block.get("input").map(Value::to_string).unwrap_or_else(|| "{}".to_string()),

@@ -621,3 +621,48 @@ fn native_search_blocks_are_built_and_flattened_on_replay() {
 			.contains("max_uses_exceeded")
 	);
 }
+
+#[test]
+fn mcp_tool_blocks_carry_the_call_and_its_result() {
+	let call = ToolUse {
+		id: "toolu_1".to_string(),
+		name: "web_fetch".to_string(),
+		input: json!({"url": "https://example.com"}),
+	};
+	let (use_block, result_block) = mcp_tool_blocks(
+		&call,
+		"search",
+		"fetch",
+		vec![json!({"type": "text", "text": "page text"})],
+		false,
+	);
+	assert_eq!(use_block["type"], json!("mcp_tool_use"));
+	assert_eq!(use_block["server_name"], json!("search"));
+	assert_eq!(use_block["name"], json!("fetch"));
+	assert_eq!(use_block["input"]["url"], json!("https://example.com"));
+	assert_eq!(result_block["type"], json!("mcp_tool_result"));
+	assert_eq!(result_block["tool_use_id"], json!("toolu_1"));
+	assert_eq!(result_block["is_error"], json!(false));
+	assert_eq!(result_block["content"][0]["text"], json!("page text"));
+	// The stream shape carries the input as a delta, like a tool_use block.
+	let events = synthesize_sse(&json!({"content": [use_block], "usage": {}}));
+	assert!(events.iter().any(|e| e.data.contains("input_json_delta")));
+	// The client's declaration is looked up by type and name.
+	let req: Request = serde_json::from_value(json!({
+		"model": "m",
+		"max_tokens": 1,
+		"messages": [{"role": "user", "content": "hi"}],
+		"tools": [{"type": "web_search_20250305", "name": "web_search", "allowed_domains": ["example.com"]}],
+	}))
+	.unwrap();
+	let tool = InterceptedTool {
+		name: "web_search".to_string(),
+		tool_type: "web_search_20250305".to_string(),
+		mapping: 0,
+		max_uses: None,
+	};
+	assert_eq!(
+		declared_tool(&req, &tool)["allowed_domains"],
+		json!(["example.com"])
+	);
+}

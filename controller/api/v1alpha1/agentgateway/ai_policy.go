@@ -564,6 +564,15 @@ type ServerTools struct {
 	// +optional
 	Unmapped UnmappedServerTools `json:"unmapped,omitempty"`
 
+	// How executed calls appear in the response the client gets. `Native` (default) adds the wire
+	// format's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a
+	// web search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other
+	// Messages calls, `web_search_call` and `mcp_call` items on Responses. `Strip` removes every trace
+	// of the gateway's calls and returns the text alone.
+	// +kubebuilder:validation:Enum=Native;Strip
+	// +optional
+	Results ServerToolResults `json:"results,omitempty"`
+
 	// Tool types that share the server tool shape but are executed by the client, so a mapping
 	// that matches them is ignored. A trailing `*` matches a prefix. When unset, the vendor-defined
 	// client tools are guarded: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`,
@@ -575,6 +584,14 @@ type ServerTools struct {
 	// +optional
 	ClientExecuted *[]string `json:"clientExecuted,omitempty"`
 }
+
+// How executed server tool calls appear in the response.
+type ServerToolResults string
+
+const (
+	ServerToolResultsNative ServerToolResults = "Native"
+	ServerToolResultsStrip  ServerToolResults = "Strip"
+)
 
 // What happens to a declared server tool that no mapping covers.
 type UnmappedServerTools string
@@ -638,6 +655,13 @@ type ServerToolMCPServer struct {
 	// cannot pause a turn for approval.
 	// +optional
 	SkipApproval *bool `json:"skipApproval,omitempty"`
+
+	// Arguments added to every call of this server's tools, as CEL expressions over
+	// `serverTool.input`, `serverTool.declaration` (the client's `mcp` descriptor), `serverTool.name`
+	// and `serverTool.type`. A value that fails to evaluate or is null is left out.
+	// +kubebuilder:validation:MaxProperties=32
+	// +optional
+	Arguments map[string]CELExpression `json:"arguments,omitempty"`
 }
 
 // An MCP tool on a configured MCP backend.
@@ -657,4 +681,13 @@ type ServerToolMCP struct {
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Tool string `json:"tool"`
+
+	// Arguments added to every call, as CEL expressions over `serverTool.input` (the model's
+	// arguments), `serverTool.declaration` (the client's tool entry as declared, with fields such as
+	// `allowed_domains`, `user_location` or `max_uses`), `serverTool.name` and `serverTool.type`. A
+	// value that fails to evaluate or is null is left out. This is how a declared option reaches the
+	// MCP tool.
+	// +kubebuilder:validation:MaxProperties=32
+	// +optional
+	Arguments map[string]CELExpression `json:"arguments,omitempty"`
 }

@@ -56,6 +56,7 @@ spec:
         keepaliveInterval: 10s
         failureMode: FailOpen
         unmapped: Reject
+        results: Strip
         clientExecuted: ["bash_*", "text_editor_*"]
         tools:
           - type: web_search_*
@@ -66,6 +67,9 @@ spec:
                 name: searxng
               target: search
               tool: search
+              arguments:
+                allowed_domains: serverTool.declaration.allowed_domains
+                max_results: "5"
           - type: web_fetch_20250910
             description: Fetch a web page
             inputSchema:
@@ -89,6 +93,8 @@ spec:
               name: searxng
             target: search
             skipApproval: true
+            arguments:
+              caller: serverTool.declaration.server_label
 
 ---
 # Output
@@ -109,14 +115,20 @@ output:
             keepaliveInterval: 10s
             maxIterations: 4
             mcpServers:
-            - backend:
+            - arguments:
+                caller: serverTool.declaration.server_label
+              backend:
                 backend: default/searxng
               label: search
               skipApproval: true
               target: search
               url: https://mcp.example.com/mcp
+            results: STRIP
             tools:
-            - backend:
+            - arguments:
+                allowed_domains: serverTool.declaration.allowed_domains
+                max_results: "5"
+              backend:
                 backend: default/searxng
               target: search
               tool: search

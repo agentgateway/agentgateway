@@ -87,6 +87,9 @@ backends:
                   backend: searxng
                   target: search
                   tool: search
+                  arguments:
+                    allowed_domains: serverTool.declaration.allowed_domains
+                    max_results: "5"
               - type: web_fetch_20250910
                 mcp:
                   backend: searxng
@@ -110,6 +113,7 @@ backends:
             keepaliveInterval: 10s
             failureMode: failOpen
             unmapped: reject
+            results: strip
             clientExecuted: []
   - backend:
       llmRouter:

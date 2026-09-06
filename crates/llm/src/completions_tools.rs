@@ -61,6 +61,15 @@ pub fn find_web_search(req: &Request, matchers: &[TypeMatch]) -> Option<Intercep
 	})
 }
 
+/// The client's `web_search_options`, as sent.
+pub fn declared_web_search_options(req: &Request) -> Value {
+	req
+		.rest
+		.get("web_search_options")
+		.cloned()
+		.unwrap_or(Value::Null)
+}
+
 /// Replace the `web_search_options` field with a function tool the model can call.
 pub fn rewrite_web_search(req: &mut Request, tool: &InterceptedTool, def: &ToolDefinition) {
 	if let Some(rest) = req.rest.as_object_mut() {

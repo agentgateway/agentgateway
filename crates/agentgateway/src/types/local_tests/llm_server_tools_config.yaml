@@ -20,12 +20,16 @@ llm:
       failureMode: failOpen
       unmapped: reject
       clientExecuted: []
+      results: strip
       tools:
       - type: web_search_*
         mcp:
           backend: searxng
           target: search
           tool: search
+          arguments:
+            allowed_domains: serverTool.declaration.allowed_domains
+            max_results: "5"
       - type: web_fetch_20250910
         description: Fetch a web page
         inputSchema:
