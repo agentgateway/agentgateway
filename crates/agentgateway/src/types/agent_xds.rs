@@ -1156,6 +1156,12 @@ fn convert_backend_ai_policy(
 			.collect(),
 		wildcard_patterns: Arc::new(Vec::new()), // Will be populated by compile_model_alias_patterns()
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
+		server_tools: ai
+			.server_tools
+			.as_ref()
+			.map(convert_server_tools)
+			.transpose()?
+			.map(Arc::new),
 		routes: ai
 			.routes
 			.iter()
@@ -4026,6 +4032,69 @@ fn convert_prompt_caching(
 	}
 }
 
+fn convert_server_tools(
+	st: &proto::agent::backend_policy_spec::ai::ServerTools,
+) -> Result<llm::policy::ServerToolsConfig, ProtoError> {
+	use proto::agent::backend_policy_spec::ai::server_tools;
+	let tools = st
+		.tools
+		.iter()
+		.map(|t| {
+			let backend = match t.backend.as_ref().and_then(|b| b.kind.as_ref()) {
+				Some(proto::agent::backend_reference::Kind::Backend(key)) => strng::new(key),
+				_ => {
+					return Err(ProtoError::Generic(format!(
+						"serverTools.tools[{}].backend must reference a Backend",
+						t.r#type
+					)));
+				},
+			};
+			let input_schema = t
+				.input_schema
+				.as_deref()
+				.map(serde_json::from_str::<serde_json::Value>)
+				.transpose()
+				.map_err(|e| {
+					ProtoError::Generic(format!(
+						"serverTools.tools[{}].inputSchema is not valid JSON: {e}",
+						t.r#type
+					))
+				})?;
+			Ok(llm::policy::ServerToolMapping {
+				tool_type: t.r#type.clone(),
+				mcp: llm::policy::ServerToolMcpTarget {
+					backend,
+					target: t.target.as_deref().map(strng::new),
+					tool: strng::new(&t.tool),
+				},
+				description: t.description.clone(),
+				input_schema,
+			})
+		})
+		.collect::<Result<Vec<_>, ProtoError>>()?;
+	let failure_mode = match server_tools::FailureMode::try_from(st.failure_mode)
+		.map_err(|_| ProtoError::EnumParse("invalid server tools failure mode".to_string()))?
+	{
+		server_tools::FailureMode::FailClosed => llm::policy::ServerToolFailureMode::FailClosed,
+		server_tools::FailureMode::FailOpen => llm::policy::ServerToolFailureMode::FailOpen,
+	};
+	let defaults = llm::policy::ServerToolsConfig::defaults();
+	Ok(llm::policy::ServerToolsConfig {
+		tools,
+		max_iterations: st.max_iterations.unwrap_or(defaults.max_iterations),
+		max_result_bytes: st
+			.max_result_bytes
+			.map(|b| b as usize)
+			.unwrap_or(defaults.max_result_bytes),
+		keepalive_interval: st
+			.keepalive_interval
+			.map(TryInto::try_into)
+			.transpose()?
+			.unwrap_or(defaults.keepalive_interval),
+		failure_mode,
+	})
+}
+
 fn convert_reject_audit(action: i32) -> llm::policy::RejectAuditAction {
 	if action == RejectAuditAction::Audit as i32 {
 		llm::policy::RejectAuditAction::Audit
@@ -4874,6 +4943,7 @@ mod tests {
 				prompts: None,
 				model_aliases: Default::default(),
 				prompt_caching: None,
+				server_tools: None,
 				routes: vec![
 					(
 						"/v1/chat/completions".to_string(),

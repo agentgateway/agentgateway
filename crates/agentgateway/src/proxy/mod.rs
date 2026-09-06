@@ -293,6 +293,10 @@ fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
 			status: StatusCode::BAD_REQUEST,
 			reason: ProxyResponseReason::InvalidRequest,
 		},
+		llm::AIError::ServerTool(_) => AIErrorClassification {
+			status: StatusCode::BAD_GATEWAY,
+			reason: ProxyResponseReason::UpstreamFailure,
+		},
 		llm::AIError::ModelNotFound => AIErrorClassification {
 			status: StatusCode::NOT_FOUND,
 			reason: ProxyResponseReason::InvalidRequest,
@@ -330,7 +334,8 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::UnsupportedEncoding(_)
 		| llm::AIError::UnsupportedConversion(_)
 		| llm::AIError::UnsupportedContent
-		| llm::AIError::ResponseDecoding(_) => AIErrorClassification {
+		| llm::AIError::ResponseDecoding(_)
+		| llm::AIError::ServerTool(_) => AIErrorClassification {
 			status: StatusCode::BAD_GATEWAY,
 			reason: ProxyResponseReason::UpstreamFailure,
 		},

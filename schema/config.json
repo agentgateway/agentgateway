@@ -4997,6 +4997,17 @@
           "additionalProperties": {
             "$ref": "#/$defs/RouteType"
           }
+        },
+        "serverTools": {
+          "description": "Server tools declared by the client that the gateway fulfils through MCP.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerToolsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -5787,6 +5798,117 @@
           "description": "Cohere /v2/rerank (document reranking)",
           "type": "string",
           "const": "rerank"
+        }
+      ]
+    },
+    "ServerToolsConfig": {
+      "description": "Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an\nMCP tool and continuing the turn. This applies to Anthropic Messages requests only and only to\ntools the client declared as server-executed; client tools are never touched.",
+      "type": "object",
+      "properties": {
+        "tools": {
+          "description": "Server tools to fulfil, matched by the tool `type` the client declares.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerToolMapping"
+          }
+        },
+        "maxIterations": {
+          "description": "Maximum number of follow-up model calls for one client request. The client's `max_uses` is\nhonoured as a lower cap.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 3
+        },
+        "maxResultBytes": {
+          "description": "Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 65536
+        },
+        "keepaliveInterval": {
+          "description": "Interval between keepalive `ping` events while a streaming turn is held back.",
+          "type": "string",
+          "default": "15s"
+        },
+        "failureMode": {
+          "description": "What happens when a tool call fails.",
+          "$ref": "#/$defs/ServerToolFailureMode",
+          "default": "failClosed"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tools"
+      ]
+    },
+    "ServerToolMapping": {
+      "description": "Maps one server tool type to the MCP tool that fulfils it.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any\ntype with that prefix.",
+          "type": "string"
+        },
+        "mcp": {
+          "description": "The MCP tool that fulfils the server tool.",
+          "$ref": "#/$defs/ServerToolMcpTarget"
+        },
+        "description": {
+          "description": "Description shown to the model. Defaults to the MCP tool's description.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputSchema": {
+          "description": "JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "mcp"
+      ]
+    },
+    "ServerToolMcpTarget": {
+      "description": "An MCP tool on a configured MCP backend.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "Name of the MCP backend to call.",
+          "type": "string"
+        },
+        "target": {
+          "description": "Target within the backend. Required when the backend has more than one target.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "description": "Name of the tool on the MCP backend.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "tool"
+      ]
+    },
+    "ServerToolFailureMode": {
+      "description": "What happens when a server tool call fails.",
+      "oneOf": [
+        {
+          "description": "End the turn with an error.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Report the failure to the model as an error tool result and let it continue.",
+          "type": "string",
+          "const": "failOpen"
         }
       ]
     },
@@ -11864,6 +11986,17 @@
               "type": "null"
             }
           ]
+        },
+        "serverTools": {
+          "description": "Server tools declared by clients that are fulfilled through MCP.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerToolsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -12058,6 +12191,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serverTools": {
+          "description": "serverTools fulfils server tools declared by the client (for example a coding agent's `web_search`)\nthrough an MCP tool, for providers that cannot execute them.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerToolsConfig"
             },
             {
               "type": "null"

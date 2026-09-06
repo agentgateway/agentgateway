@@ -18,6 +18,7 @@ pub mod gemini;
 pub mod model_catalog;
 pub mod openai;
 pub mod parse;
+pub mod server_tools;
 pub mod tokenizer;
 pub mod types;
 pub mod vertex;
@@ -507,6 +508,8 @@ pub enum AIError {
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]
 	JoinError(#[from] tokio::task::JoinError),
+	#[error("server tool: {0}")]
+	ServerTool(Strng),
 }
 
 #[apply(schema!)]

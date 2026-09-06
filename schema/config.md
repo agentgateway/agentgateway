@@ -2568,6 +2568,19 @@
 |`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`binds[].listeners[].routes[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`binds[].listeners[].routes[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.key`|string|Private key file for the client certificate.|
@@ -9134,6 +9147,19 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -12533,6 +12559,19 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].aws`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -15895,6 +15934,19 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].tcpRoutes`|[]object|TCP routes attached directly to this listener.|
 |`binds[].listeners[].tcpRoutes[].name`|string|Name identifying this route.|
 |`binds[].listeners[].tcpRoutes[].namespace`|string|Namespace scoping this route.|
@@ -21456,6 +21508,19 @@
 |`policies[].policy.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`policies[].policy.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`policies[].policy.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`policies[].policy.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`policies[].policy.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`policies[].policy.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`policies[].policy.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`policies[].policy.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`policies[].policy.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`policies[].policy.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`policies[].policy.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`policies[].policy.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`policies[].policy.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`policies[].policy.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`policies[].policy.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`policies[].policy.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`policies[].policy.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`policies[].policy.backendTLS.key`|string|Private key file for the client certificate.|
@@ -28022,6 +28087,19 @@
 |`backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`backends[].ai.policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`backends[].ai.policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`backends[].ai.policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`backends[].ai.policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`backends[].ai.policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`backends[].ai.policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups`|[]object||
 |`backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -31421,6 +31499,19 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].aws`|object||
 |`backends[].aws.agentCore`|object||
 |`backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -34781,6 +34872,19 @@
 |`backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`backends[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`backends[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`backends[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`backends[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`backends[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`backends[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups`|[]object|routeGroups provides a set of route groups used for route delegation. This is an advanced feature<br>primarily used for testing.|
 |`routeGroups[].name`|string|Identifier for this route group, referenced by delegating routes.|
 |`routeGroups[].routes`|[]object|HTTP routes grouped together for delegation and reuse.|
@@ -37219,6 +37323,19 @@
 |`routeGroups[].routes[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routeGroups[].routes[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routeGroups[].routes[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routeGroups[].routes[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routeGroups[].routes[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routeGroups[].routes[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routeGroups[].routes[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`routeGroups[].routes[].policies.backendTLS.key`|string|Private key file for the client certificate.|
@@ -43785,6 +43902,19 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -47184,6 +47314,19 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].aws`|object||
 |`routeGroups[].routes[].backends[].aws.agentCore`|object||
 |`routeGroups[].routes[].backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -50546,6 +50689,19 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways`|object|gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.<br>Each gateway defines a port that proxy will listen on, and optionally TLS settings for that port.|
 |`gateways.*.port`|integer|port is the port to listen on for this gateway.|
 |`gateways.*.protocol`|enum|protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways<br>default to HTTP, or HTTPS when tls is set.<br>Possible values: `HTTP`, `HTTPS`, `TCP`, `TLS`, `null`.|
@@ -55632,6 +55788,19 @@
 |`routes[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routes[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routes[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routes[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routes[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routes[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routes[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routes[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routes[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routes[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routes[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routes[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routes[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`routes[].policies.backendTLS.key`|string|Private key file for the client certificate.|
@@ -62198,6 +62367,19 @@
 |`routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routes[].backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routes[].backends[].ai.policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routes[].backends[].ai.policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routes[].backends[].ai.policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routes[].backends[].ai.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routes[].backends[].ai.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].ai.groups`|[]object||
 |`routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
 |`routes[].backends[].ai.groups[].providers[].name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -65597,6 +65779,19 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].aws`|object||
 |`routes[].backends[].aws.agentCore`|object||
 |`routes[].backends[].aws.agentCore.agentRuntimeArn`|string|ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).|
@@ -68959,6 +69154,19 @@
 |`routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routes[].backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`routes[].backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`routes[].backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`routes[].backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`routes[].backends[].policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`routes[].backends[].policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`routes[].backends[].policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`routes[].backends[].policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`routes[].backends[].policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`routes[].backends[].policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`routes[].backends[].policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`routes[].backends[].policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`tcpRoutes`|[]object|tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.|
 |`tcpRoutes[].gateways`|string|gateways attaches this route to named TCP/TLS gateways or gateway listeners.<br>This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>If unset, the 'default' gateway will be used.|
 |`tcpRoutes[].name`|string|Name identifying this route.|
@@ -70009,6 +70217,19 @@
 |`llm.providers[].defaults.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`llm.providers[].defaults.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`llm.providers[].defaults.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`llm.providers[].defaults.serverTools`|object|Server tools declared by clients that are fulfilled through MCP.|
+|`llm.providers[].defaults.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`llm.providers[].defaults.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`llm.providers[].defaults.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`llm.providers[].defaults.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`llm.providers[].defaults.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`llm.providers[].defaults.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`llm.providers[].defaults.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`llm.providers[].defaults.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`llm.providers[].defaults.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`llm.providers[].defaults.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`llm.providers[].defaults.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`llm.providers[].defaults.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].id`|string|id is a stable identity for this model config entry. The name field remains the model match pattern.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
@@ -72753,6 +72974,19 @@
 |`llm.models[].promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`llm.models[].promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`llm.models[].promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`llm.models[].serverTools`|object|serverTools fulfils server tools declared by the client (for example a coding agent's `web_search`)<br>through an MCP tool, for providers that cannot execute them.|
+|`llm.models[].serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`llm.models[].serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`llm.models[].serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`llm.models[].serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`llm.models[].serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`llm.models[].serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`llm.models[].serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`llm.models[].serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`llm.models[].serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`llm.models[].serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`llm.models[].serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`llm.models[].serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.models[].matches`|[]object|matches specifies the conditions under which this model should be used in addition to matching the model name.|
 |`llm.models[].matches[].headers`|[]object|Request headers to match for conditional model routing.|
 |`llm.models[].matches[].headers[].name`|string|HTTP header or pseudo-header name (such as `:method`) to match.|
@@ -79116,6 +79350,19 @@
 |`mcp.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`mcp.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`mcp.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`mcp.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
+|`mcp.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares.|
+|`mcp.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
+|`mcp.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
+|`mcp.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
+|`mcp.policies.ai.serverTools.tools[].mcp.target`|string|Target within the backend. Required when the backend has more than one target.|
+|`mcp.policies.ai.serverTools.tools[].mcp.tool`|string|Name of the tool on the MCP backend.|
+|`mcp.policies.ai.serverTools.tools[].description`|string|Description shown to the model. Defaults to the MCP tool's description.|
+|`mcp.policies.ai.serverTools.tools[].inputSchema`|any|JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.|
+|`mcp.policies.ai.serverTools.maxIterations`|integer|Maximum number of follow-up model calls for one client request. The client's `max_uses` is<br>honoured as a lower cap.|
+|`mcp.policies.ai.serverTools.maxResultBytes`|integer|Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.|
+|`mcp.policies.ai.serverTools.keepaliveInterval`|string|Interval between keepalive `ping` events while a streaming turn is held back.|
+|`mcp.policies.ai.serverTools.failureMode`|enum|What happens when a tool call fails.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`mcp.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
 |`mcp.policies.backendTLS.key`|string|Private key file for the client certificate.|

@@ -3008,6 +3008,26 @@ async fn make_backend_call(
 			l.request_processing_duration = Some(l.request_processing_start.elapsed());
 		}
 	});
+	let server_tools = call
+		.req
+		.extensions_mut()
+		.remove::<Arc<llm::server_tools::Interception>>()
+		.map(|interception| {
+			// Keep a template of the final upstream request so follow-up turns are sent the same way.
+			let (parts, body) =
+				std::mem::replace(&mut call.req, Request::new(http::Body::empty())).into_parts();
+			let template = parts.clone();
+			call.req = Request::from_parts(parts, body);
+			let resend = llm::server_tools::ResendContext {
+				parts: template,
+				backend_auth: backend_call.backend_policies.backend_auth.clone(),
+				upstream: upstream.clone(),
+				target: call.target.clone(),
+				connection: call.connection.clone(),
+				mcp_log: log.as_ref().map(|l| l.mcp_status.clone()),
+			};
+			(interception, Box::new(resend))
+		});
 	let resp = upstream.call(call).await;
 	if let Some(span) = span.as_deref_mut() {
 		match &resp {
@@ -3067,22 +3087,42 @@ async fn make_backend_call(
 		backend_call.backend_policies.llm_provider.clone(),
 		llm_request,
 	) {
-		Box::pin(
-			llm
-				.provider
-				.process_response(
-					policy_client.clone(),
-					llm_request,
-					llm_response_policies,
-					log.as_ref().expect("must be set").request_snapshot.clone(),
-					llm_logging.expect("must be set"),
-					Some(&inputs.model_catalog),
-					resp,
-				)
-				.assert_size::<{ 4 * 1024 }>(),
-		)
-		.await
-		.map_err(ProxyError::AIResponse)?
+		match server_tools {
+			Some((interception, resend)) if resp.status().is_success() => Box::pin(
+				llm
+					.provider
+					.run_server_tools(
+						policy_client.clone(),
+						llm_request,
+						llm_response_policies,
+						log.as_ref().expect("must be set").request_snapshot.clone(),
+						llm_logging.expect("must be set"),
+						Some(&inputs.model_catalog),
+						resp,
+						interception,
+						resend,
+					)
+					.assert_size::<{ 4 * 1024 }>(),
+			)
+			.await
+			.map_err(ProxyError::AIResponse)?,
+			_ => Box::pin(
+				llm
+					.provider
+					.process_response(
+						policy_client.clone(),
+						llm_request,
+						llm_response_policies,
+						log.as_ref().expect("must be set").request_snapshot.clone(),
+						llm_logging.expect("must be set"),
+						Some(&inputs.model_catalog),
+						resp,
+					)
+					.assert_size::<{ 4 * 1024 }>(),
+			)
+			.await
+			.map_err(ProxyError::AIResponse)?,
+		}
 	} else {
 		resp
 	};

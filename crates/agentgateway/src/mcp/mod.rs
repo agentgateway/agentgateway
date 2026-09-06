@@ -10,6 +10,7 @@ mod session;
 mod sse;
 mod streamablehttp;
 mod subscriptions;
+mod tool_runtime;
 mod upstream;
 
 use std::fmt::{Display, Write};
@@ -32,6 +33,7 @@ use rmcp::model::{
 };
 pub use router::App;
 use thiserror::Error;
+pub(crate) use tool_runtime::ToolRuntime;
 
 use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;
