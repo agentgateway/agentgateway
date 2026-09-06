@@ -1700,7 +1700,10 @@ func processConcreteRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, 
 
 	// Process local rate limiting if present
 	if rl.Local != nil {
-		localPolicy := processLocalRateLimitPolicy(rl.Local, policyPhase, basePolicyName, policy)
+		localPolicy, err := processLocalRateLimitPolicy(rl.Local, policyPhase, basePolicyName, policy)
+		if err != nil {
+			errs = append(errs, err)
+		}
 		if localPolicy != nil {
 			agwPolicies = append(agwPolicies, localPolicy)
 		}
@@ -1722,10 +1725,14 @@ func processConcreteRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, 
 
 // processLocalRateLimitPolicy processes local rate limiting configuration
 func processLocalRateLimitTraffic(_ PolicyCtx, limits *[]agentgateway.LocalRateLimit, _ types.NamespacedName) (*api.Policy_Traffic, error) {
+	var errs []error
 	rules := make([]*api.TrafficPolicySpec_LocalRateLimit_Rule, 0, len(*limits))
 	for _, limit := range *limits {
 		rule := &api.TrafficPolicySpec_LocalRateLimit_Rule{
 			Type: api.TrafficPolicySpec_LocalRateLimit_REQUEST,
+			Key: castCELPtr(limit.Key, func(expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("local rate limit key is not a valid CEL expression: %s", expr))
+			}),
 		}
 		var capacity uint64
 		if limit.Requests != nil {
@@ -1759,17 +1766,17 @@ func processLocalRateLimitTraffic(_ PolicyCtx, limits *[]agentgateway.LocalRateL
 		Kind: &api.TrafficPolicySpec_LocalRateLimit_{
 			LocalRateLimit: localRateLimit,
 		},
-	}}, nil
+	}}, errors.Join(errs...)
 }
 
-func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) *api.Policy {
-	tp, _ := processLocalRateLimitTraffic(PolicyCtx{}, &limits, policy)
+func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+	tp, err := processLocalRateLimitTraffic(PolicyCtx{}, &limits, policy)
 	tp.Traffic.Phase = phase(policyPhase)
 	return &api.Policy{
 		Key:  basePolicyName + localRateLimitPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: tp,
-	}
+	}, err
 }
 
 func processGlobalRateLimitTraffic(ctx PolicyCtx, grl *agentgateway.GlobalRateLimit, policy types.NamespacedName) (*api.Policy_Traffic, error) {

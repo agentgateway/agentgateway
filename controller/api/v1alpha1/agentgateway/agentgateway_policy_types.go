@@ -3354,6 +3354,14 @@ type LocalRateLimit struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	Burst *int32 `json:"burst,omitempty"`
+
+	// CEL expression selecting the bucket the request counts against, for example `jwt.sub` for a
+	// per-user limit or `jwt.team` for a per-team limit. Each distinct value gets its own bucket with
+	// the limit above. Requests without a value, or whose expression cannot be evaluated, share one
+	// bucket. When unset, all requests share one bucket. Each proxy instance keeps a bounded number
+	// of buckets per rule and drops the least used ones.
+	// +optional
+	Key *CELExpression `json:"key,omitempty"`
 }
 
 type CORS struct {

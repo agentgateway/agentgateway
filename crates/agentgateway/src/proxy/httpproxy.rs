@@ -558,20 +558,49 @@ async fn apply_llm_request_policies(
 	llm_req: &LLMRequest,
 	response_headers: &mut HeaderMap,
 ) -> Result<store::LLMResponsePolicies, ProxyResponse> {
-	let local_rate_limit = policies
+	// Token limits are settled here, where the parsed request gives the token count and, for a
+	// keyed rule, the `llm` context its key may read.
+	let mut local_rate_limit = Vec::new();
+	let mut local_status: Option<http::localratelimit::RateLimitStatus> = None;
+	let limits = policies
 		.local_rate_limit
 		.as_deref()
-		.into_iter()
-		.flatten()
-		.filter(|rate_limit| rate_limit.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
-		.cloned()
-		.collect::<Vec<_>>();
-	let mut local_status: Option<http::localratelimit::RateLimitStatus> = None;
-	for lrl in &local_rate_limit {
-		local_status = http::localratelimit::RateLimitStatus::most_constrained(
-			local_status,
-			lrl.check_llm_request(llm_req)?,
-		);
+		.map(Vec::as_slice)
+		.unwrap_or_default();
+	if !limits.is_empty() {
+		// The context costs a clone of the request, so it is only built for a key that reads it.
+		let reads_llm = |lrl: &http::localratelimit::RateLimit| {
+			lrl.spec.limit_type == http::localratelimit::RateLimitType::Tokens
+				&& lrl.spec.key.as_ref().is_some_and(|key| key.needs_llm())
+		};
+		let llm_ctx = limits.iter().any(reads_llm).then(|| {
+			cel::LLMContext::from_llm_info(
+				llm::LLMInfo {
+					request: llm_req.clone(),
+					response: Default::default(),
+				},
+				None,
+			)
+		});
+		let mut exec = cel::Executor::new_request(req);
+		if let Some(llm_ctx) = llm_ctx.as_ref() {
+			exec.llm = cel::ExtensionOrDirect::Direct(Some(llm_ctx));
+		}
+		let admitted = limits.iter().try_for_each(|lrl| {
+			if let Some((status, charged)) = lrl.charge_tokens(llm_req.input_tokens, &exec)? {
+				local_status =
+					http::localratelimit::RateLimitStatus::most_constrained(local_status, Some(status));
+				local_rate_limit.push(charged);
+			}
+			Ok::<(), ProxyError>(())
+		});
+		if let Err(e) = admitted {
+			// The request is rejected, so it must not count against the rules that admitted it.
+			for charged in &local_rate_limit {
+				charged.refund();
+			}
+			return Err(e.into());
+		}
 	}
 	if let Some(status) = local_status {
 		http::x_headers::set_ratelimit_headers(

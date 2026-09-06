@@ -32,6 +32,7 @@ span more than one agentgateway traffic type.
 * [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
 * [llm-cost-routing](llm-cost-routing/README.md): classify LLM requests with CEL and route the same public model name to different upstream models.
 * [llm-ollama-postgres](llm-ollama-postgres/README.md): proxy local Ollama models and store request logs in Postgres.
+* [llm-keyed-rate-limit](llm-keyed-rate-limit/README.md): give every caller its own local rate limit buckets, keyed by JWT claims and the requested model.
 * [llm-prompt-enrichment](llm-prompt-enrichment/README.md): append or prepend prompts to agentgateway AI requests.
 * [llm-prompt-guard](llm-prompt-guard/README.md): configure prompt guards for LLM requests and responses.
 * [llm-semantic-routing](llm-semantic-routing/README.md): use vLLM Semantic Router for cost-based or tier-aware semantic model selection.

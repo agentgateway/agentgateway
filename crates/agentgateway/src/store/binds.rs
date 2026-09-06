@@ -568,7 +568,7 @@ impl LLMRequestPolicies {
 
 #[derive(Debug, Default)]
 pub struct LLMResponsePolicies {
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
+	pub local_rate_limit: Vec<http::localratelimit::ChargedBucket>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
 	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,

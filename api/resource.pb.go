@@ -12845,6 +12845,9 @@ type TrafficPolicySpec_LocalRateLimit_Rule struct {
 	TokensPerFill uint64                                `protobuf:"varint,2,opt,name=tokens_per_fill,json=tokensPerFill,proto3" json:"tokens_per_fill,omitempty"`
 	FillInterval  *durationpb.Duration                  `protobuf:"bytes,3,opt,name=fill_interval,json=fillInterval,proto3" json:"fill_interval,omitempty"`
 	Type          TrafficPolicySpec_LocalRateLimit_Type `protobuf:"varint,4,opt,name=type,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_LocalRateLimit_Type" json:"type,omitempty"`
+	// CEL expression selecting the bucket, for example `jwt.sub`. Each distinct value gets its
+	// own bucket with the limits above; when unset, all requests share one bucket.
+	Key           *string `protobuf:"bytes,5,opt,name=key,proto3,oneof" json:"key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12905,6 +12908,13 @@ func (x *TrafficPolicySpec_LocalRateLimit_Rule) GetType() TrafficPolicySpec_Loca
 		return x.Type
 	}
 	return TrafficPolicySpec_LocalRateLimit_REQUEST
+}
+
+func (x *TrafficPolicySpec_LocalRateLimit_Rule) GetKey() string {
+	if x != nil && x.Key != nil {
+		return *x.Key
+	}
+	return ""
 }
 
 type TrafficPolicySpec_ExternalAuth_BodyOptions struct {
@@ -18596,7 +18606,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\x8fV\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xaeV\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -18648,20 +18658,22 @@ const file_resource_proto_rawDesc = "" +
 	"\x06TOKENS\x10\x01\"-\n" +
 	"\vFailureMode\x12\x0f\n" +
 	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
-	"\tFAIL_OPEN\x10\x01\x1a\xcb\x04\n" +
+	"\tFAIL_OPEN\x10\x01\x1a\xea\x04\n" +
 	"\x0eLocalRateLimit\x12\x1d\n" +
 	"\n" +
 	"max_tokens\x18\x01 \x01(\x04R\tmaxTokens\x12&\n" +
 	"\x0ftokens_per_fill\x18\x02 \x01(\x04R\rtokensPerFill\x12>\n" +
 	"\rfill_interval\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\ffillInterval\x12T\n" +
 	"\x04type\x18\x04 \x01(\x0e2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.TypeR\x04type\x12V\n" +
-	"\x05rules\x18\x05 \x03(\v2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.RuleR\x05rules\x1a\xe3\x01\n" +
+	"\x05rules\x18\x05 \x03(\v2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.RuleR\x05rules\x1a\x82\x02\n" +
 	"\x04Rule\x12\x1d\n" +
 	"\n" +
 	"max_tokens\x18\x01 \x01(\x04R\tmaxTokens\x12&\n" +
 	"\x0ftokens_per_fill\x18\x02 \x01(\x04R\rtokensPerFill\x12>\n" +
 	"\rfill_interval\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\ffillInterval\x12T\n" +
-	"\x04type\x18\x04 \x01(\x0e2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.TypeR\x04type\"\x1e\n" +
+	"\x04type\x18\x04 \x01(\x0e2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.TypeR\x04type\x12\x15\n" +
+	"\x03key\x18\x05 \x01(\tH\x00R\x03key\x88\x01\x01B\x06\n" +
+	"\x04_key\"\x1e\n" +
 	"\x04Type\x12\v\n" +
 	"\aREQUEST\x10\x00\x12\t\n" +
 	"\x05TOKEN\x10\x01\x1a\xf7\x0f\n" +
@@ -20462,6 +20474,7 @@ func file_resource_proto_init() {
 	file_resource_proto_msgTypes[110].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[118].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[119].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[121].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[125].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[130].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[140].OneofWrappers = []any{}
