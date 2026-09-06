@@ -308,7 +308,7 @@ pub fn tool_result_block(tool_use_id: &str, content: Vec<Value>, is_error: bool)
 	block
 }
 
-const TRUNCATION_MARKER: &str = "\n[tool result truncated by the gateway]";
+pub(crate) const TRUNCATION_MARKER: &str = "\n[tool result truncated by the gateway]";
 
 /// Convert MCP `CallToolResult.content` items into Anthropic `tool_result` content blocks.
 ///

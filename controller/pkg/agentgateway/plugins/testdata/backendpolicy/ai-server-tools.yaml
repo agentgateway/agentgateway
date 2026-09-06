@@ -78,6 +78,15 @@ spec:
                 kind: AgentgatewayBackend
                 name: searxng
               tool: fetch
+        mcpServers:
+          - label: search
+            url: https://mcp.example.com/mcp
+            backendRef:
+              group: agentgateway.dev
+              kind: AgentgatewayBackend
+              name: searxng
+            target: search
+            skipApproval: true
 
 ---
 # Output
@@ -93,6 +102,13 @@ output:
             failureMode: FAIL_OPEN
             keepaliveInterval: 10s
             maxIterations: 4
+            mcpServers:
+            - backend:
+                backend: default/searxng
+              label: search
+              skipApproval: true
+              target: search
+              url: https://mcp.example.com/mcp
             tools:
             - backend:
                 backend: default/searxng

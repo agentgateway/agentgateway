@@ -35,3 +35,9 @@ llm:
         mcp:
           backend: searxng
           tool: fetch
+      mcpServers:
+      - label: search
+        url: https://mcp.example.com/mcp
+        backend: searxng
+        target: search
+        skipApproval: true
