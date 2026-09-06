@@ -450,6 +450,7 @@ impl ProxyError {
 				if let Some(hm) = rb.headers_mut() {
 					*hm = *response_headers;
 					if body_missing {
+						hm.remove(hyper::header::CONTENT_LENGTH);
 						hm.insert(
 							hyper::header::CONTENT_TYPE,
 							HeaderValue::from_static("application/json"),

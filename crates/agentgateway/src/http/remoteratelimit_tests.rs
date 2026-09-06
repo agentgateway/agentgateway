@@ -694,7 +694,11 @@ async fn apply_over_limit_without_body_returns_actionable_json_and_retry_after()
 			}),
 			quota: None,
 		}],
-		response_headers_to_add: vec![],
+		response_headers_to_add: vec![proto::HeaderValue {
+			key: "content-length".to_string(),
+			value: "0".to_string(),
+			raw_value: vec![],
+		}],
 		request_headers_to_add: vec![],
 		raw_body: vec![],
 		dynamic_metadata: None,
@@ -709,6 +713,7 @@ async fn apply_over_limit_without_body_returns_actionable_json_and_retry_after()
 		direct.headers().get("content-type").unwrap(),
 		"application/json"
 	);
+	assert!(direct.headers().get("content-length").is_none());
 	let body = direct.into_body().collect().await.unwrap().to_bytes();
 	let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 	assert_eq!(body["error"]["message"], "rate limit exceeded");
