@@ -28,8 +28,9 @@ llm:
       keepaliveInterval: 15s
       failureMode: failClosed
       tools:
-      # Anthropic Messages clients declare `{"type": "web_search_20250305", ...}`; OpenAI Responses
-      # clients declare `{"type": "web_search"}`. Both are fulfilled by the MCP `search` tool.
+      # Anthropic Messages clients declare `{"type": "web_search_20250305", ...}`, OpenAI Responses
+      # clients declare `{"type": "web_search"}`, and Chat Completions clients send a
+      # `web_search_options` field. All three are fulfilled by the MCP `search` tool.
       - type: web_search*
         mcp:
           backend: search

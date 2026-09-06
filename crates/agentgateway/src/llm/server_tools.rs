@@ -1,7 +1,8 @@
 //! Fulfilment of client-declared server tools through MCP.
 //!
-//! The request and response manipulation lives in `agent_llm::server_tools` (Anthropic Messages)
-//! and `agent_llm::responses_tools` (OpenAI Responses). This module wires them into the proxy: it
+//! The request and response manipulation lives in `agent_llm::server_tools` (Anthropic Messages),
+//! `agent_llm::responses_tools` (OpenAI Responses) and `agent_llm::completions_tools` (OpenAI Chat
+//! Completions `web_search_options`). This module wires them into the proxy: it
 //! resolves the MCP backends from the store, rewrites the request before it is translated, and
 //! after each model response decides whether to execute a tool and continue the same turn or hand
 //! the finished message to the client.
@@ -12,7 +13,7 @@ use std::time::Duration;
 
 use ::http::request::Parts;
 use agent_llm::server_tools::{InterceptedTool, SseEvent, ToolDefinition, ToolUse};
-use agent_llm::{responses_tools as rt, server_tools as st};
+use agent_llm::{completions_tools as ct, responses_tools as rt, server_tools as st};
 use http_body_util::BodyExt;
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -33,6 +34,7 @@ mod tests;
 enum Wire {
 	Messages,
 	Responses,
+	Completions,
 }
 
 impl Wire {
@@ -40,6 +42,7 @@ impl Wire {
 		match self {
 			Wire::Messages => st::tool_uses(message),
 			Wire::Responses => rt::function_calls(message),
+			Wire::Completions => ct::tool_calls(message),
 		}
 	}
 
@@ -47,6 +50,7 @@ impl Wire {
 		match self {
 			Wire::Messages => st::strip_tool_uses(message, names),
 			Wire::Responses => rt::strip_function_calls(message, names),
+			Wire::Completions => ct::strip_tool_calls(message, names),
 		}
 	}
 
@@ -59,6 +63,11 @@ impl Wire {
 				acc.finish()
 			},
 			Wire::Responses => rt::final_response(events),
+			Wire::Completions => {
+				let mut acc = ct::ChunkAccumulator::default();
+				acc.feed_all(events);
+				acc.finish()
+			},
 		}
 	}
 
@@ -66,6 +75,7 @@ impl Wire {
 		match self {
 			Wire::Messages => st::synthesize_sse(message),
 			Wire::Responses => rt::synthesize_sse(message),
+			Wire::Completions => ct::synthesize_sse(message),
 		}
 	}
 
@@ -73,6 +83,7 @@ impl Wire {
 		match self {
 			Wire::Messages => st::ping_event(),
 			Wire::Responses => rt::keepalive(),
+			Wire::Completions => ct::keepalive(),
 		}
 	}
 
@@ -80,6 +91,7 @@ impl Wire {
 		match self {
 			Wire::Messages => st::error_event(message),
 			Wire::Responses => rt::error_event(message),
+			Wire::Completions => ct::error_event(message),
 		}
 	}
 
@@ -104,6 +116,13 @@ impl Wire {
 				}
 				rt::function_call_output(&call.id, output)
 			},
+			Wire::Completions => {
+				let mut output = rt::mcp_content_to_output(content, max_bytes);
+				if is_error {
+					output = format!("error: {output}");
+				}
+				ct::tool_message(&call.id, output)
+			},
 		}
 	}
 
@@ -116,6 +135,7 @@ impl Wire {
 				true,
 			),
 			Wire::Responses => rt::function_call_output(&call.id, format!("tool call failed: {message}")),
+			Wire::Completions => ct::tool_message(&call.id, format!("tool call failed: {message}")),
 		}
 	}
 
@@ -129,6 +149,10 @@ impl Wire {
 				serde_json::from_value::<types::responses::Response>(message)
 					.map_err(AIError::ResponseParsing)?,
 			),
+			Wire::Completions => Box::new(
+				serde_json::from_value::<types::completions::Response>(message)
+					.map_err(AIError::ResponseParsing)?,
+			),
 		})
 	}
 
@@ -140,6 +164,9 @@ impl Wire {
 			Wire::Responses => serde_json::from_value::<types::responses::Response>(message.clone())
 				.map(|r| r.to_llm_response(log_content))
 				.unwrap_or_default(),
+			Wire::Completions => serde_json::from_value::<types::completions::Response>(message.clone())
+				.map(|r| r.to_llm_response(log_content))
+				.unwrap_or_default(),
 		}
 	}
 }
@@ -149,6 +176,7 @@ impl Wire {
 enum Conversation {
 	Messages(types::messages::Request),
 	Responses(types::responses::Request),
+	Completions(types::completions::Request),
 }
 
 impl Conversation {
@@ -156,6 +184,7 @@ impl Conversation {
 		match self {
 			Conversation::Messages(_) => Wire::Messages,
 			Conversation::Responses(_) => Wire::Responses,
+			Conversation::Completions(_) => Wire::Completions,
 		}
 	}
 
@@ -163,6 +192,7 @@ impl Conversation {
 		match self {
 			Conversation::Messages(req) => types::ChatRequest::Messages(req.clone()),
 			Conversation::Responses(req) => types::ChatRequest::Responses(req.clone()),
+			Conversation::Completions(req) => types::ChatRequest::Completions(req.clone()),
 		}
 	}
 
@@ -185,6 +215,16 @@ impl Conversation {
 					.unwrap_or_default();
 				rt::append_tool_turn(req, output, results);
 			},
+			Conversation::Completions(req) => {
+				let assistant = message
+					.get("choices")
+					.and_then(Value::as_array)
+					.and_then(|c| c.first())
+					.and_then(|c| c.get("message"))
+					.cloned()
+					.unwrap_or(Value::Null);
+				ct::append_tool_turn(req, assistant, results);
+			},
 		}
 	}
 }
@@ -194,6 +234,7 @@ impl Conversation {
 enum Totals {
 	Messages(st::UsageTotals),
 	Responses(rt::UsageTotals),
+	Completions(ct::UsageTotals),
 }
 
 impl Totals {
@@ -201,6 +242,7 @@ impl Totals {
 		match wire {
 			Wire::Messages => Totals::Messages(Default::default()),
 			Wire::Responses => Totals::Responses(Default::default()),
+			Wire::Completions => Totals::Completions(Default::default()),
 		}
 	}
 
@@ -208,6 +250,7 @@ impl Totals {
 		match self {
 			Totals::Messages(t) => t.add(st::UsageTotals::of(message)),
 			Totals::Responses(t) => t.add(rt::UsageTotals::of(message)),
+			Totals::Completions(t) => t.add(ct::UsageTotals::of(message)),
 		}
 	}
 
@@ -215,13 +258,15 @@ impl Totals {
 		match self {
 			Totals::Messages(t) => st::set_usage(message, *t),
 			Totals::Responses(t) => rt::set_usage(message, *t),
+			Totals::Completions(t) => ct::set_usage(message, *t),
 		}
 	}
 
-	fn patch(&self, events: &mut [SseEvent]) {
+	fn patch(&self, events: &mut Vec<SseEvent>) {
 		match self {
 			Totals::Messages(t) => st::patch_usage(events, *t),
 			Totals::Responses(t) => rt::patch_usage(events, *t),
+			Totals::Completions(t) => ct::patch_usage(events, *t),
 		}
 	}
 }
@@ -534,6 +579,30 @@ pub async fn intercept_responses(
 		parts.headers.clone(),
 		config.max_iterations.max(1),
 	))
+}
+
+/// Rewrite a Chat Completions client's `web_search_options` into a function tool when a
+/// `web_search*` mapping exists. Returns `None`, leaving the request untouched, otherwise.
+pub async fn intercept_completions(
+	config: &Arc<ServerToolsConfig>,
+	policy: &Policy,
+	req: &mut types::completions::Request,
+	inputs: &Arc<ProxyInputs>,
+	parts: &Parts,
+) -> Option<Arc<Interception>> {
+	let tool = ct::find_web_search(req, &config.matchers())?;
+	let mut binder = Binder::new(inputs, parts);
+	let def = binder
+		.bind_mapping(&tool.name, &config.tools[tool.mapping])
+		.await?;
+	ct::rewrite_web_search(req, &tool, &def);
+	binder.finish(
+		config,
+		policy,
+		Conversation::Completions(req.clone()),
+		parts.headers.clone(),
+		config.max_iterations.max(1),
+	)
 }
 
 /// What the proxy needs to send a follow-up request to the same upstream.

@@ -3127,7 +3127,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].routes[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`binds[].listeners[].routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`binds[].listeners[].routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`binds[].listeners[].routes[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`binds[].listeners[].routes[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`binds[].listeners[].routes[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -10859,7 +10859,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -14837,7 +14837,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -18777,7 +18777,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`binds[].listeners[].routes[].backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -24930,7 +24930,7 @@
 |`policies[].policy.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`policies[].policy.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`policies[].policy.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`policies[].policy.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`policies[].policy.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`policies[].policy.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`policies[].policy.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`policies[].policy.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -32662,7 +32662,7 @@
 |`backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -36640,7 +36640,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -40578,7 +40578,7 @@
 |`backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -43591,7 +43591,7 @@
 |`routeGroups[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups[].routes[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routeGroups[].routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routeGroups[].routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routeGroups[].routes[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routeGroups[].routes[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routeGroups[].routes[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -51323,7 +51323,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -55301,7 +55301,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -59241,7 +59241,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups[].routes[].backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routeGroups[].routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routeGroups[].routes[].backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -64923,7 +64923,7 @@
 |`routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routes[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routes[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routes[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routes[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routes[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -72655,7 +72655,7 @@
 |`routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routes[].backends[].ai.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routes[].backends[].ai.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routes[].backends[].ai.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routes[].backends[].ai.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routes[].backends[].ai.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -76633,7 +76633,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -80573,7 +80573,7 @@
 |`routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routes[].backends[].policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`routes[].backends[].policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`routes[].backends[].policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`routes[].backends[].policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`routes[].backends[].policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -81646,7 +81646,7 @@
 |`llm.providers[].defaults.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`llm.providers[].defaults.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`llm.providers[].defaults.serverTools`|object|Server tools declared by clients that are fulfilled through MCP.|
-|`llm.providers[].defaults.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`llm.providers[].defaults.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`llm.providers[].defaults.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`llm.providers[].defaults.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`llm.providers[].defaults.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -84967,7 +84967,7 @@
 |`llm.models[].promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`llm.models[].promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`llm.models[].serverTools`|object|serverTools fulfils server tools declared by the client (for example a coding agent's `web_search`)<br>through an MCP tool, for providers that cannot execute them.|
-|`llm.models[].serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`llm.models[].serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`llm.models[].serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`llm.models[].serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`llm.models[].serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
@@ -92483,7 +92483,7 @@
 |`mcp.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`mcp.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`mcp.policies.ai.serverTools`|object|Server tools declared by the client that the gateway fulfils through MCP.|
-|`mcp.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages) or `web_search`, `file_search` and `code_interpreter`<br>(Responses).|
+|`mcp.policies.ai.serverTools.tools`|[]object|Server tools to fulfil, matched by the tool `type` the client declares, for example<br>`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`<br>(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).|
 |`mcp.policies.ai.serverTools.tools[].type`|string|The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any<br>type with that prefix.|
 |`mcp.policies.ai.serverTools.tools[].mcp`|object|The MCP tool that fulfils the server tool.|
 |`mcp.policies.ai.serverTools.tools[].mcp.backend`|string|Name of the MCP backend to call.|
