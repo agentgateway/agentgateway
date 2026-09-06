@@ -525,7 +525,9 @@ impl Relay {
 
 	/// Consume a response stream until the first result, error data, or end.
 	/// `Ok(None)` means the target rejected the list method as unsupported.
-	async fn first_response(stream: Messages) -> Result<Option<ServerResult>, UpstreamError> {
+	pub(crate) async fn first_response(
+		stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>>,
+	) -> Result<Option<ServerResult>, UpstreamError> {
 		let mut stream = std::pin::pin!(stream);
 		while let Some(msg) = stream.next().await {
 			match msg {
@@ -639,7 +641,7 @@ impl Relay {
 		self.upstreams.is_multiplexing
 	}
 
-	fn build_guardrails_ctx(
+	pub(crate) fn build_guardrails_ctx(
 		&self,
 		r: &JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
@@ -1737,7 +1739,7 @@ fn listen_filter_for_target(
 	filter
 }
 
-fn wrap_with_guardrails(
+pub(crate) fn wrap_with_guardrails(
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	guardrails: GuardrailsCtx,
 ) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static {

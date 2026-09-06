@@ -38,6 +38,7 @@ pub const DEFAULT_BUFFER_LIMIT: usize = 32 * 1024 * 1024;
 
 pub mod catalog;
 pub mod policy;
+pub mod server_tools;
 
 use policy::streaming_guardrails::GuardedSseBody;
 pub use types::{OutputMessage, OutputMessagePart, ToolCall};
@@ -1711,10 +1712,17 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, managed_body, mut req) = self
+		let (mut parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
+		if let Some(policy) = policies
+			&& let Some(config) = policy.server_tools.as_ref()
+			&& let Some(interception) =
+				server_tools::intercept(config, policy, &mut req, &backend_info.inputs, &parts).await
+		{
+			parts.extensions.insert(interception);
+		}
 
 		self
 			.process_chat_request(
@@ -2421,60 +2429,117 @@ impl AIProvider {
 		model_catalog: Option<&catalog::ModelCatalog>,
 		buffered: BufferedResponse,
 	) -> Result<Response, AIError> {
-		let LLMLogging {
-			response: log,
-			guardrails: guardrail_log,
-			content: log_content,
-		} = logging;
 		let BufferedResponse {
-			mut parts,
+			parts,
 			bytes,
-			mut managed_body,
+			managed_body,
 		} = buffered;
 
-		let (llm_resp, body) = if !parts.status.is_success() {
+		if !parts.status.is_success() {
 			let body = self.process_error(
 				&req,
 				parts.status,
 				&bytes,
 				model_catalog.map(|c| c.as_handle()),
 			)?;
-			(LLMResponse::default(), body)
-		} else {
-			let mut resp = self.translate_chat_or_detect_response(
-				&req,
-				&bytes,
-				model_catalog.map(|c| c.as_handle()),
-			)?;
-			let prompt_guard_headers =
-				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
+			return Ok(Self::finish_buffered(
+				parts,
+				body,
+				managed_body,
+				req,
+				LLMResponse::default(),
+				rate_limit,
+				req_snapshot,
+				&logging.response,
+				model_catalog,
+			));
+		}
+		let resp =
+			self.translate_chat_or_detect_response(&req, &bytes, model_catalog.map(|c| c.as_handle()))?;
+		Box::pin(self.finish_translated_response(
+			client,
+			req,
+			rate_limit,
+			req_snapshot,
+			logging,
+			model_catalog,
+			parts,
+			managed_body,
+			resp,
+		))
+		.await
+	}
 
-			// Apply response prompt guard
-			if req.input_format.supports_prompt_guard()
-				&& let Some(dr) = Policy::apply_response_prompt_guard(
-					&client,
-					resp.as_mut(),
-					&prompt_guard_headers,
-					&rate_limit.prompt_guard,
-					req_snapshot.as_deref(),
-					Some(&guardrail_log),
-				)
-				.await
-				.map_err(|e| {
-					warn!("failed to apply response prompt guard: {e}");
-					AIError::PromptWebhookError
-				})? {
-				return Ok(dr.map(|replacement| {
-					managed_body.replace_content(replacement.into_boxed().into());
-					managed_body
-				}));
-			}
+	/// Apply response guards, then finalize a response already translated to the client's format.
+	#[allow(clippy::too_many_arguments)]
+	async fn finish_translated_response(
+		&self,
+		client: PolicyClient,
+		req: LLMRequest,
+		rate_limit: LLMResponsePolicies,
+		req_snapshot: Option<Arc<RequestSnapshot>>,
+		logging: LLMLogging,
+		model_catalog: Option<&catalog::ModelCatalog>,
+		parts: ::http::response::Parts,
+		mut managed_body: Body,
+		mut resp: Box<dyn ResponseType>,
+	) -> Result<Response, AIError> {
+		let LLMLogging {
+			response: log,
+			guardrails: guardrail_log,
+			content: log_content,
+		} = logging;
+		let prompt_guard_headers =
+			response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
 
-			let llm_resp = resp.to_llm_response(log_content);
-			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
-			(llm_resp, Bytes::copy_from_slice(&body))
-		};
+		// Apply response prompt guard
+		if req.input_format.supports_prompt_guard()
+			&& let Some(dr) = Policy::apply_response_prompt_guard(
+				&client,
+				resp.as_mut(),
+				&prompt_guard_headers,
+				&rate_limit.prompt_guard,
+				req_snapshot.as_deref(),
+				Some(&guardrail_log),
+			)
+			.await
+			.map_err(|e| {
+				warn!("failed to apply response prompt guard: {e}");
+				AIError::PromptWebhookError
+			})? {
+			return Ok(dr.map(|replacement| {
+				managed_body.replace_content(replacement.into_boxed().into());
+				managed_body
+			}));
+		}
 
+		let llm_resp = resp.to_llm_response(log_content);
+		let body = resp.serialize().map_err(AIError::ResponseParsing)?;
+		Ok(Self::finish_buffered(
+			parts,
+			Bytes::from(body),
+			managed_body,
+			req,
+			llm_resp,
+			rate_limit,
+			req_snapshot,
+			&log,
+			model_catalog,
+		))
+	}
+
+	#[allow(clippy::too_many_arguments)]
+	fn finish_buffered(
+		mut parts: ::http::response::Parts,
+		body: Bytes,
+		mut managed_body: Body,
+		req: LLMRequest,
+		llm_resp: LLMResponse,
+		rate_limit: LLMResponsePolicies,
+		req_snapshot: Option<Arc<RequestSnapshot>>,
+		log: &AsyncLog<llm::LLMInfo>,
+		model_catalog: Option<&catalog::ModelCatalog>,
+	) -> Response {
 		parts.headers.remove(header::CONTENT_LENGTH);
 		let llm_info = LLMInfo::new(req, llm_resp);
 		parts
@@ -2493,7 +2558,7 @@ impl AIProvider {
 			amend_tokens(rate_limit, &llm_info, exec);
 		}
 		log.store(Some(llm_info));
-		Ok(resp)
+		resp
 	}
 
 	async fn buffer_response(resp: Response) -> Result<BufferedResponse, AIError> {

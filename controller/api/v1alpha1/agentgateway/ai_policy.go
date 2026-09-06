@@ -511,3 +511,81 @@ type PromptCachingConfig struct {
 	// +kubebuilder:default=0
 	CacheMessageOffset int `json:"cacheMessageOffset,omitempty"`
 }
+
+// Fulfils server tools that the client declared, such as a coding agent's `web_search`, by calling an
+// MCP tool and continuing the turn. This applies to Anthropic Messages requests only and only to
+// tools the client declared as server-executed; client tools are never touched.
+type ServerTools struct {
+	// Server tools to fulfil, matched by the tool `type` the client declares.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +required
+	Tools []ServerToolMapping `json:"tools"`
+
+	// Maximum number of follow-up model calls for one client request.
+	// The client's `max_uses` is honoured as a lower cap.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=32
+	// +kubebuilder:default=3
+	// +optional
+	MaxIterations *int32 `json:"maxIterations,omitempty"`
+
+	// Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:default=65536
+	// +optional
+	MaxResultBytes *int32 `json:"maxResultBytes,omitempty"`
+
+	// Interval between keepalive `ping` events while a streaming turn is held back.
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="keepaliveInterval must be at least 1 second"
+	// +kubebuilder:default="15s"
+	// +optional
+	KeepaliveInterval *Duration `json:"keepaliveInterval,omitempty"`
+
+	// What happens when a tool call fails. `FailClosed` (default) ends the turn with an error;
+	// `FailOpen` reports the failure to the model as an error tool result and lets it continue.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+}
+
+// Maps one server tool type to the MCP tool that fulfils it.
+type ServerToolMapping struct {
+	// The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any
+	// type with that prefix.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +required
+	Type string `json:"type"`
+
+	// The MCP tool that fulfils the server tool.
+	// +required
+	MCP ServerToolMCP `json:"mcp"`
+
+	// Description shown to the model. Defaults to the MCP tool's description.
+	// +kubebuilder:validation:MaxLength=4096
+	// +optional
+	Description *string `json:"description,omitempty"`
+
+	// JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.
+	// +optional
+	InputSchema *apiextensionsv1.JSON `json:"inputSchema,omitempty"`
+}
+
+// An MCP tool on a configured MCP backend.
+type ServerToolMCP struct {
+	// The MCP backend to call.
+	//
+	// Supported types: Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Target within the backend. Required when the backend has more than one target.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Target *string `json:"target,omitempty"`
+
+	// Name of the tool on the MCP backend.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Tool string `json:"tool"`
+}

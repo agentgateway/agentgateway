@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 127.0.0.1:19001
+  statsAddr: 127.0.0.1:19002
+
+backends:
+# An MCP server that exposes a `search` tool, for example a SearXNG MCP server.
+- name: search
+  mcp:
+    targets:
+    - name: searxng
+      mcp:
+        host: searxng-mcp.internal
+        port: 8080
+        path: /mcp
+
+llm:
+  port: 4000
+  models:
+  # A model served by vLLM. It cannot execute Anthropic server tools such as a coding agent's
+  # `web_search`, so the gateway fulfils them through the MCP `search` tool and continues the turn.
+  - name: qwen3
+    provider: openAI
+    params:
+      baseUrl: http://vllm.internal:8000/v1
+    serverTools:
+      maxIterations: 3
+      keepaliveInterval: 15s
+      failureMode: failClosed
+      tools:
+      - type: web_search_*
+        mcp:
+          backend: search
+          tool: search
