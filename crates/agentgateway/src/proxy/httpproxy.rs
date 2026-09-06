@@ -3647,9 +3647,124 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
+		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies,
+		drop_stale_ratelimit_headers, hop_by_hop_headers, merge_in_headers,
 		resolved_workload_target_hostname, select_service_target_port, spiffe_backend_alpns,
 	};
+
+	fn headers(pairs: &[(&str, &str)]) -> ::http::HeaderMap {
+		let mut hm = ::http::HeaderMap::new();
+		for (k, v) in pairs {
+			hm.insert(
+				::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+				::http::HeaderValue::from_str(v).unwrap(),
+			);
+		}
+		hm
+	}
+
+	#[test]
+	fn ratelimit_denial_keeps_the_headers_of_the_limit_that_denied() {
+		// One policy, several descriptors. The per-minute request limit passed and left its
+		// numbers in the response policy headers; the hourly spend limit denied and built the 429.
+		// The client must be told about the limit it hit, not the one it did not.
+		let mut policy_headers = headers(&[
+			("x-ratelimit-limit", "60"),
+			("x-ratelimit-remaining", "56"),
+			("x-ratelimit-reset", "12"),
+			("x-other-policy-header", "kept"),
+		]);
+		let mut denial = headers(&[
+			("x-ratelimit-limit", "5000000"),
+			("x-ratelimit-remaining", "0"),
+			("x-ratelimit-reset", "2970"),
+		]);
+
+		drop_stale_ratelimit_headers(
+			&mut policy_headers,
+			::http::StatusCode::TOO_MANY_REQUESTS,
+			&denial,
+		);
+		merge_in_headers(Some(policy_headers), &mut denial);
+
+		assert_eq!(denial["x-ratelimit-limit"], "5000000");
+		assert_eq!(denial["x-ratelimit-remaining"], "0");
+		assert_eq!(denial["x-ratelimit-reset"], "2970");
+		// Everything else the policies produced still merges.
+		assert_eq!(denial["x-other-policy-header"], "kept");
+	}
+
+	#[test]
+	fn a_denial_drops_every_value_of_a_repeated_ratelimit_header() {
+		// HeaderMap allows a name to carry several values. A single leftover value would still
+		// describe the wrong limit, so the whole set has to go.
+		let mut policy_headers = ::http::HeaderMap::new();
+		policy_headers.append("x-ratelimit-limit", "60".parse().unwrap());
+		policy_headers.append("x-ratelimit-limit", "61".parse().unwrap());
+		policy_headers.append("x-ratelimit-remaining", "56".parse().unwrap());
+		policy_headers.append("x-ratelimit-remaining", "57".parse().unwrap());
+		policy_headers.append("x-ratelimit-reset", "12".parse().unwrap());
+
+		let denial = headers(&[
+			("x-ratelimit-limit", "5000000"),
+			("x-ratelimit-remaining", "0"),
+			("x-ratelimit-reset", "2970"),
+		]);
+
+		drop_stale_ratelimit_headers(
+			&mut policy_headers,
+			::http::StatusCode::TOO_MANY_REQUESTS,
+			&denial,
+		);
+
+		assert!(policy_headers.is_empty(), "left behind: {policy_headers:?}");
+	}
+
+	#[test]
+	fn ratelimit_denial_without_its_own_headers_still_takes_the_policy_ones() {
+		// Nothing better is on the response, so the accumulated set is the only description there
+		// is and it still merges.
+		let mut policy_headers = headers(&[
+			("x-ratelimit-limit", "60"),
+			("x-ratelimit-remaining", "0"),
+			("x-ratelimit-reset", "12"),
+		]);
+		let mut resp_headers = headers(&[("content-length", "0")]);
+
+		drop_stale_ratelimit_headers(
+			&mut policy_headers,
+			::http::StatusCode::TOO_MANY_REQUESTS,
+			&resp_headers,
+		);
+		merge_in_headers(Some(policy_headers), &mut resp_headers);
+
+		assert_eq!(resp_headers["x-ratelimit-limit"], "60");
+		assert_eq!(resp_headers["x-ratelimit-remaining"], "0");
+		assert_eq!(resp_headers["x-ratelimit-reset"], "12");
+	}
+
+	#[test]
+	fn allowed_response_keeps_the_existing_merge() {
+		// Off the denial path nothing changes: the gateway's own budget is what the client has to
+		// respect, so it still replaces an upstream provider's numbers on a 200.
+		let mut policy_headers = headers(&[
+			("x-ratelimit-limit", "60"),
+			("x-ratelimit-remaining", "56"),
+			("x-ratelimit-reset", "12"),
+		]);
+		let mut upstream = headers(&[
+			("x-ratelimit-limit", "10000"),
+			("x-ratelimit-remaining", "9999"),
+			("x-ratelimit-reset", "1"),
+		]);
+
+		drop_stale_ratelimit_headers(&mut policy_headers, ::http::StatusCode::OK, &upstream);
+		merge_in_headers(Some(policy_headers), &mut upstream);
+
+		assert_eq!(upstream["x-ratelimit-limit"], "60");
+		assert_eq!(upstream["x-ratelimit-remaining"], "56");
+		assert_eq!(upstream["x-ratelimit-reset"], "12");
+	}
 
 	#[test]
 	fn spiffe_backend_alpns_explicit_alpn_is_fixed() {
@@ -4573,6 +4688,23 @@ struct ResponsePolicies {
 	a2a_type: a2a::RequestType,
 }
 
+/// A 429 answers with the limit that actually denied the request. Rate-limit headers collected
+/// while other limits *passed* describe a different limit, so merging them over the denial hands
+/// the client the budget and reset of a window it never hit, and it retries straight back into the
+/// wall. Drop them and leave the denial's own set whole; `set_ratelimit_headers` refuses to mix two
+/// sets for the same reason. Only a denial that carries its own set is affected.
+fn drop_stale_ratelimit_headers(
+	policy_headers: &mut HeaderMap,
+	status: StatusCode,
+	response_headers: &HeaderMap,
+) {
+	if status == StatusCode::TOO_MANY_REQUESTS
+		&& http::x_headers::has_ratelimit_headers(response_headers)
+	{
+		http::x_headers::remove_ratelimit_headers(policy_headers);
+	}
+}
+
 impl ResponsePolicies {
 	pub fn headers(&mut self) -> &mut HeaderMap {
 		&mut self.response_headers
@@ -4641,7 +4773,9 @@ impl ResponsePolicies {
 		}
 
 		if !self.response_headers.is_empty() {
-			merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
+			let mut policy_headers = self.response_headers.clone();
+			drop_stale_ratelimit_headers(&mut policy_headers, resp.status(), resp.headers());
+			merge_in_headers(Some(policy_headers), resp.headers_mut());
 			dtrace::snapshot!(Response, "response headers", l, &resp);
 		}
 

@@ -105,6 +105,23 @@ pub mod x_headers {
 		insert_header(hm, X_RATELIMIT_RESET, reset_seconds);
 	}
 
+	/// The standard rate-limit trio. Callers treat it as one set: all three or none.
+	pub const RATELIMIT_HEADERS: [HeaderName; 3] =
+		[X_RATELIMIT_LIMIT, X_RATELIMIT_REMAINING, X_RATELIMIT_RESET];
+
+	/// True when the map already carries any of the rate-limit trio.
+	pub fn has_ratelimit_headers(hm: &HeaderMap<HeaderValue>) -> bool {
+		RATELIMIT_HEADERS.iter().any(|name| hm.contains_key(name))
+	}
+
+	/// Removes the whole rate-limit trio, so a caller hands over one complete set instead of a
+	/// mix of two.
+	pub fn remove_ratelimit_headers(hm: &mut HeaderMap<HeaderValue>) {
+		for name in &RATELIMIT_HEADERS {
+			hm.remove(name);
+		}
+	}
+
 	fn insert_header(hm: &mut HeaderMap<HeaderValue>, name: HeaderName, value: u64) {
 		if let Ok(hv) = HeaderValue::try_from(value.to_string()) {
 			hm.insert(name, hv);
