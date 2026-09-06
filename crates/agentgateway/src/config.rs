@@ -35,7 +35,7 @@ pub fn parse_config(
 	local_config_source: Option<ConfigSource>,
 ) -> anyhow::Result<Config> {
 	// Shellexpend before parsing it
-	let contents = contents.replace("# yaml-language-server: $schema", "#");
+	let contents = neutralize_env_vars_in_yaml_comments(&contents);
 	let contents = shellexpand::full(&contents)?;
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
@@ -733,6 +733,24 @@ pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
 	}
 	inp
 }
+
+// Escape '$' in full-line YAML comments so 'shellexpand' won't try to resolve environment variables in commented-out lines. 
+pub(crate) fn neutralize_env_vars_in_yaml_comments(input: &str) -> String {
+	let mut result = String::with_capacity(input.len());
+	for line in input.split('\n') {
+		if line.trim().starts_with('#') {
+			result.push_str(&line.replace('$', ""));
+		} else {
+			result.push_str(line);
+		}
+		result.push('\n');
+	}
+	if input.ends_with('\n') {
+		result.pop();
+	}
+	result
+}
+
 // tries to parse the URI so we can fail early
 fn validate_uri(uri_str: Option<String>) -> anyhow::Result<Option<String>> {
 	let Some(uri_str) = uri_str else {
@@ -1620,6 +1638,28 @@ config:
 		assert_eq!(config.network.as_str(), "static-network");
 	}
 
+	#[test]
+	fn ignores_env_vars_in_yaml_comments() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("COMMENTED_VAR");
+			env::remove_var("API_KEY");
+		}
+
+		let config = parse_config(
+			r#"
+# network: "${COMMENTED_VAR}"
+# apiKey: $API_KEY
+config:
+  network: "actual-value"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("commented-out environment variables should not cause an error");
+		assert_eq!(config.network.as_str(), "actual-value");
+	}
+	
 	#[test]
 	fn errors_on_unset_environment_variable() {
 		let _env_lock = lock_env();
