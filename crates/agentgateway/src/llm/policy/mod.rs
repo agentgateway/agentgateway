@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ::http::HeaderMap;
 use bytes::Bytes;
 use http_body_util::BodyExt as _;
@@ -15,7 +17,7 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{GuardrailLog, RequestLog};
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
 use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
-use crate::*;
+use crate::{serde_dur, *};
 
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
@@ -198,6 +200,9 @@ pub struct Policy {
 		schemars(with = "std::collections::HashMap<String, crate::llm::RouteType>")
 	)]
 	pub routes: SortedRoutes,
+	/// Server tools declared by the client that the gateway fulfils through MCP.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server_tools: Option<Arc<ServerToolsConfig>>,
 }
 
 fn webhook_header_expressions(g: &PromptGuard) -> impl Iterator<Item = &cel::Expression> {
@@ -2669,4 +2674,100 @@ fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] i
 		GuardrailPhase::Request,
 	);
 	assert!(matches!(result, Some(RegexResult::Reject)));
+}
+
+fn default_server_tool_iterations() -> u32 {
+	3
+}
+
+fn default_server_tool_result_bytes() -> usize {
+	64 * 1024
+}
+
+fn default_server_tool_keepalive() -> Duration {
+	Duration::from_secs(15)
+}
+
+/// Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an
+/// MCP tool and continuing the turn. This applies to Anthropic Messages requests only and only to
+/// tools the client declared as server-executed; client tools are never touched.
+#[apply(schema!)]
+pub struct ServerToolsConfig {
+	/// Server tools to fulfil, matched by the tool `type` the client declares.
+	pub tools: Vec<ServerToolMapping>,
+	/// Maximum number of follow-up model calls for one client request. The client's `max_uses` is
+	/// honoured as a lower cap.
+	#[serde(default = "default_server_tool_iterations")]
+	pub max_iterations: u32,
+	/// Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
+	#[serde(default = "default_server_tool_result_bytes")]
+	pub max_result_bytes: usize,
+	/// Interval between keepalive `ping` events while a streaming turn is held back.
+	#[serde(default = "default_server_tool_keepalive", with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub keepalive_interval: Duration,
+	/// What happens when a tool call fails.
+	#[serde(default)]
+	pub failure_mode: ServerToolFailureMode,
+}
+
+impl ServerToolsConfig {
+	/// The configuration with no tools and default limits.
+	pub fn defaults() -> Self {
+		Self {
+			tools: Vec::new(),
+			max_iterations: default_server_tool_iterations(),
+			max_result_bytes: default_server_tool_result_bytes(),
+			keepalive_interval: default_server_tool_keepalive(),
+			failure_mode: ServerToolFailureMode::default(),
+		}
+	}
+
+	pub fn matchers(&self) -> Vec<agent_llm::server_tools::TypeMatch> {
+		self
+			.tools
+			.iter()
+			.map(|t| agent_llm::server_tools::TypeMatch::parse(&t.tool_type))
+			.collect()
+	}
+}
+
+/// Maps one server tool type to the MCP tool that fulfils it.
+#[apply(schema!)]
+pub struct ServerToolMapping {
+	/// The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any
+	/// type with that prefix.
+	#[serde(rename = "type")]
+	pub tool_type: String,
+	/// The MCP tool that fulfils the server tool.
+	pub mcp: ServerToolMcpTarget,
+	/// Description shown to the model. Defaults to the MCP tool's description.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub description: Option<String>,
+	/// JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub input_schema: Option<serde_json::Value>,
+}
+
+/// An MCP tool on a configured MCP backend.
+#[apply(schema!)]
+pub struct ServerToolMcpTarget {
+	/// Name of the MCP backend to call.
+	pub backend: Strng,
+	/// Target within the backend. Required when the backend has more than one target.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub target: Option<Strng>,
+	/// Name of the tool on the MCP backend.
+	pub tool: Strng,
+}
+
+/// What happens when a server tool call fails.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ServerToolFailureMode {
+	/// End the turn with an error.
+	#[default]
+	FailClosed,
+	/// Report the failure to the model as an error tool result and let it continue.
+	FailOpen,
 }

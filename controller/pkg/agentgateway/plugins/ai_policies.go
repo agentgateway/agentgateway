@@ -352,3 +352,38 @@ func translateAuxiliaryBackendPolicies(ctx PolicyCtx, namespace string, policies
 	}
 	return TranslateInlineBackendPolicy(ctx, namespace, pol)
 }
+
+func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.ServerTools) (*api.BackendPolicySpec_Ai_ServerTools, error) {
+	var errs []error
+	out := &api.BackendPolicySpec_Ai_ServerTools{}
+	for _, tool := range st.Tools {
+		be, err := BuildBackendRef(ctx, tool.MCP.BackendRef, namespace)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("serverTools tool %q: %v", tool.Type, err))
+			continue
+		}
+		t := &api.BackendPolicySpec_Ai_ServerTools_Tool{
+			Type:        tool.Type,
+			Backend:     be,
+			Target:      tool.MCP.Target,
+			Tool:        tool.MCP.Tool,
+			Description: tool.Description,
+		}
+		if tool.InputSchema != nil {
+			schema := string(tool.InputSchema.Raw)
+			t.InputSchema = &schema
+		}
+		out.Tools = append(out.Tools, t)
+	}
+	if st.MaxIterations != nil {
+		out.MaxIterations = new(uint32(*st.MaxIterations)) //nolint:gosec // G115: MaxIterations is validated by kubebuilder to be >= 1
+	}
+	if st.MaxResultBytes != nil {
+		out.MaxResultBytes = new(uint32(*st.MaxResultBytes)) //nolint:gosec // G115: MaxResultBytes is validated by kubebuilder to be >= 1024
+	}
+	out.KeepaliveInterval = durationToProto(st.KeepaliveInterval)
+	if st.FailureMode == agentgateway.FailOpen {
+		out.FailureMode = api.BackendPolicySpec_Ai_ServerTools_FAIL_OPEN
+	}
+	return out, errors.Join(errs...)
+}

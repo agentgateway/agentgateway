@@ -20,7 +20,7 @@ use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
-use crate::llm::policy::{PromptCachingConfig, PromptGuard};
+use crate::llm::policy::{PromptCachingConfig, PromptGuard, ServerToolsConfig};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, anthropic, copilot, custom, openai};
 use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::{LocalWorkload, RequestPolicy};
@@ -502,6 +502,9 @@ pub struct LocalLLMProviderDefaults {
 	/// Cache-point insertion for LLM providers that support prompt caching.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	prompt_caching: Option<PromptCachingConfig>,
+	/// Server tools declared by clients that are fulfilled through MCP.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	server_tools: Option<ServerToolsConfig>,
 }
 
 #[apply(schema_de!)]
@@ -849,6 +852,10 @@ pub struct LocalLLMModels {
 	/// promptCaching configures cache point insertion for supported LLM providers.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	prompt_caching: Option<PromptCachingConfig>,
+	/// serverTools fulfils server tools declared by the client (for example a coding agent's `web_search`)
+	/// through an MCP tool, for providers that cannot execute them.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	server_tools: Option<ServerToolsConfig>,
 
 	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1022,6 +1029,7 @@ impl LocalLLMModels {
 			self.health = self.health.take().or(defaults.health);
 			self.backend_tunnel = self.backend_tunnel.take().or(defaults.backend_tunnel);
 			self.prompt_caching = self.prompt_caching.take().or(defaults.prompt_caching);
+			self.server_tools = self.server_tools.take().or(defaults.server_tools);
 		}
 		Ok(())
 	}
@@ -4577,6 +4585,7 @@ async fn convert_llm_config(
 			model_aliases: Default::default(),
 			wildcard_patterns: Arc::new(vec![]),
 			prompt_caching: model_config.prompt_caching.clone(),
+			server_tools: model_config.server_tools.clone().map(Arc::new),
 			routes: Default::default(),
 		})));
 		let resolved_inline_policies = pols.clone();

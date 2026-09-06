@@ -3524,6 +3524,147 @@ spec:
                           The special `*` wildcard matches any path.
                           If not specified, all traffic defaults to `completions` type.
                         type: object
+                      serverTools:
+                        description: |-
+                          Fulfils server tools that the client declared, such as a coding agent's `web_search`, by
+                          calling an MCP tool and continuing the turn. Applies to Anthropic Messages requests only.
+                        properties:
+                          failureMode:
+                            description: |-
+                              What happens when a tool call fails. `FailClosed` (default) ends the turn with an error;
+                              `FailOpen` reports the failure to the model as an error tool result and lets it continue.
+                            enum:
+                            - FailClosed
+                            - FailOpen
+                            type: string
+                          keepaliveInterval:
+                            default: 15s
+                            description: Interval between keepalive `ping` events
+                              while a streaming turn is held back.
+                            maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                            type: string
+                            x-kubernetes-validations:
+                            - message: keepaliveInterval must be at least 1 second
+                              rule: duration(self) >= duration('1s')
+                          maxIterations:
+                            default: 3
+                            description: |-
+                              Maximum number of follow-up model calls for one client request.
+                              The client's `max_uses` is honoured as a lower cap.
+                            format: int32
+                            maximum: 32
+                            minimum: 1
+                            type: integer
+                          maxResultBytes:
+                            default: 65536
+                            description: Maximum size of one tool result fed back
+                              to the model, in bytes. Larger results are cut.
+                            format: int32
+                            minimum: 1024
+                            type: integer
+                          tools:
+                            description: Server tools to fulfil, matched by the tool
+                              `type` the client declares.
+                            items:
+                              description: Maps one server tool type to the MCP tool
+                                that fulfils it.
+                              properties:
+                                description:
+                                  description: Description shown to the model. Defaults
+                                    to the MCP tool's description.
+                                  maxLength: 4096
+                                  type: string
+                                inputSchema:
+                                  description: JSON schema of the tool input shown
+                                    to the model. Defaults to the MCP tool's input
+                                    schema.
+                                  x-kubernetes-preserve-unknown-fields: true
+                                mcp:
+                                  description: The MCP tool that fulfils the server
+                                    tool.
+                                  properties:
+                                    backendRef:
+                                      description: |-
+                                        The MCP backend to call.
+
+                                        Supported types: Backend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: Group of the referent, for
+                                            example `gateway.networking.k8s.io`. Empty
+                                            selects the core API group
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: Kubernetes resource kind of
+                                            the referent, for example `Service`. Defaults
+                                            to `Service`
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: Namespace of the referent.
+                                            Defaults to the local namespace. A cross-namespace
+                                            reference requires a ReferenceGrant in
+                                            the referent namespace
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: Destination port number. Required
+                                            when the referent is a Kubernetes `Service`
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
+                                    target:
+                                      description: Target within the backend. Required
+                                        when the backend has more than one target.
+                                      minLength: 1
+                                      type: string
+                                    tool:
+                                      description: Name of the tool on the MCP backend.
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - backendRef
+                                  - tool
+                                  type: object
+                                type:
+                                  description: |-
+                                    The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any
+                                    type with that prefix.
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - mcp
+                              - type
+                              type: object
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                        required:
+                        - tools
+                        type: object
                       transformations:
                         description: |-
                           CEL transformations to compute and set fields in the request body.
@@ -3561,8 +3702,8 @@ spec:
                     x-kubernetes-validations:
                     - message: at least one of the fields in [defaults finalTransformations
                         modelAliases overrides prompt promptCaching promptGuard routes
-                        transformations] must be set
-                      rule: '[has(self.defaults),has(self.finalTransformations),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
+                        serverTools transformations] must be set
+                      rule: '[has(self.defaults),has(self.finalTransformations),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.serverTools),has(self.transformations)].filter(x,x==true).size()
                         >= 1'
                   auth:
                     description: Settings for managing authentication to the backend

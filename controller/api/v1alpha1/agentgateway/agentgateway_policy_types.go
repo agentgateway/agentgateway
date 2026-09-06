@@ -2350,6 +2350,11 @@ type BackendAI struct {
 	// +optional
 	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
 
+	// Fulfils server tools that the client declared, such as a coding agent's `web_search`, by
+	// calling an MCP tool and continuing the turn. Applies to Anthropic Messages requests only.
+	// +optional
+	ServerTools *ServerTools `json:"serverTools,omitempty"`
+
 	// Rules for identifying the type of traffic to handle.
 	// The keys are URL path suffixes matched using ends-with comparison, for
 	// example `"/v1/chat/completions"`.
