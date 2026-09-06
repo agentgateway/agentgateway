@@ -3181,6 +3181,13 @@ type RateLimits struct {
 	// Global rate limiting policy using an external service.
 	// +optional
 	Global *GlobalRateLimit `json:"global,omitempty"`
+
+	// Limits on in-flight requests, counted per key on each proxy instance.
+	// Every rule must admit the request.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Concurrency []ConcurrencyLimit `json:"concurrency,omitempty"`
 }
 
 type RateLimitsConditional struct {
@@ -3205,6 +3212,13 @@ type RateLimitsOrConditional struct {
 	// +optional
 	Global *GlobalRateLimit `json:"global,omitempty"`
 
+	// Limits on in-flight requests, counted per key on each proxy instance.
+	// Every rule must admit the request.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Concurrency []ConcurrencyLimit `json:"concurrency,omitempty"`
+
 	// Conditional policy execution. Set this or the top-level rateLimit fields.
 	// The first matching policy will be executed.
 	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
@@ -3226,7 +3240,7 @@ func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[Con
 	if len(r.Conditional) > 0 {
 		return nil, seq
 	}
-	return &RateLimits{Local: r.Local, Global: r.Global}, seq
+	return &RateLimits{Local: r.Local, Global: r.Global, Concurrency: r.Concurrency}, seq
 }
 
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
@@ -3322,6 +3336,72 @@ const (
 	LocalRateLimitUnitMinutes LocalRateLimitUnit = "Minutes"
 	LocalRateLimitUnitHours   LocalRateLimitUnit = "Hours"
 )
+
+// Limits how many requests may be in flight at once for a key. A slot is taken when a request is
+// admitted and released when its response has been fully sent. Counts are kept on each proxy
+// instance, without coordination between instances.
+type ConcurrencyLimit struct {
+	// Maximum number of in-flight requests allowed per key. Requests over the limit fail with a
+	// `429` error. `0` rejects every request the rule applies to.
+	// +kubebuilder:validation:Minimum=0
+	// +required
+	MaxConcurrent int32 `json:"maxConcurrent"`
+
+	// CEL expression selecting the counter, for example `jwt.sub` or
+	// `jwt.sub + "/" + llm.requestModel`. Requests without a key share one counter.
+	// Keys that use `llm` are evaluated once the LLM request has been parsed.
+	// +optional
+	Key *CELExpression `json:"key,omitempty"`
+
+	// CEL expression computing the limit for this request instead of `maxConcurrent`.
+	// It must evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.
+	// +optional
+	LimitOverride *CELExpression `json:"limitOverride,omitempty"`
+
+	// Keeps the rule's slots in a store every proxy instance shares, so the limit holds across
+	// instances instead of once per instance.
+	// +optional
+	Shared *SharedConcurrencyCounters `json:"shared,omitempty"`
+}
+
+// Slots kept in a shared store.
+type SharedConcurrencyCounters struct {
+	// The Redis store that keeps the counters.
+	// +required
+	Redis RedisStore `json:"redis"`
+
+	// How long a slot stays counted without renewal. Slots are renewed while their request runs
+	// and dropped when it ends, so this only bounds how long a slot taken by an instance that went
+	// away is counted. Defaults to 60s.
+	// +optional
+	Lease *Duration `json:"lease,omitempty"`
+
+	// How long a store call may take before `failureMode` applies. Defaults to 1s.
+	// +optional
+	Timeout *Duration `json:"timeout,omitempty"`
+
+	// Prefix of the store keys. Rules with the same settings and prefix count together, so give
+	// gateways that must not share their slots different prefixes. Defaults to
+	// `agentgateway:concurrency`.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +optional
+	KeyPrefix *string `json:"keyPrefix,omitempty"`
+
+	// What happens to a request when the store cannot be reached. "FailOpen" (default) lets it
+	// through without taking a slot. "FailClosed" rejects it with a 503.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+}
+
+// A Redis store.
+type RedisStore struct {
+	// Connection URL, such as `redis://redis.default.svc:6379/0`, or `rediss://` for TLS.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
+	// +required
+	URL string `json:"url"`
+}
 
 // Local rate limiting policy. Local rate limits are handled on a per-proxy basis, without coordination
 // between instances of the proxy.
