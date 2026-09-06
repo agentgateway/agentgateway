@@ -55,6 +55,7 @@ spec:
         maxIterations: 4
         keepaliveInterval: 10s
         failureMode: FailOpen
+        unmapped: Reject
         tools:
           - type: web_search_*
             mcp:
@@ -121,6 +122,7 @@ output:
               inputSchema: '{"properties":{"url":{"type":"string"}},"required":["url"],"type":"object"}'
               tool: fetch
               type: web_fetch_20250910
+            unmapped: REJECT
       key: backend/default/agw:ai:default/ai-be
       name:
         kind: AgentgatewayPolicy

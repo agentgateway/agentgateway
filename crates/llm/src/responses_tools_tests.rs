@@ -327,3 +327,46 @@ fn response_is_rebuilt_from_deltas_when_the_terminal_output_is_empty() {
 	// Without the terminal event the stream is incomplete.
 	assert!(final_response(&events[..11]).is_none());
 }
+
+#[test]
+fn client_executed_builtins_are_skipped_and_unmapped_ones_listed() {
+	let req = request(
+		json!("hi"),
+		json!([
+			{"type": "local_shell"},
+			{"type": "apply_patch"},
+			{"type": "web_search"},
+			{"type": "file_search", "vector_store_ids": ["vs_1"]},
+			{"type": "mcp", "server_label": "docs"},
+			{"type": "function", "name": "read", "parameters": {}},
+		]),
+	);
+	let found = find_builtin_tools(&req, &matchers(&["*"]));
+	let names: Vec<&str> = found.iter().map(|t| t.name.as_str()).collect();
+	assert_eq!(names, ["web_search", "file_search"]);
+	assert_eq!(
+		unmapped_builtin_tools(&req, &matchers(&["web_search*"])),
+		["file_search"]
+	);
+}
+
+#[test]
+fn function_tools_and_forced_choice_are_removed() {
+	let mut req: Request = serde_json::from_value(json!({
+		"model": "m",
+		"input": "hi",
+		"tools": [
+			{"type": "function", "name": "web_search", "parameters": {}},
+			{"type": "function", "name": "read", "parameters": {}},
+			{"type": "web_search"},
+		],
+		"tool_choice": {"type": "function", "name": "web_search"},
+	}))
+	.unwrap();
+	remove_function_tools(&mut req, &HashSet::from(["web_search"]));
+	let tools = req.rest["tools"].as_array().unwrap();
+	assert_eq!(tools.len(), 2);
+	assert_eq!(tools[0]["name"], json!("read"));
+	assert_eq!(tools[1]["type"], json!("web_search"));
+	assert!(req.rest.get("tool_choice").is_none());
+}
