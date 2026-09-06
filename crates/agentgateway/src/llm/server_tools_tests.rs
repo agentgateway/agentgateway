@@ -903,3 +903,186 @@ async fn responses_without_server_tools_are_untouched() {
 	assert_eq!(requests[0]["tools"][0]["function"]["name"], json!("read"));
 	assert!(recorded(&s.mcp_calls).is_empty());
 }
+
+// --- OpenAI Chat Completions clients ---
+
+/// The Chat Completions route with a `web_search*` mapping.
+async fn setup_completions(model: Model, streaming: bool) -> Setup {
+	let (llm, llm_requests) = llm_server(model, streaming).await;
+	let (mcp, mcp_calls) = mcp_server(false).await;
+	let config = ServerToolsConfig {
+		tools: vec![ServerToolMapping {
+			tool_type: "web_search*".to_string(),
+			mcp: ServerToolMcpTarget {
+				backend: strng::format!("/{}", mcp.address()),
+				target: None,
+				tool: strng::literal!("search"),
+			},
+			description: None,
+			input_schema: None,
+		}],
+		mcp_servers: vec![],
+		max_iterations: 3,
+		max_result_bytes: 64 * 1024,
+		keepalive_interval: Duration::from_millis(20),
+		failure_mode: ServerToolFailureMode::FailClosed,
+	};
+	let policy = Policy {
+		routes: [(
+			strng::literal!("/v1/chat/completions"),
+			RouteType::Completions,
+		)]
+		.into_iter()
+		.collect(),
+		server_tools: Some(Arc::new(config)),
+		..Default::default()
+	};
+	let mut backend = custom_llm_backend(
+		"llm",
+		SimpleBackendReference::Backend(strng::format!("/{}", llm.address())),
+		vec![ProviderFormat::Completions],
+	);
+	backend.inline_policies = vec![BackendTrafficPolicy::AI(Arc::new(policy))];
+	let bind = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*llm.address())
+		.with_mcp_backend(*mcp.address(), true, false)
+		.with_raw_backend(backend)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/llm")));
+	Setup {
+		llm_requests,
+		mcp_calls,
+		_llm: llm,
+		_mcp: mcp,
+		bind,
+	}
+}
+
+fn completions_request(streaming: bool, web_search: bool) -> Vec<u8> {
+	let mut body = json!({
+		"model": "mock-model",
+		"messages": [{"role": "user", "content": "Who won Super Bowl LX?"}],
+		"stream": streaming,
+	});
+	if web_search {
+		body["web_search_options"] = json!({"search_context_size": "low"});
+	}
+	body.to_string().into_bytes()
+}
+
+async fn send_completions(
+	setup: &Setup,
+	body: Vec<u8>,
+) -> (http::StatusCode, http::HeaderMap, bytes::Bytes) {
+	let io = setup.bind.serve_http(BIND_KEY);
+	let resp = send_request_body(
+		io,
+		Method::POST,
+		"http://localhost/v1/chat/completions",
+		&body,
+	)
+	.await;
+	let status = resp.status();
+	let headers = resp.headers().clone();
+	let body = resp.into_body().collect().await.unwrap().to_bytes();
+	(status, headers, body)
+}
+
+#[tokio::test]
+async fn completions_web_search_options_is_fulfilled() {
+	let s = setup_completions(Model::SearchThenAnswer, false).await;
+	let (status, _, body) = send_completions(&s, completions_request(false, true)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let completion: Value = serde_json::from_slice(&body).unwrap();
+	let choice = &completion["choices"][0];
+	assert_eq!(choice["finish_reason"], json!("stop"));
+	assert_eq!(
+		choice["message"]["content"],
+		json!("Seattle won Super Bowl LX.")
+	);
+	assert!(
+		choice["message"].get("tool_calls").is_none(),
+		"{completion}"
+	);
+	// Usage is summed across both model calls (100 + 200 in, 10 + 20 out).
+	assert_eq!(completion["usage"]["prompt_tokens"], json!(300));
+	assert_eq!(completion["usage"]["completion_tokens"], json!(30));
+
+	let calls = recorded(&s.mcp_calls);
+	assert_eq!(calls.len(), 1);
+	assert_eq!(calls[0]["name"], json!("search"));
+
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 2);
+	// The field is gone and the model sees a function tool with the MCP schema instead.
+	assert!(
+		requests[0].get("web_search_options").is_none(),
+		"{}",
+		requests[0]
+	);
+	assert_eq!(
+		requests[0]["tools"][0]["function"]["name"],
+		json!("web_search")
+	);
+	assert_eq!(
+		requests[0]["tools"][0]["function"]["description"],
+		json!("Search the web")
+	);
+	let messages = requests[1]["messages"].as_array().unwrap();
+	assert_eq!(messages.len(), 3);
+	assert_eq!(messages[1]["role"], json!("assistant"));
+	assert_eq!(messages[2]["role"], json!("tool"));
+	assert_eq!(messages[2]["tool_call_id"], json!("call_1"));
+	assert!(
+		messages[2]["content"]
+			.as_str()
+			.unwrap()
+			.contains("Seattle won Super Bowl LX 24-17."),
+		"{}",
+		messages[2]
+	);
+}
+
+#[tokio::test]
+async fn completions_stream_is_held_back_and_completed() {
+	let s = setup_completions(Model::SearchThenAnswer, true).await;
+	let (status, headers, body) = send_completions(&s, completions_request(true, true)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	assert!(
+		headers
+			.get(http::header::CONTENT_TYPE)
+			.and_then(|v| v.to_str().ok())
+			.is_some_and(|v| v.starts_with("text/event-stream")),
+		"{headers:?}"
+	);
+	let events = parse_sse(&body);
+	assert_eq!(events.last().unwrap().data, "[DONE]");
+	let mut acc = agent_llm::completions_tools::ChunkAccumulator::default();
+	acc.feed_all(&events);
+	let completion = acc.finish().unwrap();
+	assert_eq!(
+		completion["choices"][0]["message"]["content"],
+		json!("Seattle won Super Bowl LX.")
+	);
+	assert!(
+		completion["choices"][0]["message"]
+			.get("tool_calls")
+			.is_none()
+	);
+	assert_eq!(completion["usage"]["prompt_tokens"], json!(300));
+	assert_eq!(completion["usage"]["completion_tokens"], json!(30));
+	assert_eq!(recorded(&s.mcp_calls).len(), 1);
+	assert_eq!(recorded(&s.llm_requests).len(), 2);
+}
+
+#[tokio::test]
+async fn completions_without_web_search_options_are_untouched() {
+	let s = setup_completions(Model::AnswerOnly, false).await;
+	let (status, _, body) = send_completions(&s, completions_request(false, false)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let requests = recorded(&s.llm_requests);
+	assert_eq!(requests.len(), 1);
+	assert!(requests[0].get("tools").is_none(), "{}", requests[0]);
+	assert!(recorded(&s.mcp_calls).is_empty());
+}
