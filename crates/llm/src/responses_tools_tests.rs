@@ -38,7 +38,7 @@ fn builtin_tools_are_found_by_type_and_never_shadow_client_functions() {
 			{"type": "code_interpreter", "container": {"type": "auto"}},
 		]),
 	);
-	let found = find_builtin_tools(&req, &matchers(&["web_search*", "code_interpreter"]));
+	let found = find_builtin_tools(&req, &matchers(&["web_search*", "code_interpreter"]), &[]);
 	assert_eq!(found.len(), 1, "{found:?}");
 	assert_eq!(found[0].name, "web_search_preview");
 	assert_eq!(found[0].mapping, 0);
@@ -88,7 +88,7 @@ fn builtins_are_rewritten_in_place_and_descriptors_are_expanded() {
 			{"type": "function", "name": "read", "parameters": {}},
 		]),
 	);
-	let found = find_builtin_tools(&req, &matchers(&["web_search"]));
+	let found = find_builtin_tools(&req, &matchers(&["web_search"]), &[]);
 	rewrite_builtin_tools(&mut req, &found, &[definition()]);
 	replace_tools(
 		&mut req,
@@ -341,11 +341,19 @@ fn client_executed_builtins_are_skipped_and_unmapped_ones_listed() {
 			{"type": "function", "name": "read", "parameters": {}},
 		]),
 	);
-	let found = find_builtin_tools(&req, &matchers(&["*"]));
+	let defaults = matchers(crate::server_tools::DEFAULT_CLIENT_EXECUTED_TOOL_TYPES);
+	let found = find_builtin_tools(&req, &matchers(&["*"]), &defaults);
 	let names: Vec<&str> = found.iter().map(|t| t.name.as_str()).collect();
 	assert_eq!(names, ["web_search", "file_search"]);
+	// An empty list lets the mapping take the shell tools too.
+	let found = find_builtin_tools(&req, &matchers(&["*"]), &[]);
+	let names: Vec<&str> = found.iter().map(|t| t.name.as_str()).collect();
 	assert_eq!(
-		unmapped_builtin_tools(&req, &matchers(&["web_search*"])),
+		names,
+		["local_shell", "apply_patch", "web_search", "file_search"]
+	);
+	assert_eq!(
+		unmapped_builtin_tools(&req, &matchers(&["web_search*"]), &defaults),
 		["file_search"]
 	);
 }

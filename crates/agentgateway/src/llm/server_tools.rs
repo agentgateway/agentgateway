@@ -535,10 +535,14 @@ pub async fn intercept(
 	// readable for a provider that never ran the search.
 	st::flatten_replayed_search_results(req);
 	let matchers = config.matchers();
+	let client_executed = config.client_executed_matchers();
 	if config.unmapped == UnmappedServerTools::Reject {
-		reject_unmapped("server tool", &st::unmapped_server_tools(req, &matchers))?;
+		reject_unmapped(
+			"server tool",
+			&st::unmapped_server_tools(req, &matchers, &client_executed),
+		)?;
 	}
-	let found = st::find_server_tools(req, &matchers);
+	let found = st::find_server_tools(req, &matchers, &client_executed);
 	if found.is_empty() {
 		return Ok(None);
 	}
@@ -585,10 +589,14 @@ pub async fn intercept_responses(
 	parts: &Parts,
 ) -> Result<Option<Arc<Interception>>, AIError> {
 	let matchers = config.matchers();
-	let builtins = rt::find_builtin_tools(req, &matchers);
+	let client_executed = config.client_executed_matchers();
+	let builtins = rt::find_builtin_tools(req, &matchers, &client_executed);
 	let descriptors = rt::find_mcp_descriptors(req);
 	if config.unmapped == UnmappedServerTools::Reject {
-		reject_unmapped("built-in tool", &rt::unmapped_builtin_tools(req, &matchers))?;
+		reject_unmapped(
+			"built-in tool",
+			&rt::unmapped_builtin_tools(req, &matchers, &client_executed),
+		)?;
 		let unmapped_servers: Vec<String> = descriptors
 			.iter()
 			.filter(|d| {

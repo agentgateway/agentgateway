@@ -56,6 +56,7 @@ spec:
         keepaliveInterval: 10s
         failureMode: FailOpen
         unmapped: Reject
+        clientExecuted: ["bash_*", "text_editor_*"]
         tools:
           - type: web_search_*
             mcp:
@@ -100,6 +101,10 @@ output:
       backend:
         ai:
           serverTools:
+            clientExecuted:
+              types:
+              - bash_*
+              - text_editor_*
             failureMode: FAIL_OPEN
             keepaliveInterval: 10s
             maxIterations: 4

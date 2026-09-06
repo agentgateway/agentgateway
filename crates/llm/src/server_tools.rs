@@ -44,18 +44,26 @@ impl TypeMatch {
 	}
 }
 
-/// Vendor-defined tools that share the server tool shape but are executed by the client, such as
-/// Anthropic's `bash`, `text_editor`, `computer` and `memory` tools. They are never intercepted,
-/// even when a mapping matches them: taking them over would swallow calls the client expected to
-/// run itself.
-pub const CLIENT_EXECUTED_TOOL_TYPES: &[&str] =
-	&["bash_*", "text_editor_*", "computer_*", "memory_*"];
+/// Vendor-defined tool types that share the server tool shape but are executed by the client, on
+/// every route: Anthropic's `bash`, `text_editor`, `computer` and `memory` tools, and the OpenAI
+/// Responses shell, patch and computer-use tools. This is the default for the operator's
+/// `clientExecuted` list; a mapping that matches one of these is ignored unless the operator
+/// removes the entry.
+pub const DEFAULT_CLIENT_EXECUTED_TOOL_TYPES: &[&str] = &[
+	"bash_*",
+	"text_editor_*",
+	"computer_*",
+	"memory_*",
+	"local_shell",
+	"shell",
+	"apply_patch",
+	"computer_use_preview",
+	"computer",
+];
 
-/// Whether a declared tool type is one the client executes itself.
-pub fn is_client_executed(tool_type: &str) -> bool {
-	CLIENT_EXECUTED_TOOL_TYPES
-		.iter()
-		.any(|pattern| TypeMatch::parse(pattern).matches(tool_type))
+/// Whether a declared tool type is in the client-executed list.
+pub fn is_client_executed(tool_type: &str, client_executed: &[TypeMatch]) -> bool {
+	client_executed.iter().any(|m| m.matches(tool_type))
 }
 
 /// A server tool the client declared and the gateway will fulfil.
@@ -91,8 +99,12 @@ fn server_tool_parts(tool: &Value) -> Option<(&str, &str)> {
 /// Find the client-declared server tools that have an operator mapping.
 ///
 /// A server tool is a `tools[]` entry carrying a `type` and no `input_schema`. Custom tools,
-/// client-executed vendor tools and server tools without a mapping are left alone.
-pub fn find_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<InterceptedTool> {
+/// types in the `client_executed` list and server tools without a mapping are left alone.
+pub fn find_server_tools(
+	req: &Request,
+	matchers: &[TypeMatch],
+	client_executed: &[TypeMatch],
+) -> Vec<InterceptedTool> {
 	let Some(tools) = req.rest.get("tools").and_then(Value::as_array) else {
 		return Vec::new();
 	};
@@ -101,7 +113,7 @@ pub fn find_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercept
 		.filter_map(|tool| {
 			let (tool_type, name) = server_tool_parts(tool)?;
 			let mapping = matchers.iter().position(|m| m.matches(tool_type))?;
-			if is_client_executed(tool_type) {
+			if is_client_executed(tool_type, client_executed) {
 				tracing::warn!(
 					tool_type,
 					"server tool mapping matches a client-executed tool; leaving it to the client"
@@ -118,9 +130,13 @@ pub fn find_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Intercept
 		.collect()
 }
 
-/// The types of declared server tools that no mapping covers and that the client does not
-/// execute itself, so a provider without them will drop or reject them.
-pub fn unmapped_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<String> {
+/// The types of declared server tools that no mapping covers and that are not in the
+/// `client_executed` list, so a provider without them will drop or reject them.
+pub fn unmapped_server_tools(
+	req: &Request,
+	matchers: &[TypeMatch],
+	client_executed: &[TypeMatch],
+) -> Vec<String> {
 	req
 		.rest
 		.get("tools")
@@ -129,7 +145,9 @@ pub fn unmapped_server_tools(req: &Request, matchers: &[TypeMatch]) -> Vec<Strin
 		.flatten()
 		.filter_map(|tool| {
 			let (tool_type, _) = server_tool_parts(tool)?;
-			if is_client_executed(tool_type) || matchers.iter().any(|m| m.matches(tool_type)) {
+			if is_client_executed(tool_type, client_executed)
+				|| matchers.iter().any(|m| m.matches(tool_type))
+			{
 				return None;
 			}
 			Some(tool_type.to_string())

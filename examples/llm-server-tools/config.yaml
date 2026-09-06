@@ -27,6 +27,9 @@ llm:
       maxIterations: 3
       keepaliveInterval: 15s
       failureMode: failClosed
+      # Tool types the client runs itself are never taken over. This is the default list; set
+      # `clientExecuted: []` to let every mapping apply, or add types to guard more.
+      # clientExecuted: [bash_*, text_editor_*, computer_*, memory_*, local_shell, shell, apply_patch, computer_use_preview, computer]
       tools:
       # Anthropic Messages clients declare `{"type": "web_search_20250305", ...}`, OpenAI Responses
       # clients declare `{"type": "web_search"}`, and Chat Completions clients send a

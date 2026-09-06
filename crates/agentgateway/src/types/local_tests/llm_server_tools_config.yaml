@@ -19,6 +19,7 @@ llm:
       keepaliveInterval: 10s
       failureMode: failOpen
       unmapped: reject
+      clientExecuted: []
       tools:
       - type: web_search_*
         mcp:

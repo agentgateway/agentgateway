@@ -287,6 +287,8 @@ struct SetupOpts {
 	tool_type: &'static str,
 	unmapped: UnmappedServerTools,
 	json_results: bool,
+	/// `None` keeps the default guard list.
+	client_executed: Option<Vec<String>>,
 }
 
 impl Default for SetupOpts {
@@ -295,6 +297,7 @@ impl Default for SetupOpts {
 			tool_type: "web_search_*",
 			unmapped: UnmappedServerTools::Drop,
 			json_results: false,
+			client_executed: None,
 		}
 	}
 }
@@ -344,6 +347,9 @@ async fn setup_with(
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode,
 		unmapped: opts.unmapped,
+		client_executed: opts
+			.client_executed
+			.unwrap_or_else(crate::llm::policy::default_client_executed),
 	};
 	let policy = Policy {
 		routes: [(strng::literal!("/v1/messages"), RouteType::Messages)]
@@ -773,6 +779,7 @@ async fn setup_responses(model: Model, streaming: bool, skip_approval: bool) -> 
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode: ServerToolFailureMode::FailClosed,
 		unmapped: UnmappedServerTools::Drop,
+		client_executed: crate::llm::policy::default_client_executed(),
 	};
 	let policy = Policy {
 		routes: [(strng::literal!("/v1/responses"), RouteType::Responses)]
@@ -1013,6 +1020,7 @@ async fn setup_completions(model: Model, streaming: bool) -> Setup {
 		keepalive_interval: Duration::from_millis(20),
 		failure_mode: ServerToolFailureMode::FailClosed,
 		unmapped: UnmappedServerTools::Drop,
+		client_executed: crate::llm::policy::default_client_executed(),
 	};
 	let policy = Policy {
 		routes: [(
@@ -1195,7 +1203,7 @@ async fn client_executed_tool_types_are_never_intercepted() {
 		{"type": "bash_20250124", "name": "bash"},
 		{"type": "web_search_20250305", "name": "web_search"},
 	]);
-	let (status, _, body) = send(&s, client_request(false, tools)).await;
+	let (status, _, body) = send(&s, client_request(false, tools.clone())).await;
 	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
 	let requests = recorded(&s.llm_requests);
 	assert_eq!(requests.len(), 1);
@@ -1206,6 +1214,31 @@ async fn client_executed_tool_types_are_never_intercepted() {
 		.map(|t| t["function"]["name"].as_str().unwrap())
 		.collect();
 	assert_eq!(names, ["web_search"], "{}", requests[0]);
+
+	// An operator who empties the list lets the mapping take bash as well.
+	let s = setup_with(
+		Model::AnswerOnly,
+		false,
+		3,
+		ServerToolFailureMode::FailClosed,
+		false,
+		SetupOpts {
+			tool_type: "*",
+			client_executed: Some(vec![]),
+			..Default::default()
+		},
+	)
+	.await;
+	let (status, _, body) = send(&s, client_request(false, tools)).await;
+	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&body));
+	let requests = recorded(&s.llm_requests);
+	let names: Vec<&str> = requests[0]["tools"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|t| t["function"]["name"].as_str().unwrap())
+		.collect();
+	assert_eq!(names, ["bash", "web_search"], "{}", requests[0]);
 }
 
 #[tokio::test]
