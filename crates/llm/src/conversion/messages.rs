@@ -261,7 +261,12 @@ pub mod from_completions {
 		req: &types::completions::Request,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
+		let mut typed =
+			json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
+		if let Some(format) = super::super::chat_extensions::response_format(req)? {
+			typed.response_format =
+				Some(serde_json::from_value(format.into_owned()).map_err(AIError::RequestParsing)?);
+		}
 		let model_id = typed.model.clone().unwrap_or_default();
 		let xlated = translate_internal(typed, model_id, catalog);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)

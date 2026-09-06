@@ -1,0 +1,23 @@
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    { "role": "system", "content": "Extract structured person information." },
+    { "role": "user", "content": "Ada Lovelace, age 36, interests: mathematics." }
+  ],
+  "max_tokens": 6400,
+  "reasoning_effort": "high",
+  "json_schema": {
+    "name": "person",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "age": { "type": "integer", "minimum": 0 },
+        "interests": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "age", "interests"],
+      "additionalProperties": false
+    }
+  }
+}

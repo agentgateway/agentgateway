@@ -151,7 +151,8 @@ mod requests {
 		("image-inline", &[VERTEX_GEMINI]),
 		("image-file", &[VERTEX_GEMINI]),
 		("file-inline", &[VERTEX_GEMINI]),
-		("structured-output", &[VERTEX_GEMINI]),
+		("structured-output", &[ANTHROPIC, VERTEX_GEMINI]),
+		("chat-extensions", &[ANTHROPIC, VERTEX_GEMINI]),
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
 		("generation-config", &[VERTEX_GEMINI]),

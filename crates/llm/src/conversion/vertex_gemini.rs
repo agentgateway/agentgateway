@@ -187,7 +187,7 @@ pub mod from_completions {
 
 		let tools = build_tools(req);
 		let tool_config = build_tool_config(req);
-		let generation_config = build_generation_config(req, &model);
+		let generation_config = build_generation_config(req, &model)?;
 
 		let cached_content = req
 			.rest
@@ -680,7 +680,7 @@ pub mod from_completions {
 	fn build_generation_config(
 		req: &types::completions::Request,
 		model: &str,
-	) -> Option<vg::GenerationConfig> {
+	) -> Result<Option<vg::GenerationConfig>, AIError> {
 		let stop_sequences = match &req.stop {
 			Some(Value::String(s)) => vec![s.clone()],
 			Some(Value::Array(a)) => a
@@ -691,7 +691,7 @@ pub mod from_completions {
 			_ => Vec::new(),
 		};
 
-		let (response_mime_type, response_schema) = response_format(req);
+		let (response_mime_type, response_schema) = response_format(req)?;
 		let thinking_config = thinking_config(req, model);
 
 		let cfg = vg::GenerationConfig {
@@ -715,17 +715,19 @@ pub mod from_completions {
 		};
 
 		if cfg == vg::GenerationConfig::default() {
-			None
+			Ok(None)
 		} else {
-			Some(cfg)
+			Ok(Some(cfg))
 		}
 	}
 
-	fn response_format(req: &types::completions::Request) -> (Option<String>, Option<Value>) {
-		let Some(rf) = req.rest.get("response_format") else {
-			return (None, None);
+	fn response_format(
+		req: &types::completions::Request,
+	) -> Result<(Option<String>, Option<Value>), AIError> {
+		let Some(rf) = crate::conversion::chat_extensions::response_format(req)? else {
+			return Ok((None, None));
 		};
-		match rf.get("type").and_then(Value::as_str) {
+		Ok(match rf.get("type").and_then(Value::as_str) {
 			Some("json_object") => (Some("application/json".into()), None),
 			Some("json_schema") => {
 				// Unwrap OpenAI's {schema, strict, name, description} and normalize the bare schema.
@@ -736,7 +738,7 @@ pub mod from_completions {
 				(Some("application/json".into()), schema)
 			},
 			_ => (None, None),
-		}
+		})
 	}
 
 	// Gemini's responseSchema / functionDeclarations[].parameters accept only a subset of JSON Schema.

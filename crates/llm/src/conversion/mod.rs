@@ -1,4 +1,5 @@
 pub mod bedrock;
+pub mod chat_extensions;
 pub mod completions;
 pub mod gemini;
 pub mod messages;
@@ -6,6 +7,9 @@ pub mod openai_compat;
 pub mod responses;
 pub mod vertex;
 pub mod vertex_gemini;
+
+#[cfg(test)]
+mod chat_extensions_tests;
 
 /// Translate an OpenAI `tool_calls[].function.arguments` string into an Anthropic
 /// `tool_use.input` value.

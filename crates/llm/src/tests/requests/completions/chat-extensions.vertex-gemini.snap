@@ -1,0 +1,105 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/chat-extensions.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: system
+      content: Extract structured person information.
+    - role: user
+      content: "Ada Lovelace, age 36, interests: mathematics."
+  max_tokens: 6400
+  reasoning_effort: high
+  json_schema:
+    name: person
+    strict: true
+    schema:
+      type: object
+      properties:
+        name:
+          type: string
+        age:
+          type: integer
+          minimum: 0
+        interests:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - age
+        - interests
+      additionalProperties: false
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Ada Lovelace, age 36, interests: mathematics."
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "Extract structured person information."
+        }
+      ]
+    },
+    "generationConfig": {
+      "maxOutputTokens": 6400,
+      "responseMimeType": "application/json",
+      "responseSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "interests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "age",
+          "interests"
+        ]
+      },
+      "thinkingConfig": {
+        "thinkingBudget": 4096,
+        "includeThoughts": true
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-2.5-pro",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 6400
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "Extract structured person information."
+      },
+      {
+        "role": "user",
+        "content": "Ada Lovelace, age 36, interests: mathematics."
+      }
+    ]
+  }
+}
