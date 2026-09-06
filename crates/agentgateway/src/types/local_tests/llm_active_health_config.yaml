@@ -1,0 +1,38 @@
+llm:
+  providers:
+  - name: vllm-shared
+    provider:
+      custom:
+        formats:
+        - type: completions
+    params:
+      baseUrl: http://vllm.internal:8000/v1
+    defaults:
+      health:
+        active:
+          path: /health
+          interval: 5s
+          timeout: 2s
+          unhealthyThreshold: 2
+  models:
+  - name: qwen3
+    provider:
+      reference: vllm-shared
+    params:
+      model: Qwen/Qwen3-32B
+  - name: llama
+    provider:
+      custom:
+        formats:
+        - type: completions
+    params:
+      baseUrl: http://llama.internal:8000/v1
+    health:
+      unhealthyExpression: "response.code >= 500"
+      eviction:
+        duration: 30s
+        restoreHealth: 1.0
+      active:
+        interval: 15s
+        healthyThreshold: 2
+        expectedStatuses: [200, 204]
