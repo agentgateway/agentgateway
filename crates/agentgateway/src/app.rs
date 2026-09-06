@@ -170,7 +170,10 @@ pub async fn run_with_ui_assets(
 		admission: Default::default(),
 	};
 
-	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
+	let pi = Arc::new(pi);
+	// Probe LLM providers that have an active health check configured.
+	tokio::spawn(crate::http::healthcheck::HealthChecker::new(pi.clone()).run());
+	let gw = proxy::Gateway::new(pi, drain_rx.clone());
 
 	// Run the agentgateway in the data plane worker pool.
 	let mut xds_rx_for_proxy = xds_rx.clone();

@@ -973,6 +973,25 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			}
 		});
 	}
+	/// Evict `key` until `time`, or extend its eviction if it is already evicted. Passing a time
+	/// that is not in the future restores an evicted endpoint on the next worker pass, with its
+	/// health set to `restore_health` when given. Used by active health checks, which decide on
+	/// their own when an endpoint leaves and rejoins the active set.
+	pub fn evict_until(&self, key: EndpointKey, time: Instant, restore_health: Option<f64>) {
+		let Some(bucket) = self.find_bucket(&key) else {
+			return;
+		};
+		let Some(cur) = bucket
+			.active
+			.get(&key)
+			.or_else(|| bucket.rejected.get(&key))
+		else {
+			return;
+		};
+		cur.info.evicted_until.store(Some(Arc::new(time)));
+		self.send_eviction(key, time, restore_health);
+	}
+
 	pub fn evict(&self, key: EndpointKey, time: Instant) {
 		let Some(bucket) = self.find_bucket(&key) else {
 			return;
@@ -983,19 +1002,24 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
-				self.eviction_worker.start();
-				let mut tx = self.tx_eviction.clone();
-				tokio::spawn(async move {
-					let _ = tx
-						.send(EvictionEvent::Evict {
-							key,
-							until: time,
-							restore_health: None,
-						})
-						.await;
-				});
+				self.send_eviction(key, time, None);
 			}
 		}
+	}
+
+	/// Hand the eviction to the worker, which removes the endpoint and restores it at `until`.
+	fn send_eviction(&self, key: EndpointKey, until: Instant, restore_health: Option<f64>) {
+		self.eviction_worker.start();
+		let mut tx = self.tx_eviction.clone();
+		tokio::spawn(async move {
+			let _ = tx
+				.send(EvictionEvent::Evict {
+					key,
+					until,
+					restore_health,
+				})
+				.await;
+		});
 	}
 }
 
@@ -1051,6 +1075,10 @@ impl EndpointInfo {
 	}
 	pub fn times_ejected(&self) -> u64 {
 		self.times_ejected.load(AtomicOrdering::Relaxed)
+	}
+	/// Whether the endpoint is currently evicted from the active set.
+	pub fn is_evicted(&self) -> bool {
+		self.evicted_until.load().is_some()
 	}
 	// Todo: fine-tune the algorithm here
 	pub fn score(&self) -> f64 {
