@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde_json::{Value, json};
 
 use super::*;
-use crate::server_tools::{encode_sse, parse_sse};
+use crate::server_tools::{add_usage, comment_keepalive, encode_sse, parse_sse};
 
 fn request(extra: Value) -> Request {
 	let mut body = json!({
@@ -112,7 +112,7 @@ fn tool_turn_is_appended() {
 		"tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "web_search", "arguments": "{}"}}]});
 	append_tool_turn(
 		&mut req,
-		assistant,
+		&json!({"choices": [{"message": assistant}]}),
 		vec![tool_message("call_1", "Seattle".to_string())],
 	);
 	assert_eq!(req.messages.len(), 3);
@@ -127,14 +127,18 @@ fn tool_turn_is_appended() {
 fn usage_is_summed_and_written_back() {
 	let first = json!({"usage": {"prompt_tokens": 10, "completion_tokens": 2, "prompt_tokens_details": {"cached_tokens": 4}}});
 	let second = json!({"usage": {"prompt_tokens": 20, "completion_tokens": 3, "completion_tokens_details": {"reasoning_tokens": 1}}});
-	let mut totals = UsageTotals::of(&first);
-	totals.add(UsageTotals::of(&second));
-	assert_eq!(totals.prompt_tokens, 30);
-	assert_eq!(totals.completion_tokens, 5);
-	assert_eq!(totals.cached_tokens, Some(4));
-	assert_eq!(totals.reasoning_tokens, Some(1));
+	let mut totals = Value::Null;
+	add_usage(&mut totals, first.get("usage"));
+	add_usage(&mut totals, second.get("usage"));
+	assert_eq!(totals["prompt_tokens"], json!(30));
+	assert_eq!(totals["completion_tokens"], json!(5));
+	assert_eq!(totals["prompt_tokens_details"]["cached_tokens"], json!(4));
+	assert_eq!(
+		totals["completion_tokens_details"]["reasoning_tokens"],
+		json!(1)
+	);
 	let mut response = completion(None, Some("hi"));
-	set_usage(&mut response, totals);
+	set_usage(&mut response, &totals);
 	assert_eq!(response["usage"]["prompt_tokens"], json!(30));
 	assert_eq!(response["usage"]["total_tokens"], json!(35));
 	assert_eq!(
@@ -201,14 +205,9 @@ fn chunks_are_accumulated_and_synthesized() {
 
 #[test]
 fn usage_is_patched_or_added() {
-	let totals = UsageTotals {
-		prompt_tokens: 300,
-		completion_tokens: 30,
-		cached_tokens: None,
-		reasoning_tokens: None,
-	};
+	let totals = json!({"prompt_tokens": 300, "completion_tokens": 30});
 	let mut with_usage = synthesize_sse(&completion(None, Some("hi")));
-	patch_usage(&mut with_usage, totals);
+	patch_usage(&mut with_usage, &totals);
 	let mut acc = ChunkAccumulator::default();
 	acc.feed_all(&with_usage);
 	assert_eq!(acc.finish().unwrap()["usage"]["total_tokens"], json!(330));
@@ -216,13 +215,13 @@ fn usage_is_patched_or_added() {
 	let mut without = synthesize_sse(&completion(None, Some("hi")));
 	without.retain(|ev| !ev.data.contains("\"usage\""));
 	let before = without.len();
-	patch_usage(&mut without, totals);
+	patch_usage(&mut without, &totals);
 	assert_eq!(without.len(), before + 1);
 	assert_eq!(without.last().unwrap().data, "[DONE]");
 	let mut acc = ChunkAccumulator::default();
 	acc.feed_all(&without);
 	assert_eq!(acc.finish().unwrap()["usage"]["prompt_tokens"], json!(300));
-	assert!(String::from_utf8_lossy(&keepalive()).starts_with(':'));
+	assert!(String::from_utf8_lossy(&comment_keepalive()).starts_with(':'));
 	let err = String::from_utf8_lossy(&error_event("boom")).to_string();
 	assert!(
 		err.contains("server_tool_error") && err.ends_with("data: [DONE]\n\n"),

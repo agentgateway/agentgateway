@@ -14,7 +14,7 @@ use serde_json::Value;
 
 use crate::http::authorization::RuleSets;
 use crate::mcp::handler::Relay;
-use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::mcp::router::McpBackendGroup;
 use crate::mcp::upstream::{IncomingRequestContext, Upstream};
 use crate::mcp::{MCPInfo, McpAuthorizationSet, rbac};
 use crate::telemetry::log::AsyncLog;
@@ -51,7 +51,7 @@ impl ToolRuntime {
 		target: Option<&str>,
 		parts: &Parts,
 	) -> anyhow::Result<Self> {
-		let (name, backend, backend_policies) = {
+		let (name, mut backend, backend_policies) = {
 			let binds = inputs.stores.read_binds();
 			let be = binds
 				.backend(backend_key)
@@ -59,60 +59,34 @@ impl ToolRuntime {
 			let Backend::MCP(name, backend) = &be.backend else {
 				anyhow::bail!("backend {backend_key} is not an MCP backend");
 			};
-			let inline = be.inline_policies.clone();
 			let policies = binds.backend_policies(
 				BackendTargetRef::Backend {
 					name: name.name.as_ref(),
 					namespace: name.namespace.as_ref(),
 					section: None,
 				},
-				&[inline.as_slice()],
+				&[be.inline_policies.as_slice()],
 				None,
 			);
 			(name.clone(), backend.clone(), policies)
 		};
-		let mut candidates = backend
+		// Keep the one target the runtime talks to.
+		backend
 			.targets
-			.iter()
-			.filter(|t| target.is_none_or(|want| t.name == want));
-		let Some(selected) = candidates.next() else {
-			anyhow::bail!(
+			.retain(|t| target.is_none_or(|want| t.name == want));
+		let target_name = match backend.targets.as_slice() {
+			[selected] => selected.name.clone(),
+			[] => anyhow::bail!(
 				"MCP backend {backend_key} has no target {}",
 				target.unwrap_or_default()
-			);
+			),
+			_ => {
+				anyhow::bail!("MCP backend {backend_key} has multiple targets; set the target explicitly")
+			},
 		};
-		if candidates.next().is_some() {
-			anyhow::bail!("MCP backend {backend_key} has multiple targets; set the target explicitly");
-		}
-		let resolved = selected
-			.spec
-			.backend()
-			.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, inputs))
-			.transpose()?;
-		let target_policies = {
-			let binds = inputs.stores.read_binds();
-			binds.sub_backend_policies(
-				BackendTargetRef::Backend {
-					name: name.name.as_ref(),
-					namespace: name.namespace.as_ref(),
-					section: Some(selected.name.as_ref()),
-				},
-				resolved.as_ref().map(|r| r.inline_policies.as_slice()),
-			)
-		};
-		let target_name = selected.name.clone();
-		let group = McpBackendGroup {
-			targets: vec![Arc::new(McpTarget {
-				name: target_name.clone(),
-				spec: selected.spec.clone(),
-				backend: resolved.map(|r| r.backend),
-				backend_policies: backend_policies.clone().merge(target_policies),
-			})],
-			stateful: backend.stateful,
-			prefix_mode: backend.prefix_mode,
-			failure_mode: backend.failure_mode,
-			session_idle_ttl: backend.session_idle_ttl,
-		};
+		let group =
+			McpBackendGroup::resolve(&inputs.stores, inputs, &name, &backend, &backend_policies)
+				.map_err(|e| anyhow::anyhow!("{e}"))?;
 		let authorization = backend_policies
 			.mcp_authorization
 			.clone()

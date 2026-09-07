@@ -17,7 +17,8 @@ use bytes::Bytes;
 use serde_json::{Map, Value, json};
 
 use crate::server_tools::{
-	InterceptedTool, SearchResult, SseEvent, TRUNCATION_MARKER, ToolDefinition, ToolUse, TypeMatch,
+	InterceptedTool, SearchResult, SseEvent, ToolDefinition, ToolUse, TypeMatch, fill_total,
+	function_definition, is_client_executed, is_named, item_text, push_str, truncate, withdraw_tools,
 };
 use crate::types::responses::{RawInputItem, Request, RequestInput};
 
@@ -27,8 +28,6 @@ mod tests;
 
 /// Tool entry types the client executes itself. They are never rewritten.
 const CLIENT_TOOL_TYPES: &[&str] = &["function", "custom"];
-
-use crate::server_tools::is_client_executed;
 
 fn tools_array(req: &Request) -> Option<&Vec<Value>> {
 	req.rest.get("tools").and_then(Value::as_array)
@@ -128,24 +127,9 @@ pub fn unmapped_builtin_tools(
 /// Remove the named function tools, and a `tool_choice` that forces one of them, so the model has
 /// to answer without them.
 pub fn remove_function_tools(req: &mut Request, names: &HashSet<&str>) {
-	if let Some(list) = req.rest.get_mut("tools").and_then(Value::as_array_mut) {
-		list.retain(|tool| {
-			!(tool_type(tool) == Some("function")
-				&& tool
-					.get("name")
-					.and_then(Value::as_str)
-					.is_some_and(|n| names.contains(n)))
-		});
-	}
-	let forced = req
-		.rest
-		.get("tool_choice")
-		.and_then(|c| c.get("name"))
-		.and_then(Value::as_str)
-		.is_some_and(|n| names.contains(n));
-	if forced && let Some(rest) = req.rest.as_object_mut() {
-		rest.remove("tool_choice");
-	}
+	withdraw_tools(&mut req.rest, names, |tool| {
+		tool_type(tool) == Some("function") && is_named(tool, names)
+	});
 }
 
 /// How a client wants calls to a remote MCP server approved.
@@ -240,11 +224,7 @@ pub fn find_mcp_descriptors(req: &Request) -> Vec<McpDescriptor> {
 pub fn function_tool(name: &str, def: &ToolDefinition) -> Value {
 	let mut tool = Map::new();
 	tool.insert("type".to_string(), json!("function"));
-	tool.insert("name".to_string(), json!(name));
-	if let Some(description) = &def.description {
-		tool.insert("description".to_string(), json!(description));
-	}
-	tool.insert("parameters".to_string(), def.input_schema.clone());
+	tool.extend(function_definition(name, def));
 	Value::Object(tool)
 }
 
@@ -452,20 +432,18 @@ pub fn strip_function_calls(response: &mut Value, names: &HashSet<&str>) -> usiz
 		return 0;
 	};
 	let before = output.len();
-	output.retain(|item| {
-		let is_call = tool_type(item) == Some("function_call");
-		let ours = item
-			.get("name")
-			.and_then(Value::as_str)
-			.is_some_and(|n| names.contains(n));
-		!(is_call && ours)
-	});
+	output.retain(|item| !(tool_type(item) == Some("function_call") && is_named(item, names)));
 	before - output.len()
 }
 
 /// Append the model's output items and the tool outputs to the conversation, ready to be sent
 /// again. A plain-text `input` becomes a user message item first.
-pub fn append_tool_turn(req: &mut Request, output_items: Vec<Value>, outputs: Vec<Value>) {
+pub fn append_tool_turn(req: &mut Request, response: &Value, outputs: Vec<Value>) {
+	let output_items = response
+		.get("output")
+		.and_then(Value::as_array)
+		.cloned()
+		.unwrap_or_default();
 	let mut items = match std::mem::replace(&mut req.input, RequestInput::Items(Vec::new())) {
 		RequestInput::Text(text) => vec![RawInputItem::from_value(json!({
 			"type": "message",
@@ -496,113 +474,36 @@ pub fn mcp_content_to_output(items: &[Value], max_bytes: usize) -> String {
 	let mut out = String::new();
 	for item in items {
 		let text = match tool_type(item) {
-			Some("text") => item.get("text").and_then(Value::as_str).map(str::to_string),
-			Some("image") => Some(format!(
+			Some("image") => format!(
 				"[image {}]",
 				item
 					.get("mimeType")
 					.and_then(Value::as_str)
 					.unwrap_or("image/png")
-			)),
-			Some("resource") => {
-				let resource = item.get("resource");
-				resource
-					.and_then(|r| r.get("text"))
-					.and_then(Value::as_str)
-					.map(str::to_string)
-					.or_else(|| resource.map(Value::to_string))
+			),
+			_ => match item_text(item) {
+				Some(text) => text,
+				None => continue,
 			},
-			_ => Some(item.to_string()),
-		};
-		let Some(text) = text else {
-			continue;
 		};
 		if !out.is_empty() {
 			out.push('\n');
 		}
-		if out.len() + text.len() > max_bytes {
-			let mut cut = max_bytes.saturating_sub(out.len()).min(text.len());
-			while cut > 0 && !text.is_char_boundary(cut) {
-				cut -= 1;
-			}
-			out.push_str(&text[..cut]);
-			out.push_str(TRUNCATION_MARKER);
+		out.push_str(&text);
+		if out.len() > max_bytes {
+			truncate(&mut out, max_bytes);
 			return out;
 		}
-		out.push_str(&text);
 	}
 	out
 }
 
-/// Token usage summed across the model calls of one client turn.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct UsageTotals {
-	pub input_tokens: u64,
-	pub output_tokens: u64,
-	pub cached_tokens: Option<u64>,
-	pub reasoning_tokens: Option<u64>,
-}
-
-fn add_opt(a: Option<u64>, b: Option<u64>) -> Option<u64> {
-	match (a, b) {
-		(None, None) => None,
-		(a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
-	}
-}
-
-impl UsageTotals {
-	pub fn of(response: &Value) -> Self {
-		let usage = response.get("usage");
-		let field = |path: &[&str]| {
-			let mut value = usage?;
-			for key in path {
-				value = value.get(key)?;
-			}
-			value.as_u64()
-		};
-		Self {
-			input_tokens: field(&["input_tokens"]).unwrap_or(0),
-			output_tokens: field(&["output_tokens"]).unwrap_or(0),
-			cached_tokens: field(&["input_tokens_details", "cached_tokens"]),
-			reasoning_tokens: field(&["output_tokens_details", "reasoning_tokens"]),
-		}
-	}
-
-	pub fn add(&mut self, other: UsageTotals) {
-		self.input_tokens += other.input_tokens;
-		self.output_tokens += other.output_tokens;
-		self.cached_tokens = add_opt(self.cached_tokens, other.cached_tokens);
-		self.reasoning_tokens = add_opt(self.reasoning_tokens, other.reasoning_tokens);
-	}
-
-	fn apply(&self, usage: &mut Value) {
-		if !usage.is_object() {
-			*usage = Value::Object(Map::new());
-		}
-		usage["input_tokens"] = Value::from(self.input_tokens);
-		usage["output_tokens"] = Value::from(self.output_tokens);
-		usage["total_tokens"] = Value::from(self.input_tokens + self.output_tokens);
-		if let Some(cached) = self.cached_tokens {
-			if !usage["input_tokens_details"].is_object() {
-				usage["input_tokens_details"] = Value::Object(Map::new());
-			}
-			usage["input_tokens_details"]["cached_tokens"] = Value::from(cached);
-		}
-		if let Some(reasoning) = self.reasoning_tokens {
-			if !usage["output_tokens_details"].is_object() {
-				usage["output_tokens_details"] = Value::Object(Map::new());
-			}
-			usage["output_tokens_details"]["reasoning_tokens"] = Value::from(reasoning);
-		}
-	}
-}
-
 /// Overwrite the usage of a response with the summed totals.
-pub fn set_usage(response: &mut Value, totals: UsageTotals) {
-	if !response.is_object() {
-		return;
+pub fn set_usage(response: &mut Value, totals: &Value) {
+	crate::server_tools::set_usage(response, totals);
+	if let Some(usage) = response.get_mut("usage") {
+		fill_total(usage, ["input_tokens", "output_tokens"]);
 	}
-	totals.apply(&mut response["usage"]);
 }
 
 /// The event type, taken from the JSON body first: some producers put a generic name on the
@@ -623,13 +524,6 @@ fn is_terminal(event_type: &str) -> bool {
 
 fn index_of(data: &Value, key: &str) -> u64 {
 	data.get(key).and_then(Value::as_u64).unwrap_or(0)
-}
-
-fn push_str(target: &mut Value, add: &str) {
-	match target {
-		Value::String(s) => s.push_str(add),
-		other => *other = Value::String(add.to_string()),
-	}
 }
 
 /// Rebuilds a complete Responses response from its streaming events.
@@ -877,32 +771,27 @@ pub fn synthesize_sse(response: &Value) -> Vec<SseEvent> {
 						out.push(name, data);
 					};
 					match tool_type(part) {
-						Some("output_text") => {
-							let text = part.get("text").and_then(Value::as_str).unwrap_or("");
+						Some(kind @ ("output_text" | "refusal")) => {
+							// Text parts stream as deltas; only `output_text` carries logprobs.
+							let key = if kind == "output_text" {
+								"text"
+							} else {
+								"refusal"
+							};
+							let text = part.get(key).and_then(Value::as_str).unwrap_or("");
 							let mut empty = part.clone();
-							empty["text"] = json!("");
+							empty[key] = json!("");
+							let mut delta = json!({"delta": text});
+							let mut done = json!({key: text});
+							if kind == "output_text" {
+								delta["logprobs"] = json!([]);
+								done["logprobs"] = json!([]);
+							}
 							with("response.content_part.added", json!({"part": empty}));
 							if !text.is_empty() {
-								with(
-									"response.output_text.delta",
-									json!({"delta": text, "logprobs": []}),
-								);
+								with(&format!("response.{kind}.delta"), delta);
 							}
-							with(
-								"response.output_text.done",
-								json!({"text": text, "logprobs": []}),
-							);
-							with("response.content_part.done", json!({"part": part}));
-						},
-						Some("refusal") => {
-							let refusal = part.get("refusal").and_then(Value::as_str).unwrap_or("");
-							let mut empty = part.clone();
-							empty["refusal"] = json!("");
-							with("response.content_part.added", json!({"part": empty}));
-							if !refusal.is_empty() {
-								with("response.refusal.delta", json!({"delta": refusal}));
-							}
-							with("response.refusal.done", json!({"refusal": refusal}));
+							with(&format!("response.{kind}.done"), done);
 							with("response.content_part.done", json!({"part": part}));
 						},
 						_ => {
@@ -960,7 +849,7 @@ pub fn synthesize_sse(response: &Value) -> Vec<SseEvent> {
 }
 
 /// Rewrite the usage carried by the stream's terminal event to the summed totals.
-pub fn patch_usage(events: &mut [SseEvent], totals: UsageTotals) {
+pub fn patch_usage(events: &mut [SseEvent], totals: &Value) {
 	for ev in events.iter_mut() {
 		let Ok(mut data) = serde_json::from_str::<Value>(&ev.data) else {
 			continue;
@@ -971,14 +860,9 @@ pub fn patch_usage(events: &mut [SseEvent], totals: UsageTotals) {
 		if !is_terminal(ty) || !data.get("response").is_some_and(Value::is_object) {
 			continue;
 		}
-		totals.apply(&mut data["response"]["usage"]);
+		set_usage(&mut data["response"], totals);
 		ev.data = data.to_string();
 	}
-}
-
-/// The comment line sent while a turn is held back. SSE clients ignore comments.
-pub fn keepalive() -> Bytes {
-	Bytes::from_static(b": keepalive\n\n")
 }
 
 /// An `error` event in the Responses stream shape.
