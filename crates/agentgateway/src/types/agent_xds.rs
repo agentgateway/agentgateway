@@ -4071,6 +4071,19 @@ fn convert_server_tool_arguments(
 	)
 }
 
+/// The MCP backend a server tool mapping names. Only Backend references are supported.
+fn server_tool_backend(
+	reference: Option<&proto::agent::BackendReference>,
+	what: &str,
+) -> Result<Strng, ProtoError> {
+	match reference.and_then(|b| b.kind.as_ref()) {
+		Some(proto::agent::backend_reference::Kind::Backend(key)) => Ok(strng::new(key)),
+		_ => Err(ProtoError::Generic(format!(
+			"serverTools.{what}.backend must reference a Backend"
+		))),
+	}
+}
+
 fn convert_server_tools(
 	st: &proto::agent::backend_policy_spec::ai::ServerTools,
 	diagnostics: &mut Diagnostics,
@@ -4080,15 +4093,7 @@ fn convert_server_tools(
 		.tools
 		.iter()
 		.map(|t| {
-			let backend = match t.backend.as_ref().and_then(|b| b.kind.as_ref()) {
-				Some(proto::agent::backend_reference::Kind::Backend(key)) => strng::new(key),
-				_ => {
-					return Err(ProtoError::Generic(format!(
-						"serverTools.tools[{}].backend must reference a Backend",
-						t.r#type
-					)));
-				},
-			};
+			let backend = server_tool_backend(t.backend.as_ref(), &format!("tools[{}]", t.r#type))?;
 			let input_schema = t
 				.input_schema
 				.as_deref()
@@ -4117,15 +4122,13 @@ fn convert_server_tools(
 		.mcp_servers
 		.iter()
 		.map(|m| {
-			let backend = match m.backend.as_ref().and_then(|b| b.kind.as_ref()) {
-				Some(proto::agent::backend_reference::Kind::Backend(key)) => strng::new(key),
-				_ => {
-					return Err(ProtoError::Generic(format!(
-						"serverTools.mcpServers[{}].backend must reference a Backend",
-						m.label.as_deref().or(m.url.as_deref()).unwrap_or("")
-					)));
-				},
-			};
+			let backend = server_tool_backend(
+				m.backend.as_ref(),
+				&format!(
+					"mcpServers[{}]",
+					m.label.as_deref().or(m.url.as_deref()).unwrap_or("")
+				),
+			)?;
 			Ok(llm::policy::ServerToolMcpServer {
 				label: m.label.as_deref().map(strng::new),
 				url: m.url.as_deref().map(strng::new),
@@ -4136,29 +4139,7 @@ fn convert_server_tools(
 			})
 		})
 		.collect::<Result<Vec<_>, ProtoError>>()?;
-	let failure_mode = match server_tools::FailureMode::try_from(st.failure_mode)
-		.map_err(|_| ProtoError::EnumParse("invalid server tools failure mode".to_string()))?
-	{
-		server_tools::FailureMode::FailClosed => llm::policy::ServerToolFailureMode::FailClosed,
-		server_tools::FailureMode::FailOpen => llm::policy::ServerToolFailureMode::FailOpen,
-	};
-	let unmapped = match server_tools::UnmappedMode::try_from(st.unmapped)
-		.map_err(|_| ProtoError::EnumParse("invalid server tools unmapped mode".to_string()))?
-	{
-		server_tools::UnmappedMode::Drop => llm::policy::UnmappedServerTools::Drop,
-		server_tools::UnmappedMode::Reject => llm::policy::UnmappedServerTools::Reject,
-	};
-	let results = match server_tools::ResultsMode::try_from(st.results)
-		.map_err(|_| ProtoError::EnumParse("invalid server tools results mode".to_string()))?
-	{
-		server_tools::ResultsMode::Native => llm::policy::ServerToolResults::Native,
-		server_tools::ResultsMode::Strip => llm::policy::ServerToolResults::Strip,
-	};
-	let defaults = llm::policy::ServerToolsConfig::defaults();
-	let client_executed = match st.client_executed.as_ref() {
-		Some(list) => list.types.clone(),
-		None => defaults.client_executed.clone(),
-	};
+	let defaults = llm::policy::ServerToolsConfig::default();
 	Ok(llm::policy::ServerToolsConfig {
 		tools,
 		mcp_servers,
@@ -4172,10 +4153,26 @@ fn convert_server_tools(
 			.map(TryInto::try_into)
 			.transpose()?
 			.unwrap_or(defaults.keepalive_interval),
-		failure_mode,
-		unmapped,
-		results,
-		client_executed,
+		failure_mode: if st.failure_mode == server_tools::FailureMode::FailOpen as i32 {
+			llm::policy::ServerToolFailureMode::FailOpen
+		} else {
+			llm::policy::ServerToolFailureMode::FailClosed
+		},
+		unmapped: if st.unmapped == server_tools::UnmappedMode::Reject as i32 {
+			llm::policy::UnmappedServerTools::Reject
+		} else {
+			llm::policy::UnmappedServerTools::Drop
+		},
+		results: if st.results == server_tools::ResultsMode::Strip as i32 {
+			llm::policy::ServerToolResults::Strip
+		} else {
+			llm::policy::ServerToolResults::Native
+		},
+		client_executed: st
+			.client_executed
+			.as_ref()
+			.map(|list| list.types.clone())
+			.unwrap_or(defaults.client_executed),
 	})
 }
 

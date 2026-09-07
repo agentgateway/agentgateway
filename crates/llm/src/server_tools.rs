@@ -155,26 +155,38 @@ pub fn unmapped_server_tools(
 		.collect()
 }
 
-/// Remove the named tools from the request, and a `tool_choice` that forces one of them, so the
-/// model has to answer without them.
-pub fn remove_tools(req: &mut Request, names: &HashSet<&str>) {
-	if let Some(list) = req.rest.get_mut("tools").and_then(Value::as_array_mut) {
-		list.retain(|tool| {
-			!tool
-				.get("name")
-				.and_then(Value::as_str)
-				.is_some_and(|n| names.contains(n))
-		});
+/// Whether a tool entry or call carries one of `names`.
+pub(crate) fn is_named(tool: &Value, names: &HashSet<&str>) -> bool {
+	tool
+		.get("name")
+		.and_then(Value::as_str)
+		.is_some_and(|n| names.contains(n))
+}
+
+/// Remove the tools `ours` selects from `rest.tools`, and a `tool_choice` that forces one of
+/// `names`, so the model has to answer without them.
+pub(crate) fn withdraw_tools(
+	rest: &mut Value,
+	names: &HashSet<&str>,
+	ours: impl Fn(&Value) -> bool,
+) {
+	if let Some(list) = rest.get_mut("tools").and_then(Value::as_array_mut) {
+		list.retain(|tool| !ours(tool));
 	}
-	let forced = req
-		.rest
+	let forced = rest
 		.get("tool_choice")
 		.and_then(|c| c.get("name"))
 		.and_then(Value::as_str)
 		.is_some_and(|n| names.contains(n));
-	if forced && let Some(rest) = req.rest.as_object_mut() {
+	if forced && let Some(rest) = rest.as_object_mut() {
 		rest.remove("tool_choice");
 	}
+}
+
+/// Remove the named tools from the request, and a `tool_choice` that forces one of them, so the
+/// model has to answer without them.
+pub fn remove_tools(req: &mut Request, names: &HashSet<&str>) {
+	withdraw_tools(&mut req.rest, names, |tool| is_named(tool, names));
 }
 
 /// Replace each intercepted server tool with the custom tool definition, keeping the client's name
@@ -261,11 +273,7 @@ pub fn strip_tool_uses(message: &mut Value, names: &HashSet<&str>) -> usize {
 		let before = content.len();
 		content.retain(|block| {
 			let is_tool_use = block.get("type").and_then(Value::as_str) == Some("tool_use");
-			let ours = block
-				.get("name")
-				.and_then(Value::as_str)
-				.is_some_and(|n| names.contains(n));
-			!(is_tool_use && ours)
+			!(is_tool_use && is_named(block, names))
 		});
 		before - content.len()
 	};
@@ -286,78 +294,72 @@ pub fn fingerprint(calls: &[ToolUse]) -> String {
 	parts.join("|")
 }
 
-/// Token usage summed across the model calls of one client turn.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct UsageTotals {
-	pub input_tokens: u64,
-	pub output_tokens: u64,
-	pub cache_creation_input_tokens: Option<u64>,
-	pub cache_read_input_tokens: Option<u64>,
-}
-
-fn add_opt(a: Option<u64>, b: Option<u64>) -> Option<u64> {
-	match (a, b) {
-		(None, None) => None,
-		(a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
+/// Add every number in `usage` to the matching number in `totals`, creating what is missing, so
+/// the usage of several model calls reads like the usage of one. Any value that is not a number
+/// is kept from the first message that carried it.
+pub fn add_usage(totals: &mut Value, usage: Option<&Value>) {
+	match (totals, usage) {
+		(_, None) => {},
+		(totals, Some(usage)) if totals.is_null() => *totals = usage.clone(),
+		(Value::Object(totals), Some(Value::Object(usage))) => {
+			for (key, value) in usage {
+				add_usage(totals.entry(key).or_insert(Value::Null), Some(value));
+			}
+		},
+		(Value::Number(total), Some(Value::Number(add))) => {
+			*total = if let (Some(a), Some(b)) = (total.as_u64(), add.as_u64()) {
+				serde_json::Number::from(a + b)
+			} else if let (Some(a), Some(b)) = (total.as_i64(), add.as_i64()) {
+				serde_json::Number::from(a + b)
+			} else {
+				serde_json::Number::from_f64(total.as_f64().unwrap_or(0.0) + add.as_f64().unwrap_or(0.0))
+					.unwrap_or_else(|| total.clone())
+			};
+		},
+		_ => {},
 	}
 }
 
-impl UsageTotals {
-	pub fn of(message: &Value) -> Self {
-		let usage = message.get("usage");
-		let field = |name: &str| usage.and_then(|u| u.get(name)).and_then(Value::as_u64);
-		Self {
-			input_tokens: field("input_tokens").unwrap_or(0),
-			output_tokens: field("output_tokens").unwrap_or(0),
-			cache_creation_input_tokens: field("cache_creation_input_tokens"),
-			cache_read_input_tokens: field("cache_read_input_tokens"),
+/// Overwrite the numbers of a message's usage with the summed totals. Nested objects are merged,
+/// and anything that is not a number keeps the message's own value.
+pub fn set_usage(message: &mut Value, totals: &Value) {
+	fn overlay(target: &mut Value, totals: &Value) {
+		match totals {
+			Value::Object(fields) => {
+				if !target.is_object() {
+					*target = Value::Object(Map::new());
+				}
+				let target = target.as_object_mut().expect("just set");
+				for (key, value) in fields {
+					overlay(target.entry(key).or_insert(Value::Null), value);
+				}
+			},
+			Value::Number(_) => *target = totals.clone(),
+			_ => {},
 		}
 	}
-
-	pub fn add(&mut self, other: UsageTotals) {
-		self.input_tokens += other.input_tokens;
-		self.output_tokens += other.output_tokens;
-		self.cache_creation_input_tokens = add_opt(
-			self.cache_creation_input_tokens,
-			other.cache_creation_input_tokens,
-		);
-		self.cache_read_input_tokens =
-			add_opt(self.cache_read_input_tokens, other.cache_read_input_tokens);
-	}
-
-	fn apply_input(&self, usage: &mut Value) {
-		if !usage.is_object() {
-			*usage = Value::Object(Map::new());
-		}
-		usage["input_tokens"] = Value::from(self.input_tokens);
-		if let Some(v) = self.cache_creation_input_tokens {
-			usage["cache_creation_input_tokens"] = Value::from(v);
-		}
-		if let Some(v) = self.cache_read_input_tokens {
-			usage["cache_read_input_tokens"] = Value::from(v);
-		}
-	}
-
-	fn apply(&self, usage: &mut Value) {
-		self.apply_input(usage);
-		usage["output_tokens"] = Value::from(self.output_tokens);
+	if totals.is_object()
+		&& let Some(message) = message.as_object_mut()
+	{
+		overlay(message.entry("usage").or_insert(Value::Null), totals);
 	}
 }
 
-/// Overwrite the usage of a Messages response with the summed totals.
-pub fn set_usage(message: &mut Value, totals: UsageTotals) {
-	if !message.is_object() {
-		return;
+/// Keep `total_tokens` equal to the sum of the two counts it reports.
+pub(crate) fn fill_total(usage: &mut Value, parts: [&str; 2]) {
+	let count = |key: &str| usage.get(key).and_then(Value::as_u64);
+	if let (Some(a), Some(b)) = (count(parts[0]), count(parts[1])) {
+		usage["total_tokens"] = Value::from(a + b);
 	}
-	totals.apply(&mut message["usage"]);
 }
 
 /// Append the model's turn and the tool results to the conversation, ready to be sent again.
-pub fn append_tool_turn(
-	req: &mut Request,
-	assistant_content: Vec<Value>,
-	tool_results: Vec<Value>,
-) {
+pub fn append_tool_turn(req: &mut Request, message: &Value, tool_results: Vec<Value>) {
+	let assistant_content = message
+		.get("content")
+		.and_then(Value::as_array)
+		.cloned()
+		.unwrap_or_default();
 	let parts = |blocks: Vec<Value>| {
 		Some(ContentBlock::Array(
 			blocks.into_iter().map(ContentPart::Unknown).collect(),
@@ -390,6 +392,34 @@ pub fn tool_result_block(tool_use_id: &str, content: Vec<Value>, is_error: bool)
 
 pub(crate) const TRUNCATION_MARKER: &str = "\n[tool result truncated by the gateway]";
 
+/// The text of an MCP content item: a `text` item, an embedded text resource, or the item's
+/// JSON. Images have none.
+pub(crate) fn item_text(item: &Value) -> Option<String> {
+	match item.get("type").and_then(Value::as_str) {
+		Some("text") => item.get("text").and_then(Value::as_str).map(str::to_string),
+		Some("image") => None,
+		Some("resource") => {
+			let resource = item.get("resource");
+			resource
+				.and_then(|r| r.get("text"))
+				.and_then(Value::as_str)
+				.map(str::to_string)
+				.or_else(|| resource.map(Value::to_string))
+		},
+		_ => Some(item.to_string()),
+	}
+}
+
+/// Cut `text` to at most `budget` bytes on a character boundary and mark the cut.
+pub(crate) fn truncate(text: &mut String, budget: usize) {
+	let mut cut = budget.min(text.len());
+	while cut > 0 && !text.is_char_boundary(cut) {
+		cut -= 1;
+	}
+	text.truncate(cut);
+	text.push_str(TRUNCATION_MARKER);
+}
+
 /// Convert MCP `CallToolResult.content` items into Anthropic `tool_result` content blocks.
 ///
 /// Text and embedded text resources become `text` blocks, images become base64 `image` blocks,
@@ -399,28 +429,8 @@ pub fn mcp_content_to_tool_result(items: &[Value], max_bytes: usize) -> Vec<Valu
 	let mut out = Vec::new();
 	let mut budget = max_bytes;
 	for item in items {
-		let (text, image) = match item.get("type").and_then(Value::as_str) {
-			Some("text") => (
-				item.get("text").and_then(Value::as_str).map(str::to_string),
-				None,
-			),
-			Some("image") => (None, Some(item)),
-			Some("resource") => {
-				let resource = item.get("resource");
-				let text = resource
-					.and_then(|r| r.get("text"))
-					.and_then(Value::as_str)
-					.map(str::to_string)
-					.or_else(|| resource.map(|r| r.to_string()));
-				(text, None)
-			},
-			_ => (Some(item.to_string()), None),
-		};
-		if let Some(image) = image {
-			let data = image
-				.get("data")
-				.and_then(Value::as_str)
-				.unwrap_or_default();
+		if item.get("type").and_then(Value::as_str) == Some("image") {
+			let data = item.get("data").and_then(Value::as_str).unwrap_or_default();
 			if data.len() > budget {
 				out.push(json!({"type": "text", "text": TRUNCATION_MARKER.trim_start()}));
 				break;
@@ -430,22 +440,17 @@ pub fn mcp_content_to_tool_result(items: &[Value], max_bytes: usize) -> Vec<Valu
 				"type": "image",
 				"source": {
 					"type": "base64",
-					"media_type": image.get("mimeType").and_then(Value::as_str).unwrap_or("image/png"),
+					"media_type": item.get("mimeType").and_then(Value::as_str).unwrap_or("image/png"),
 					"data": data,
 				},
 			}));
 			continue;
 		}
-		let Some(mut text) = text else {
+		let Some(mut text) = item_text(item) else {
 			continue;
 		};
 		if text.len() > budget {
-			let mut cut = budget;
-			while cut > 0 && !text.is_char_boundary(cut) {
-				cut -= 1;
-			}
-			text.truncate(cut);
-			text.push_str(TRUNCATION_MARKER);
+			truncate(&mut text, budget);
 			out.push(json!({"type": "text", "text": text}));
 			break;
 		}
@@ -723,64 +728,50 @@ fn render_search_results(items: &[Value]) -> String {
 /// that never ran the search has no tool call to pair them with, so text is the form every
 /// backend reads. Blocks with vendor-encrypted content are left alone.
 pub fn flatten_replayed_search_results(req: &mut Request) -> usize {
+	fn block(part: &ContentPart) -> Option<&Value> {
+		match part {
+			ContentPart::Unknown(block) => Some(block),
+			_ => None,
+		}
+	}
 	let mut rewritten = 0;
 	for message in &mut req.messages {
 		let Some(ContentBlock::Array(parts)) = message.content.as_mut() else {
 			continue;
 		};
 		// Queries by tool use id, so the text can say what was searched.
-		let queries: HashMap<String, String> = parts
+		let queries: HashMap<&str, &str> = parts
 			.iter()
-			.filter_map(|part| match part {
-				ContentPart::Unknown(block)
-					if block.get("type").and_then(Value::as_str) == Some("server_tool_use") =>
-				{
-					Some((
-						block.get("id")?.as_str()?.to_string(),
-						block
-							.get("input")
-							.and_then(|i| i.get("query"))
-							.and_then(Value::as_str)
-							.unwrap_or_default()
-							.to_string(),
-					))
-				},
-				_ => None,
+			.filter_map(block)
+			.filter(|b| b["type"] == "server_tool_use")
+			.filter_map(|b| {
+				Some((
+					b["id"].as_str()?,
+					b["input"]["query"].as_str().unwrap_or_default(),
+				))
 			})
 			.collect();
-		let mut flattened_ids: HashSet<String> = HashSet::new();
-		for part in parts.iter_mut() {
-			let ContentPart::Unknown(block) = part else {
+		let mut flattened: HashSet<String> = HashSet::new();
+		let mut texts = Vec::new();
+		for (index, part) in parts.iter().enumerate() {
+			let Some(block) = block(part).filter(|b| b["type"] == "web_search_tool_result") else {
 				continue;
 			};
-			if block.get("type").and_then(Value::as_str) != Some("web_search_tool_result") {
-				continue;
-			}
-			let Some(tool_use_id) = block
-				.get("tool_use_id")
-				.and_then(Value::as_str)
-				.map(str::to_string)
-			else {
+			let Some(id) = block["tool_use_id"].as_str() else {
 				continue;
 			};
-			let body = match block.get("content") {
-				Some(Value::Array(items)) => {
-					let encrypted = items.iter().any(|item| {
-						item
-							.get("encrypted_content")
-							.and_then(Value::as_str)
-							.is_some_and(|c| !c.is_empty())
-					});
-					if encrypted {
-						continue;
-					}
-					if items.is_empty() {
-						"No results.".to_string()
-					} else {
-						render_search_results(items)
-					}
-				},
-				Some(Value::Object(error)) => format!(
+			let vendor_encrypted = |items: &[Value]| {
+				items.iter().any(|item| {
+					item["encrypted_content"]
+						.as_str()
+						.is_some_and(|c| !c.is_empty())
+				})
+			};
+			let body = match &block["content"] {
+				Value::Array(items) if vendor_encrypted(items) => continue,
+				Value::Array(items) if items.is_empty() => "No results.".to_string(),
+				Value::Array(items) => render_search_results(items),
+				Value::Object(error) => format!(
 					"Search failed: {}",
 					error
 						.get("error_code")
@@ -789,32 +780,26 @@ pub fn flatten_replayed_search_results(req: &mut Request) -> usize {
 				),
 				_ => continue,
 			};
-			let query = queries.get(&tool_use_id).cloned().unwrap_or_default();
-			let heading = if query.is_empty() {
-				"Web search results:".to_string()
-			} else {
-				format!("Web search for \"{query}\":")
+			let heading = match queries.get(id).filter(|q| !q.is_empty()) {
+				Some(query) => format!("Web search for \"{query}\":"),
+				None => "Web search results:".to_string(),
 			};
-			*part = ContentPart::Text {
+			texts.push((index, format!("{heading}\n{body}")));
+			flattened.insert(id.to_string());
+		}
+		rewritten += texts.len();
+		for (index, text) in texts {
+			parts[index] = ContentPart::Text {
 				r#type: "text".to_string(),
-				text: format!("{heading}\n{body}"),
+				text,
 				rest: Default::default(),
 			};
-			flattened_ids.insert(tool_use_id);
-			rewritten += 1;
 		}
-		if !flattened_ids.is_empty() {
-			parts.retain(|part| match part {
-				ContentPart::Unknown(block) => {
-					!(block.get("type").and_then(Value::as_str) == Some("server_tool_use")
-						&& block
-							.get("id")
-							.and_then(Value::as_str)
-							.is_some_and(|id| flattened_ids.contains(id)))
-				},
-				_ => true,
-			});
-		}
+		parts.retain(|part| {
+			!block(part).is_some_and(|b| {
+				b["type"] == "server_tool_use" && b["id"].as_str().is_some_and(|id| flattened.contains(id))
+			})
+		});
 	}
 	rewritten
 }
@@ -887,6 +872,31 @@ pub fn ping_event() -> Bytes {
 	encode_one("ping", json!({"type": "ping"}))
 }
 
+/// The comment line sent while a turn is held back on the OpenAI routes. SSE clients ignore
+/// comments.
+pub fn comment_keepalive() -> Bytes {
+	Bytes::from_static(b": keepalive\n\n")
+}
+
+/// Append to a JSON string, or set it when the value is not a string yet.
+pub(crate) fn push_str(target: &mut Value, add: &str) {
+	match target {
+		Value::String(s) => s.push_str(add),
+		other => *other = Value::String(add.to_string()),
+	}
+}
+
+/// The `name`, `description` and `parameters` of a function tool, as OpenAI formats them.
+pub(crate) fn function_definition(name: &str, def: &ToolDefinition) -> Map<String, Value> {
+	let mut function = Map::new();
+	function.insert("name".to_string(), json!(name));
+	if let Some(description) = &def.description {
+		function.insert("description".to_string(), json!(description));
+	}
+	function.insert("parameters".to_string(), def.input_schema.clone());
+	function
+}
+
 /// An Anthropic-style `error` event.
 pub fn error_event(message: &str) -> Bytes {
 	encode_one(
@@ -931,17 +941,13 @@ impl MessageAccumulator {
 					return;
 				}
 				match block.get("type").and_then(Value::as_str) {
-					Some("text") => {
-						if !block.get("text").is_some_and(Value::is_string) {
-							block["text"] = Value::String(String::new());
+					Some(kind @ ("text" | "thinking")) => {
+						let key = if kind == "text" { "text" } else { "thinking" };
+						if !block[key].is_string() {
+							block[key] = Value::String(String::new());
 						}
 					},
-					Some("thinking") => {
-						if !block.get("thinking").is_some_and(Value::is_string) {
-							block["thinking"] = Value::String(String::new());
-						}
-					},
-					Some("tool_use") | Some("server_tool_use") => {
+					Some("tool_use" | "server_tool_use") => {
 						self.partial_json.insert(index, String::new());
 					},
 					_ => {},
@@ -957,25 +963,15 @@ impl MessageAccumulator {
 					return;
 				};
 				match delta.get("type").and_then(Value::as_str) {
-					Some("text_delta") => {
-						if let (Some(Value::String(text)), Some(add)) = (
-							block.get_mut("text"),
-							delta.get("text").and_then(Value::as_str),
-						) {
-							text.push_str(add);
+					Some(kind @ ("text_delta" | "thinking_delta")) => {
+						let key = kind.trim_end_matches("_delta");
+						if let Some(add) = delta.get(key).and_then(Value::as_str) {
+							push_str(&mut block[key], add);
 						}
 					},
 					Some("input_json_delta") => {
 						if let Some(add) = delta.get("partial_json").and_then(Value::as_str) {
 							self.partial_json.entry(index).or_default().push_str(add);
-						}
-					},
-					Some("thinking_delta") => {
-						if let (Some(Value::String(thinking)), Some(add)) = (
-							block.get_mut("thinking"),
-							delta.get("thinking").and_then(Value::as_str),
-						) {
-							thinking.push_str(add);
 						}
 					},
 					Some("signature_delta") => {
@@ -1164,30 +1160,27 @@ pub fn synthesize_sse(message: &Value) -> Vec<SseEvent> {
 	events
 }
 
-/// Rewrite the usage carried by `message_start` and `message_delta` events to the summed totals.
-pub fn patch_usage(events: &mut [SseEvent], totals: UsageTotals) {
+/// Rewrite the usage carried by `message_start` and `message_delta` events to the summed totals:
+/// the input-side counts ride on `message_start`, the output count on `message_delta`.
+pub fn patch_usage(events: &mut [SseEvent], totals: &Value) {
+	let output_tokens =
+		json!({"output_tokens": totals.get("output_tokens").cloned().unwrap_or(json!(0))});
+	let mut input = totals.clone();
+	if let Some(input) = input.as_object_mut() {
+		input.remove("output_tokens");
+	}
 	for ev in events.iter_mut() {
 		let Ok(mut data) = serde_json::from_str::<Value>(&ev.data) else {
 			continue;
 		};
 		let changed = match event_type(ev, &data) {
-			Some("message_start") => {
-				if data.get("message").is_some_and(Value::is_object) {
-					totals.apply_input(&mut data["message"]["usage"]);
-					true
-				} else {
-					false
-				}
+			Some("message_start") if data.get("message").is_some_and(Value::is_object) => {
+				set_usage(&mut data["message"], &input);
+				true
 			},
 			Some("message_delta") => {
-				if data.get("usage").is_some_and(Value::is_object) {
-					data["usage"]["output_tokens"] = Value::from(totals.output_tokens);
-					if data["usage"].get("input_tokens").is_some() {
-						totals.apply_input(&mut data["usage"]);
-					}
-				} else {
-					data["usage"] = json!({"output_tokens": totals.output_tokens});
-				}
+				let has_input = data["usage"].get("input_tokens").is_some();
+				set_usage(&mut data, if has_input { totals } else { &output_tokens });
 				true
 			},
 			_ => false,

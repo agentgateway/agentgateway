@@ -15,7 +15,10 @@ use std::collections::{BTreeMap, HashSet};
 use bytes::Bytes;
 use serde_json::{Map, Value, json};
 
-use crate::server_tools::{InterceptedTool, SseEvent, ToolDefinition, ToolUse, TypeMatch};
+use crate::server_tools::{
+	InterceptedTool, SseEvent, ToolDefinition, ToolUse, TypeMatch, fill_total, function_definition,
+	push_str,
+};
 use crate::types::completions::{Request, RequestMessage};
 
 #[cfg(test)]
@@ -75,16 +78,10 @@ pub fn rewrite_web_search(req: &mut Request, tool: &InterceptedTool, def: &ToolD
 	if let Some(rest) = req.rest.as_object_mut() {
 		rest.remove("web_search_options");
 	}
-	let mut function = Map::new();
-	function.insert("name".to_string(), json!(tool.name));
-	if let Some(description) = &def.description {
-		function.insert("description".to_string(), json!(description));
-	}
-	function.insert("parameters".to_string(), def.input_schema.clone());
 	req
 		.tools
 		.get_or_insert_with(Vec::new)
-		.push(json!({"type": "function", "function": function}));
+		.push(json!({"type": "function", "function": function_definition(&tool.name, def)}));
 }
 
 /// Remove the named function tools, and a `tool_choice` that forces one of them, so the model has
@@ -186,7 +183,11 @@ pub fn strip_tool_calls(message: &mut Value, names: &HashSet<&str>) -> usize {
 }
 
 /// Append the model's message and the tool messages to the conversation, ready to be sent again.
-pub fn append_tool_turn(req: &mut Request, assistant: Value, tool_messages: Vec<Value>) {
+pub fn append_tool_turn(req: &mut Request, completion: &Value, tool_messages: Vec<Value>) {
+	let assistant = first_choice(completion)
+		.and_then(|c| c.get("message"))
+		.cloned()
+		.unwrap_or(Value::Null);
 	let assistant =
 		serde_json::from_value::<RequestMessage>(assistant).unwrap_or_else(|_| RequestMessage {
 			role: "assistant".to_string(),
@@ -209,85 +210,15 @@ pub fn tool_message(call_id: &str, content: String) -> Value {
 	json!({"role": "tool", "tool_call_id": call_id, "content": content})
 }
 
-/// Token usage summed across the model calls of one client turn.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct UsageTotals {
-	pub prompt_tokens: u64,
-	pub completion_tokens: u64,
-	pub cached_tokens: Option<u64>,
-	pub reasoning_tokens: Option<u64>,
-}
-
-fn add_opt(a: Option<u64>, b: Option<u64>) -> Option<u64> {
-	match (a, b) {
-		(None, None) => None,
-		(a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
-	}
-}
-
-impl UsageTotals {
-	pub fn of(message: &Value) -> Self {
-		let usage = message.get("usage");
-		let field = |path: &[&str]| {
-			let mut value = usage?;
-			for key in path {
-				value = value.get(key)?;
-			}
-			value.as_u64()
-		};
-		Self {
-			prompt_tokens: field(&["prompt_tokens"]).unwrap_or(0),
-			completion_tokens: field(&["completion_tokens"]).unwrap_or(0),
-			cached_tokens: field(&["prompt_tokens_details", "cached_tokens"]),
-			reasoning_tokens: field(&["completion_tokens_details", "reasoning_tokens"]),
-		}
-	}
-
-	pub fn add(&mut self, other: UsageTotals) {
-		self.prompt_tokens += other.prompt_tokens;
-		self.completion_tokens += other.completion_tokens;
-		self.cached_tokens = add_opt(self.cached_tokens, other.cached_tokens);
-		self.reasoning_tokens = add_opt(self.reasoning_tokens, other.reasoning_tokens);
-	}
-
-	fn apply(&self, usage: &mut Value) {
-		if !usage.is_object() {
-			*usage = Value::Object(Map::new());
-		}
-		usage["prompt_tokens"] = Value::from(self.prompt_tokens);
-		usage["completion_tokens"] = Value::from(self.completion_tokens);
-		usage["total_tokens"] = Value::from(self.prompt_tokens + self.completion_tokens);
-		if let Some(cached) = self.cached_tokens {
-			if !usage["prompt_tokens_details"].is_object() {
-				usage["prompt_tokens_details"] = Value::Object(Map::new());
-			}
-			usage["prompt_tokens_details"]["cached_tokens"] = Value::from(cached);
-		}
-		if let Some(reasoning) = self.reasoning_tokens {
-			if !usage["completion_tokens_details"].is_object() {
-				usage["completion_tokens_details"] = Value::Object(Map::new());
-			}
-			usage["completion_tokens_details"]["reasoning_tokens"] = Value::from(reasoning);
-		}
-	}
-}
-
 /// Overwrite the usage of a completion with the summed totals.
-pub fn set_usage(message: &mut Value, totals: UsageTotals) {
-	if !message.is_object() {
-		return;
+pub fn set_usage(message: &mut Value, totals: &Value) {
+	crate::server_tools::set_usage(message, totals);
+	if let Some(usage) = message.get_mut("usage") {
+		fill_total(usage, ["prompt_tokens", "completion_tokens"]);
 	}
-	totals.apply(&mut message["usage"]);
 }
 
 const DONE: &str = "[DONE]";
-
-fn push_str(target: &mut Value, add: &str) {
-	match target {
-		Value::String(s) => s.push_str(add),
-		other => *other = Value::String(add.to_string()),
-	}
-}
 
 /// Rebuilds a complete chat completion from its streamed chunks.
 #[derive(Debug, Default)]
@@ -380,23 +311,15 @@ impl ChunkAccumulator {
 	/// The rebuilt completion, or `None` when no chunk was seen.
 	pub fn finish(self) -> Option<Value> {
 		let mut response = self.base?;
-		let mut message = Map::new();
-		message.insert(
-			"role".to_string(),
-			json!(self.role.unwrap_or_else(|| "assistant".to_string())),
-		);
-		message.insert(
-			"content".to_string(),
-			self.content.map(Value::String).unwrap_or(Value::Null),
-		);
+		let mut message = json!({
+			"role": self.role.unwrap_or_else(|| "assistant".to_string()),
+			"content": self.content,
+		});
 		if let Some(refusal) = self.refusal {
-			message.insert("refusal".to_string(), json!(refusal));
+			message["refusal"] = json!(refusal);
 		}
 		if !self.tool_calls.is_empty() {
-			message.insert(
-				"tool_calls".to_string(),
-				Value::Array(self.tool_calls.into_values().collect()),
-			);
+			message["tool_calls"] = Value::Array(self.tool_calls.into_values().collect());
 		}
 		response.insert(
 			"choices".to_string(),
@@ -511,7 +434,7 @@ pub fn synthesize_sse(message: &Value) -> Vec<SseEvent> {
 
 /// Rewrite the usage carried by the stream to the summed totals, adding a usage chunk before
 /// `[DONE]` when the stream had none.
-pub fn patch_usage(events: &mut Vec<SseEvent>, totals: UsageTotals) {
+pub fn patch_usage(events: &mut Vec<SseEvent>, totals: &Value) {
 	let mut patched = false;
 	let mut base: Option<Map<String, Value>> = None;
 	for ev in events.iter_mut() {
@@ -522,26 +445,25 @@ pub fn patch_usage(events: &mut Vec<SseEvent>, totals: UsageTotals) {
 			base = Some(base_of(&data));
 		}
 		if data.get("usage").is_some_and(Value::is_object) {
-			totals.apply(&mut data["usage"]);
+			set_usage(&mut data, totals);
 			ev.data = data.to_string();
 			patched = true;
 		}
 	}
 	if !patched {
-		let mut usage = Value::Null;
-		totals.apply(&mut usage);
-		let extra = chunk(&base.unwrap_or_default(), json!([]), Some(usage));
+		let mut usage = json!({"usage": {}});
+		set_usage(&mut usage, totals);
+		let extra = chunk(
+			&base.unwrap_or_default(),
+			json!([]),
+			Some(usage["usage"].take()),
+		);
 		let at = events
 			.iter()
 			.position(|ev| ev.data.trim() == DONE)
 			.unwrap_or(events.len());
 		events.insert(at, extra);
 	}
-}
-
-/// The comment line sent while a turn is held back. SSE clients ignore comments.
-pub fn keepalive() -> Bytes {
-	Bytes::from_static(b": keepalive\n\n")
 }
 
 /// An error object in the shape OpenAI streams use, followed by `[DONE]`.

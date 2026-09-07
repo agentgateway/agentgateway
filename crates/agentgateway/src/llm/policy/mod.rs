@@ -2677,68 +2677,51 @@ fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] i
 	assert!(matches!(result, Some(RegexResult::Reject)));
 }
 
-fn default_server_tool_iterations() -> u32 {
-	3
-}
-
-fn default_server_tool_result_bytes() -> usize {
-	64 * 1024
-}
-
-fn default_server_tool_keepalive() -> Duration {
-	Duration::from_secs(15)
-}
-
 /// Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an
 /// MCP tool and continuing the turn. This applies to Anthropic Messages, OpenAI Responses and
 /// OpenAI Chat Completions requests, and only to what the client declared as server-executed:
 /// Anthropic server tools, Responses built-in tools and `mcp` servers, and the Chat Completions
 /// `web_search_options` field. Client tools are never touched.
 #[apply(schema!)]
+#[serde(default)]
 pub struct ServerToolsConfig {
 	/// Server tools to fulfil, matched by the tool `type` the client declares, for example
 	/// `web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`
 	/// (Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub tools: Vec<ServerToolMapping>,
 	/// Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to
 	/// configured MCP backends. The backend's tools are exposed to the model by name.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub mcp_servers: Vec<ServerToolMcpServer>,
 	/// Maximum number of follow-up model calls for one client request. The client's `max_uses` is
 	/// honoured as a lower cap. At the cap, and when the model repeats an identical call, the
 	/// gateway answers the pending calls with an error result, withdraws its tools, and makes one
 	/// more model call so the turn ends with an answer.
-	#[serde(default = "default_server_tool_iterations")]
 	pub max_iterations: u32,
 	/// Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
-	#[serde(default = "default_server_tool_result_bytes")]
 	pub max_result_bytes: usize,
 	/// Interval between keepalive `ping` events while a streaming turn is held back.
-	#[serde(default = "default_server_tool_keepalive", with = "serde_dur")]
+	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub keepalive_interval: Duration,
 	/// What happens when a tool call fails.
-	#[serde(default)]
 	pub failure_mode: ServerToolFailureMode,
 	/// What happens to a declared server tool that no mapping covers. By default it is left to the
 	/// provider, which usually drops it; `reject` answers the request with a 400 that names the
 	/// tool type instead.
-	#[serde(default)]
 	pub unmapped: UnmappedServerTools,
 	/// How executed calls appear in the response the client gets. `native` (default) adds the wire
 	/// format's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a
 	/// web search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other
 	/// Messages calls, `web_search_call` and `mcp_call` items on Responses. `strip` removes every
 	/// trace of the gateway's calls and returns the text alone.
-	#[serde(default)]
 	pub results: ServerToolResults,
 	/// Tool types that share the server tool shape but are executed by the client, so a mapping
 	/// that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined
 	/// client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the
 	/// Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`
 	/// tools. Set it to an empty list to let every mapping apply, or add entries to guard more.
-	#[serde(default = "default_client_executed")]
 	pub client_executed: Vec<String>,
 }
 
@@ -2749,22 +2732,24 @@ pub fn default_client_executed() -> Vec<String> {
 		.collect()
 }
 
-impl ServerToolsConfig {
-	/// The configuration with no tools and default limits.
-	pub fn defaults() -> Self {
+impl Default for ServerToolsConfig {
+	/// No tools, and the default limits.
+	fn default() -> Self {
 		Self {
 			tools: Vec::new(),
 			mcp_servers: Vec::new(),
-			max_iterations: default_server_tool_iterations(),
-			max_result_bytes: default_server_tool_result_bytes(),
-			keepalive_interval: default_server_tool_keepalive(),
+			max_iterations: 3,
+			max_result_bytes: 64 * 1024,
+			keepalive_interval: Duration::from_secs(15),
 			failure_mode: ServerToolFailureMode::default(),
 			unmapped: UnmappedServerTools::default(),
 			results: ServerToolResults::default(),
 			client_executed: default_client_executed(),
 		}
 	}
+}
 
+impl ServerToolsConfig {
 	pub fn matchers(&self) -> Vec<agent_llm::server_tools::TypeMatch> {
 		self
 			.tools
