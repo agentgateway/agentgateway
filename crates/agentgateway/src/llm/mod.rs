@@ -336,6 +336,8 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// Completions
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
+		// Composed through Messages, so it comes after the direct conversions.
+		chat(InputFormat::Completions, ChatFormat::OpenAIResponses),
 		// Messages
 		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
@@ -343,7 +345,8 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// Responses
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Responses, ChatFormat::BedrockConverse),
-		// Missing: Responses -> Messages
+		// Composed through Completions, so it comes after the direct conversions.
+		chat(InputFormat::Responses, ChatFormat::AnthropicMessages),
 	]
 };
 
@@ -383,8 +386,11 @@ fn render_openai_responses(
 			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
 		},
 		types::ChatRequest::Messages(req) => conversion::responses::from_messages::translate(&req),
-		_ => Err(AIError::UnsupportedConversion(strng::literal!(
-			"expected responses request"
+		types::ChatRequest::Completions(req) => {
+			conversion::responses::from_completions::translate(&req, ctx.catalog)
+		},
+		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
+			"gemini to responses"
 		))),
 	}
 }
@@ -412,9 +418,9 @@ fn render_anthropic_messages(
 			conversion::messages::from_completions::translate(&req, catalog)
 		},
 		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
-		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-			"responses to messages"
-		))),
+		types::ChatRequest::Responses(req) => {
+			conversion::messages::from_responses::translate(&req, catalog)
+		},
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to messages"
 		))),
@@ -553,6 +559,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAIResponses => match self.input {
 				InputFormat::Responses => AIProvider::parse_response::<types::responses::Response>(bytes),
 				InputFormat::Messages => conversion::responses::from_messages::translate_response(bytes),
+				InputFormat::Completions => {
+					conversion::responses::from_completions::translate_response(bytes)
+				},
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -563,6 +572,9 @@ impl ChatTranslation {
 				InputFormat::Messages => AIProvider::parse_response::<types::messages::Response>(bytes),
 				InputFormat::Completions => {
 					conversion::messages::from_completions::translate_response(bytes)
+				},
+				InputFormat::Responses => {
+					conversion::messages::from_responses::translate_response(bytes, ctx.model)
 				},
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
@@ -648,6 +660,14 @@ impl ChatTranslation {
 						ctx.log_content,
 					)
 				}),
+				InputFormat::Completions => resp.map(|b| {
+					conversion::responses::from_completions::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
 				_ => resp,
 			},
 
@@ -657,6 +677,14 @@ impl ChatTranslation {
 				}),
 				InputFormat::Completions => resp.map(|b| {
 					conversion::messages::from_completions::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
+				InputFormat::Responses => resp.map(|b| {
+					conversion::messages::from_responses::translate_stream(
 						b,
 						ctx.buffer_limit,
 						ctx.logger,
@@ -777,7 +805,7 @@ impl ChatTranslation {
 
 			ChatFormat::OpenAIResponses => match format {
 				ChatErrorFormat::OpenAI => match self.input {
-					InputFormat::Responses => Ok(bytes.clone()),
+					InputFormat::Responses | InputFormat::Completions => Ok(bytes.clone()),
 					InputFormat::Messages => {
 						conversion::responses::from_messages::translate_error(bytes, status)
 					},
@@ -792,10 +820,11 @@ impl ChatTranslation {
 					InputFormat::Completions => {
 						conversion::messages::from_completions::translate_error(bytes)
 					},
+					InputFormat::Responses => conversion::messages::from_responses::translate_error(bytes),
 					_ => unsupported(),
 				},
 				ChatErrorFormat::OpenAI => match self.input {
-					InputFormat::Messages => Ok(bytes.clone()),
+					InputFormat::Messages | InputFormat::Responses => Ok(bytes.clone()),
 					_ => unsupported(),
 				},
 				_ => unsupported(),

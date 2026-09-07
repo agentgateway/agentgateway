@@ -161,7 +161,9 @@ pub mod from_messages {
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
-	fn translate_internal(req: messages::Request) -> Result<types::responses::Request, AIError> {
+	pub(crate) fn translate_internal(
+		req: messages::Request,
+	) -> Result<types::responses::Request, AIError> {
 		let messages::Request {
 			messages,
 			system,
@@ -734,7 +736,7 @@ pub mod from_messages {
 		Ok(Box::new(anthropic))
 	}
 
-	fn translate_response_internal(
+	pub(crate) fn translate_response_internal(
 		resp: responses::Response,
 	) -> Result<messages::MessagesResponse, AIError> {
 		if resp.error.is_some() || matches!(resp.status, responses::Status::Failed) {
@@ -1675,5 +1677,59 @@ pub mod from_messages {
 
 	fn unsupported<T>(reason: &'static str) -> Result<T, AIError> {
 		Err(AIError::UnsupportedConversion(strng::new(reason)))
+	}
+}
+
+/// A Chat Completions client on a Responses provider, by way of the Messages converters: the
+/// request goes Chat Completions to Messages to Responses, and the response and stream come back
+/// the same way. Fields the Messages format has no place for, such as `n`, `logprobs` and
+/// `response_format`, are lost here as they are on those two paths.
+pub mod from_completions {
+	use axum_core::body::Body;
+	use bytes::Bytes;
+
+	use crate::types::ResponseType;
+	use crate::types::completions::typed as completions;
+	use crate::types::responses::typed as responses;
+	use crate::{
+		AIError, LogContentFields, StreamingUsageGuard, conversion, json, logged_response_parsing,
+		types,
+	};
+
+	pub fn translate(
+		req: &types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
+		let request = conversion::messages::from_completions::translate_typed(typed, catalog);
+		let request = super::from_messages::translate_internal(request)?;
+		serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let resp = serde_json::from_slice::<responses::Response>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
+		let response = super::from_messages::translate_response_internal(resp)?;
+		let response = conversion::messages::from_completions::translate_response_internal(response);
+		let passthrough = json::convert::<_, types::completions::Response>(&response)
+			.map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(passthrough))
+	}
+
+	/// The Responses stage sees the provider's usage and content, so it takes the guard and the
+	/// content flags; the Chat Completions stage only re-frames the events.
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+	) -> Body {
+		let events = super::from_messages::translate_stream(b, buffer_limit, log, log_content);
+		conversion::messages::from_completions::translate_stream(
+			events,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
 	}
 }

@@ -491,7 +491,10 @@ pub mod to_responses {
 		Ok(Box::new(passthrough))
 	}
 
-	fn translate_response_internal(resp: completions::Response, model: &str) -> responses::Response {
+	pub(crate) fn translate_response_internal(
+		resp: completions::Response,
+		model: &str,
+	) -> responses::Response {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder = types::responses::ResponseBuilder::new(response_id, model.to_string());
 

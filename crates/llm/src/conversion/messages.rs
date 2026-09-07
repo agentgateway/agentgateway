@@ -262,9 +262,16 @@ pub mod from_completions {
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
-		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id, catalog);
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+		serde_json::to_vec(&translate_typed(typed, catalog)).map_err(AIError::RequestMarshal)
+	}
+
+	/// The Messages request for an already typed Chat Completions request.
+	pub(crate) fn translate_typed(
+		req: completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> messages::Request {
+		let model_id = req.model.clone().unwrap_or_default();
+		translate_internal(req, model_id, catalog)
 	}
 
 	fn translate_internal(
@@ -525,7 +532,9 @@ pub mod from_completions {
 		Ok(Box::new(passthrough))
 	}
 
-	fn translate_response_internal(resp: messages::MessagesResponse) -> completions::Response {
+	pub(crate) fn translate_response_internal(
+		resp: messages::MessagesResponse,
+	) -> completions::Response {
 		// Convert Anthropic content blocks to OpenAI message content
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
@@ -1041,6 +1050,63 @@ impl StreamingToolCalls {
 				finish_reason,
 			}]
 		})
+	}
+}
+
+/// A Responses client on a Messages provider, by way of the Chat Completions converters: the
+/// request goes Responses to Chat Completions to Messages, and the response and stream come back
+/// the same way. What Chat Completions has no place for, such as the provider's built-in tools, is
+/// lost here as it is on those two paths.
+pub mod from_responses {
+	use axum_core::body::Body;
+	use bytes::Bytes;
+
+	use crate::conversion::openai_compat;
+	use crate::types::ResponseType;
+	use crate::types::messages::typed as messages;
+	use crate::{
+		AIError, LogContentFields, StreamingUsageGuard, json, logged_response_parsing, types,
+	};
+
+	pub fn translate(
+		req: &types::responses::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let completions = openai_compat::from_responses::translate_request(req)?;
+		let request = super::from_completions::translate_typed(completions, catalog);
+		serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+		let resp = serde_json::from_slice::<messages::MessagesResponse>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
+		let completions = super::from_completions::translate_response_internal(resp);
+		let response = openai_compat::to_responses::translate_response_internal(completions, model);
+		let passthrough = json::convert::<_, types::responses::Response>(&response)
+			.map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(passthrough))
+	}
+
+	/// The Messages stage sees the provider's usage and content, so it takes the guard and the
+	/// content flags; the Responses stage only re-frames the events.
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+	) -> Body {
+		let completions = super::from_completions::translate_stream(b, buffer_limit, log, log_content);
+		openai_compat::to_responses::translate_stream(
+			completions,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+	}
+
+	/// A Responses client reads the OpenAI error shape the Chat Completions stage produces.
+	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
+		super::from_completions::translate_error(bytes)
 	}
 }
 
