@@ -9,6 +9,7 @@
 .venv
 .env
 .env.*
+!.env.example
 *.local
 var/
 controller/_output

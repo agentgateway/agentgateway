@@ -1,0 +1,51 @@
+# Standalone agentgateway — Render Blueprint
+# Canonical Blueprint Path for this example:
+#   examples/render-deploy/render.yaml
+#
+# Deploy-to-Render button (use `path`, not blueprintPath):
+#   https://render.com/deploy?repo=https://github.com/agentgateway/agentgateway&path=examples/render-deploy/render.yaml
+#
+# Dashboard: New Blueprint → Blueprint Path = examples/render-deploy/render.yaml
+#
+# Builds examples/render-deploy/Dockerfile (entrypoint + official image).
+# Do not use runtime: image — that skips the Dockerfile and leaves /ui/
+# unauthenticated on an empty disk.
+# https://agentgateway.dev/docs/standalone/latest/setup/install/docker/
+#
+# dockerfilePath / dockerContext are relative to the repo root (Render
+# Blueprint spec), even though this file lives under examples/render-deploy/.
+
+services:
+  - type: web
+    name: agentgateway
+    runtime: docker
+    plan: starter
+    numInstances: 1
+    autoDeploy: false
+    autoDeployTrigger: off
+    dockerfilePath: ./examples/render-deploy/Dockerfile
+    dockerContext: ./examples/render-deploy
+    # /ui/ is basic-auth protected (401 without creds). TCP-style default
+    # (omit healthCheckPath) treats a listening :4000 as healthy.
+    disk:
+      name: agw-config
+      mountPath: /config
+      sizeGB: 1
+    envVars:
+      # Render routes public HTTP to $PORT (default 10000). The generated
+      # gateway listens on 4000 — pin PORT so they match.
+      - key: PORT
+        value: "4000"
+      # Required. Render prompts on first Blueprint create.
+      # sync: false is not allowed inside envVarGroups (Render docs).
+      - key: UI_PASSWORD
+        sync: false
+      # Optional; entrypoint defaults to admin when unset.
+      - key: UI_USER
+        value: admin
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GITHUB_PERSONAL_ACCESS_TOKEN
+        sync: false

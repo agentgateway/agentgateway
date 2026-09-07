@@ -12,6 +12,9 @@ span more than one agentgateway traffic type.
   authorize OpenAI and Anthropic traffic with NetBird Agent Network before
   routing it through a private agentgateway listener. Includes Kubernetes and
   standalone Docker Compose deployments.
+* [render-deploy](render-deploy/README.md): deploy standalone agentgateway on
+  Render with a public HTTPS URL, a persistent `/config` disk, and a Blueprint
+  (`render.yaml`).
 
 ### MCP
 

@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Example shape for a Render deployment — placeholders only.
+# The live service stores the real file on the agw-config disk at /config/config.yaml.
+# Do not commit real UI passwords, provider keys, or virtual API keys.
+#
+# Render publishes HTTPS :443 → container :4000. Admin :15000 stays loopback.
+
+config:
+  database:
+    url: sqlite:///config/data.db
+
+gateways:
+  default:
+    port: 4000
+
+ui:
+  gateways: [default]
+  policies:
+    basicAuth:
+      mode: strict
+      htpasswd:
+        file: /config/.htpasswd
+      realm: agentgateway
+
+llm:
+  gateways: [default]
+  policies:
+    apiKey:
+      mode: strict
+      keys:
+      - key: sk-lab-admin-...
+        metadata:
+          name: admin
+      - key: sk-lab-demo-...
+        metadata:
+          name: demo
+        allowedModels:
+        - gpt-4.1-nano
+        - gpt-4.1
+        - gpt-4o
+      - key: sk-lab-limited-...
+        metadata:
+          name: limited
+        allowedModels:
+        - gpt-4.1-nano
+        budgets:
+        - name: tokens
+          limit:
+            unit: Tokens
+            amount: 1000
+          window:
+            rolling: 1h
+          onBudgetExceeded: Block
+  models:
+  - name: '*'
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+
+mcp:
+  gateways: [default]
+  targets:
+  - name: github
+    mcp:
+      host: https://api.githubcopilot.com/mcp/
+    policies:
+      backendAuth:
+        key:
+          value: $GITHUB_PERSONAL_ACCESS_TOKEN
