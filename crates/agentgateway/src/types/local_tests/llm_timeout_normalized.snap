@@ -1,0 +1,110 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for llm_timeout: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      gateway/default:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: gateway/default
+        listenerName: default
+        protocol: HTTP
+listener_routes:
+  - - gateway/default
+    - - backends:
+          - backend: "/llm:router"
+            weight: 1
+        inlinePolicies:
+          - timeout:
+              requestTimeout: 30s
+              backendRequestTimeout: 25s
+        key: "gateway/default/llm:request"
+        matches:
+          - path:
+              pathPrefix: /
+        name: "llm:request"
+        namespace: internal
+listener_tcp_routes:
+  - - gateway/default
+    - []
+policies: []
+backends:
+  - backend:
+      ai:
+        name: "llm:model:gpt-4o-mini:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                gpt-4o-mini:
+                  endpoint:
+                    name: gpt-4o-mini
+                    provider:
+                      openAI:
+                        model: gpt-4o-mini
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - ai: {}
+  - backend:
+      llmRouter:
+        name: "llm:router"
+        namespace: ""
+        target:
+          models:
+            - name: gpt-4o-mini
+              created: 0
+              visibility: public
+              headerMatches: []
+              backend:
+                backend: "/llm:model:gpt-4o-mini:0"
+                weight: 1
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":countTokens": geminiCountTokens
+                    ":generateContent": generateContent
+                    ":rawPredict": messages
+                    ":streamGenerateContent": generateContent
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+          virtualModels: []
+route_groups: []
+workloads: []
+services: []

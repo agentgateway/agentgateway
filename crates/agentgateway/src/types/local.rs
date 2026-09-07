@@ -2473,6 +2473,9 @@ struct LocalLLMPolicy {
 	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
+	/// Set request timeout limits.
+	#[serde(default)]
+	timeout: Option<timeout::Policy>,
 }
 
 #[apply(schema_de!)]
@@ -4299,6 +4302,7 @@ async fn convert_llm_config(
 			guardrails,
 			local_rate_limit,
 			remote_rate_limit,
+			timeout,
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		shared_prompt_guard = guardrails;
@@ -4308,6 +4312,7 @@ async fn convert_llm_config(
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
+				timeout,
 				..Default::default()
 			},
 			None,

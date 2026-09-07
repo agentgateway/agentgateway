@@ -660,6 +660,54 @@ async fn test_llm_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_timeout_config() {
+	test_config_parsing("llm_timeout").await;
+}
+
+/// The llm section attaches its policies to the generated `llm:request` route when it is bound to
+/// a gateway, but owns its own listener when it is not. Cover the second path too, so a timeout
+/// configured on a port-based llm section is not silently dropped.
+#[tokio::test]
+async fn test_llm_timeout_on_own_listener() {
+	super::STARTUP_TIMESTAMP.get_or_init(|| 0);
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  port: 3000
+  policies:
+    timeout:
+      requestTimeout: 30s
+  models:
+  - name: gpt-4o-mini
+    provider: openai
+"#,
+	)
+	.await
+	.expect("llm section with a timeout policy should normalize");
+
+	let timeouts: Vec<_> = normalized
+		.policies
+		.iter()
+		.filter_map(|p| match &p.policy {
+			PolicyType::Traffic(t) => match &t.policy {
+				TrafficPolicy::Timeout(timeout) => Some(timeout),
+				_ => None,
+			},
+			_ => None,
+		})
+		.collect();
+	assert_eq!(
+		timeouts.len(),
+		1,
+		"expected exactly one timeout policy, got {timeouts:?}"
+	);
+	assert_eq!(
+		timeouts[0].request_timeout,
+		Some(std::time::Duration::from_secs(30))
+	);
+}
+
+#[tokio::test]
 async fn test_llm_provider_reference_config() {
 	test_config_parsing("llm_provider_reference").await;
 }

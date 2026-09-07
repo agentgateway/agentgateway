@@ -12433,6 +12433,18 @@
             }
           ],
           "default": null
+        },
+        "timeout": {
+          "description": "Set request timeout limits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeoutPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false

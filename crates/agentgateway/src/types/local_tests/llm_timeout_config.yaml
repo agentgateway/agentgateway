@@ -1,0 +1,15 @@
+gateways:
+  default:
+    port: 3000
+
+llm:
+  policies:
+    timeout:
+      requestTimeout: 30s
+      backendRequestTimeout: 25s
+  models:
+  - name: gpt-4o-mini
+    provider: openai
+    params:
+      model: gpt-4o-mini
+      apiKey: "sk-123"
