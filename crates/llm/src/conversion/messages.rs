@@ -158,6 +158,15 @@ pub mod from_completions {
 		msg: &completions::RequestAssistantMessage,
 	) -> Vec<messages::ContentBlock> {
 		let mut out = Vec::new();
+		// An earlier thinking block is replayed ahead of the turn's text and tool calls, as the
+		// provider requires, and only with the signature it was issued with: an unsigned block is
+		// rejected.
+		if let Some(signature) = msg.reasoning_signature.as_deref().filter(|s| !s.is_empty()) {
+			out.push(messages::ContentBlock::Thinking {
+				thinking: msg.reasoning_content.clone().unwrap_or_default(),
+				signature: signature.to_string(),
+			});
+		}
 		if let Some(content) = &msg.content {
 			match content {
 				completions::RequestAssistantMessageContent::Text(text) => {
@@ -529,7 +538,8 @@ pub mod from_completions {
 		// Convert Anthropic content blocks to OpenAI message content
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
-		let mut reasoning_content = None;
+		let mut reasoning_content: Option<String> = None;
+		let mut reasoning_signatures = Vec::new();
 		for block in resp.content {
 			match block {
 				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
@@ -560,9 +570,20 @@ pub mod from_completions {
 					// Should be on the request path, not the response path
 					continue;
 				},
-				// For now we ignore Redacted and signature think through a better approach as this may be needed
-				messages::ContentBlock::Thinking { thinking, .. } => {
-					reasoning_content = Some(thinking);
+				// Chat Completions carries one reasoning text, so several blocks are joined. The signature
+				// attests to one block and only survives a response with exactly one.
+				messages::ContentBlock::Thinking {
+					thinking,
+					signature,
+				} => {
+					match reasoning_content.as_mut() {
+						Some(text) => {
+							text.push_str("\n\n");
+							text.push_str(&thinking);
+						},
+						None => reasoning_content = Some(thinking),
+					}
+					reasoning_signatures.push(signature);
 				},
 				messages::ContentBlock::RedactedThinking { .. } => {},
 
@@ -587,7 +608,10 @@ pub mod from_completions {
 			refusal: None,
 			audio: None,
 			reasoning_content,
-			reasoning_signature: None,
+			reasoning_signature: match reasoning_signatures.as_slice() {
+				[signature] if !signature.is_empty() => Some(signature.clone()),
+				_ => None,
+			},
 			extra: None,
 		};
 		let finish_reason = resp.stop_reason.as_ref().map(super::translate_stop_reason);
@@ -821,8 +845,10 @@ pub mod from_completions {
 								None => emit_chunk = false,
 							}
 						},
-						messages::ContentBlockDelta::SignatureDelta { .. }
-						| messages::ContentBlockDelta::CitationsDelta { .. } => {
+						messages::ContentBlockDelta::SignatureDelta { signature } => {
+							dr.reasoning_signature = Some(signature)
+						},
+						messages::ContentBlockDelta::CitationsDelta { .. } => {
 							emit_chunk = false;
 						},
 					};
