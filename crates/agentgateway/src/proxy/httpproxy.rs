@@ -705,11 +705,7 @@ impl HTTPProxy {
 		}
 
 		let mut resp = match response_policies
-			.apply(
-				&mut resp,
-				log.as_mut().unwrap(),
-				is_upstream_response,
-			)
+			.apply(&mut resp, log.as_mut().unwrap(), is_upstream_response)
 			.await
 		{
 			Ok(_) => resp,
@@ -749,9 +745,7 @@ impl HTTPProxy {
 				.await
 				.unwrap_or_else(|e| e.into_response_with_grpc(is_grpc_request))
 		} else {
-			if is_upstream_response
-				&& let Some(idle_timeout) = response_idle_timeout
-			{
+			if is_upstream_response && let Some(idle_timeout) = response_idle_timeout {
 				resp = http::timeout::apply_response_idle_timeout(resp, idle_timeout);
 			}
 			resp.map(move |b| http::Body::new(LogBody::new(b, log)))
