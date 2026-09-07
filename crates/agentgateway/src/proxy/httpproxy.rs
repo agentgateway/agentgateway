@@ -3711,6 +3711,51 @@ mod tests {
 	use crate::{http, llm};
 
 	#[test]
+	fn normalize_uri_falls_back_to_host_header_for_http2_without_authority() {
+		// Some minimal gRPC clients, and AWS ALB's synthetic gRPC health-check probe, send HTTP/2
+		// requests that omit the :authority pseudo-header and rely on a plain Host header instead
+		// (RFC 7540 8.1.2.3 permits this). Before this fix, normalize_uri only handled that
+		// fallback for HTTP/1.x, so req.uri().authority() stayed None and callers like
+		// crate::http::get_host() rejected the request as InvalidRequest before route selection.
+		let mut req = ::http::Request::builder()
+			.method(Method::GET)
+			.version(::http::Version::HTTP_2)
+			.uri("/v1/embeddings")
+			.header(::http::header::HOST, "ember.internal")
+			.body(http::Body::empty())
+			.unwrap();
+
+		super::normalize_uri(None, &mut req).unwrap();
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("ember.internal")
+		);
+		assert_eq!(crate::http::get_host(&req).unwrap(), "ember.internal");
+	}
+
+	#[test]
+	fn normalize_uri_leaves_http2_authority_untouched_when_already_present() {
+		// The common case: an h2-conformant client sets :authority, which the http/h2 crates
+		// already populate into req.uri().authority() before normalize_uri ever runs. Make sure
+		// extending the HTTP/2 fallback doesn't disturb that.
+		let mut req = ::http::Request::builder()
+			.method(Method::GET)
+			.version(::http::Version::HTTP_2)
+			.uri("https://from-authority.internal/v1/embeddings")
+			.header(::http::header::HOST, "from-host-header.internal")
+			.body(http::Body::empty())
+			.unwrap();
+
+		super::normalize_uri(None, &mut req).unwrap();
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("from-authority.internal")
+		);
+	}
+
+	#[test]
 	fn configured_request_headers_are_marked_sensitive_at_ingress() {
 		let mut request = ::http::Request::builder()
 			.uri("https://example.com")
@@ -4392,11 +4437,15 @@ fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 	}
 }
 
-// The http library will not put the authority into req.uri().authority for HTTP/1. Normalize so
-// the rest of the code doesn't need to worry about it
+// The http library will not put the authority into req.uri().authority for HTTP/1, and an HTTP/2
+// request that omits the :authority pseudo-header in favor of a plain Host header (permitted by
+// RFC 7540 8.1.2.3, and sent by some minimal gRPC clients and AWS ALB's gRPC health-check probe)
+// hits the same gap. Normalize so the rest of the code doesn't need to worry about it.
 fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
 	debug!("request before normalization: {req:?}");
-	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version() {
+	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 | ::http::Version::HTTP_2 =
+		req.version()
+	{
 		let host = req.headers_mut().remove(http::header::HOST);
 		if req.uri().authority().is_none() {
 			let mut parts = std::mem::take(req.uri_mut()).into_parts();
