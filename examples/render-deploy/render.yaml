@@ -21,7 +21,9 @@ services:
     runtime: docker
     plan: starter
     numInstances: 1
-    autoDeploy: false
+    # Replaces the deprecated autoDeploy boolean. Render rejects a Blueprint
+    # that sets both. `off` = manual deploys only (do not rebuild on every
+    # push to this repo).
     autoDeployTrigger: off
     dockerfilePath: ./examples/render-deploy/Dockerfile
     dockerContext: ./examples/render-deploy
