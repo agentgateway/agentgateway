@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde_json::{Value, json};
 
 use super::*;
-use crate::server_tools::parse_sse;
+use crate::server_tools::{TRUNCATION_MARKER, add_usage, comment_keepalive, parse_sse};
 
 fn request(input: Value, tools: Value) -> Request {
 	serde_json::from_value(json!({
@@ -142,9 +142,9 @@ fn tool_turn_is_appended_after_a_text_input() {
 	let mut req = request(json!("Who won?"), json!([]));
 	append_tool_turn(
 		&mut req,
-		vec![
-			json!({"type": "function_call", "call_id": "call_1", "name": "web_search", "arguments": "{}"}),
-		],
+		&json!({"output": [
+			{"type": "function_call", "call_id": "call_1", "name": "web_search", "arguments": "{}"},
+		]}),
 		vec![function_call_output("call_1", "Seattle".to_string())],
 	);
 	let RequestInput::Items(items) = &req.input else {
@@ -182,14 +182,18 @@ fn mcp_content_is_flattened_and_capped() {
 fn usage_is_summed_and_written_back() {
 	let first = json!({"usage": {"input_tokens": 10, "output_tokens": 2, "input_tokens_details": {"cached_tokens": 4}}});
 	let second = json!({"usage": {"input_tokens": 20, "output_tokens": 3, "output_tokens_details": {"reasoning_tokens": 1}}});
-	let mut totals = UsageTotals::of(&first);
-	totals.add(UsageTotals::of(&second));
-	assert_eq!(totals.input_tokens, 30);
-	assert_eq!(totals.output_tokens, 5);
-	assert_eq!(totals.cached_tokens, Some(4));
-	assert_eq!(totals.reasoning_tokens, Some(1));
+	let mut totals = Value::Null;
+	add_usage(&mut totals, first.get("usage"));
+	add_usage(&mut totals, second.get("usage"));
+	assert_eq!(totals["input_tokens"], json!(30));
+	assert_eq!(totals["output_tokens"], json!(5));
+	assert_eq!(totals["input_tokens_details"]["cached_tokens"], json!(4));
+	assert_eq!(
+		totals["output_tokens_details"]["reasoning_tokens"],
+		json!(1)
+	);
 	let mut response = json!({"id": "resp", "output": []});
-	set_usage(&mut response, totals);
+	set_usage(&mut response, &totals);
 	assert_eq!(response["usage"]["input_tokens"], json!(30));
 	assert_eq!(response["usage"]["total_tokens"], json!(35));
 	assert_eq!(
@@ -247,18 +251,13 @@ fn usage_is_patched_into_the_terminal_event() {
 	let mut events = synthesize_sse(&completed("done"));
 	patch_usage(
 		&mut events,
-		UsageTotals {
-			input_tokens: 300,
-			output_tokens: 30,
-			cached_tokens: None,
-			reasoning_tokens: None,
-		},
+		&json!({"input_tokens": 300, "output_tokens": 30}),
 	);
 	let final_resp = final_response(&events).unwrap();
 	assert_eq!(final_resp["usage"]["input_tokens"], json!(300));
 	assert_eq!(final_resp["usage"]["output_tokens"], json!(30));
 	assert_eq!(final_resp["usage"]["total_tokens"], json!(330));
-	assert!(String::from_utf8_lossy(&keepalive()).starts_with(':'));
+	assert!(String::from_utf8_lossy(&comment_keepalive()).starts_with(':'));
 	assert!(String::from_utf8_lossy(&error_event("boom")).contains("server_tool_error"));
 }
 

@@ -142,29 +142,23 @@ fn fingerprint_is_order_independent() {
 
 #[test]
 fn usage_totals_add_and_set() {
-	let mut totals = UsageTotals::of(&tool_use_message());
+	let mut totals = Value::Null;
+	add_usage(&mut totals, tool_use_message().get("usage"));
 	assert_eq!(
 		totals,
-		UsageTotals {
-			input_tokens: 100,
-			output_tokens: 20,
-			cache_creation_input_tokens: None,
-			cache_read_input_tokens: Some(50),
-		}
+		json!({"input_tokens": 100, "output_tokens": 20, "cache_read_input_tokens": 50})
 	);
-	totals.add(UsageTotals {
-		input_tokens: 300,
-		output_tokens: 40,
-		cache_creation_input_tokens: Some(7),
-		cache_read_input_tokens: None,
-	});
-	assert_eq!(totals.input_tokens, 400);
-	assert_eq!(totals.output_tokens, 60);
-	assert_eq!(totals.cache_creation_input_tokens, Some(7));
-	assert_eq!(totals.cache_read_input_tokens, Some(50));
+	add_usage(
+		&mut totals,
+		Some(&json!({"input_tokens": 300, "output_tokens": 40, "cache_creation_input_tokens": 7})),
+	);
+	assert_eq!(
+		totals,
+		json!({"input_tokens": 400, "output_tokens": 60, "cache_creation_input_tokens": 7, "cache_read_input_tokens": 50})
+	);
 
 	let mut message = tool_use_message();
-	set_usage(&mut message, totals);
+	set_usage(&mut message, &totals);
 	assert_eq!(
 		message["usage"],
 		json!({"input_tokens": 400, "output_tokens": 60, "cache_creation_input_tokens": 7, "cache_read_input_tokens": 50})
@@ -180,7 +174,7 @@ fn append_tool_turn_serializes_blocks() {
 		vec![json!({"type": "text", "text": "Seattle won."})],
 		false,
 	)];
-	append_tool_turn(&mut req, assistant.clone(), results);
+	append_tool_turn(&mut req, &tool_use_message(), results);
 	let body: Value = serde_json::to_value(&req).unwrap();
 	let messages = body["messages"].as_array().unwrap();
 	assert_eq!(messages.len(), 3);
@@ -290,15 +284,8 @@ fn accumulator_rebuilds_message() {
 			"usage": {"input_tokens": 25, "output_tokens": 15},
 		})
 	);
-	assert_eq!(
-		UsageTotals::of(&message),
-		UsageTotals {
-			input_tokens: 25,
-			output_tokens: 15,
-			cache_creation_input_tokens: None,
-			cache_read_input_tokens: None,
-		}
-	);
+	assert_eq!(message["usage"]["input_tokens"], json!(25));
+	assert_eq!(message["usage"]["output_tokens"], json!(15));
 
 	let mut incomplete = MessageAccumulator::default();
 	incomplete.feed_all(&parse_sse(STREAM.as_bytes())[..9]);
@@ -382,12 +369,7 @@ fn patch_usage_rewrites_start_and_delta() {
 	let mut events = parse_sse(STREAM.as_bytes());
 	patch_usage(
 		&mut events,
-		UsageTotals {
-			input_tokens: 500,
-			output_tokens: 70,
-			cache_creation_input_tokens: None,
-			cache_read_input_tokens: Some(9),
-		},
+		&json!({"input_tokens": 500, "output_tokens": 70, "cache_read_input_tokens": 9}),
 	);
 	let start: Value = serde_json::from_str(&events[0].data).unwrap();
 	assert_eq!(
@@ -401,13 +383,8 @@ fn patch_usage_rewrites_start_and_delta() {
 	let mut acc = MessageAccumulator::default();
 	acc.feed_all(&events);
 	assert_eq!(
-		UsageTotals::of(&acc.finish().unwrap()),
-		UsageTotals {
-			input_tokens: 500,
-			output_tokens: 70,
-			cache_creation_input_tokens: None,
-			cache_read_input_tokens: Some(9),
-		}
+		acc.finish().unwrap()["usage"],
+		json!({"input_tokens": 500, "output_tokens": 70, "cache_read_input_tokens": 9})
 	);
 }
 

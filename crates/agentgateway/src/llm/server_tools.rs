@@ -83,8 +83,7 @@ impl Wire {
 	fn keepalive(self) -> Bytes {
 		match self {
 			Wire::Messages => st::ping_event(),
-			Wire::Responses => rt::keepalive(),
-			Wire::Completions => ct::keepalive(),
+			Wire::Responses | Wire::Completions => st::comment_keepalive(),
 		}
 	}
 
@@ -110,19 +109,16 @@ impl Wire {
 				st::mcp_content_to_tool_result(content, max_bytes),
 				is_error,
 			),
-			Wire::Responses => {
+			Wire::Responses | Wire::Completions => {
 				let mut output = rt::mcp_content_to_output(content, max_bytes);
 				if is_error {
 					output = format!("error: {output}");
 				}
-				rt::function_call_output(&call.id, output)
-			},
-			Wire::Completions => {
-				let mut output = rt::mcp_content_to_output(content, max_bytes);
-				if is_error {
-					output = format!("error: {output}");
+				if self == Wire::Responses {
+					rt::function_call_output(&call.id, output)
+				} else {
+					ct::tool_message(&call.id, output)
 				}
-				ct::tool_message(&call.id, output)
 			},
 		}
 	}
@@ -158,16 +154,18 @@ impl Wire {
 	}
 
 	fn llm_response_for(self, message: &Value, log_content: LogContentFields) -> LLMResponse {
+		self
+			.parse_final(message.clone())
+			.map(|r| r.to_llm_response(log_content))
+			.unwrap_or_default()
+	}
+
+	/// Rewrite the usage carried by a turn's events to the summed totals.
+	fn patch_usage(self, events: &mut Vec<SseEvent>, totals: &Value) {
 		match self {
-			Wire::Messages => serde_json::from_value::<types::messages::Response>(message.clone())
-				.map(|r| r.to_llm_response(log_content))
-				.unwrap_or_default(),
-			Wire::Responses => serde_json::from_value::<types::responses::Response>(message.clone())
-				.map(|r| r.to_llm_response(log_content))
-				.unwrap_or_default(),
-			Wire::Completions => serde_json::from_value::<types::completions::Response>(message.clone())
-				.map(|r| r.to_llm_response(log_content))
-				.unwrap_or_default(),
+			Wire::Messages => st::patch_usage(events, totals),
+			Wire::Responses => rt::patch_usage(events, totals),
+			Wire::Completions => ct::patch_usage(events, totals),
 		}
 	}
 }
@@ -209,74 +207,9 @@ impl Conversation {
 	/// Append the model's turn and the tool results, ready to be sent again.
 	fn append(&mut self, message: &Value, results: Vec<Value>) {
 		match self {
-			Conversation::Messages(req) => {
-				let assistant = message
-					.get("content")
-					.and_then(Value::as_array)
-					.cloned()
-					.unwrap_or_default();
-				st::append_tool_turn(req, assistant, results);
-			},
-			Conversation::Responses(req) => {
-				let output = message
-					.get("output")
-					.and_then(Value::as_array)
-					.cloned()
-					.unwrap_or_default();
-				rt::append_tool_turn(req, output, results);
-			},
-			Conversation::Completions(req) => {
-				let assistant = message
-					.get("choices")
-					.and_then(Value::as_array)
-					.and_then(|c| c.first())
-					.and_then(|c| c.get("message"))
-					.cloned()
-					.unwrap_or(Value::Null);
-				ct::append_tool_turn(req, assistant, results);
-			},
-		}
-	}
-}
-
-/// Token usage summed across the model calls of one client turn.
-#[derive(Debug, Clone, Copy)]
-enum Totals {
-	Messages(st::UsageTotals),
-	Responses(rt::UsageTotals),
-	Completions(ct::UsageTotals),
-}
-
-impl Totals {
-	fn new(wire: Wire) -> Self {
-		match wire {
-			Wire::Messages => Totals::Messages(Default::default()),
-			Wire::Responses => Totals::Responses(Default::default()),
-			Wire::Completions => Totals::Completions(Default::default()),
-		}
-	}
-
-	fn add(&mut self, message: &Value) {
-		match self {
-			Totals::Messages(t) => t.add(st::UsageTotals::of(message)),
-			Totals::Responses(t) => t.add(rt::UsageTotals::of(message)),
-			Totals::Completions(t) => t.add(ct::UsageTotals::of(message)),
-		}
-	}
-
-	fn set(&self, message: &mut Value) {
-		match self {
-			Totals::Messages(t) => st::set_usage(message, *t),
-			Totals::Responses(t) => rt::set_usage(message, *t),
-			Totals::Completions(t) => ct::set_usage(message, *t),
-		}
-	}
-
-	fn patch(&self, events: &mut Vec<SseEvent>) {
-		match self {
-			Totals::Messages(t) => st::patch_usage(events, *t),
-			Totals::Responses(t) => rt::patch_usage(events, *t),
-			Totals::Completions(t) => ct::patch_usage(events, *t),
+			Conversation::Messages(req) => st::append_tool_turn(req, message, results),
+			Conversation::Responses(req) => rt::append_tool_turn(req, message, results),
+			Conversation::Completions(req) => ct::append_tool_turn(req, message, results),
 		}
 	}
 }
@@ -441,6 +374,29 @@ impl<'a> Binder<'a> {
 		Some(definition)
 	}
 
+	/// Bind each found tool to its mapping, keeping the tools whose mapping resolved and the
+	/// definitions the model sees, in the same order.
+	async fn bind_mappings(
+		&mut self,
+		config: &ServerToolsConfig,
+		found: Vec<InterceptedTool>,
+		declared: impl Fn(&InterceptedTool) -> Value,
+	) -> (Vec<InterceptedTool>, Vec<ToolDefinition>) {
+		let mut tools = Vec::with_capacity(found.len());
+		let mut definitions = Vec::with_capacity(found.len());
+		for tool in found {
+			let mapping = &config.tools[tool.mapping];
+			if let Some(def) = self
+				.bind_mapping(&tool.name, mapping, &tool.tool_type, declared(&tool))
+				.await
+			{
+				tools.push(tool);
+				definitions.push(def);
+			}
+		}
+		(tools, definitions)
+	}
+
 	/// Bind the tools of a remote MCP server the client declared. Returns the function tools the
 	/// model sees in place of the descriptor.
 	async fn bind_server(
@@ -468,7 +424,7 @@ impl<'a> Binder<'a> {
 			.server_label
 			.chars()
 			.map(|c| {
-				if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+				if c.is_ascii_alphanumeric() || "_-".contains(c) {
 					c
 				} else {
 					'_'
@@ -576,19 +532,9 @@ pub async fn intercept(
 		return Ok(None);
 	}
 	let mut binder = Binder::new(inputs, parts);
-	let mut tools: Vec<InterceptedTool> = Vec::with_capacity(found.len());
-	let mut definitions = Vec::with_capacity(found.len());
-	for tool in found {
-		let mapping = &config.tools[tool.mapping];
-		let declaration = st::declared_tool(req, &tool);
-		if let Some(def) = binder
-			.bind_mapping(&tool.name, mapping, &tool.tool_type, declaration)
-			.await
-		{
-			tools.push(tool);
-			definitions.push(def);
-		}
-	}
+	let (tools, definitions) = binder
+		.bind_mappings(config, found, |tool| st::declared_tool(req, tool))
+		.await;
 	st::rewrite_server_tools(req, &tools, &definitions);
 	let max_iterations = tools
 		.iter()
@@ -647,19 +593,11 @@ pub async fn intercept_responses(
 	let taken = rt::client_tool_names(req);
 	let mut binder = Binder::new(inputs, parts);
 
-	let mut tools: Vec<InterceptedTool> = Vec::with_capacity(builtins.len());
-	let mut definitions = Vec::with_capacity(builtins.len());
-	for tool in builtins {
-		let mapping = &config.tools[tool.mapping];
-		let declaration = rt::declared_tool(req, &tool.tool_type);
-		if let Some(def) = binder
-			.bind_mapping(&tool.name, mapping, &tool.tool_type, declaration)
-			.await
-		{
-			tools.push(tool);
-			definitions.push(def);
-		}
-	}
+	let (tools, definitions) = binder
+		.bind_mappings(config, builtins, |tool| {
+			rt::declared_tool(req, &tool.tool_type)
+		})
+		.await;
 	// Built-ins are replaced in place, so the descriptor positions below stay valid.
 	rt::rewrite_builtin_tools(req, &tools, &definitions);
 
@@ -722,19 +660,13 @@ pub async fn intercept_completions(
 		return Ok(None);
 	};
 	let mut binder = Binder::new(inputs, parts);
-	let declaration = ct::declared_web_search_options(req);
-	let Some(def) = binder
-		.bind_mapping(
-			&tool.name,
-			&config.tools[tool.mapping],
-			&tool.tool_type,
-			declaration,
-		)
-		.await
-	else {
+	let (tools, definitions) = binder
+		.bind_mappings(config, vec![tool], |_| ct::declared_web_search_options(req))
+		.await;
+	let (Some(tool), Some(def)) = (tools.first(), definitions.first()) else {
 		return Ok(None);
 	};
-	ct::rewrite_web_search(req, &tool, &def);
+	ct::rewrite_web_search(req, tool, def);
 	Ok(binder.finish(
 		config,
 		policy,
@@ -808,7 +740,8 @@ struct ExecutedCall {
 
 struct LoopState {
 	conversation: Conversation,
-	totals: Totals,
+	/// Token usage summed over the model calls of the turn.
+	totals: Value,
 	iteration: u32,
 	last_fingerprint: Option<String>,
 	/// Every call that ran, in order.
@@ -821,12 +754,32 @@ impl LoopState {
 	fn new(interception: &Interception) -> Self {
 		Self {
 			conversation: interception.conversation.clone(),
-			totals: Totals::new(interception.wire()),
+			totals: Value::Null,
 			iteration: 0,
 			last_fingerprint: None,
 			executed: Vec::new(),
 			concluding: false,
 		}
+	}
+
+	/// Record the model's turn and the tool results, ready for the follow-up request.
+	fn advance(&mut self, message: &Value, results: Vec<Value>) {
+		st::add_usage(&mut self.totals, message.get("usage"));
+		self.iteration += 1;
+		self.conversation.append(message, results);
+	}
+
+	/// Feed the model error results for calls the loop will not run, withdraw the gateway's
+	/// tools, and prepare the follow-up that ends the turn.
+	fn conclude(&mut self, interception: &Interception, message: &Value, calls: &[ToolUse]) {
+		let wire = interception.wire();
+		let results = calls
+			.iter()
+			.map(|call| wire.error_result(call, LIMIT_REACHED))
+			.collect();
+		self.advance(message, results);
+		self.concluding = true;
+		self.conversation.remove_tools(&interception.names());
 	}
 
 	/// Add the wire format's own items for the calls that ran ahead of the answer. With
@@ -891,6 +844,43 @@ impl LoopState {
 			Wire::Completions => {},
 		}
 		true
+	}
+
+	/// The finished message for the client. `strip` removes the gateway's calls first, and with
+	/// `handing_back` every call that ran is shown. A streaming client gets the turn's own events
+	/// with the summed usage, or a rebuilt stream when blocks were added or removed, since that
+	/// changes the block numbering.
+	fn finish(
+		&mut self,
+		interception: &Interception,
+		turn: Turn,
+		strip: bool,
+		handing_back: bool,
+		streaming: bool,
+	) -> Outcome {
+		let wire = interception.wire();
+		let Turn {
+			mut message,
+			mut events,
+			parts,
+			..
+		} = turn;
+		if strip {
+			wire.strip(&mut message, &interception.names());
+		}
+		let added = self.add_native_items(interception, &mut message, handing_back);
+		st::add_usage(&mut self.totals, message.get("usage"));
+		st::set_usage(&mut message, &self.totals);
+		if streaming && (strip || added) {
+			events = wire.synthesize(&message);
+		} else if streaming {
+			wire.patch_usage(&mut events, &self.totals);
+		}
+		Outcome::Message {
+			parts,
+			events,
+			message,
+		}
 	}
 }
 
@@ -1140,30 +1130,33 @@ async fn execute(
 	})
 }
 
-/// Feed the model error results for calls the loop will not run, withdraw the gateway's tools,
-/// and prepare the follow-up that ends the turn.
-fn conclude(
-	interception: &Interception,
-	state: &mut LoopState,
-	message: &Value,
-	calls: &[ToolUse],
-) {
-	let wire = interception.wire();
-	let results = calls
-		.iter()
-		.map(|call| wire.error_result(call, LIMIT_REACHED))
-		.collect();
-	state.totals.add(message);
-	state.iteration += 1;
-	state.concluding = true;
-	state.conversation.append(message, results);
-	state.conversation.remove_tools(&interception.names());
-}
-
 async fn close_runtimes(interception: &Interception) {
 	for runtime in &interception.runtimes {
 		runtime.close().await;
 	}
+}
+
+/// What the loop hands back, before the client's response is finalised.
+enum Outcome {
+	/// The first response had no gateway calls, so it is handed on untouched.
+	Untouched(Turn),
+	/// The upstream answered a follow-up with a non-success status.
+	Failed(BufferedResponse),
+	/// The finished message, with the events a streaming client gets.
+	Message {
+		parts: ::http::response::Parts,
+		events: Vec<SseEvent>,
+		message: Value,
+	},
+	/// The client went away while the turn was held back.
+	Gone,
+}
+
+/// How a streaming client is kept alive while the turn is held back.
+struct Keepalive<'a> {
+	tx: &'a mpsc::Sender<Result<Bytes, std::io::Error>>,
+	interval: Duration,
+	wire: Wire,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1223,114 +1216,45 @@ impl AIProvider {
 		interception: Arc<Interception>,
 		resend: Box<ResendContext>,
 	) -> Result<Response, AIError> {
-		let wire = interception.wire();
-		let mut state = LoopState::new(&interception);
-		let mut resp = first;
-		let result = loop {
-			let turn = match self.read_turn(wire, &req, model_catalog, resp).await? {
-				TurnOutcome::Message(turn) => turn,
-				TurnOutcome::Failed(buffered) => {
-					break self
-						.process_chat_or_detect_buffered_response(
-							client,
-							req,
-							rate_limit,
-							req_snapshot,
-							logging,
-							model_catalog.map(Arc::as_ref),
-							buffered,
-						)
-						.await;
-				},
-			};
-			match decide(&interception, &state, &turn.message) {
-				Next::Finish { strip } => {
-					if !strip && state.iteration == 0 {
-						break self
-							.process_chat_or_detect_buffered_response(
-								client,
-								req,
-								rate_limit,
-								req_snapshot,
-								logging,
-								model_catalog.map(Arc::as_ref),
-								BufferedResponse {
-									parts: turn.parts,
-									bytes: turn.raw,
-								},
-							)
-							.await;
-					}
-					let mut message = turn.message;
-					if strip {
-						wire.strip(&mut message, &interception.names());
-					}
-					state.add_native_items(&interception, &mut message, false);
-					state.totals.add(&message);
-					state.totals.set(&mut message);
-					let translated = wire.parse_final(message)?;
-					break self
-						.finish_translated_response(
-							client,
-							req,
-							rate_limit,
-							req_snapshot,
-							logging,
-							model_catalog.map(Arc::as_ref),
-							turn.parts,
-							translated,
-						)
-						.await;
-				},
-				Next::Execute(calls) => {
-					let executed = execute(&interception, &calls, resend.mcp_log.as_ref()).await?;
-					state.executed.extend(executed.calls);
-					state.last_fingerprint = Some(st::fingerprint(&calls));
-					state.totals.add(&turn.message);
-					state.iteration += 1;
-					state.conversation.append(&turn.message, executed.results);
-					let body =
-						self.render_follow_up(&interception, &state.conversation, &req, model_catalog)?;
-					resp = resend
-						.send(body)
-						.await
-						.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
-				},
-				Next::ExecuteAndReturn(calls) => {
-					let executed = execute(&interception, &calls, resend.mcp_log.as_ref()).await?;
-					state.executed.extend(executed.calls);
-					let mut message = turn.message;
-					wire.strip(&mut message, &interception.names());
-					state.add_native_items(&interception, &mut message, true);
-					state.totals.add(&message);
-					state.totals.set(&mut message);
-					let translated = wire.parse_final(message)?;
-					break self
-						.finish_translated_response(
-							client,
-							req,
-							rate_limit,
-							req_snapshot,
-							logging,
-							model_catalog.map(Arc::as_ref),
-							turn.parts,
-							translated,
-						)
-						.await;
-				},
-				Next::Conclude(calls) => {
-					conclude(&interception, &mut state, &turn.message, &calls);
-					let body =
-						self.render_follow_up(&interception, &state.conversation, &req, model_catalog)?;
-					resp = resend
-						.send(body)
-						.await
-						.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
-				},
-			}
-		};
+		let outcome = self
+			.drive_server_tools(&req, model_catalog, first, &interception, &resend, None)
+			.await;
 		close_runtimes(&interception).await;
-		result
+		let catalog = model_catalog.map(Arc::as_ref);
+		let buffered = match outcome? {
+			Outcome::Untouched(turn) => BufferedResponse {
+				parts: turn.parts,
+				bytes: turn.raw,
+			},
+			Outcome::Failed(buffered) => buffered,
+			Outcome::Message { parts, message, .. } => {
+				let translated = interception.wire().parse_final(message)?;
+				return self
+					.finish_translated_response(
+						client,
+						req,
+						rate_limit,
+						req_snapshot,
+						logging,
+						catalog,
+						parts,
+						translated,
+					)
+					.await;
+			},
+			Outcome::Gone => return Err(server_tool_error("the client went away")),
+		};
+		self
+			.process_chat_or_detect_buffered_response(
+				client,
+				req,
+				rate_limit,
+				req_snapshot,
+				logging,
+				catalog,
+				buffered,
+			)
+			.await
 	}
 
 	async fn run_server_tools_streaming(
@@ -1393,26 +1317,42 @@ impl AIProvider {
 
 		let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(32);
 		let provider = self.clone();
-		let keepalive = interception.config.keepalive_interval;
+		let interval = interception.config.keepalive_interval;
 		let task = tokio::spawn(async move {
+			let keepalive = Keepalive {
+				tx: &tx,
+				interval,
+				wire,
+			};
 			let outcome = provider
-				.server_tools_stream_loop(
+				.drive_server_tools(
 					&req,
 					model_catalog.as_ref(),
 					Response::from_parts(parts, body),
 					&interception,
 					&resend,
-					&tx,
-					keepalive,
+					Some(&keepalive),
 				)
 				.await;
 			close_runtimes(&interception).await;
+			let outcome = outcome.and_then(|outcome| match outcome {
+				Outcome::Failed(buffered) => Err(server_tool_error(format!(
+					"follow-up request failed with status {}",
+					buffered.parts.status
+				))),
+				outcome => Ok(outcome),
+			});
 			match outcome {
-				Ok(Some((events, message))) => {
+				Ok(Outcome::Untouched(Turn {
+					events, message, ..
+				}))
+				| Ok(Outcome::Message {
+					events, message, ..
+				}) => {
 					amend.non_atomic_mutate(|r| r.response = wire.llm_response_for(&message, log_content));
 					let _ = tx.send(Ok(st::encode_sse(&events))).await;
 				},
-				Ok(None) => {},
+				Ok(Outcome::Failed(_) | Outcome::Gone) => {},
 				Err(e) => {
 					warn!("server tool turn failed: {e}");
 					let _ = tx.send(Ok(wire.error_event(&e.to_string()))).await;
@@ -1434,135 +1374,91 @@ impl AIProvider {
 		Ok(Response::from_parts(client_parts, body))
 	}
 
-	/// Drive the loop while keeping the client alive. Returns the final events and message, or
-	/// `None` when the client went away.
-	async fn server_tools_stream_loop(
+	/// Drive one client turn: read each model response, run the gateway's calls, and re-send the
+	/// conversation until the model answers or the loop has to stop. With `keepalive`, the client
+	/// is kept alive while the turn is held back.
+	async fn drive_server_tools(
 		&self,
 		req: &LLMRequest,
 		catalog: Option<&Arc<catalog::ModelCatalog>>,
 		first: Response,
 		interception: &Interception,
 		resend: &ResendContext,
-		tx: &mpsc::Sender<Result<Bytes, std::io::Error>>,
-		keepalive: Duration,
-	) -> Result<Option<(Vec<SseEvent>, Value)>, AIError> {
+		keepalive: Option<&Keepalive<'_>>,
+	) -> Result<Outcome, AIError> {
 		let wire = interception.wire();
 		let mut state = LoopState::new(interception);
 		let mut resp = first;
 		loop {
-			let Some(turn) = with_keepalive(
-				tx,
-				keepalive,
-				wire,
-				self.read_turn(wire, req, catalog, resp),
-			)
-			.await
+			let Some(turn) = with_keepalive(keepalive, self.read_turn(wire, req, catalog, resp)).await
 			else {
-				return Ok(None);
+				return Ok(Outcome::Gone);
 			};
 			let turn = match turn? {
 				TurnOutcome::Message(turn) => turn,
-				TurnOutcome::Failed(buffered) => {
-					return Err(server_tool_error(format!(
-						"follow-up request failed with status {}",
-						buffered.parts.status
-					)));
-				},
+				TurnOutcome::Failed(buffered) => return Ok(Outcome::Failed(buffered)),
 			};
 			match decide(interception, &state, &turn.message) {
-				Next::Finish { strip } => {
-					let mut message = turn.message;
-					if !strip && state.iteration == 0 {
-						return Ok(Some((turn.events, message)));
-					}
-					if strip {
-						wire.strip(&mut message, &interception.names());
-					}
-					let added = state.add_native_items(interception, &mut message, false);
-					state.totals.add(&message);
-					state.totals.set(&mut message);
-					// Added or removed blocks change the block numbering, so the stream is rebuilt;
-					// otherwise the final turn's own events are replayed with the summed usage.
-					let events = if strip || added {
-						wire.synthesize(&message)
-					} else {
-						let mut events = turn.events;
-						state.totals.patch(&mut events);
-						events
-					};
-					return Ok(Some((events, message)));
+				Next::Finish { strip: false } if state.iteration == 0 => {
+					return Ok(Outcome::Untouched(turn));
 				},
-				Next::Execute(calls) => {
+				Next::Finish { strip } => {
+					return Ok(state.finish(interception, turn, strip, false, req.streaming));
+				},
+				Next::ExecuteAndReturn(calls) => {
 					let Some(executed) = with_keepalive(
-						tx,
 						keepalive,
-						wire,
 						execute(interception, &calls, resend.mcp_log.as_ref()),
 					)
 					.await
 					else {
-						return Ok(None);
+						return Ok(Outcome::Gone);
+					};
+					state.executed.extend(executed?.calls);
+					return Ok(state.finish(interception, turn, true, true, req.streaming));
+				},
+				Next::Execute(calls) => {
+					let Some(executed) = with_keepalive(
+						keepalive,
+						execute(interception, &calls, resend.mcp_log.as_ref()),
+					)
+					.await
+					else {
+						return Ok(Outcome::Gone);
 					};
 					let executed = executed?;
 					state.executed.extend(executed.calls);
 					state.last_fingerprint = Some(st::fingerprint(&calls));
-					state.totals.add(&turn.message);
-					state.iteration += 1;
-					state.conversation.append(&turn.message, executed.results);
-					let body = self.render_follow_up(interception, &state.conversation, req, catalog)?;
-					let Some(sent) = with_keepalive(tx, keepalive, wire, resend.send(body)).await else {
-						return Ok(None);
-					};
-					resp = sent.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
+					state.advance(&turn.message, executed.results);
 				},
-				Next::ExecuteAndReturn(calls) => {
-					let Some(executed) = with_keepalive(
-						tx,
-						keepalive,
-						wire,
-						execute(interception, &calls, resend.mcp_log.as_ref()),
-					)
-					.await
-					else {
-						return Ok(None);
-					};
-					let executed = executed?;
-					state.executed.extend(executed.calls);
-					let mut message = turn.message;
-					wire.strip(&mut message, &interception.names());
-					state.add_native_items(interception, &mut message, true);
-					state.totals.add(&message);
-					state.totals.set(&mut message);
-					return Ok(Some((wire.synthesize(&message), message)));
-				},
-				Next::Conclude(calls) => {
-					conclude(interception, &mut state, &turn.message, &calls);
-					let body = self.render_follow_up(interception, &state.conversation, req, catalog)?;
-					let Some(sent) = with_keepalive(tx, keepalive, wire, resend.send(body)).await else {
-						return Ok(None);
-					};
-					resp = sent.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
-				},
+				Next::Conclude(calls) => state.conclude(interception, &turn.message, &calls),
 			}
+			let body = self.render_follow_up(interception, &state.conversation, req, catalog)?;
+			let Some(sent) = with_keepalive(keepalive, resend.send(body)).await else {
+				return Ok(Outcome::Gone);
+			};
+			resp = sent.map_err(|e| server_tool_error(format!("follow-up request failed: {e}")))?;
 		}
 	}
 }
 
-/// Poll `fut` while sending a keepalive every `interval`. Returns `None` if the client is gone.
+/// Poll `fut`, sending a keepalive every interval when the client streams. Returns `None` when
+/// the client is gone.
 async fn with_keepalive<T>(
-	tx: &mpsc::Sender<Result<Bytes, std::io::Error>>,
-	interval: Duration,
-	wire: Wire,
+	keepalive: Option<&Keepalive<'_>>,
 	fut: impl Future<Output = T>,
 ) -> Option<T> {
+	let Some(keepalive) = keepalive else {
+		return Some(fut.await);
+	};
 	tokio::pin!(fut);
-	let mut ticker = tokio::time::interval(interval.max(Duration::from_millis(100)));
+	let mut ticker = tokio::time::interval(keepalive.interval.max(Duration::from_millis(100)));
 	ticker.tick().await;
 	loop {
 		tokio::select! {
 			out = &mut fut => return Some(out),
 			_ = ticker.tick() => {
-				if tx.send(Ok(wire.keepalive())).await.is_err() {
+				if keepalive.tx.send(Ok(keepalive.wire.keepalive())).await.is_err() {
 					return None;
 				}
 			},
