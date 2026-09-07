@@ -15,7 +15,7 @@ Render terminates TLS on `:443` and forwards to the container’s `PORT=4000`. D
 
 `dockerfilePath` / `dockerContext` inside the YAML stay relative to the **repo root** (`./examples/render-deploy/Dockerfile`), even though the Blueprint file lives under `examples/render-deploy/`.
 
-The image this service builds is this folder’s [`Dockerfile`](./Dockerfile): a thin wrapper around the official `cr.agentgateway.dev/agentgateway` image. The wrapper writes `/config/.htpasswd` on every start and seeds `config.yaml` on first boot. Do **not** pick **Existing Image** → `cr.agentgateway.dev/agentgateway:v1.5.0`. Empty `/config` auto-gen serves `/ui/` with **no auth**.
+The image this service builds is this folder’s [`Dockerfile`](./Dockerfile): a thin wrapper around the official `cr.agentgateway.dev/agentgateway` image. The wrapper writes `/config/.htpasswd` on every start, seeds `config.yaml` on first boot, chowns the disk, then drops to uid 65532 — the gateway itself does not run as root. Do **not** pick **Existing Image** → `cr.agentgateway.dev/agentgateway:v1.5.0`. Empty `/config` auto-gen serves `/ui/` with **no auth**.
 
 ## Architecture
 
@@ -112,7 +112,7 @@ Set these in the Render **Environment** tab. Never commit real values. See [`.en
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `PORT` | **Yes** | Must be `4000`. Render proxies `$PORT` (default `10000`); the gateway listens on 4000. |
-| `UI_USER` | No | Basic-auth username. Default `admin`. |
+| `UI_USER` | No | Basic-auth username. Default `admin`. Letters, digits, `.`, `_`, `@`, `-` only. |
 | `UI_PASSWORD` | **Yes** | Entrypoint writes `/config/.htpasswd` every start. Process exits 1 if unset. |
 | `OPENAI_API_KEY` | For OpenAI | Expanded as `$OPENAI_API_KEY` on the model. |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | For GitHub MCP | Bearer the gateway sends to `api.githubcopilot.com`. |
@@ -145,7 +145,7 @@ The Blueprint already declares **`agw-config`** → **`/config`**, 1 GB. Disks a
 
 ### 4. Deploy
 
-First boot writes `.htpasswd` + a seed `config.yaml`, then the gateway watches `/config/config.yaml`. In Render logs you want:
+First boot writes `.htpasswd` + a seed `config.yaml`, chowns `/config` to uid 65532, then execs the gateway as that uid, which watches `/config/config.yaml`. In Render logs you want:
 
 - `state_manager Watching config file: /config/config.yaml`
 - `app serving UI at http://localhost:4000/ui`
@@ -232,15 +232,17 @@ Starter is enough for a demo. The disk is the persistence story.
 
 ## Security
 
-`ui.policies.basicAuth` `mode: strict` plus file htpasswd (`{SHA}` lines the entrypoint rewrites every start). Unauthenticated `GET /ui/` is **401** and `WWW-Authenticate: Basic realm="agentgateway"`.
+`ui.policies.basicAuth` `mode: strict` plus file htpasswd (`$2y$` bcrypt at cost 10, rewritten every start via `htpasswd -B`). Unauthenticated `GET /ui/` is **401** and `WWW-Authenticate: Basic realm="agentgateway"`.
 
 That is **demo-grade** behind Render TLS. It is not an IdP.
 
 - Rotate `UI_PASSWORD`, `OPENAI_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`, and every virtual key if this URL is more than a lab.
 - Scope the GitHub PAT. Remote Copilot MCP will do whatever that token can do.
-- `{SHA}` / HTTP basic is not SSO.
+- HTTP basic is not SSO, however strong the hash.
 
-Inline bcrypt in `config.yaml` is a footgun: hashes contain `$`, and agentgateway env-expands `$VARS`. That is why the entrypoint uses a file.
+Inline bcrypt in `config.yaml` is a footgun: hashes contain `$`, and agentgateway env-expands `$VARS`. A file-backed htpasswd is read as raw bytes with no expansion, which is why the entrypoint writes one.
+
+`config.yaml` and `.htpasswd` are both created mode `600` and owned by uid 65532, so virtual keys you add to the config are not world-readable inside the container.
 
 ## Verify
 
