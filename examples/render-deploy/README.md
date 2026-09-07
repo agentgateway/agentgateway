@@ -133,7 +133,7 @@ From a fork, create a Blueprint against that repo and set the same Blueprint Pat
 
 **Manual** — New → Web Service → this repo, Docker, `./examples/render-deploy/Dockerfile`, context `./examples/render-deploy`. Do **not** pick **Existing Image** → `cr.agentgateway.dev/agentgateway:v1.5.0`. Empty `/config` auto-gen serves `/ui/` with **no auth**.
 
-`autoDeploy` is off so pushes to this repository do not redeploy every copy of the button.
+`autoDeployTrigger: off` so pushes to this repository do not redeploy every copy of the button. Do not also set `autoDeploy` — Render rejects a Blueprint that includes both.
 
 ### 2. Set the env vars
 
