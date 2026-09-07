@@ -23,6 +23,8 @@ pub(crate) fn write(dst: &mut String) {
 		let micros = nanos / 1000;
 		let mut buf = itoa::Buffer::new();
 		let s = buf.format(micros);
+		// Zero-pad to six digits so 3270 renders as "003270", not "3270"
+		dst.push_str(&"000000"[s.len()..]);
 		dst.push_str(s);
 		// Finish off with a Z
 		dst.push('Z');

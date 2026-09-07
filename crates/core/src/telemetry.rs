@@ -879,6 +879,9 @@ pub mod testing {
 
 #[cfg(test)]
 mod tests {
+	use std::thread;
+	use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 	use super::*;
 
 	#[test]
@@ -906,6 +909,25 @@ mod tests {
 		write_json_log(&mut buf, "info", "test", &kv).expect("log should serialize");
 
 		assert_eq!(json_field_value(&buf, "ordinary_float"), "123.456");
+	}
+
+	#[test]
+	fn json_log_time_keeps_leading_zeros_in_fraction() {
+		// The timestamp is read from the clock inside the writer, so the test cannot
+		// choose it. The fraction only lost its leading zeros below 100000 µs (e.g.
+		// ".4101Z" for 4101 µs), so sleep until the next second boundary to sample
+		// inside that window instead of whatever instant the test happens to run at.
+		let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+		thread::sleep(Duration::from_nanos(u64::from(
+			1_000_000_000 - now.subsec_nanos(),
+		)));
+		let mut buf = String::new();
+
+		write_json_log(&mut buf, "info", "test", &[]).expect("log should serialize");
+
+		let time = json_field_value(&buf, "time").trim_matches('"');
+		// "2025-07-16T18:32:01.000000Z".len(): a six-digit fraction, never shorter
+		assert_eq!(time.len(), 27, "{time}");
 	}
 
 	fn json_field_value<'a>(json: &'a str, field: &str) -> &'a str {
