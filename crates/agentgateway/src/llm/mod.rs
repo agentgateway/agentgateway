@@ -791,6 +791,7 @@ impl ChatTranslation {
 						ctx.buffer_limit,
 						strng::new(&ctx.model),
 						ctx.logger,
+						ctx.log_content,
 					)
 				}),
 				_ => resp,

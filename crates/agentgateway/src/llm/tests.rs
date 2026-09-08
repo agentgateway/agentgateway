@@ -3830,6 +3830,177 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	);
 }
 
+/// Build a Gemini SSE stream body from a list of `GenerateContentResponse` chunks.
+fn gemini_sse_body(chunks: &[serde_json::Value]) -> Body {
+	let mut data = String::new();
+	for c in chunks {
+		data.push_str(&format!("data: {}\n\n", serde_json::to_string(c).unwrap()));
+	}
+	Body::from(data)
+}
+
+fn vertex_gemini_stream_log() -> (AsyncLog<LLMInfo>, AsyncLog<LLMInfo>) {
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	log.store(Some(LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "gemini-2.5-pro".into(),
+			provider: "vertex".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	}));
+	(log, log2)
+}
+
+#[tokio::test]
+async fn vertex_gemini_to_messages_stream_captures_completion_and_tool_calls() {
+	let body = gemini_sse_body(&[
+		serde_json::json!({
+			"responseId": "resp-1",
+			"modelVersion": "gemini-2.5-pro",
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "Let me check." }] } }]
+		}),
+		serde_json::json!({
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } },
+					"thoughtSignature": "SIGNATURE_BLOB_THAT_MUST_NOT_BE_LOGGED" }
+			]}, "finishReason": "STOP" }],
+			"usageMetadata": { "promptTokenCount": 1000, "cachedContentTokenCount": 800,
+				"candidatesTokenCount": 50, "totalTokenCount": 1050 }
+		}),
+	]);
+	let (log, log2) = vertex_gemini_stream_log();
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::vertex_gemini::to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-pro"),
+		logger,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be captured for streaming gemini messages");
+	assert_eq!(completion.join(""), "Let me check.");
+
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be captured for streaming gemini tool calls");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+	assert_eq!(
+		tool_calls[0].arguments,
+		serde_json::json!({"city": "Berlin"})
+	);
+	// The thoughtSignature rides in the client-facing tool_use id, but must not reach the log.
+	assert!(
+		!tool_calls[0].id.as_str().contains("SIGNATURE_BLOB"),
+		"logged tool call id must not embed the thoughtSignature, got {:?}",
+		tool_calls[0].id
+	);
+
+	// Usage is reported on the Anthropic convention: input excludes cached, total is input+output.
+	assert_eq!(info.response.input_tokens, Some(200));
+	assert_eq!(info.response.output_tokens, Some(50));
+	assert_eq!(info.response.total_tokens, Some(250));
+	assert_eq!(info.response.cached_input_tokens, Some(800));
+}
+
+#[tokio::test]
+async fn vertex_gemini_to_messages_stream_skips_telemetry_when_disabled() {
+	let body = gemini_sse_body(&[serde_json::json!({
+		"responseId": "resp-1",
+		"candidates": [{ "content": { "role": "model", "parts": [
+			{ "text": "hi" },
+			{ "functionCall": { "name": "f", "args": {} } }
+		]}, "finishReason": "STOP" }]
+	})]);
+	let (log, log2) = vertex_gemini_stream_log();
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::vertex_gemini::to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-pro"),
+		logger,
+		llm::LogContentFields::default(),
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion must stay unset when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages must stay unset when log_content.tool_calls is false"
+	);
+}
+
+#[tokio::test]
+async fn vertex_gemini_to_messages_stream_captures_tool_call_after_finish_reason() {
+	// A functionCall can arrive in a chunk after the one carrying finishReason; it is emitted to
+	// the client, so it must reach the logged output messages too.
+	let body = gemini_sse_body(&[
+		serde_json::json!({
+			"responseId": "resp-1",
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "ok" }] },
+				"finishReason": "STOP" }]
+		}),
+		serde_json::json!({
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "late_tool", "args": { "a": 1 } } }
+			]}}]
+		}),
+	]);
+	let (log, log2) = vertex_gemini_stream_log();
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::vertex_gemini::to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-pro"),
+		logger,
+		llm::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		},
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("a tool call after finishReason must still be logged");
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].name.as_str(), "late_tool");
+}
+
 fn vertex_provider(model: &str) -> AIProvider {
 	AIProvider::Vertex(vertex::Provider {
 		model_override: Some(strng::new(model)),

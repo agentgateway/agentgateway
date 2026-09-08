@@ -2391,10 +2391,18 @@ pub mod to_messages {
 		pending_input_tokens: usize,
 		pending_output_tokens: usize,
 		pending_cache_read: Option<usize>,
+		// Telemetry accumulation; each is None when the matching log_content flag is off.
+		// Not drained on flush: a tool call or text delta can still arrive in a chunk after the
+		// one carrying finishReason, and it has to land in the logged record too.
+		pending_tool_calls: Option<Vec<crate::OutputMessagePart>>,
+		pending_completion: Option<String>,
+		// The stop reason already sent in `message_delta`, so a re-publish at stream close
+		// reports the same finish_reason rather than dropping it.
+		flushed_stop_reason: Option<Strng>,
 	}
 
 	impl StreamState {
-		pub(super) fn new() -> Self {
+		pub(super) fn new(log_content: crate::LogContentFields) -> Self {
 			Self {
 				stream_id: None,
 				model_version: String::new(),
@@ -2409,6 +2417,9 @@ pub mod to_messages {
 				pending_input_tokens: 0,
 				pending_output_tokens: 0,
 				pending_cache_read: None,
+				pending_tool_calls: log_content.tool_calls.then(Vec::new),
+				pending_completion: log_content.completion.then(String::new),
+				flushed_stop_reason: None,
 			}
 		}
 
@@ -2417,6 +2428,32 @@ pub mod to_messages {
 				self.saw_token = true;
 				log.update(|r| r.response.first_token = Some(Instant::now()));
 			}
+		}
+
+		/// Copy the accumulated completion text and tool calls into the log record.
+		///
+		/// Idempotent and non-draining, so it is safe to call both when `message_delta` is emitted
+		/// and again at stream close; a later call simply overwrites with the fuller value.
+		fn publish_telemetry(&self, log: &StreamingUsageGuard, stop_reason: Option<&str>) {
+			if self.pending_tool_calls.is_none() && self.pending_completion.is_none() {
+				return;
+			}
+			let finish = stop_reason.map(strng::new);
+			let tool_parts = self
+				.pending_tool_calls
+				.clone()
+				.filter(|parts| !parts.is_empty());
+			let completion = self.pending_completion.clone();
+			// Wrapped in Option so the FnMut closure can consume the owned values once.
+			let mut pending = Some((tool_parts, finish, completion));
+			log.update(|r| {
+				if let Some((parts, fin, text)) = pending.take() {
+					crate::conversion::completions::build_output_messages(&mut r.response, parts, fin);
+					if let Some(text) = text {
+						r.response.completion = Some(vec![text]);
+					}
+				}
+			});
 		}
 
 		/// Emit `message_delta` + `message_stop` exactly once.
@@ -2429,6 +2466,7 @@ pub mod to_messages {
 			&mut self,
 			force: bool,
 			out: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+			log: &StreamingUsageGuard,
 		) {
 			if self.message_stop_sent {
 				return;
@@ -2444,6 +2482,8 @@ pub mod to_messages {
 			let Some(stop_reason) = stop_reason else {
 				return;
 			};
+			self.flushed_stop_reason = crate::types::serialize_str(&stop_reason);
+			self.publish_telemetry(log, self.flushed_stop_reason.as_deref());
 			out.push(
 				messages::MessagesStreamEvent::MessageDelta {
 					delta: messages::MessageDelta {
@@ -2615,6 +2655,9 @@ pub mod to_messages {
 								OpenBlock::Text(i) => i,
 								_ => unreachable!(),
 							};
+							if let Some(c) = self.pending_completion.as_mut() {
+								c.push_str(&t.text);
+							}
 							out.push(
 								messages::MessagesStreamEvent::ContentBlockDelta {
 									index: idx,
@@ -2637,6 +2680,15 @@ pub mod to_messages {
 								.as_deref()
 								.map(str::to_string)
 								.unwrap_or_else(|| format!("toolu_{id}_{call_idx}"));
+							// Log the plain id, before the thoughtSignature is joined on: the signature is
+							// a multi-KB opaque blob and would bloat every logged tool call.
+							if let Some(pending) = self.pending_tool_calls.as_mut() {
+								pending.push(crate::OutputMessagePart::ToolCall {
+									id: strng::new(&base_id),
+									name: strng::new(&fc.function_call.name),
+									arguments: fc.function_call.args.clone(),
+								});
+							}
 							let tool_id = join_tool_call_id(base_id, fc.thought_signature.as_deref());
 							let block_idx = self.block_index;
 							out.push(
@@ -2699,16 +2751,23 @@ pub mod to_messages {
 				self.pending_stop_reason = Some(crate::conversion::messages::finish_reason_to_stop_reason(
 					finish,
 				));
-				self.flush_message_end(false, &mut out);
+				self.flush_message_end(false, &mut out, log);
 			}
 
 			out
 		}
 
-		fn on_done(&mut self) -> Vec<(&'static str, messages::MessagesStreamEvent)> {
+		fn on_done(
+			&mut self,
+			log: &StreamingUsageGuard,
+		) -> Vec<(&'static str, messages::MessagesStreamEvent)> {
 			let mut out = Vec::new();
 			self.close_open_block(&mut out);
-			self.flush_message_end(true, &mut out);
+			self.flush_message_end(true, &mut out, log);
+			// `flush_message_end` is a no-op once message_stop has been sent, so re-publish here to
+			// pick up any content that arrived in a chunk after the one carrying finishReason.
+			let stop_reason = self.flushed_stop_reason.clone();
+			self.publish_telemetry(log, stop_reason.as_deref());
 			out
 		}
 	}
@@ -2720,8 +2779,9 @@ pub mod to_messages {
 		buffer_limit: usize,
 		model: Strng,
 		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
 	) -> Body {
-		let mut state = StreamState::new();
+		let mut state = StreamState::new(log_content);
 		// Gemini ends without [DONE]; append one to the INPUT so json_transform_multi fires
 		// SseJsonEvent::Done on clean close, which lets on_done() emit message_stop.
 		let b = to_completions::append_done_on_close(b.into_data_stream());
@@ -2757,7 +2817,7 @@ pub mod to_messages {
 				},
 				// Gemini has no [DONE] of its own (we append one), so Eof is the abnormal close.
 				// on_done() guards on message_stop_sent, so this cannot double-emit message_stop.
-				parse::sse::SseJsonEvent::Done | parse::sse::SseJsonEvent::Eof => state.on_done(),
+				parse::sse::SseJsonEvent::Done | parse::sse::SseJsonEvent::Eof => state.on_done(&log),
 				// Don't synthesize a clean termination over a stream that actually failed.
 				parse::sse::SseJsonEvent::Error => vec![],
 			},
