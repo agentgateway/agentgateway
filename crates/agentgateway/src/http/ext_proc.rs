@@ -11,7 +11,9 @@ use proto::processing_response::Response;
 use protos::envoy::service::ext_proc::v3::ProtocolConfiguration;
 use serde_json::Value as JsonValue;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
+use tower::ServiceExt;
 
 use crate::cel::{Executor, Expression, RequestSnapshot};
 use crate::client::ResolvedDestination;
@@ -402,12 +404,14 @@ struct ExtProcInstance {
 	span_client: PolicyClient,
 	span_target: Arc<SimpleBackendReference>,
 	client: Option<proto::external_processor_client::ExternalProcessorClient<GrpcReferenceChannel>>,
+	chan: Option<GrpcReferenceChannel>,
 	tx_req: Option<Sender<ProcessingRequest>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 	req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
+	ready: Option<oneshot::Receiver<()>>,
 }
 
 impl ExtProcInstance {
@@ -434,15 +438,17 @@ impl ExtProcInstance {
 			span_client: client,
 			span_target,
 			client: Some(
-				proto::external_processor_client::ExternalProcessorClient::new(chan)
+				proto::external_processor_client::ExternalProcessorClient::new(chan.clone())
 					.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE),
 			),
+			chan: Some(chan),
 			tx_req: None,
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
 			metadata_context,
 			req_attributes,
 			resp_attributes,
+			ready: None,
 		}
 	}
 
@@ -457,12 +463,14 @@ impl ExtProcInstance {
 		let Some(mut client) = self.client.take() else {
 			return Err(Error::RequestSend);
 		};
+		let mut chan = self.chan.take().unwrap();
 		let failure_mode = self.failure_mode;
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
 		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
+		let (tx_ready, rx_ready) = oneshot::channel();
 		dtrace::spawn(async move {
 			let mut request = tonic::Request::new(req_stream);
 			*request.metadata_mut() = grpc_initial_metadata;
@@ -471,6 +479,20 @@ impl ExtProcInstance {
 				span_target.as_ref(),
 				"/envoy.service.ext_proc.v3.ExternalProcessor/Process",
 			);
+			trace!("initializing extproc client");
+			match chan.ready().await {
+				Ok(_) => (),
+				Err(e) => {
+					if let Some(span) = span.as_deref_mut() {
+						let e = tonic::Status::unknown(format!("Not ready: {}", e));
+						span.record_grpc_error(&e);
+					}
+					warn!(?failure_mode, "failed to get extproc client ready: {e:?}");
+					return;
+				},
+			}
+			trace!("extproc client is ready");
+			let _ = tx_ready.send(());
 			let responses = match client.process(request).await {
 				Ok(r) => r,
 				Err(e) => {
@@ -537,6 +559,7 @@ impl ExtProcInstance {
 		self.tx_req = Some(tx_req);
 		self.rx_resp_for_request = Some(rx_resp_for_request);
 		self.rx_resp_for_response = Some(rx_resp_for_response);
+		self.ready = Some(rx_ready);
 		Ok(())
 	}
 
@@ -926,6 +949,15 @@ impl ExtProcInstance {
 			protocol_config,
 			self.protocol_config_sent,
 		);
+
+		if failure_mode == FailureMode::FailOpen {
+			// wait for it to be either signalled or dropped
+			// to make the following attempts to send data
+			// fail reliably on connection issues.
+			trace!("start waiting for extproc client getting ready");
+			let _ = self.ready.take().unwrap().await;
+			trace!("finished waiting for extproc client getting ready");
+		}
 
 		// Send request headers unless processing options explicitly skip this phase.
 		if send_request_headers {
