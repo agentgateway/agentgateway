@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 #
 # Example shape for a Render deployment — placeholders only.
-# The live service stores the real file on the agw-config disk at /config/config.yaml.
+# The entrypoint seeds this onto the agw-config disk as /config/config.yaml
+# on first boot (and merges llm/mcp if an older UI-only seed is already there).
 # Do not commit real UI passwords, provider keys, or virtual API keys.
 #
 # Render publishes HTTPS :443 → container :4000. Admin :15000 stays loopback.

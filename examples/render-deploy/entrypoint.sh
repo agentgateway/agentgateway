@@ -44,6 +44,63 @@ mkdir -p "${CONFIG_DIR}"
 umask 077
 printf '%s\n' "${UI_PASSWORD}" | htpasswd -niB -C 10 "${UI_USER}" > "${HTPASSWD_FILE}"
 
+# Lab seed (same shape as config.example.yaml). First boot writes the whole
+# file. An older UI-only disk gets missing llm/mcp appended; existing
+# operator-set sections are left alone.
+append_lab_llm() {
+  cat <<'EOF'
+llm:
+  gateways: [default]
+  policies:
+    apiKey:
+      mode: strict
+      keys:
+      - key: sk-lab-admin-...
+        metadata:
+          name: admin
+      - key: sk-lab-demo-...
+        metadata:
+          name: demo
+        allowedModels:
+        - gpt-4.1-nano
+        - gpt-4.1
+        - gpt-4o
+      - key: sk-lab-limited-...
+        metadata:
+          name: limited
+        allowedModels:
+        - gpt-4.1-nano
+        budgets:
+        - name: tokens
+          limit:
+            unit: Tokens
+            amount: 1000
+          window:
+            rolling: 1h
+          onBudgetExceeded: Block
+  models:
+  - name: '*'
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+EOF
+}
+
+append_lab_mcp() {
+  cat <<'EOF'
+mcp:
+  gateways: [default]
+  targets:
+  - name: github
+    mcp:
+      host: https://api.githubcopilot.com/mcp/
+    policies:
+      backendAuth:
+        key:
+          value: $GITHUB_PERSONAL_ACCESS_TOKEN
+EOF
+}
+
 if [ ! -f "${CONFIG_FILE}" ]; then
   cat > "${CONFIG_FILE}" <<'EOF'
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
@@ -62,6 +119,22 @@ ui:
         file: /config/.htpasswd
       realm: agentgateway
 EOF
+  append_lab_llm >> "${CONFIG_FILE}"
+  append_lab_mcp >> "${CONFIG_FILE}"
+  echo "entrypoint: seeded ${CONFIG_FILE} (llm + mcp + ui basicAuth)" >&2
+else
+  lab=0
+  if ! grep -Eq '^llm:' "${CONFIG_FILE}"; then
+    append_lab_llm >> "${CONFIG_FILE}"
+    lab=1
+  fi
+  if ! grep -Eq '^mcp:' "${CONFIG_FILE}"; then
+    append_lab_mcp >> "${CONFIG_FILE}"
+    lab=1
+  fi
+  if [ "${lab}" = 1 ]; then
+    echo "entrypoint: updated ${CONFIG_FILE} (lab=true)" >&2
+  fi
 fi
 
 # Root only on first boot to claim the disk; the gateway itself never runs

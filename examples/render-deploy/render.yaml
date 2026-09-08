@@ -22,9 +22,11 @@ services:
     plan: starter
     numInstances: 1
     # Replaces the deprecated autoDeploy boolean. Render rejects a Blueprint
-    # that sets both. `off` = manual deploys only (do not rebuild on every
-    # push to this repo).
-    autoDeployTrigger: off
+    # that sets both. Rebuild on commits that touch this example only.
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - examples/render-deploy/**
     dockerfilePath: ./examples/render-deploy/Dockerfile
     dockerContext: ./examples/render-deploy
     # /ui/ is basic-auth protected (401 without creds). TCP-style default

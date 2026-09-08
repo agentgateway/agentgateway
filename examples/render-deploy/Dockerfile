@@ -4,7 +4,8 @@
 # The published image has no shell (ENTRYPOINT=/app/agentgateway). Empty
 # /config auto-gen serves /ui/ with no auth. This image writes
 # /config/.htpasswd from UI_USER / UI_PASSWORD on every start, seeds
-# config.yaml on first boot, then execs the gateway.
+# config.yaml (UI basicAuth, OpenAI wildcard, virtual keys, GitHub MCP)
+# on first boot, then execs the gateway.
 #
 # Pin: https://agentgateway.dev/docs/standalone/latest/setup/install/docker/
 #

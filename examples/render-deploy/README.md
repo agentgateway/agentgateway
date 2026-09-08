@@ -15,7 +15,7 @@ Render terminates TLS on `:443` and forwards to the container’s `PORT=4000`. D
 
 `dockerfilePath` / `dockerContext` inside the YAML stay relative to the **repo root** (`./examples/render-deploy/Dockerfile`), even though the Blueprint file lives under `examples/render-deploy/`.
 
-The image this service builds is this folder’s [`Dockerfile`](./Dockerfile): a thin wrapper around the official `cr.agentgateway.dev/agentgateway` image. The wrapper writes `/config/.htpasswd` on every start, seeds `config.yaml` on first boot, chowns the disk, then drops to uid 65532 — the gateway itself does not run as root. Do **not** pick **Existing Image** → `cr.agentgateway.dev/agentgateway:v1.5.0`. Empty `/config` auto-gen serves `/ui/` with **no auth**.
+The image this service builds is this folder’s [`Dockerfile`](./Dockerfile): a thin wrapper around the official `cr.agentgateway.dev/agentgateway` image. The wrapper writes `/config/.htpasswd` on every start, seeds `config.yaml` (UI basicAuth, OpenAI wildcard, virtual keys, GitHub MCP) on first boot, chowns the disk, then drops to uid 65532 — the gateway itself does not run as root. Do **not** pick **Existing Image** → `cr.agentgateway.dev/agentgateway:v1.5.0`. Empty `/config` auto-gen serves `/ui/` with **no auth**.
 
 ## Architecture
 
@@ -133,7 +133,7 @@ From a fork, create a Blueprint against that repo and set the same Blueprint Pat
 
 **Manual** — New → Web Service → this repo, Docker, `./examples/render-deploy/Dockerfile`, context `./examples/render-deploy`. Do **not** pick **Existing Image** → `cr.agentgateway.dev/agentgateway:v1.5.0`. Empty `/config` auto-gen serves `/ui/` with **no auth**.
 
-`autoDeployTrigger: off` so pushes to this repository do not redeploy every copy of the button. Do not also set `autoDeploy` — Render rejects a Blueprint that includes both.
+Pushes to the linked branch auto-deploy when `examples/render-deploy/` changes (`autoDeployTrigger: commit` + `buildFilter`). Other folders in this repo do not rebuild the service. Do not also set `autoDeploy` — Render rejects a Blueprint that includes both.
 
 ### 2. Set the env vars
 
@@ -145,13 +145,16 @@ The Blueprint already declares **`agw-config`** → **`/config`**, 1 GB. Disks a
 
 ### 4. Deploy
 
-First boot writes `.htpasswd` + a seed `config.yaml`, chowns `/config` to uid 65532, then execs the gateway as that uid, which watches `/config/config.yaml`. In Render logs you want:
+First boot writes `.htpasswd` + the lab `config.yaml` (UI basicAuth, OpenAI wildcard, virtual keys, GitHub MCP), chowns `/config` to uid 65532, then execs the gateway as that uid, which watches `/config/config.yaml`. In Render logs you want:
 
+- `entrypoint: seeded /config/config.yaml (llm + mcp + ui basicAuth)` (first boot) or `entrypoint: updated /config/config.yaml (lab=true)` (old UI-only disk)
 - `state_manager Watching config file: /config/config.yaml`
 - `app serving UI at http://localhost:4000/ui`
 - `proxy::gateway started bind bind="bind/4000"`
 - admin on `127.0.0.1:15000`
 - `==> Your service is live`
+
+If this service was created before the lab seed shipped, click **Manual Deploy**. The disk already has a config file, so a rebuild alone is not enough unless the entrypoint is allowed to merge missing `llm` / `mcp` sections (it will not overwrite models or MCP you added in the UI).
 
 A `http.status=401` on `/ui/` with `basic authentication failure: no basic authentication credentials found` is success. Health checks must **not** `GET /ui/` (401 ≠ healthy). The Blueprint omits `healthCheckPath` so Render uses TCP on `:4000`.
 
@@ -163,13 +166,13 @@ https://<your-service>.onrender.com/ui/
 
 Browser basic-auth prompt: `UI_USER` / `UI_PASSWORD`. Gateway Overview should show LLM, MCP, and Traffic on gateway **default**.
 
-### 6. Add OpenAI
+### 6. Confirm OpenAI
 
-**LLM → Models → Add model.** Incoming name `*`, provider OpenAI, API key `$OPENAI_API_KEY`. Outgoing model stays “Incoming model.”
+The seed already has incoming name `*`, provider OpenAI, API key `$OPENAI_API_KEY`. Set `OPENAI_API_KEY` in the Environment tab (Render restarts the service). **LLM → Models** should show the wildcard; outgoing model stays “Incoming model.” Only use **Add model** if you want a second provider.
 
-### 7. Add virtual keys
+### 7. Confirm virtual keys
 
-**LLM → Virtual API Keys** (or edit `/config/config.yaml`). Strict mode. Three lab keys: `admin` (any), `demo` (selected models), `limited` (`gpt-4.1-nano` + token budget). Use placeholders in docs; paste real secrets only in the dashboard / disk.
+The seed is already **LLM → Virtual API Keys**, strict mode, three lab keys: `admin` (any), `demo` (selected models), `limited` (`gpt-4.1-nano` + token budget). Use placeholders in docs; paste real secrets only in the dashboard / disk.
 
 ### 8. Call chat completions (HTTPS + Bearer)
 
@@ -190,15 +193,9 @@ curl -sS "$HOST/v1/chat/completions" \
 
 A 200 with token usage shows up under **LLM → Logs**.
 
-### 9. Add GitHub MCP
+### 9. Confirm GitHub MCP
 
-**MCP → Servers → Add server.**
-
-- Name: `github`
-- Type: **Streamable HTTP**
-- Endpoint: `https://api.githubcopilot.com/mcp/`
-
-Attach MCP to the existing `default` gateway (no second public port). Auth is a backend key:
+The seed already attaches GitHub remote Copilot MCP to the `default` gateway (no second public port):
 
 ```yaml
 mcp:
@@ -213,7 +210,7 @@ mcp:
           value: $GITHUB_PERSONAL_ACCESS_TOKEN
 ```
 
-State should go **ready**. Clients use `https://<your-service>.onrender.com/mcp`.
+Set `GITHUB_PERSONAL_ACCESS_TOKEN` in the Environment tab. **MCP → Servers** should show `github`, Streamable HTTP, **ready**. Clients use `https://<your-service>.onrender.com/mcp`. Only use **Add server** for extra targets.
 
 ## Ports and limits
 
