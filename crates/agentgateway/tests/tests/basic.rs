@@ -398,6 +398,32 @@ async fn basic_http2() {
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
 }
 
+#[tokio::test]
+async fn http2_host_header_without_authority() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	let (mut client, connection) = h2::client::handshake(t.serve(BIND_KEY)).await.unwrap();
+	let connection = tokio::spawn(connection);
+
+	// h2 encodes an HTTP/1.x-version request on an HTTP/2 connection without
+	// :authority, preserving the regular Host header instead.
+	let request = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("/")
+		.version(Version::HTTP_11)
+		.header(header::HOST, "lo")
+		.body(())
+		.unwrap();
+	let (response, _) = client.send_request(request, true).unwrap();
+	assert_eq!(response.await.unwrap().status(), 200);
+
+	connection.abort();
+}
+
 async fn grpc_trailer_backend(status: &'static str) -> std::net::SocketAddr {
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let addr = listener.local_addr().unwrap();

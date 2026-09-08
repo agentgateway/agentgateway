@@ -258,6 +258,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "google-cloud-auth",
+ "h2",
  "hashbrown 0.17.1",
  "headers",
  "headers-accept",
