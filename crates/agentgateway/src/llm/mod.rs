@@ -354,9 +354,8 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// (Vertex or the Gemini API with a Gemini model, custom providers advertising
 		// generateContent) takes it in preference to the compat shim.
 		chat(InputFormat::Completions, ChatFormat::VertexGemini),
-		// Native Messages api to Vertex Gemini
-		chat(InputFormat::Messages, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
+		chat(InputFormat::Messages, ChatFormat::VertexGemini),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		// Missing: Bedrock --> Bedrock
 		//
