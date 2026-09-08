@@ -1136,7 +1136,10 @@ impl AIProvider {
 			AIProvider::Vertex(p) => Target::Hostname(p.get_host(route_type), 443),
 			// Model is not known before the body is parsed, so the target here is model-unaware
 			// (Runtime for chat routes); `setup_request` re-resolves it to the Mantle host if needed.
-			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type, None, None), 443),
+			AIProvider::Bedrock(p) => {
+				let endpoint = p.resolve_endpoint(route_type, None, None);
+				Target::Hostname(p.get_host(route_type, endpoint), 443)
+			},
 			AIProvider::Azure(p) => Target::Hostname(p.get_host(), 443),
 			AIProvider::Custom(_) => return None,
 		})
@@ -1154,6 +1157,14 @@ impl AIProvider {
 		connection_target: Option<&mut Target>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
+		let bedrock_endpoint = match self {
+			AIProvider::Bedrock(p) => Some(p.resolve_endpoint(
+				route_type,
+				llm_request.map(|l| l.request_model.as_str()),
+				catalog,
+			)),
+			_ => None,
+		};
 		if let Some(path_override) = path_override {
 			http::modify_req_uri(req, |uri| {
 				uri.path_and_query = Some(PathAndQuery::from_str(path_override)?);
@@ -1166,14 +1177,13 @@ impl AIProvider {
 				llm_request,
 				path_prefix,
 				has_host_override,
-				catalog,
+				bedrock_endpoint,
 			)?;
 		}
 		if !has_host_override {
-			let model_id = llm_request.map(|l| l.request_model.as_str());
-			self.set_default_authority(req, route_type, model_id, connection_target, catalog)?;
+			self.set_default_authority(req, route_type, connection_target, bedrock_endpoint)?;
 		}
-		self.set_required_fields(req, route_type, llm_request, catalog)?;
+		self.set_required_fields(req, route_type, llm_request, bedrock_endpoint)?;
 		Ok(())
 	}
 
@@ -1205,7 +1215,7 @@ impl AIProvider {
 		llm_request: Option<&LLMRequest>,
 		path_prefix: Option<&str>,
 		has_host_override: bool,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
+		bedrock_endpoint: Option<bedrock::BedrockEndpoint>,
 	) -> anyhow::Result<()> {
 		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
 			if let Some(prefix) = path_prefix {
@@ -1337,11 +1347,12 @@ impl AIProvider {
 			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
+						let endpoint = bedrock_endpoint.expect("setup_request resolves the Bedrock endpoint");
 						let path = provider.get_path_for_route(
 							route_type,
 							l.streaming,
 							l.request_model.as_str(),
-							catalog,
+							endpoint,
 						);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
@@ -1414,9 +1425,8 @@ impl AIProvider {
 		&self,
 		req: &mut Request,
 		route_type: RouteType,
-		model_id: Option<&str>,
 		connection_target: Option<&mut Target>,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
+		bedrock_endpoint: Option<bedrock::BedrockEndpoint>,
 	) -> anyhow::Result<()> {
 		let authority = match self {
 			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
@@ -1427,10 +1437,12 @@ impl AIProvider {
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
-				// Resolve the model-aware host + Mantle signing name. The region is set in
-				// set_required_fields instead, so it still applies under a host override.
-				let host = provider.get_host(route_type, model_id, catalog);
-				let signing_service = provider.signing_service_name(route_type, model_id, catalog);
+				// Model-aware host + Mantle signing name, from the endpoint resolved once in
+				// setup_request. The region is set in set_required_fields instead, so it still applies
+				// under a host override.
+				let endpoint = bedrock_endpoint.expect("setup_request resolves the Bedrock endpoint");
+				let host = provider.get_host(route_type, endpoint);
+				let signing_service = provider.signing_service_name(endpoint);
 				// Bedrock's Mantle-vs-Runtime host is model-dependent, so align the connection target with it.
 				if let Some(Target::Hostname(target_host, _)) = connection_target {
 					*target_host = host.clone();
@@ -1465,7 +1477,7 @@ impl AIProvider {
 		req: &mut Request,
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
-		catalog: agent_llm::model_catalog::Catalog<'_>,
+		bedrock_endpoint: Option<bedrock::BedrockEndpoint>,
 	) -> anyhow::Result<()> {
 		match self {
 			AIProvider::Anthropic(_) => {
@@ -1563,14 +1575,8 @@ impl AIProvider {
 				if matches!(
 					route_type,
 					RouteType::Messages | RouteType::AnthropicTokenCount
-				) && matches!(
-					provider.resolve_endpoint(
-						route_type,
-						llm_request.map(|r| r.request_model.as_str()),
-						catalog
-					),
-					bedrock::BedrockEndpoint::Mantle
-				) {
+				) && matches!(bedrock_endpoint, Some(bedrock::BedrockEndpoint::Mantle))
+				{
 					req
 						.headers
 						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));

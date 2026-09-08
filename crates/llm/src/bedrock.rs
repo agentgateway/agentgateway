@@ -61,7 +61,7 @@ impl Provider {
 		model.contains("anthropic.claude")
 	}
 
-	/// Resolves the endpoint for a route when the chat routes are correct
+	/// Resolves which Bedrock endpoint (Runtime vs Mantle) serves the given route and model.
 	pub fn resolve_endpoint(
 		&self,
 		route_type: super::RouteType,
@@ -108,14 +108,9 @@ impl Provider {
 		}
 	}
 
-	/// SigV4 signing-service override for the route (`Some` for Mantle, else the default `bedrock`).
-	pub fn signing_service_name(
-		&self,
-		route_type: super::RouteType,
-		model_id: Option<&str>,
-		catalog: crate::model_catalog::Catalog<'_>,
-	) -> Option<&'static str> {
-		match self.resolve_endpoint(route_type, model_id, catalog) {
+	/// SigV4 signing-service override for the endpoint (`Some` for Mantle, else the default `bedrock`).
+	pub fn signing_service_name(&self, endpoint: BedrockEndpoint) -> Option<&'static str> {
+		match endpoint {
 			BedrockEndpoint::Mantle => Some(MANTLE_SIGNING_SERVICE_NAME),
 			BedrockEndpoint::Runtime => None,
 		}
@@ -155,12 +150,9 @@ impl Provider {
 		route_type: super::RouteType,
 		streaming: bool,
 		model: &str,
-		catalog: crate::model_catalog::Catalog<'_>,
+		endpoint: BedrockEndpoint,
 	) -> Strng {
-		if matches!(
-			self.resolve_endpoint(route_type, Some(model), catalog),
-			BedrockEndpoint::Mantle
-		) {
+		if matches!(endpoint, BedrockEndpoint::Mantle) {
 			return match route_type {
 				super::RouteType::Responses => strng::literal!("/v1/responses"),
 				super::RouteType::Messages => strng::literal!("/anthropic/v1/messages"),
@@ -185,17 +177,12 @@ impl Provider {
 		}
 	}
 
-	pub fn get_host(
-		&self,
-		route_type: super::RouteType,
-		model_id: Option<&str>,
-		catalog: crate::model_catalog::Catalog<'_>,
-	) -> Strng {
+	pub fn get_host(&self, route_type: super::RouteType, endpoint: BedrockEndpoint) -> Strng {
 		// Rerank always uses the agent-runtime host, independent of endpoint choice.
 		if matches!(route_type, super::RouteType::Rerank) {
 			return strng::format!("bedrock-agent-runtime.{}.amazonaws.com", self.region);
 		}
-		match self.resolve_endpoint(route_type, model_id, catalog) {
+		match endpoint {
 			BedrockEndpoint::Mantle => strng::format!("bedrock-mantle.{}.api.aws", self.region),
 			BedrockEndpoint::Runtime => {
 				strng::format!("bedrock-runtime.{}.amazonaws.com", self.region)
@@ -313,26 +300,24 @@ mod tests {
 	#[test]
 	fn mantle_endpoint_uses_correct_host_path_and_signing() {
 		let p = provider(BedrockEndpointPreference::MantleOnly);
+		let ep = BedrockEndpoint::Mantle;
 		assert_eq!(
-			p.get_host(RouteType::Messages, None, None).as_str(),
+			p.get_host(RouteType::Messages, ep).as_str(),
 			"bedrock-mantle.us-east-1.api.aws"
 		);
+		assert_eq!(p.signing_service_name(ep), Some("bedrock-mantle"));
 		assert_eq!(
-			p.signing_service_name(RouteType::Messages, None, None),
-			Some("bedrock-mantle")
-		);
-		assert_eq!(
-			p.get_path_for_route(RouteType::Messages, false, "m", None)
+			p.get_path_for_route(RouteType::Messages, false, "m", ep)
 				.as_str(),
 			"/anthropic/v1/messages"
 		);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Responses, false, "m", None)
+			p.get_path_for_route(RouteType::Responses, false, "m", ep)
 				.as_str(),
 			"/v1/responses"
 		);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Completions, false, "m", None)
+			p.get_path_for_route(RouteType::Completions, false, "m", ep)
 				.as_str(),
 			"/v1/chat/completions"
 		);
@@ -341,20 +326,18 @@ mod tests {
 	#[test]
 	fn runtime_endpoint_uses_correct_host_path_and_signing() {
 		let p = provider(BedrockEndpointPreference::RuntimeOnly);
+		let ep = BedrockEndpoint::Runtime;
 		assert_eq!(
-			p.get_host(RouteType::Messages, None, None).as_str(),
+			p.get_host(RouteType::Messages, ep).as_str(),
 			"bedrock-runtime.us-east-1.amazonaws.com"
 		);
-		assert_eq!(
-			p.signing_service_name(RouteType::Messages, None, None),
-			None
-		);
+		assert_eq!(p.signing_service_name(ep), None);
 		assert_eq!(
 			p.get_path_for_route(
 				RouteType::Messages,
 				false,
 				"anthropic.claude-3-5-haiku-20241022-v1:0",
-				None
+				ep
 			)
 			.as_str(),
 			"/model/anthropic.claude-3-5-haiku-20241022-v1:0/converse"
@@ -363,14 +346,10 @@ mod tests {
 
 	#[test]
 	fn rerank_always_uses_agent_runtime_host() {
-		for pref in [
-			BedrockEndpointPreference::MantleOnly,
-			BedrockEndpointPreference::RuntimeOnly,
-			BedrockEndpointPreference::RuntimePreferred,
-		] {
+		for ep in [BedrockEndpoint::Mantle, BedrockEndpoint::Runtime] {
 			assert_eq!(
-				provider(pref)
-					.get_host(RouteType::Rerank, None, None)
+				provider(BedrockEndpointPreference::RuntimePreferred)
+					.get_host(RouteType::Rerank, ep)
 					.as_str(),
 				"bedrock-agent-runtime.us-east-1.amazonaws.com"
 			);
@@ -415,12 +394,13 @@ mod tests {
 			);
 		}
 		// Host + path for embeddings must be the Runtime invoke path, not a Mantle path.
+		let ep = p.resolve_endpoint(RouteType::Embeddings, Some("m"), None);
 		assert_eq!(
-			p.get_host(RouteType::Embeddings, Some("m"), None).as_str(),
+			p.get_host(RouteType::Embeddings, ep).as_str(),
 			"bedrock-runtime.us-east-1.amazonaws.com"
 		);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Embeddings, false, "m", None)
+			p.get_path_for_route(RouteType::Embeddings, false, "m", ep)
 				.as_str(),
 			"/model/m/invoke"
 		);
@@ -430,35 +410,31 @@ mod tests {
 	fn anthropic_count_tokens_follows_the_endpoint() {
 		// Runtime uses the Bedrock CountTokens API; Mantle uses Anthropic's native count_tokens.
 		let runtime = provider(BedrockEndpointPreference::RuntimeOnly);
-		assert_eq!(
-			runtime.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None),
-			BedrockEndpoint::Runtime
-		);
+		let runtime_ep = runtime.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None);
+		assert_eq!(runtime_ep, BedrockEndpoint::Runtime);
 		assert_eq!(
 			runtime
-				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", None)
+				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", runtime_ep)
 				.as_str(),
 			"/model/m/count-tokens"
 		);
 
 		let mantle = provider(BedrockEndpointPreference::MantleOnly);
-		assert_eq!(
-			mantle.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None),
-			BedrockEndpoint::Mantle
-		);
+		let mantle_ep = mantle.resolve_endpoint(RouteType::AnthropicTokenCount, Some("m"), None);
+		assert_eq!(mantle_ep, BedrockEndpoint::Mantle);
 		assert_eq!(
 			mantle
-				.get_host(RouteType::AnthropicTokenCount, Some("m"), None)
+				.get_host(RouteType::AnthropicTokenCount, mantle_ep)
 				.as_str(),
 			"bedrock-mantle.us-east-1.api.aws"
 		);
 		assert_eq!(
-			mantle.signing_service_name(RouteType::AnthropicTokenCount, Some("m"), None),
+			mantle.signing_service_name(mantle_ep),
 			Some("bedrock-mantle")
 		);
 		assert_eq!(
 			mantle
-				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", None)
+				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", mantle_ep)
 				.as_str(),
 			"/anthropic/v1/messages/count_tokens"
 		);
