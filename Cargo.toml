@@ -102,7 +102,7 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = { version = "1.15", default-features = false, features = [
+google-cloud-auth = { version = "1.16", default-features = false, features = [
     "idtoken",
     # Support the full ADC set; this one is opt in
     "gdch",
@@ -128,7 +128,7 @@ indexmap = { version = "2.13", features = ["serde"] }
 insta = { version = "1.47", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.12", features = ["serde"] }
 itertools = "0.15"
-jsonwebtoken = { version = "10.4.0" }
+jsonwebtoken = { version = "11" }
 lazy_static = "1.5"
 libc = "0.2"
 notify = "8.2"
