@@ -680,7 +680,11 @@ pub mod from_completions {
 	/// Function responses must remain in their own user entry: Gemini 3 rejects a
 	/// functionResponse with sibling parts. Other user entries retain a text filler when
 	/// necessary (for example, image-only turns).
-	pub(super) fn push_content(contents: &mut Vec<vg::Content>, role: &str, mut parts: Vec<vg::Part>) {
+	pub(super) fn push_content(
+		contents: &mut Vec<vg::Content>,
+		role: &str,
+		mut parts: Vec<vg::Part>,
+	) {
 		if parts.is_empty() {
 			return;
 		}
@@ -2224,7 +2228,6 @@ pub mod to_completions {
 		Body::from_stream(stream)
 	}
 }
-
 
 pub mod to_messages {
 	use std::time::Instant;
