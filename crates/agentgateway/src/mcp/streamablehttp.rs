@@ -46,6 +46,10 @@ pub(crate) struct RequestProtocol {
 }
 
 impl RequestProtocol {
+	pub(crate) fn version(&self) -> Option<&ProtocolVersion> {
+		self.version.as_ref()
+	}
+
 	pub(crate) fn is_modern(&self) -> bool {
 		self.version.as_ref().is_some_and(is_modern_version)
 	}

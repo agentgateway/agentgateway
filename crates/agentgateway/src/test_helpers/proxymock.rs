@@ -852,7 +852,7 @@ impl TestBind {
 		)
 	}
 
-	fn with_multiplex_mcp_backend_options(
+	pub(crate) fn with_multiplex_mcp_backend_options(
 		self,
 		name: &str,
 		servers: Vec<(&str, SocketAddr, bool)>,

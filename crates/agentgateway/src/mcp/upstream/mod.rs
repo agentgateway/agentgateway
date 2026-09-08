@@ -32,6 +32,13 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCa
 use crate::types::agent::{McpPrefixMode, McpTargetSpec};
 use crate::*;
 
+#[derive(Debug)]
+pub(crate) struct ResolverFailure {
+	pub status: http::StatusCode,
+	pub error: rmcp::ErrorData,
+	pub www_authenticate: Vec<http::HeaderValue>,
+}
+
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
 	method: ::http::Method,
@@ -173,6 +180,8 @@ pub enum UpstreamError {
 	/// so client-visible errors do not blame the request for a backend condition.
 	#[error("{0}")]
 	Unavailable(String),
+	#[error("resolver upstream error: {}", .0.error.message)]
+	ResolverFailure(Box<ResolverFailure>),
 	#[error("unsupported method: {0}")]
 	InvalidMethod(String),
 	#[error("stdio upstream error: {0}")]

@@ -189,10 +189,11 @@ impl Session {
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 		ctx: &IncomingRequestContext,
+		client_capabilities: Option<rmcp::model::ClientCapabilities>,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		let (service_name, prompt) = self
 			.relay
-			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
+			.resolve_resource_name(ResolveKind::Prompt, name, ctx, client_capabilities)
 			.await?;
 		log.non_atomic_mutate(|l| {
 			l.set_prompt(service_name.to_string(), prompt.to_string());
@@ -380,6 +381,23 @@ impl Session {
 	) -> Result<Response, ProxyError> {
 		match d {
 			Ok(r) => Ok(r),
+			Err(UpstreamError::ResolverFailure(failure)) if req_id.is_some() => {
+				let message = rmcp::model::JsonRpcError::new(req_id.clone(), failure.error);
+				let body = serde_json::to_vec(&message)
+					.map_err(|error| mcp::Error::SendError(req_id.clone(), error.to_string()))?;
+				let mut response = ::http::Response::new(bytes::Bytes::from(body));
+				*response.status_mut() = failure.status;
+				response.headers_mut().insert(
+					CONTENT_TYPE,
+					::http::HeaderValue::from_static(JSON_MIME_TYPE),
+				);
+				for challenge in failure.www_authenticate {
+					response
+						.headers_mut()
+						.append(::http::header::WWW_AUTHENTICATE, challenge);
+				}
+				Err(mcp::Error::UpstreamError(Box::new(http::SendDirectResponse(response))).into())
+			},
 			Err(UpstreamError::Http(ClientError::Status(resp))) => {
 				let resp = http::SendDirectResponse::new(*resp)
 					.await
@@ -481,6 +499,17 @@ impl Session {
 					l.session_id = session_id;
 				});
 				self.strip_unsupported_client_capabilities_from_meta(&mut r.request, &ctx);
+				let uses_resolver = matches!(
+					&r.request,
+					ClientRequest::CallToolRequest(_) | ClientRequest::GetPromptRequest(_)
+				) || matches!(
+					&r.request,
+					ClientRequest::CompleteRequest(request)
+						if matches!(&request.params.r#ref, Reference::Prompt(_))
+				);
+				let resolver_capabilities = (self.relay.needs_resolution() && uses_resolver)
+					.then(|| r.request.get_meta().client_capabilities())
+					.flatten();
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities, &ctx);
@@ -569,6 +598,7 @@ impl Session {
 							ResolveKind::Tool,
 							&name,
 							&ctx,
+							resolver_capabilities,
 						))
 						.await?;
 						let call_arguments = ctr.params.arguments.clone();
@@ -604,6 +634,7 @@ impl Session {
 							ResolveKind::Prompt,
 							&name,
 							&ctx,
+							resolver_capabilities,
 						))
 						.await?;
 						log.non_atomic_mutate(|l| {
@@ -696,8 +727,15 @@ impl Session {
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
-							let (service_name, prompt_name) =
-								Box::pin(self.authorize_prompt_request(&name, &method, &log, &cel, &ctx)).await?;
+							let (service_name, prompt_name) = Box::pin(self.authorize_prompt_request(
+								&name,
+								&method,
+								&log,
+								&cel,
+								&ctx,
+								resolver_capabilities,
+							))
+							.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
 							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},

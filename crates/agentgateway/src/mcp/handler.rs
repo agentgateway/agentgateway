@@ -6,17 +6,20 @@ use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use futures_util::StreamExt;
+use headers::HeaderMapExt;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, DiscoverResult,
-	ExtensionCapabilities, Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
-	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-	ProtocolVersion, RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	CacheScope, ClientCapabilities, ClientJsonRpcMessage, ClientNotification, ClientRequest,
+	ConstString, DiscoverResult, ErrorCode, ExtensionCapabilities, Implementation,
+	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
+	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
+	RequestMetaObject, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
 	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
 };
+use rmcp::transport::common::http_header::HEADER_MCP_PARAM_PREFIX;
 use tracing::{debug, info, warn};
 
 use crate::http::Response;
@@ -27,7 +30,7 @@ use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::subscriptions::ResourceSubscription;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::upstream::{IncomingRequestContext, ResolverFailure, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
@@ -240,8 +243,25 @@ impl ResolveKind {
 		}
 	}
 
-	fn list_request(&self, cursor: Option<String>) -> ClientRequest {
-		let params = cursor.map(|c| PaginatedRequestParams::default().with_cursor(Some(c)));
+	fn method(&self) -> &'static str {
+		match self {
+			ResolveKind::Tool => "tools/list",
+			ResolveKind::Prompt => "prompts/list",
+		}
+	}
+
+	fn list_request(
+		&self,
+		cursor: Option<String>,
+		meta: Option<&RequestMetaObject>,
+	) -> ClientRequest {
+		let params = if cursor.is_some() || meta.is_some() {
+			let mut params = PaginatedRequestParams::default().with_cursor(cursor);
+			params.meta = meta.cloned();
+			Some(params)
+		} else {
+			None
+		};
 		match self {
 			ResolveKind::Tool => ClientRequest::ListToolsRequest(rmcp::model::ListToolsRequest {
 				params,
@@ -397,9 +417,51 @@ impl Relay {
 		kind: ResolveKind,
 		res: &'b str,
 		ctx: &IncomingRequestContext,
+		client_capabilities: Option<ClientCapabilities>,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		if self.needs_resolution() {
-			let target = self.resolve_unprefixed(kind, res, ctx).await?;
+			let meta = if ctx_downstream_modern(ctx) {
+				let protocol_version = ctx
+					.extensions()
+					.get::<RequestProtocol>()
+					.and_then(RequestProtocol::version)
+					.cloned()
+					.ok_or_else(|| {
+						UpstreamError::InvalidRequest(
+							"modern resolver request is missing a protocol version".to_string(),
+						)
+					})?;
+				let client_capabilities = client_capabilities.ok_or_else(|| {
+					UpstreamError::InvalidRequest(
+						"modern resolver request is missing client capabilities".to_string(),
+					)
+				})?;
+				Some(RequestMetaObject::with_client_context(
+					protocol_version,
+					Implementation::new("agentgateway", BuildInfo::new().version.to_string()),
+					client_capabilities,
+				))
+			} else {
+				None
+			};
+			let mut resolver_ctx = ctx.clone();
+			let param_headers = resolver_ctx
+				.headers_mut()
+				.keys()
+				.filter(|name| {
+					name
+						.as_str()
+						.get(..HEADER_MCP_PARAM_PREFIX.len())
+						.is_some_and(|prefix| prefix.eq_ignore_ascii_case(HEADER_MCP_PARAM_PREFIX))
+				})
+				.cloned()
+				.collect_vec();
+			for name in param_headers {
+				resolver_ctx.headers_mut().remove(name);
+			}
+			let target = self
+				.resolve_unprefixed(kind, res, &resolver_ctx, meta.as_ref())
+				.await?;
 			return Ok((Cow::Owned(target.to_string()), res));
 		}
 		let (target, name) = self.parse_resource_name(res)?;
@@ -415,17 +477,19 @@ impl Relay {
 		kind: ResolveKind,
 		name: &str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<Strng, UpstreamError> {
 		let futs: Vec<_> = self
 			.upstreams
 			.iter_named()
 			.map(|(target, con)| async move {
-				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx).await;
+				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx, meta).await;
 				(target, res)
 			})
 			.collect();
 
 		let mut owner = None;
+		let mut failure = None;
 		for (target, res) in futures::future::join_all(futs).await {
 			match res {
 				Ok(true) => {
@@ -444,6 +508,9 @@ impl Relay {
 							"upstream '{target}' failed while resolving {} '{name}', skipping: {e}",
 							kind.as_str()
 						);
+						if failure.is_none() {
+							failure = Some(e);
+						}
 					} else {
 						return Err(e);
 					}
@@ -451,7 +518,16 @@ impl Relay {
 			}
 		}
 
-		owner.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown {} {name}", kind.as_str())))
+		if let Some(owner) = owner {
+			return Ok(owner);
+		}
+		if let Some(error) = failure {
+			return Err(error);
+		}
+		Err(UpstreamError::InvalidRequest(format!(
+			"unknown {} {name}",
+			kind.as_str()
+		)))
 	}
 
 	/// Page through one target's `kind` list until `name` is found or the pages
@@ -462,6 +538,7 @@ impl Relay {
 		kind: ResolveKind,
 		name: &str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<bool, UpstreamError> {
 		// Gateway-generated ids: reusing the client's id here would make the upstream
 		// see it twice (list probe, then the forwarded call) in one session.
@@ -471,13 +548,37 @@ impl Relay {
 		let mut cursor = None;
 		for _ in 0..MAX_LIST_PAGES {
 			let seq = RESOLVE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-			let req = JsonRpcRequest::new(
-				RequestId::String(format!("agw-resolve-{seq}").into()),
-				kind.list_request(cursor),
-			);
-			let Some(result) =
-				Self::first_response(con.generic_stream(target_name, req, ctx).await?).await?
-			else {
+			let id = RequestId::String(format!("agw-resolve-{seq}").into());
+			let req = JsonRpcRequest::new(id.clone(), kind.list_request(cursor, meta));
+			let stream = match con.generic_stream(target_name, req, ctx).await {
+				Ok(stream) => stream,
+				Err(UpstreamError::Http(ClientError::Status(response))) => {
+					return Self::resolver_http_error(target_name, kind, &id, *response).await;
+				},
+				Err(UpstreamError::Http(ClientError::Proxy(
+					crate::proxy::ProxyError::UpstreamCallTimeout | crate::proxy::ProxyError::RequestTimeout,
+				))) => {
+					return Err(Self::resolver_failure(
+						target_name,
+						kind,
+						"upstream resolver request timed out",
+						None,
+						None,
+						Vec::new(),
+					));
+				},
+				Err(_) => {
+					return Err(Self::resolver_failure(
+						target_name,
+						kind,
+						"upstream resolver request failed",
+						None,
+						None,
+						Vec::new(),
+					));
+				},
+			};
+			let Some(result) = Self::first_response(stream, target_name, kind, &id).await? else {
 				return Ok(false);
 			};
 			if !matches!(
@@ -485,13 +586,14 @@ impl Relay {
 				(ResolveKind::Tool, ServerResult::ListToolsResult(_))
 					| (ResolveKind::Prompt, ServerResult::ListPromptsResult(_))
 			) {
-				return Err(UpstreamError::InvalidRequest(format!(
-					"upstream returned a result incompatible with `{}`",
-					match kind {
-						ResolveKind::Tool => "tools/list",
-						ResolveKind::Prompt => "prompts/list",
-					}
-				)));
+				return Err(Self::resolver_failure(
+					target_name,
+					kind,
+					"upstream resolver response type was invalid",
+					None,
+					None,
+					Vec::new(),
+				));
 			}
 			if kind.contains_name(&result, name) {
 				return Ok(true);
@@ -501,30 +603,182 @@ impl Relay {
 				return Ok(false);
 			}
 		}
-		Err(UpstreamError::InvalidRequest(format!(
-			"exceeded {MAX_LIST_PAGES} pages listing {}s",
-			kind.as_str()
-		)))
+		Err(Self::resolver_failure(
+			target_name,
+			kind,
+			"upstream resolver pagination limit exceeded",
+			None,
+			None,
+			Vec::new(),
+		))
 	}
 
 	/// Consume a response stream until the first result, error data, or end.
 	/// `Ok(None)` means the target rejected the list method as unsupported.
-	async fn first_response(stream: Messages) -> Result<Option<ServerResult>, UpstreamError> {
+	async fn first_response(
+		stream: Messages,
+		target_name: &str,
+		kind: ResolveKind,
+		expected_id: &RequestId,
+	) -> Result<Option<ServerResult>, UpstreamError> {
 		let mut stream = std::pin::pin!(stream);
 		while let Some(msg) = stream.next().await {
 			match msg {
-				Ok(ServerJsonRpcMessage::Response(resp)) => return Ok(Some(resp.result)),
+				Ok(ServerJsonRpcMessage::Response(resp)) if &resp.id == expected_id => {
+					return Ok(Some(resp.result));
+				},
+				Ok(ServerJsonRpcMessage::Response(_)) => {
+					return Err(Self::resolver_failure(
+						target_name,
+						kind,
+						"upstream resolver response ID did not match request",
+						None,
+						None,
+						Vec::new(),
+					));
+				},
 				Ok(ServerJsonRpcMessage::Error(err)) => {
-					if err.error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND {
+					if err.id.as_ref() == Some(expected_id) && err.error.code == ErrorCode::METHOD_NOT_FOUND {
 						return Ok(None);
 					}
-					return Err(UpstreamError::InvalidRequest(err.error.message.to_string()));
+					return Err(Self::resolver_failure(
+						target_name,
+						kind,
+						"upstream resolver returned an error",
+						None,
+						Some(err.error.code),
+						Vec::new(),
+					));
+				},
+				Ok(ServerJsonRpcMessage::Request(_)) => {
+					return Err(Self::resolver_failure(
+						target_name,
+						kind,
+						"upstream resolver returned an unexpected request",
+						None,
+						None,
+						Vec::new(),
+					));
 				},
 				Ok(_) => {},
-				Err(e) => return Err(e.into()),
+				Err(_) => {
+					return Err(Self::resolver_failure(
+						target_name,
+						kind,
+						"upstream resolver response was invalid",
+						None,
+						None,
+						Vec::new(),
+					));
+				},
 			}
 		}
-		Err(UpstreamError::Recv)
+		Err(Self::resolver_failure(
+			target_name,
+			kind,
+			"upstream resolver response stream closed",
+			None,
+			None,
+			Vec::new(),
+		))
+	}
+
+	async fn resolver_http_error(
+		target_name: &str,
+		kind: ResolveKind,
+		expected_id: &RequestId,
+		response: Response,
+	) -> Result<bool, UpstreamError> {
+		let status = response.status();
+		let www_authenticate = response
+			.headers()
+			.get_all(http::header::WWW_AUTHENTICATE)
+			.iter()
+			.cloned()
+			.collect::<Vec<_>>();
+		if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
+			return Err(Self::resolver_failure(
+				target_name,
+				kind,
+				"upstream authorization failed",
+				Some(status),
+				None,
+				www_authenticate,
+			));
+		}
+		let limit = crate::http::response_buffer_limit(&response);
+		let encoding = response.headers().typed_get::<headers::ContentEncoding>();
+		let body = crate::http::compression::to_bytes_with_decompression(
+			response.into_body(),
+			encoding.as_ref(),
+			limit,
+		)
+		.await
+		.map_err(|_| {
+			Self::resolver_failure(
+				target_name,
+				kind,
+				"upstream resolver response was invalid",
+				Some(status),
+				None,
+				Vec::new(),
+			)
+		})?
+		.1;
+		let message = serde_json::from_slice::<Option<ServerJsonRpcMessage>>(&body).map_err(|_| {
+			Self::resolver_failure(
+				target_name,
+				kind,
+				"upstream resolver response was invalid",
+				Some(status),
+				None,
+				Vec::new(),
+			)
+		})?;
+		if let Some(ServerJsonRpcMessage::Error(error)) = &message
+			&& error.id.as_ref() == Some(expected_id)
+			&& error.error.code == ErrorCode::METHOD_NOT_FOUND
+		{
+			return Ok(false);
+		}
+		let upstream_code = match &message {
+			Some(ServerJsonRpcMessage::Error(error)) => Some(error.error.code),
+			_ => None,
+		};
+		Err(Self::resolver_failure(
+			target_name,
+			kind,
+			"upstream resolver request failed",
+			Some(status),
+			upstream_code,
+			Vec::new(),
+		))
+	}
+
+	fn resolver_failure(
+		target_name: &str,
+		kind: ResolveKind,
+		message: &'static str,
+		upstream_status: Option<StatusCode>,
+		upstream_code: Option<ErrorCode>,
+		www_authenticate: Vec<http::HeaderValue>,
+	) -> UpstreamError {
+		let status = upstream_status
+			.filter(|status| matches!(*status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN))
+			.unwrap_or(StatusCode::SERVICE_UNAVAILABLE);
+		UpstreamError::ResolverFailure(Box::new(ResolverFailure {
+			status,
+			error: ErrorData::internal_error(
+				message,
+				Some(serde_json::json!({
+					"target": target_name,
+					"method": kind.method(),
+					"upstreamStatus": upstream_status.map(|status| status.as_u16()),
+					"upstreamCode": upstream_code.map(|code| code.0),
+				})),
+			),
+			www_authenticate,
+		}))
 	}
 
 	/// Reverse of `resource_uri`: extracts the service name and original URI from a

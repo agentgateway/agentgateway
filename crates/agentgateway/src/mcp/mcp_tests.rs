@@ -453,17 +453,1399 @@ async fn apps_rbac_denied_ui_resource_strips_tool_meta() {
 }
 
 fn never_prefix_proxy(servers: Vec<(&str, SocketAddr, bool)>, stateful: bool) -> TestBind {
+	never_prefix_proxy_with_policies(servers, stateful, vec![])
+}
+
+fn never_prefix_proxy_with_policies(
+	servers: Vec<(&str, SocketAddr, bool)>,
+	stateful: bool,
+	policies: Vec<BackendTrafficPolicy>,
+) -> TestBind {
 	setup_proxy_test("{}")
 		.unwrap()
 		.with_multiplex_mcp_backend_prefix_mode(
 			"mcp",
 			servers,
 			stateful,
-			vec![],
+			policies,
 			crate::types::agent::McpPrefixMode::Never,
 		)
 		.with_bind(simple_bind())
 		.with_route(basic_named_route(strng::new("/mcp")))
+}
+
+fn never_prefix_proxy_with_failure_mode(
+	servers: Vec<(&str, SocketAddr, bool)>,
+	stateful: bool,
+	failure_mode: FailureMode,
+) -> TestBind {
+	setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_options(
+			"mcp",
+			servers,
+			stateful,
+			vec![],
+			crate::types::agent::McpPrefixMode::Never,
+			failure_mode,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")))
+}
+
+#[derive(Clone, Debug)]
+struct StrictModernRequest {
+	body: Vec<u8>,
+	headers: Vec<(String, String)>,
+}
+
+struct StrictModernTarget {
+	addr: SocketAddr,
+	requests: Arc<std::sync::Mutex<Vec<StrictModernRequest>>>,
+	_cancel: tokio::sync::oneshot::Sender<()>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+enum StrictListBehavior {
+	#[default]
+	Normal,
+	CapabilityUi,
+	Duplicate,
+	Error {
+		status: http::StatusCode,
+		code: i32,
+		matching_id: bool,
+		format: StrictResponseFormat,
+	},
+	MismatchedId,
+	Malformed,
+	NotFound,
+	WrongResult,
+	Closed,
+	ServerRequest,
+	Unauthorized,
+	Forbidden,
+	UnauthorizedMalformed,
+	Infinite,
+	Timeout,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum StrictResponseFormat {
+	Json,
+	Sse,
+	Gzip,
+}
+
+impl StrictModernTarget {
+	fn requests(&self) -> Vec<StrictModernRequest> {
+		self.requests.lock().unwrap().clone()
+	}
+}
+
+async fn strict_modern_target(name: &'static str) -> StrictModernTarget {
+	strict_modern_target_with_behavior(name, StrictListBehavior::Normal).await
+}
+
+async fn strict_modern_target_with_behavior(
+	name: &'static str,
+	behavior: StrictListBehavior,
+) -> StrictModernTarget {
+	strict_modern_target_with_gate(name, behavior, None).await
+}
+
+struct StrictResolutionGate {
+	arrivals: tokio::sync::Barrier,
+	release: Arc<tokio::sync::Semaphore>,
+}
+
+async fn strict_modern_target_with_gate(
+	name: &'static str,
+	behavior: StrictListBehavior,
+	gate: Option<Arc<StrictResolutionGate>>,
+) -> StrictModernTarget {
+	use axum::response::IntoResponse;
+
+	agent_core::telemetry::testing::setup_test_logging();
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let requests = Arc::new(std::sync::Mutex::new(Vec::new()));
+	let requests_clone = requests.clone();
+	let router = axum::Router::new().route(
+		"/mcp",
+		axum::routing::post(move |request: axum::http::Request<axum::body::Body>| {
+			let requests = requests_clone.clone();
+			let gate = gate.clone();
+			async move {
+				let (parts, body) = request.into_parts();
+				let bytes = axum::body::to_bytes(body, 1024 * 1024).await.unwrap();
+				let headers = parts
+					.headers
+					.iter()
+					.filter_map(|(key, value)| {
+						Some((key.as_str().to_string(), value.to_str().ok()?.to_string()))
+					})
+					.collect::<Vec<_>>();
+				let body_value = serde_json::from_slice::<serde_json::Value>(&bytes).unwrap_or_default();
+				let id = body_value.get("id").cloned().unwrap_or(serde_json::Value::Null);
+				let method = body_value
+					.get("method")
+					.and_then(serde_json::Value::as_str)
+					.unwrap_or_default();
+				requests.lock().unwrap().push(StrictModernRequest {
+					body: bytes.to_vec(),
+					headers: headers.clone(),
+				});
+
+				if ["tools/list", "prompts/list", "tools/call", "prompts/get", "completion/complete"]
+					.contains(&method)
+				{
+					let protocol = parts
+						.headers
+						.get("mcp-protocol-version")
+						.and_then(|value| value.to_str().ok());
+					let method_header = parts
+						.headers
+						.get("mcp-method")
+						.and_then(|value| value.to_str().ok());
+					let meta = body_value.pointer("/params/_meta");
+					let valid_meta = meta
+						.and_then(serde_json::Value::as_object)
+						.is_some_and(|meta| {
+							protocol == Some("2026-07-28")
+								&& meta
+								.get("io.modelcontextprotocol/protocolVersion")
+								.and_then(serde_json::Value::as_str)
+								== protocol
+								&& meta
+									.get("io.modelcontextprotocol/clientCapabilities")
+									.is_some_and(serde_json::Value::is_object)
+						});
+					if !valid_meta || method_header != Some(method) {
+						return (
+							http::StatusCode::BAD_REQUEST,
+							axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {"code": -32602, "message": "invalid modern request metadata"}
+							})),
+						)
+							.into_response();
+					}
+				}
+
+				if method == "tools/list" && body_value.pointer("/params/cursor").is_none()
+					&& let Some(gate) = gate.as_ref() {
+					gate.arrivals.wait().await;
+					if parts.headers.get("x-client-id").is_some_and(|value| value == "a") {
+						gate.release.acquire().await.unwrap().forget();
+					}
+				}
+				if matches!(method, "tools/list" | "prompts/list") {
+					match behavior {
+						StrictListBehavior::Timeout => {
+							return std::future::pending::<axum::response::Response>().await;
+						},
+						StrictListBehavior::Error { status, code, matching_id, format } => {
+							let id = if matching_id { id } else { serde_json::json!("wrong-resolver-id") };
+							let body = serde_json::json!({
+								"jsonrpc": "2.0", "id": id,
+								"error": {"code": code, "message": "private fixture detail", "data": "private fixture detail"}
+							}).to_string();
+							let mut response = match format {
+								StrictResponseFormat::Json => (
+									[(http::header::CONTENT_TYPE, "application/json")], body,
+								).into_response(),
+								StrictResponseFormat::Sse => (
+									[(http::header::CONTENT_TYPE, "text/event-stream")], format!("event: message\ndata: {body}\n\n"),
+								).into_response(),
+								StrictResponseFormat::Gzip => {
+									let mut encoder = async_compression::tokio::bufread::GzipEncoder::new(body.as_bytes());
+									let mut bytes = Vec::new();
+									tokio::io::AsyncReadExt::read_to_end(&mut encoder, &mut bytes).await.unwrap();
+									([
+										(http::header::CONTENT_TYPE, "application/json"),
+										(http::header::CONTENT_ENCODING, "gzip"),
+									], bytes).into_response()
+								},
+							};
+							*response.status_mut() = status;
+							return response;
+						},
+						StrictListBehavior::MismatchedId | StrictListBehavior::WrongResult => {
+							return axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": if matches!(behavior, StrictListBehavior::MismatchedId) { serde_json::json!("wrong-resolver-id") } else { id },
+								"result": {"content": [], "resultType": "complete"}
+							})).into_response();
+						},
+						StrictListBehavior::Malformed | StrictListBehavior::NotFound => {
+							let status = if matches!(behavior, StrictListBehavior::NotFound) { http::StatusCode::NOT_FOUND } else { http::StatusCode::OK };
+							return (status, [(http::header::CONTENT_TYPE, "application/json")], "private fixture detail").into_response();
+						},
+						StrictListBehavior::ServerRequest => {
+                            use futures::StreamExt;
+                            let request = "data: {\"jsonrpc\":\"2.0\",\"id\":\"private-server-id\",\"method\":\"ping\"}\n\n";
+                            let stream = futures::stream::once(async move { Ok::<_, std::convert::Infallible>(request) })
+                                .chain(futures::stream::pending());
+                            return ([(http::header::CONTENT_TYPE, "text/event-stream")], axum::body::Body::from_stream(stream)).into_response();
+                        },
+						StrictListBehavior::Closed => {
+							return ([(http::header::CONTENT_TYPE, "text/event-stream")], "").into_response();
+						},
+						StrictListBehavior::Unauthorized | StrictListBehavior::UnauthorizedMalformed | StrictListBehavior::Forbidden => {
+							let body = if matches!(behavior, StrictListBehavior::UnauthorizedMalformed) {
+								"private fixture detail".to_string()
+							} else {
+								serde_json::json!({"jsonrpc":"2.0", "id":id, "error":{"code":-32603,"message":"private fixture detail"}}).to_string()
+							};
+							let mut response = body.into_response();
+							*response.status_mut() = if matches!(behavior, StrictListBehavior::Forbidden) { http::StatusCode::FORBIDDEN } else { http::StatusCode::UNAUTHORIZED };
+							for challenge in ["Bearer realm=resolver", "Basic realm=alternate"] {
+								response.headers_mut().append(http::header::WWW_AUTHENTICATE, http::HeaderValue::from_static(challenge));
+							}
+							response.headers_mut().insert("x-private-upstream", http::HeaderValue::from_static("private fixture detail"));
+							return response;
+						},
+						StrictListBehavior::Infinite => {
+							let mut result = serde_json::json!({"resultType":"paged","nextCursor":"resolver-never-ending"});
+							result[if method == "tools/list" { "tools" } else { "prompts" }] = serde_json::json!([]);
+							return axum::Json(serde_json::json!({"jsonrpc":"2.0","id":id,"result":result})).into_response();
+						},
+						StrictListBehavior::Normal | StrictListBehavior::CapabilityUi | StrictListBehavior::Duplicate => {},
+					}
+				}
+
+				let result = match method {
+					"server/discover" => serde_json::json!({
+						"resultType": "complete",
+						"supportedVersions": ["2026-07-28"],
+						"capabilities": {"tools": {}, "prompts": {}},
+						"serverInfo": {"name": name, "version": "0.0.1"}
+					}),
+					"initialize" => serde_json::json!({
+						"protocolVersion": "2026-07-28",
+						"capabilities": {"tools": {}, "prompts": {}},
+						"serverInfo": {"name": name, "version": "0.0.1"}
+					}),
+					"tools/list" => {
+						let cursor = body_value.pointer("/params/cursor").and_then(serde_json::Value::as_str);
+						let page_two_cursor = match parts.headers.get("x-client-id") {
+							Some(marker) => format!("{name}-{}-tools-page-2", marker.to_str().unwrap()),
+							None => format!("{name}-tools-page-2"),
+						};
+						let tool_name = format!("{name}_ping");
+						let first_name = format!("{name}_first");
+						if cursor.is_none() {
+							let listed_name = match behavior {
+								StrictListBehavior::CapabilityUi
+									if body_value
+										.pointer("/params/_meta/io.modelcontextprotocol~1clientCapabilities/extensions/io.modelcontextprotocol~1ui")
+										.is_some() => format!("{name}_ui"),
+								StrictListBehavior::Duplicate => "shared_ping".to_string(),
+								_ => first_name,
+							};
+							serde_json::json!({
+								"resultType": "paged",
+								"tools": [{"name": listed_name, "description": "first page", "inputSchema": {"type": "object"}}],
+								"nextCursor": page_two_cursor
+							})
+						} else if cursor == Some(page_two_cursor.as_str()) {
+							serde_json::json!({
+								"resultType": "complete",
+								"tools": [{"name": tool_name, "description": "target ping", "inputSchema": {"type": "object"}}]
+							})
+						} else {
+							serde_json::json!({"resultType": "complete", "tools": []})
+						}
+					},
+					"prompts/list" => {
+						let cursor = body_value.pointer("/params/cursor").and_then(serde_json::Value::as_str);
+						let page_two_cursor = format!("{name}-prompts-page-2");
+						let prompt_name = format!("{name}_prompt");
+						let first_name = format!("{name}_first_prompt");
+						if cursor.is_none() {
+							serde_json::json!({
+								"resultType": "paged",
+								"prompts": [{"name": first_name, "description": "first page"}],
+								"nextCursor": format!("{name}-prompts-page-2")
+							})
+						} else if cursor == Some(page_two_cursor.as_str()) {
+							serde_json::json!({
+								"resultType": "complete",
+								"prompts": [{"name": prompt_name, "description": "target prompt"}]
+							})
+						} else {
+							serde_json::json!({"resultType": "complete", "prompts": []})
+						}
+					},
+					"tools/call" => {
+						let called_name = body_value.pointer("/params/name").and_then(serde_json::Value::as_str);
+						if called_name.is_some_and(|called_name| {
+							called_name == format!("{name}_ping")
+								|| called_name == format!("{name}_first")
+								|| called_name == format!("{name}_ui")
+							|| (matches!(behavior, StrictListBehavior::Duplicate) && called_name == "shared_ping")
+						}) {
+							serde_json::json!({
+								"resultType": "complete",
+								"content": [{"type": "text", "text": format!("{name} owner") }],
+								"isError": false
+							})
+						} else {
+							serde_json::json!({"resultType": "complete", "content": [{"type": "text", "text": "wrong target"}], "isError": true})
+						}
+					},
+					"prompts/get" => serde_json::json!({
+						"description": format!("{name} prompt"),
+						"messages": [{"role": "user", "content": {"type": "text", "text": format!("{name} prompt owner")}}]
+					}),
+					"completion/complete" => serde_json::json!({"completion": {"values": [format!("{name} completion")], "total": 1, "hasMore": false}}),
+					_ => serde_json::json!({}),
+				};
+				(
+					http::StatusCode::OK,
+					axum::Json(serde_json::json!({"jsonrpc": "2.0", "id": id, "result": result})),
+				)
+					.into_response()
+			}
+		}),
+	);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	StrictModernTarget {
+		addr,
+		requests,
+		_cancel: tx,
+	}
+}
+
+fn strict_request_body(request: &StrictModernRequest) -> serde_json::Value {
+	serde_json::from_slice(&request.body).unwrap()
+}
+
+fn strict_header<'a>(request: &'a StrictModernRequest, name: &str) -> Option<&'a str> {
+	request
+		.headers
+		.iter()
+		.find(|(key, _)| key.eq_ignore_ascii_case(name))
+		.map(|(_, value)| value.as_str())
+}
+
+async fn strict_gateway_post(
+	io: SocketAddr,
+	id: &str,
+	method: &str,
+	name: Option<&str>,
+	params: serde_json::Value,
+) -> reqwest::Response {
+	let client = reqwest::Client::new();
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": id,
+		"method": method,
+		"params": params,
+	});
+	let mut request = mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", method);
+	if let Some(name) = name {
+		request = request.header("mcp-name", name);
+	}
+	request
+		.timeout(std::time::Duration::from_secs(5))
+		.send()
+		.await
+		.unwrap()
+}
+
+async fn strict_target_pair(
+	behavior: StrictListBehavior,
+) -> (StrictModernTarget, StrictModernTarget) {
+	(
+		strict_modern_target_with_behavior("alpha", behavior).await,
+		strict_modern_target_with_behavior("beta", behavior).await,
+	)
+}
+
+#[tokio::test]
+async fn modern_resolution_strict_fixture_controls() {
+	let target = strict_modern_target("alpha").await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{}/mcp", target.addr);
+	for (id, meta) in [
+		(
+			"direct-no-protocol",
+			serde_json::json!({
+				"io.modelcontextprotocol/clientCapabilities": {}
+			}),
+		),
+		(
+			"direct-no-capabilities",
+			serde_json::json!({
+				"io.modelcontextprotocol/protocolVersion": "2026-07-28"
+			}),
+		),
+	] {
+		let malformed = serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": id,
+			"method": "tools/list",
+			"params": {"_meta": meta}
+		});
+		let rejected = mcp_json_post(&client, &url, &malformed)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "tools/list")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(rejected.status(), reqwest::StatusCode::BAD_REQUEST, "{id}");
+		let rejected_body = rejected.json::<serde_json::Value>().await.unwrap();
+		assert_eq!(rejected_body["error"]["code"], -32602, "{id}");
+	}
+
+	let valid = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": "direct-good",
+		"method": "tools/list",
+		"params": {"_meta": modern_meta()}
+	});
+	let accepted = mcp_json_post(&client, &url, &valid)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/list")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(accepted.status(), reqwest::StatusCode::OK);
+	let accepted_body = accepted.json::<serde_json::Value>().await.unwrap();
+	assert_eq!(accepted_body["id"], "direct-good");
+
+	let requests = target.requests();
+	assert_eq!(requests.len(), 3);
+}
+
+#[tokio::test]
+async fn modern_resolution_strict_single_target_preserves_client_id() {
+	let target = strict_modern_target("alpha").await;
+	let t = never_prefix_proxy(vec![("alpha", target.addr, false)], false);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let response = strict_gateway_post(
+		io,
+		"client-alpha-call",
+		"tools/call",
+		Some("alpha_ping"),
+		serde_json::json!({"name": "alpha_ping", "arguments": {}, "_meta": modern_meta()}),
+	)
+	.await;
+	let response_status = response.status();
+	let response_text = response.text().await.unwrap();
+	assert_eq!(response_status, reqwest::StatusCode::OK);
+	let response_body = terminal_message(&response_text, "client-alpha-call");
+	assert_eq!(response_body["id"], "client-alpha-call");
+	assert_eq!(response_body["result"]["content"][0]["text"], "alpha owner");
+
+	let requests = target.requests();
+	assert_eq!(requests.len(), 1);
+	let call_request = &requests[0];
+	assert_eq!(strict_request_body(call_request)["method"], "tools/call");
+	assert_eq!(strict_request_body(call_request)["id"], "client-alpha-call");
+	assert_eq!(
+		strict_request_body(call_request)["params"]["name"],
+		"alpha_ping"
+	);
+	assert_eq!(
+		strict_header(call_request, "mcp-method"),
+		Some("tools/call")
+	);
+	assert_eq!(strict_header(call_request, "mcp-name"), Some("alpha_ping"));
+}
+
+#[tokio::test]
+async fn modern_resolution_strict_never_prefix_paginates_tools_and_prompts() {
+	let alpha = strict_modern_target("alpha").await;
+	let beta = strict_modern_target("beta").await;
+	let t = never_prefix_proxy(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let tool_response = strict_gateway_post(
+		io,
+		"client-alpha-page-two-tool",
+		"tools/call",
+		Some("alpha_ping"),
+		serde_json::json!({"name": "alpha_ping", "arguments": {}, "_meta": modern_meta()}),
+	)
+	.await;
+	let tool_status = tool_response.status();
+	let tool_text = tool_response.text().await.unwrap();
+	assert_eq!(tool_status, reqwest::StatusCode::OK);
+	let tool_body = terminal_message(&tool_text, "client-alpha-page-two-tool");
+	assert_eq!(tool_body["id"], "client-alpha-page-two-tool");
+	assert_eq!(tool_body["result"]["content"][0]["text"], "alpha owner");
+
+	let prompt_response = strict_gateway_post(
+		io,
+		"client-beta-page-two-prompt",
+		"prompts/get",
+		Some("beta_prompt"),
+		serde_json::json!({"name": "beta_prompt", "arguments": {}, "_meta": modern_meta()}),
+	)
+	.await;
+	let prompt_status = prompt_response.status();
+	let prompt_text = prompt_response.text().await.unwrap();
+	assert_eq!(prompt_status, reqwest::StatusCode::OK);
+	let prompt_body = terminal_message(&prompt_text, "client-beta-page-two-prompt");
+	assert_eq!(prompt_body["id"], "client-beta-page-two-prompt");
+	assert_eq!(
+		prompt_body["result"]["messages"][0]["content"]["text"],
+		"beta prompt owner"
+	);
+
+	let alpha_requests = alpha.requests();
+	let beta_requests = beta.requests();
+	assert_strict_resolution_requests(&alpha_requests, "alpha");
+	assert_strict_resolution_requests(&beta_requests, "beta");
+	assert_eq!(
+		alpha_requests
+			.iter()
+			.filter(|request| strict_request_body(request)["method"] == "tools/call")
+			.count(),
+		1
+	);
+	assert_eq!(
+		beta_requests
+			.iter()
+			.filter(|request| strict_request_body(request)["method"] == "tools/call")
+			.count(),
+		0
+	);
+	assert_eq!(
+		beta_requests
+			.iter()
+			.filter(|request| strict_request_body(request)["method"] == "prompts/get")
+			.count(),
+		1
+	);
+	assert_eq!(
+		alpha_requests
+			.iter()
+			.filter(|request| strict_request_body(request)["method"] == "prompts/get")
+			.count(),
+		0
+	);
+}
+
+#[tokio::test]
+async fn modern_resolution_capability_sensitive_first_page_and_completion() {
+	let alpha = strict_modern_target_with_behavior("alpha", StrictListBehavior::CapabilityUi).await;
+	let beta = strict_modern_target("beta").await;
+	let t = never_prefix_proxy(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let mut meta = modern_meta();
+	meta["io.modelcontextprotocol/clientCapabilities"] = serde_json::json!({
+		"extensions": {"io.modelcontextprotocol/ui": {}},
+		"elicitation": {},
+		"roots": {}
+	});
+	let expected_capabilities = meta["io.modelcontextprotocol/clientCapabilities"].clone();
+	meta["progressToken"] = "discard-me".into();
+	meta["requestState"] = "discard-me".into();
+	meta["io.example/vendor"] = serde_json::json!({"discard": true});
+	let call = strict_gateway_post(
+		io,
+		"client-capability-first-page",
+		"tools/call",
+		Some("alpha_ui"),
+		serde_json::json!({"name": "alpha_ui", "arguments": {}, "_meta": meta.clone()}),
+	)
+	.await;
+	let status = call.status();
+	let text = call.text().await.unwrap();
+	assert_eq!(status, reqwest::StatusCode::OK);
+	let message = terminal_message(&text, "client-capability-first-page");
+	assert_eq!(message["result"]["content"][0]["text"], "alpha owner");
+
+	let completion = strict_gateway_post(
+		io,
+		"client-capability-completion",
+		"completion/complete",
+		None,
+		serde_json::json!({
+			"ref": {"type": "ref/prompt", "name": "alpha_prompt"},
+			"argument": {"name": "message", "value": "al"},
+			"_meta": meta
+		}),
+	)
+	.await;
+	let completion_status = completion.status();
+	let completion_text = completion.text().await.unwrap();
+	assert_eq!(completion_status, reqwest::StatusCode::OK);
+	let completion_message = terminal_message(&completion_text, "client-capability-completion");
+	assert_eq!(
+		completion_message["result"]["completion"]["values"][0],
+		"alpha completion"
+	);
+
+	for target in [alpha.requests(), beta.requests()] {
+		for request in target {
+			let body = strict_request_body(&request);
+			if !matches!(body["method"].as_str(), Some("tools/list" | "prompts/list")) {
+				continue;
+			}
+			let meta = &body["params"]["_meta"];
+			assert_eq!(
+				meta["io.modelcontextprotocol/clientCapabilities"],
+				expected_capabilities
+			);
+			assert!(meta["io.modelcontextprotocol/clientCapabilities"]["extensions"]["io.modelcontextprotocol/ui"].is_object());
+			assert_eq!(
+				meta["io.modelcontextprotocol/clientInfo"]["name"],
+				"agentgateway"
+			);
+			assert!(meta.get("progressToken").is_none());
+			assert!(meta.get("requestState").is_none());
+			assert!(meta.get("io.example/vendor").is_none());
+		}
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_duplicate_and_unknown_preserve_ids() {
+	for (behavior, name, expected) in [
+		(
+			StrictListBehavior::Duplicate,
+			"shared_ping",
+			"multiple targets",
+		),
+		(StrictListBehavior::Normal, "missing_ping", "unknown tool"),
+	] {
+		let (alpha, beta) = strict_target_pair(behavior).await;
+		let t = never_prefix_proxy(
+			vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+			false,
+		);
+		let io = t.serve_real_listener(strng::new("bind")).await;
+		let response = strict_gateway_post(
+			io,
+			"client-resolution-error",
+			"tools/call",
+			Some(name),
+			serde_json::json!({"name": name, "arguments": {}, "_meta": modern_meta()}),
+		)
+		.await;
+		let status = response.status();
+		let text = response.text().await.unwrap();
+		assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
+		let message = terminal_message(&text, "client-resolution-error");
+		assert!(
+			message["error"]["message"]
+				.as_str()
+				.unwrap()
+				.contains(expected)
+		);
+		for target in [&alpha, &beta] {
+			assert!(
+				target
+					.requests()
+					.iter()
+					.all(|request| strict_request_body(request)["method"] != "tools/call")
+			);
+		}
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_list_before_call_still_resolves_the_owner() {
+	let (alpha, beta) = strict_target_pair(StrictListBehavior::Normal).await;
+	let t = never_prefix_proxy(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let listed = strict_gateway_post(
+		io,
+		"client-list-first",
+		"tools/list",
+		None,
+		serde_json::json!({"_meta":modern_meta()}),
+	)
+	.await;
+	assert_eq!(listed.status(), http::StatusCode::OK);
+	let message = terminal_message(&listed.text().await.unwrap(), "client-list-first");
+	assert_eq!(message["result"]["tools"].as_array().unwrap().len(), 2);
+	let called = strict_gateway_post(
+		io,
+		"client-call-after-list",
+		"tools/call",
+		Some("alpha_ping"),
+		serde_json::json!({"name":"alpha_ping","arguments":{},"_meta":modern_meta()}),
+	)
+	.await;
+	assert_eq!(called.status(), http::StatusCode::OK);
+	let message = terminal_message(&called.text().await.unwrap(), "client-call-after-list");
+	assert_eq!(message["result"]["content"][0]["text"], "alpha owner");
+	for target in [&alpha, &beta] {
+		let requests = target.requests();
+		assert_eq!(
+			requests
+				.iter()
+				.filter(|request| strict_request_body(request)["id"] == "client-list-first")
+				.count(),
+			1
+		);
+		assert_eq!(
+			requests
+				.iter()
+				.filter(|request| strict_request_body(request)["id"]
+					.as_str()
+					.is_some_and(|id| id.starts_with("agw-resolve-")))
+				.count(),
+			2
+		);
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_rejects_invalid_capabilities_before_probing() {
+	let (alpha, beta) = strict_target_pair(StrictListBehavior::Normal).await;
+	let t = never_prefix_proxy(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	for capabilities in [None, Some(serde_json::json!("invalid"))] {
+		let mut meta = modern_meta();
+		meta
+			.as_object_mut()
+			.unwrap()
+			.remove("io.modelcontextprotocol/clientCapabilities");
+		if let Some(capabilities) = capabilities {
+			meta["io.modelcontextprotocol/clientCapabilities"] = capabilities;
+		}
+		let response = strict_gateway_post(
+			io,
+			"client-invalid-capabilities",
+			"tools/call",
+			Some("alpha_ping"),
+			serde_json::json!({"name":"alpha_ping","arguments":{},"_meta":meta}),
+		)
+		.await;
+		let message = assert_resolution_error(
+			response,
+			"client-invalid-capabilities",
+			http::StatusCode::BAD_REQUEST,
+			-32602,
+		)
+		.await;
+		assert!(
+			message["error"]["message"]
+				.as_str()
+				.unwrap()
+				.contains("client capabilities")
+		);
+	}
+	assert!(alpha.requests().is_empty());
+	assert!(beta.requests().is_empty());
+}
+
+async fn assert_resolution_error(
+	response: reqwest::Response,
+	id: &str,
+	status: http::StatusCode,
+	code: i32,
+) -> serde_json::Value {
+	let actual_status = response.status();
+	let headers = response.headers().clone();
+	let text = response.text().await.unwrap();
+	assert_eq!(actual_status, status, "{text}");
+	assert_eq!(headers[http::header::CONTENT_TYPE], "application/json");
+	assert!(!headers.contains_key(http::header::CONTENT_ENCODING));
+	assert!(!headers.contains_key("x-private-upstream"));
+	assert!(!text.contains("private fixture detail"), "{text}");
+	assert!(!text.contains("agw-resolve-"), "{text}");
+	let message = terminal_message(&text, id);
+	assert_eq!(message["error"]["code"], code, "{message}");
+	let challenges = headers
+		.get_all(http::header::WWW_AUTHENTICATE)
+		.iter()
+		.map(|value| value.to_str().unwrap())
+		.collect::<Vec<_>>();
+	if matches!(
+		status,
+		http::StatusCode::UNAUTHORIZED | http::StatusCode::FORBIDDEN
+	) {
+		assert_eq!(
+			challenges,
+			["Bearer realm=resolver", "Basic realm=alternate"]
+		);
+	} else {
+		assert!(challenges.is_empty());
+	}
+	message
+}
+
+#[tokio::test]
+async fn modern_resolution_method_not_found_is_not_an_owner() {
+	for (status, format) in [
+		(http::StatusCode::OK, StrictResponseFormat::Json),
+		(http::StatusCode::OK, StrictResponseFormat::Sse),
+		(http::StatusCode::NOT_FOUND, StrictResponseFormat::Json),
+		(http::StatusCode::NOT_FOUND, StrictResponseFormat::Gzip),
+	] {
+		let alpha = strict_modern_target("alpha").await;
+		let beta = strict_modern_target_with_behavior(
+			"beta",
+			StrictListBehavior::Error {
+				status,
+				code: -32601,
+				matching_id: true,
+				format,
+			},
+		)
+		.await;
+		let t = never_prefix_proxy(
+			vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+			false,
+		);
+		let io = t.serve_real_listener(strng::new("bind")).await;
+		for (name, expected_status) in [
+			("alpha_first", http::StatusCode::OK),
+			("missing", http::StatusCode::BAD_REQUEST),
+		] {
+			let response = strict_gateway_post(
+				io,
+				"client-unsupported",
+				"tools/call",
+				Some(name),
+				serde_json::json!({"name":name,"arguments":{},"_meta":modern_meta()}),
+			)
+			.await;
+			if expected_status == http::StatusCode::OK {
+				assert_eq!(response.status(), expected_status);
+				let message = terminal_message(&response.text().await.unwrap(), "client-unsupported");
+				assert_eq!(message["result"]["content"][0]["text"], "alpha owner");
+			} else {
+				let message =
+					assert_resolution_error(response, "client-unsupported", expected_status, -32602).await;
+				assert!(
+					message["error"]["message"]
+						.as_str()
+						.unwrap()
+						.contains("unknown tool")
+				);
+			}
+		}
+		assert!(
+			beta
+				.requests()
+				.iter()
+				.all(|request| strict_request_body(request)["method"] != "tools/call")
+		);
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_list_failures_preserve_ids_and_challenges() {
+	let error = |status, code, matching_id| StrictListBehavior::Error {
+		status,
+		code,
+		matching_id,
+		format: StrictResponseFormat::Json,
+	};
+	for (behavior, expected_status) in [
+		(
+			error(http::StatusCode::BAD_REQUEST, -32602, true),
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			error(http::StatusCode::NOT_FOUND, -32601, false),
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			error(http::StatusCode::OK, -32601, false),
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			StrictListBehavior::MismatchedId,
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			StrictListBehavior::Malformed,
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			StrictListBehavior::NotFound,
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			StrictListBehavior::WrongResult,
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			StrictListBehavior::ServerRequest,
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			StrictListBehavior::Closed,
+			http::StatusCode::SERVICE_UNAVAILABLE,
+		),
+		(
+			StrictListBehavior::Unauthorized,
+			http::StatusCode::UNAUTHORIZED,
+		),
+		(
+			StrictListBehavior::UnauthorizedMalformed,
+			http::StatusCode::UNAUTHORIZED,
+		),
+		(StrictListBehavior::Forbidden, http::StatusCode::FORBIDDEN),
+	] {
+		let (alpha, beta) = strict_target_pair(behavior).await;
+		let t = never_prefix_proxy(
+			vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+			false,
+		);
+		let io = t.serve_real_listener(strng::new("bind")).await;
+		let response = strict_gateway_post(
+			io,
+			"client-list-failure",
+			"tools/call",
+			Some("failure_tool"),
+			serde_json::json!({"name":"failure_tool","arguments":{},"_meta":modern_meta()}),
+		)
+		.await;
+		let message =
+			assert_resolution_error(response, "client-list-failure", expected_status, -32603).await;
+		assert!(
+			!message["error"]["message"]
+				.as_str()
+				.unwrap()
+				.contains("unknown tool"),
+			"{behavior:?}: {message}"
+		);
+		for target in [&alpha, &beta] {
+			assert!(
+				target
+					.requests()
+					.iter()
+					.all(|request| strict_request_body(request)["method"] != "tools/call")
+			);
+		}
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_failure_mode_requires_a_confirmed_owner() {
+	for mode in [FailureMode::FailOpen, FailureMode::FailClosed] {
+		for (name, owner_exists) in [("alpha_first", true), ("missing", false)] {
+			let alpha = strict_modern_target("alpha").await;
+			let beta = strict_modern_target_with_behavior("beta", StrictListBehavior::Malformed).await;
+			let t = never_prefix_proxy_with_failure_mode(
+				vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+				false,
+				mode,
+			);
+			let io = t.serve_real_listener(strng::new("bind")).await;
+			let response = strict_gateway_post(
+				io,
+				"client-partial-resolution",
+				"tools/call",
+				Some(name),
+				serde_json::json!({"name":name,"arguments":{},"_meta":modern_meta()}),
+			)
+			.await;
+			let succeeds = mode == FailureMode::FailOpen && owner_exists;
+			if succeeds {
+				assert_eq!(response.status(), http::StatusCode::OK);
+				let message =
+					terminal_message(&response.text().await.unwrap(), "client-partial-resolution");
+				assert_eq!(message["result"]["content"][0]["text"], "alpha owner");
+			} else {
+				assert_resolution_error(
+					response,
+					"client-partial-resolution",
+					http::StatusCode::SERVICE_UNAVAILABLE,
+					-32603,
+				)
+				.await;
+			}
+			assert_eq!(
+				alpha
+					.requests()
+					.iter()
+					.filter(|request| strict_request_body(request)["method"] == "tools/call")
+					.count(),
+				usize::from(succeeds)
+			);
+			assert!(
+				beta
+					.requests()
+					.iter()
+					.all(|request| strict_request_body(request)["method"] != "tools/call")
+			);
+		}
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_fail_open_no_owner_preserves_authentication() {
+	let alpha = strict_modern_target("alpha").await;
+	let beta =
+		strict_modern_target_with_behavior("beta", StrictListBehavior::UnauthorizedMalformed).await;
+	let t = never_prefix_proxy_with_failure_mode(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+		FailureMode::FailOpen,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let response = strict_gateway_post(
+		io,
+		"client-fail-open-no-owner",
+		"tools/call",
+		Some("missing"),
+		serde_json::json!({"name":"missing","arguments":{},"_meta":modern_meta()}),
+	)
+	.await;
+	assert_resolution_error(
+		response,
+		"client-fail-open-no-owner",
+		http::StatusCode::UNAUTHORIZED,
+		-32603,
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn modern_resolution_timeout_is_bounded() {
+	let (alpha, beta) = strict_target_pair(StrictListBehavior::Timeout).await;
+	let mut t = never_prefix_proxy(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+	);
+	for target in [&alpha, &beta] {
+		t.attach_backend(serde_json::json!({
+			"name": format!("basic-{}",target.addr), "host":target.addr.to_string(),
+			"policies":{"http":{"requestTimeout":"200ms"}}
+		}))
+		.await;
+	}
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let response = strict_gateway_post(
+		io,
+		"client-resolution-timeout",
+		"tools/call",
+		Some("timeout_tool"),
+		serde_json::json!({"name":"timeout_tool","arguments":{},"_meta":modern_meta()}),
+	)
+	.await;
+	let message = assert_resolution_error(
+		response,
+		"client-resolution-timeout",
+		http::StatusCode::SERVICE_UNAVAILABLE,
+		-32603,
+	)
+	.await;
+	assert_eq!(
+		message["error"]["message"],
+		"upstream resolver request timed out"
+	);
+	for target in [&alpha, &beta] {
+		let requests = target.requests();
+		assert_eq!(requests.len(), 1);
+		assert_eq!(strict_request_body(&requests[0])["method"], "tools/list");
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_pagination_cap_is_bounded() {
+	let (alpha, beta) = strict_target_pair(StrictListBehavior::Infinite).await;
+	let t = never_prefix_proxy(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let response = strict_gateway_post(
+		io,
+		"client-pagination-cap",
+		"tools/call",
+		Some("never_found"),
+		serde_json::json!({"name": "never_found", "arguments": {}, "_meta": modern_meta()}),
+	)
+	.await;
+	let message = assert_resolution_error(
+		response,
+		"client-pagination-cap",
+		http::StatusCode::SERVICE_UNAVAILABLE,
+		-32603,
+	)
+	.await;
+	assert!(
+		message["error"]["message"]
+			.as_str()
+			.unwrap()
+			.contains("pagination limit")
+	);
+	for target in [alpha.requests(), beta.requests()] {
+		assert_eq!(
+			target
+				.iter()
+				.filter(|request| strict_request_body(request)["method"] == "tools/list")
+				.count(),
+			64
+		);
+	}
+}
+
+#[tokio::test]
+async fn modern_resolution_concurrent_requests_preserve_context() {
+	let release = Arc::new(tokio::sync::Semaphore::new(0));
+	let alpha = strict_modern_target_with_gate(
+		"alpha",
+		StrictListBehavior::Normal,
+		Some(Arc::new(StrictResolutionGate {
+			arrivals: tokio::sync::Barrier::new(2),
+			release: release.clone(),
+		})),
+	)
+	.await;
+	let beta = strict_modern_target_with_gate(
+		"beta",
+		StrictListBehavior::Normal,
+		Some(Arc::new(StrictResolutionGate {
+			arrivals: tokio::sync::Barrier::new(2),
+			release: release.clone(),
+		})),
+	)
+	.await;
+	let mut t = never_prefix_proxy(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+	);
+	for (target, key) in [(&alpha, "alpha-key"), (&beta, "beta-key")] {
+		t.attach_backend(serde_json::json!({
+			"name":format!("basic-{}",target.addr), "host":target.addr.to_string(),
+			"policies":{"backendAuth":{"key":key}}
+		}))
+		.await;
+	}
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let cases = [
+		("a", "alpha_ping", "11111111111111111111111111111111"),
+		("b", "beta_ping", "22222222222222222222222222222222"),
+	];
+	let send = |(marker, name, trace): (&str, &str, &str)| {
+		let mut meta = modern_meta();
+		meta["io.modelcontextprotocol/clientInfo"]["name"] = serde_json::json!(marker);
+		meta["io.modelcontextprotocol/clientCapabilities"] =
+			serde_json::json!({"extensions":{"io.example/client":{"marker":marker}}});
+		meta["io.example/private"] = serde_json::json!(format!("private-{marker}"));
+		meta["progressToken"] = serde_json::json!(marker);
+		let body = serde_json::json!({"jsonrpc":"2.0","id":marker,"method":"tools/call",
+			"params":{"name":name,"arguments":{"secret":marker},"_meta":meta}});
+		mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "tools/call")
+			.header("mcp-name", name)
+			.header("mcp-param-secret", marker)
+			.header("authorization", format!("Bearer caller-{marker}"))
+			.header("x-client-id", marker)
+			.header("traceparent", format!("00-{trace}-3333333333333333-01"))
+			.header("tracestate", format!("example={marker}"))
+			.header("baggage", format!("client={marker}"))
+			.timeout(std::time::Duration::from_secs(5))
+			.send()
+	};
+	let first = async {
+		let response = send(cases[0]).await.unwrap();
+		assert_eq!(response.status(), http::StatusCode::OK);
+		response.text().await.unwrap()
+	};
+	let second = async {
+		let response = send(cases[1]).await.unwrap();
+		assert_eq!(response.status(), http::StatusCode::OK);
+		let body = response.text().await.unwrap();
+		release.add_permits(2);
+		body
+	};
+	let (a, b) = tokio::join!(first, second);
+	for (body, (marker, name, _)) in [a, b].into_iter().zip(cases) {
+		let message = terminal_message(&body, marker);
+		assert_eq!(
+			message["result"]["content"][0]["text"],
+			format!("{} owner", name.trim_end_matches("_ping"))
+		);
+	}
+	let mut ids = std::collections::HashSet::new();
+	for (target, target_name) in [(&alpha, "alpha"), (&beta, "beta")] {
+		let requests = target.requests();
+		assert_eq!(requests.len(), 5);
+		for request in &requests {
+			let body = strict_request_body(request);
+			let marker = strict_header(request, "x-client-id").unwrap();
+			let (_, name, trace) = cases.iter().find(|(m, _, _)| *m == marker).unwrap();
+			let expected_auth = format!("Bearer {target_name}-key");
+			assert_eq!(
+				strict_header(request, "authorization"),
+				Some(expected_auth.as_str())
+			);
+			assert_eq!(
+				strict_header(request, "traceparent")
+					.unwrap()
+					.split('-')
+					.nth(1),
+				Some(*trace)
+			);
+			let meta = &body["params"]["_meta"];
+			assert_eq!(
+				meta["traceparent"].as_str().unwrap().split('-').nth(1),
+				Some(*trace)
+			);
+			assert_eq!(meta["tracestate"], format!("example={marker}"));
+			assert_eq!(meta["baggage"], format!("client={marker}"));
+			assert_eq!(
+				meta["io.modelcontextprotocol/clientCapabilities"]["extensions"]["io.example/client"]["marker"],
+				marker
+			);
+			assert!(!String::from_utf8_lossy(&request.body).contains("-key"));
+			assert!(!String::from_utf8_lossy(&request.body).contains("Bearer caller"));
+			if body["method"] == "tools/list" {
+				assert!(ids.insert(body["id"].as_str().unwrap().to_owned()));
+				assert!(strict_header(request, "mcp-name").is_none());
+				assert!(strict_header(request, "mcp-param-secret").is_none());
+				assert_eq!(
+					meta["io.modelcontextprotocol/clientInfo"]["name"],
+					"agentgateway"
+				);
+				assert!(meta.get("io.example/private").is_none());
+				assert!(meta.get("progressToken").is_none());
+				if let Some(cursor) = body["params"].get("cursor") {
+					assert_eq!(
+						cursor,
+						&serde_json::json!(format!("{target_name}-{marker}-tools-page-2"))
+					);
+				}
+			} else {
+				assert_eq!(body["method"], "tools/call");
+				assert_eq!(body["id"], marker);
+				assert_eq!(body["params"]["name"], *name);
+				assert_eq!(strict_header(request, "mcp-param-secret"), Some(marker));
+				assert_eq!(meta["io.modelcontextprotocol/clientInfo"]["name"], marker);
+				assert_eq!(meta["io.example/private"], format!("private-{marker}"));
+				assert_eq!(meta["progressToken"], marker);
+			}
+		}
+	}
+	assert_eq!(ids.len(), 8);
+}
+
+#[tokio::test]
+async fn modern_resolution_does_not_bypass_call_authorization() {
+	let (alpha, beta) = strict_target_pair(StrictListBehavior::Normal).await;
+	let policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "tools/list""#).unwrap(),
+		)],
+	)));
+	let t = never_prefix_proxy_with_policies(
+		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(policy)],
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let response = strict_gateway_post(
+		io,
+		"client-denied",
+		"tools/call",
+		Some("alpha_first"),
+		serde_json::json!({"name":"alpha_first","arguments":{},"_meta":modern_meta()}),
+	)
+	.await;
+	assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+	let message = terminal_message(&response.text().await.unwrap(), "client-denied");
+	assert_eq!(message["error"]["code"], -32602);
+	for target in [&alpha, &beta] {
+		let requests = target.requests();
+		assert!(!requests.is_empty());
+		assert!(
+			requests
+				.iter()
+				.all(|request| strict_request_body(request)["method"] == "tools/list")
+		);
+	}
+}
+
+fn assert_strict_resolution_requests(requests: &[StrictModernRequest], target: &str) {
+	let mut tools_first_page = false;
+	let mut tools_second_page = false;
+	let mut prompts_first_page = false;
+	let mut prompts_second_page = false;
+	let tools_page_two_cursor = format!("{target}-tools-page-2");
+	let prompts_page_two_cursor = format!("{target}-prompts-page-2");
+	for request in requests {
+		let body = strict_request_body(request);
+		let method = body["method"].as_str().unwrap_or_default();
+		if !matches!(method, "tools/list" | "prompts/list") {
+			continue;
+		}
+		let meta = body["params"]["_meta"]
+			.as_object()
+			.expect("metadata object");
+		assert_eq!(
+			meta["io.modelcontextprotocol/protocolVersion"],
+			"2026-07-28"
+		);
+		assert!(meta["io.modelcontextprotocol/clientCapabilities"].is_object());
+		assert_eq!(
+			meta["io.modelcontextprotocol/clientInfo"]["name"],
+			"agentgateway"
+		);
+		assert_eq!(
+			strict_header(request, "mcp-protocol-version"),
+			Some("2026-07-28")
+		);
+		assert_eq!(strict_header(request, "mcp-method"), Some(method));
+		assert!(strict_header(request, "mcp-name").is_none());
+		let cursor = body["params"]
+			.get("cursor")
+			.and_then(serde_json::Value::as_str);
+		match method {
+			"tools/list" if cursor.is_none() => tools_first_page = true,
+			"tools/list" if cursor == Some(tools_page_two_cursor.as_str()) => tools_second_page = true,
+			"prompts/list" if cursor.is_none() => prompts_first_page = true,
+			"prompts/list" if cursor == Some(prompts_page_two_cursor.as_str()) => {
+				prompts_second_page = true
+			},
+			_ => panic!("unexpected strict resolution request: {body}"),
+		}
+	}
+	assert!(
+		tools_first_page,
+		"{target} must receive tools/list page one"
+	);
+	assert!(
+		tools_second_page,
+		"{target} must receive tools/list page two"
+	);
+	assert!(
+		prompts_first_page,
+		"{target} must receive prompts/list page one"
+	);
+	assert!(
+		prompts_second_page,
+		"{target} must receive prompts/list page two"
+	);
 }
 
 #[tokio::test]
@@ -1102,7 +2484,11 @@ async fn mrtr_tool_call(io: SocketAddr, id: i64, params: serde_json::Value) -> s
 	terminal_result(&text, id)
 }
 
-fn terminal_message(text: &str, id: i64) -> serde_json::Value {
+fn terminal_message<I>(text: &str, id: I) -> serde_json::Value
+where
+	I: Into<serde_json::Value> + std::fmt::Debug,
+{
+	let id = id.into();
 	let messages: Vec<serde_json::Value> = if text.trim_start().starts_with('{') {
 		vec![serde_json::from_str(text).unwrap()]
 	} else {
@@ -1117,8 +2503,8 @@ fn terminal_message(text: &str, id: i64) -> serde_json::Value {
 	};
 	messages
 		.into_iter()
-		.find(|m| m["id"] == serde_json::json!(id))
-		.unwrap_or_else(|| panic!("no message for id {id} in: {text}"))
+		.find(|m| m["id"] == id)
+		.unwrap_or_else(|| panic!("no message for id {id:?} in: {text}"))
 }
 
 fn terminal_result(text: &str, id: i64) -> serde_json::Value {
