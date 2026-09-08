@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -554,12 +553,8 @@ impl TraceSampler {
 			client_sampling,
 			parent_not_sampled,
 		} = &self;
-		// Built at most once, and not at all when the setting that applies is unset
-		let exec = OnceCell::new();
 		let eval = |expr: &Option<Arc<cel::Expression>>, default: bool| match expr {
-			Some(e) => exec
-				.get_or_init(|| cel::Executor::new_request(req))
-				.eval_rng(e.as_ref()),
+			Some(e) => cel::Executor::new_request(req).eval_rng(e.as_ref()),
 			None => default,
 		};
 
