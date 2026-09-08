@@ -136,9 +136,11 @@ analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options wit
 .PHONY: ensure-custom-golangci-lint
 ensure-custom-golangci-lint:
 	@expected_go_version="$$(go env GOVERSION)"; \
+	expected_lint_version="$$(sed -n 's/^version: *//p' .custom-gcl.yml | tr -d '[:space:]')"; \
 	current_go_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* built with \(go[^[:space:]]*\).*/\1/p' )"; \
-	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ]; then \
-		echo "Rebuilding golangci-lint custom with $$expected_go_version..."; \
+	current_lint_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* version \([^[:space:]]*\)-custom-gcl.*/\1/p' )"; \
+	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ] || [ "$$current_lint_version" != "$$expected_lint_version" ]; then \
+		echo "Rebuilding golangci-lint custom (go $$current_go_version->$$expected_go_version, lint $$current_lint_version->$$expected_lint_version)..."; \
 		rm -f "$(CUSTOM_GOLANGCI_LINT_BIN)"; \
 		GOTOOLCHAIN="$$expected_go_version" golangci-lint custom; \
 	fi

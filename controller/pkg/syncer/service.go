@@ -584,8 +584,18 @@ func (s *Service) HasAddressOrAssigned(id cluster.ID) bool {
 
 // DeepCopy creates a clone of Service.
 func (s *Service) DeepCopy() *Service {
-	// nolint: govet
-	out := *s
+	// Construct field-by-field to avoid copying the sync.RWMutex embedded in
+	// ClusterVIPs (AddressMap). A plain `out := *s` would duplicate the lock,
+	// which govet flags and is undefined behavior if the copied lock is used.
+	out := &Service{
+		Hostname:                 s.Hostname,
+		DefaultAddress:           s.DefaultAddress,
+		AutoAllocatedIPv4Address: s.AutoAllocatedIPv4Address,
+		AutoAllocatedIPv6Address: s.AutoAllocatedIPv6Address,
+		Resolution:               s.Resolution,
+		ResourceVersion:          s.ResourceVersion,
+		CreationTime:             s.CreationTime,
+	}
 	out.Attributes = s.Attributes.DeepCopy()
 	if s.Ports != nil {
 		out.Ports = make(PortList, len(s.Ports))
@@ -596,15 +606,17 @@ func (s *Service) DeepCopy() *Service {
 					Port:     port.Port,
 					Protocol: port.Protocol,
 				}
-			} else {
-				out.Ports[i] = nil
 			}
 		}
 	}
 
 	out.ServiceAccounts = slices.Clone(s.ServiceAccounts)
-	out.ClusterVIPs = *s.ClusterVIPs.DeepCopy()
-	return &out
+	// Construct a fresh AddressMap so its mutex is zero-valued (not copied).
+	// GetAddresses() already deep-copies both the outer map and each inner slice.
+	out.ClusterVIPs = AddressMap{
+		Addresses: s.ClusterVIPs.GetAddresses(),
+	}
+	return out
 }
 
 // Equals compares two service objects.
