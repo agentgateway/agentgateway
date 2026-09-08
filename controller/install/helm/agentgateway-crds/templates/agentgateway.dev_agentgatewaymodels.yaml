@@ -108,6 +108,19 @@ spec:
               bedrock:
                 description: Provider-specific settings for Amazon Bedrock.
                 properties:
+                  endpointPreference:
+                    default: RuntimePreferred
+                    description: |-
+                      EndpointPreference selects which Bedrock API surface to prefer.
+                      Defaults to preferring runtime over mantle.
+                      Decides which endpoint to pick mainly based on the catalog tags
+                      `mantle` and `runtime`.
+                    enum:
+                    - MantleOnly
+                    - MantlePreferred
+                    - RuntimeOnly
+                    - RuntimePreferred
+                    type: string
                   guardrail:
                     description: |-
                       Guardrail policy to use for the backend. See

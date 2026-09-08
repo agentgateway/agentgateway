@@ -27,7 +27,7 @@ Use subcommands to import catalog data from supported sources.`,
 type importFlags struct {
 	providers        []string
 	excludeProviders []string
-	source           string
+	sources          []string
 	overlay          string
 	out              string
 	pretty           bool
@@ -41,6 +41,11 @@ type importOptions struct {
 }
 
 var importSources = map[string]func(ctx context.Context, opts importOptions) (*ModelCatalog, []string, error){}
+
+// defaultImportSources merge (in order) when --source is unset: models.dev rates + Bedrock tags.
+func defaultImportSources() []string {
+	return []string{modelsDevSourceName, bedrockMantleSourceName}
+}
 
 func importSourceNames() []string {
 	names := make([]string, 0, len(importSources))
@@ -57,17 +62,20 @@ func importSourceList() string {
 
 func importCmd() *cobra.Command {
 	f := &importFlags{
-		source: githubSourceName,
+		sources: defaultImportSources(),
 	}
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import a model catalog",
 		Long: `Import a model catalog.
 
+Multiple sources are merged in order, so later sources overlay earlier ones (e.g. models.dev
+supplies pricing and aws-bedrock-mantle overlays Bedrock endpoint tags onto it).
+
 Examples:
-	agctl catalog import > catalog.json
-	agctl catalog import --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty
-	agctl catalog import --source models.dev --providers anthropic,google,openai`,
+	agctl catalog import --out ./costs/catalog.json
+	agctl catalog import --source models.dev --providers anthropic,google,openai
+	agctl catalog import --source models.dev,aws-bedrock-mantle --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -75,7 +83,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&f.source, "source", f.source, "import source ("+importSourceList()+")")
+	cmd.Flags().StringSliceVar(&f.sources, "source", f.sources, "import sources to merge, in order ("+importSourceList()+")")
 	cmd.Flags().StringVar(&f.overlay, "overlay", "", "YAML catalog to merge over imported data")
 	cmd.Flags().StringSliceVar(&f.providers, "providers", nil, "source provider ids to import (default: every provider the proxy supports)")
 	cmd.Flags().StringSliceVar(&f.excludeProviders, "exclude-providers", nil, "source provider ids to omit")
@@ -88,22 +96,29 @@ Examples:
 
 func runImport(cmd *cobra.Command, f *importFlags) error {
 	ctx := cmd.Context()
-	if f.source == "" {
-		return fmt.Errorf("source is required; pass --source with one of: %s", importSourceList())
-	}
-	src, ok := importSources[f.source]
-	if !ok {
-		return fmt.Errorf("unsupported source %q (supported sources: %s)", f.source, importSourceList())
+	if len(f.sources) == 0 {
+		return fmt.Errorf("at least one source is required; pass --source with any of: %s", importSourceList())
 	}
 
-	cat, warns, err := src(ctx, importOptions{
-		providers:        f.providers,
-		excludeProviders: f.excludeProviders,
-		legacy:           f.legacy,
-	})
-	if err != nil {
-		return err
+	merged := &ModelCatalog{Providers: map[string]Provider{}}
+	var warns []string
+	for _, name := range f.sources {
+		src, ok := importSources[name]
+		if !ok {
+			return fmt.Errorf("unsupported source %q (supported sources: %s)", name, importSourceList())
+		}
+		cat, w, err := src(ctx, importOptions{
+			providers:        f.providers,
+			excludeProviders: f.excludeProviders,
+			legacy:           f.legacy,
+		})
+		if err != nil {
+			return fmt.Errorf("source %q: %w", name, err)
+		}
+		warns = append(warns, w...)
+		merged.overlayWith(cat)
 	}
+
 	if f.overlay != "" {
 		overlayData, err := os.ReadFile(f.overlay)
 		if err != nil {
@@ -116,21 +131,21 @@ func runImport(cmd *cobra.Command, f *importFlags) error {
 		if err := overlay.Validate(); err != nil {
 			return fmt.Errorf("invalid overlay %s: %w", f.overlay, err)
 		}
-		cat.overlayWith(&overlay)
+		merged.overlayWith(&overlay)
 	}
-	if cat.Metadata == nil {
-		cat.Metadata = &CatalogMetadata{
+	if merged.Metadata == nil {
+		merged.Metadata = &CatalogMetadata{
 			GeneratedAt: time.Now().UTC().Truncate(time.Second),
 		}
 	}
-	if err := cat.Validate(); err != nil {
+	if err := merged.Validate(); err != nil {
 		return fmt.Errorf("invalid catalog: %w", err)
 	}
 	for _, w := range warns {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
 	}
 
-	data, err := marshalCatalog(cat, f.pretty)
+	data, err := marshalCatalog(merged, f.pretty)
 	if err != nil {
 		return err
 	}
@@ -142,6 +157,6 @@ func runImport(cmd *cobra.Command, f *importFlags) error {
 	} else if err := os.WriteFile(dest, data, 0o644); err != nil { //nolint:gosec // Catalog data is non-sensitive.
 		return fmt.Errorf("write %s: %w", dest, err)
 	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "imported %d providers\n", len(cat.Providers))
+	fmt.Fprintf(cmd.ErrOrStderr(), "imported %d providers\n", len(merged.Providers))
 	return nil
 }

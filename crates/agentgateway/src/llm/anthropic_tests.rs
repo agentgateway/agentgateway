@@ -37,7 +37,7 @@ fn set_required_fields_oauth_token() {
 	let mut req = make_bearer_request(&format!("{OAUTH_TOKEN_PREFIX}01234567890abcdef"));
 
 	provider
-		.set_required_fields(&mut req, RouteType::Messages, None)
+		.set_required_fields(&mut req, RouteType::Messages, None, None)
 		.unwrap();
 
 	// Authorization header must still be present (OAuth keeps Bearer).
@@ -57,7 +57,7 @@ fn set_required_fields_oauth_token_strips_api_key() {
 	);
 
 	provider
-		.set_required_fields(&mut req, RouteType::Messages, None)
+		.set_required_fields(&mut req, RouteType::Messages, None, None)
 		.unwrap();
 
 	// Authorization header must still be present.
@@ -72,7 +72,7 @@ fn set_required_fields_api_key_token() {
 	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
 
 	provider
-		.set_required_fields(&mut req, RouteType::Messages, None)
+		.set_required_fields(&mut req, RouteType::Messages, None, None)
 		.unwrap();
 
 	// Authorization header must be removed.
@@ -93,7 +93,7 @@ fn set_required_fields_explicit_authorization_preserved() {
 	let mut req = make_bearer_request_with_explicit_auth("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9");
 
 	provider
-		.set_required_fields(&mut req, RouteType::Messages, None)
+		.set_required_fields(&mut req, RouteType::Messages, None, None)
 		.unwrap();
 
 	// Authorization header must be preserved.
@@ -133,7 +133,7 @@ fn set_required_fields_default_auth_still_rewrites() {
 		.insert(AppliedBackendAuthLocation { explicit: false });
 
 	provider
-		.set_required_fields(&mut req, RouteType::Messages, None)
+		.set_required_fields(&mut req, RouteType::Messages, None, None)
 		.unwrap();
 
 	// Authorization header must be removed (default behavior).
@@ -159,7 +159,7 @@ fn set_required_fields_explicit_non_authorization_location_preserved() {
 		.insert(AppliedBackendAuthLocation { explicit: true });
 
 	provider
-		.set_required_fields(&mut req, RouteType::Messages, None)
+		.set_required_fields(&mut req, RouteType::Messages, None, None)
 		.unwrap();
 
 	// Explicit auth location means no rewrite — Authorization is kept.

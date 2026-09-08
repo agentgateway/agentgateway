@@ -557,12 +557,23 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			guardrailVersion = &llm.Bedrock.Guardrail.GuardrailVersion
 		}
 
+		endpointPreference := api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED
+		switch llm.Bedrock.EndpointPreference {
+		case agentgateway.BedrockEndpointPreferenceMantlePreferred:
+			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED
+		case agentgateway.BedrockEndpointPreferenceMantleOnly:
+			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY
+		case agentgateway.BedrockEndpointPreferenceRuntimeOnly:
+			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY
+		}
+
 		provider.Provider = &api.AIBackend_Provider_Bedrock{
 			Bedrock: &api.AIBackend_Bedrock{
 				Model:               llm.Bedrock.Model,
 				Region:              region,
 				GuardrailIdentifier: guardrailIdentifier,
 				GuardrailVersion:    guardrailVersion,
+				EndpointPreference:  endpointPreference,
 			},
 		}
 	} else if llm.Custom != nil {

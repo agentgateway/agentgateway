@@ -195,6 +195,15 @@ macro_rules! provider_env_model_test {
 const VERTEX_RERANK_MODEL: &str = "semantic-ranker-default@latest";
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
+	llm_config_pref(provider, env, model, None)
+}
+
+fn llm_config_pref(
+	provider: &str,
+	env: &str,
+	model: &str,
+	bedrock_preference: Option<&str>,
+) -> String {
 	let policies = if provider == "azure" || provider == "foundry" {
 		r#"
       policies:
@@ -215,10 +224,14 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 		"".to_string()
 	};
 	let extra = if provider == "bedrock" {
-		r#"
-              region: us-west-2
+		let pref = bedrock_preference
+			.map(|p| format!("\n              endpointPreference: {p}"))
+			.unwrap_or_default();
+		format!(
+			r#"
+              region: us-west-2{pref}
               "#
-		.to_string()
+		)
 	} else if provider == "vertex" {
 		// Discovery Engine ranking (rerank) is only served from `global`/`us`/`eu`, not the Vertex AI
 		// regions used for chat/embeddings, so the rerank model pins the location to `global`.
@@ -480,6 +493,43 @@ mod bedrock {
 		MODEL_OPUS_46_PROFILE,
 		send_messages_output_config_effort
 	);
+}
+
+// Live smoke test for the Bedrock Mantle endpoint (bedrock-mantle.{region}.api.aws).
+//
+// Required env vars:
+//   AGENTGATEWAY_E2E=true
+//   AWS credentials resolvable by the default provider chain (e.g. AWS_PROFILE, or the standard
+//   AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_SESSION_TOKEN), for a region where Mantle is
+//   available and the model is enabled (the config below pins us-west-2).
+//
+// Example:
+//   AGENTGATEWAY_E2E=true AWS_PROFILE=my-bedrock-profile \
+//   cargo test --test integration -- --ignored mantle_smoke
+async fn setup_bedrock_mantle(model: &str) -> Option<AgentGateway> {
+	if !require_env("AGENTGATEWAY_E2E") {
+		return None;
+	}
+	let gw = AgentGateway::new(llm_config_pref("bedrock", "", model, Some("mantleOnly")))
+		.await
+		.unwrap();
+	Some(gw)
+}
+
+mod bedrock_mantle {
+	use super::*;
+
+	#[tokio::test]
+	#[ignore]
+	async fn mantle_smoke() {
+		let Some(gw) = setup_bedrock_mantle("openai.gpt-oss-120b").await else {
+			return;
+		};
+		// Cap output so it stays within the shared assert_log token bound.
+		send_completions_request(&gw, false, Some(50), None, "give me a 1 word answer").await;
+		send_completions_request(&gw, true, Some(50), None, "give me a 1 word answer").await;
+		send_responses(&gw, false).await;
+	}
 }
 
 mod anthropic {

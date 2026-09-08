@@ -5761,6 +5761,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`binds[].listeners[].routes[].backends[].ai.provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -9160,6 +9161,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -24649,6 +24651,7 @@
 |`backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`backends[].ai.provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`backends[].ai.provider.azure`|object||
 |`backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -28048,6 +28051,7 @@
 |`backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`backends[].ai.groups[].providers[].provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`backends[].ai.groups[].providers[].provider.azure`|object||
 |`backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -40412,6 +40416,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routeGroups[].routes[].backends[].ai.provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`routeGroups[].routes[].backends[].ai.provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -43811,6 +43816,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -58825,6 +58831,7 @@
 |`routes[].backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routes[].backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routes[].backends[].ai.provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`routes[].backends[].ai.provider.azure`|object||
 |`routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -62224,6 +62231,7 @@
 |`routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routes[].backends[].ai.groups[].providers[].provider.bedrock.endpointPreference`|enum|Which endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -69293,6 +69301,7 @@
 |`llm.providers[].params.apiKey`|object|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
 |`llm.providers[].params.apiKey.file`|string|Path to a file on disk to load the value from.|
 |`llm.providers[].params.awsRegion`|string|AWS region to use for the Bedrock provider.|
+|`llm.providers[].params.bedrockEndpointPreference`|enum|Which Bedrock endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`llm.providers[].params.vertexRegion`|string|Google Cloud region to use for the Vertex AI provider.|
 |`llm.providers[].params.vertexProject`|string|Google Cloud project ID to use for the Vertex AI provider.|
 |`llm.providers[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
@@ -70018,6 +70027,7 @@
 |`llm.models[].params.apiKey`|object|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
 |`llm.models[].params.apiKey.file`|string|Path to a file on disk to load the value from.|
 |`llm.models[].params.awsRegion`|string|AWS region to use for the Bedrock provider.|
+|`llm.models[].params.bedrockEndpointPreference`|enum|Which Bedrock endpoint to prefer (Runtime vs Mantle).<br>Possible values: `runtimePreferred`, `mantlePreferred`, `mantleOnly`, `runtimeOnly`.|
 |`llm.models[].params.vertexRegion`|string|Google Cloud region to use for the Vertex AI provider.|
 |`llm.models[].params.vertexProject`|string|Google Cloud project ID to use for the Vertex AI provider.|
 |`llm.models[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
