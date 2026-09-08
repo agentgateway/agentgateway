@@ -2184,7 +2184,7 @@ fn msg_stream_chunk(state: &mut to_messages::StreamState, v: Value) -> Vec<Value
 
 #[test]
 fn msg_stream_text_emits_message_start_and_text_block() {
-	let mut s = to_messages::StreamState::new();
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
 	let events = msg_stream_chunk(
 		&mut s,
 		json!({ "candidates": [{
@@ -2206,7 +2206,7 @@ fn msg_stream_text_emits_message_start_and_text_block() {
 
 #[test]
 fn msg_stream_thinking_before_text() {
-	let mut s = to_messages::StreamState::new();
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
 	let events = msg_stream_chunk(
 		&mut s,
 		json!({ "candidates": [{
@@ -2238,7 +2238,7 @@ fn msg_stream_thinking_before_text() {
 
 #[test]
 fn msg_stream_tool_call_block() {
-	let mut s = to_messages::StreamState::new();
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
 	let events = msg_stream_chunk(
 		&mut s,
 		json!({ "candidates": [{
@@ -2266,7 +2266,7 @@ fn msg_stream_tool_call_block() {
 
 #[test]
 fn msg_stream_text_continues_across_chunks() {
-	let mut s = to_messages::StreamState::new();
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
 	// First chunk: text part, no finishReason
 	let e1 = msg_stream_chunk(
 		&mut s,
@@ -2333,7 +2333,13 @@ async fn translate_stream_emits_message_stop_on_clean_close() {
 		}]
 	}));
 	let log = crate::StreamingUsageGuard::default();
-	let out = to_messages::translate_stream(body, 1024 * 1024, strng::new("gemini-2.5-flash"), log);
+	let out = to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-flash"),
+		log,
+		crate::LogContentFields::default(),
+	);
 	let events = collect_stream_events(out).await;
 
 	let types: Vec<&str> = events.iter().filter_map(|e| e["type"].as_str()).collect();
@@ -2363,7 +2369,13 @@ async fn translate_stream_message_stop_on_truncated_stream_no_finish_reason() {
 		}]
 	}));
 	let log = crate::StreamingUsageGuard::default();
-	let out = to_messages::translate_stream(body, 1024 * 1024, strng::new("gemini-2.5-flash"), log);
+	let out = to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-flash"),
+		log,
+		crate::LogContentFields::default(),
+	);
 	let events = collect_stream_events(out).await;
 
 	let types: Vec<&str> = events.iter().filter_map(|e| e["type"].as_str()).collect();
@@ -2408,7 +2420,13 @@ async fn translate_stream_input_tokens_forwarded_to_client() {
 		.unwrap()
 	));
 	let log = crate::StreamingUsageGuard::default();
-	let out = to_messages::translate_stream(body, 1024 * 1024, strng::new("gemini-2.5-flash"), log);
+	let out = to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-flash"),
+		log,
+		crate::LogContentFields::default(),
+	);
 	let events = collect_stream_events(out).await;
 
 	let delta = events
