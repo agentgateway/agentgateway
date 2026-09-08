@@ -12,10 +12,11 @@ use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, DiscoverResult,
-	ExtensionCapabilities, Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
-	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-	ProtocolVersion, RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
-	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
+	ExtensionCapabilities, Extensions, Implementation, JsonRpcNotification, JsonRpcRequest,
+	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
+	PaginatedRequestParams, ProtocolVersion, RequestId, RequestMetaObject, ResultType,
+	ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerRequest,
+	ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -240,15 +241,27 @@ impl ResolveKind {
 		}
 	}
 
-	fn list_request(&self, cursor: Option<String>) -> ClientRequest {
+	fn list_request(
+		&self,
+		cursor: Option<String>,
+		meta: Option<&RequestMetaObject>,
+	) -> ClientRequest {
 		let params = cursor.map(|c| PaginatedRequestParams::default().with_cursor(Some(c)));
+		// Propagate the original client request's `_meta` onto the resolve request so
+		// modern (2026-07-28) upstreams that require the per-request envelope accept it.
+		let mut extensions = Extensions::new();
+		if let Some(m) = meta {
+			extensions.insert(m.clone());
+		}
 		match self {
 			ResolveKind::Tool => ClientRequest::ListToolsRequest(rmcp::model::ListToolsRequest {
 				params,
+				extensions,
 				..Default::default()
 			}),
 			ResolveKind::Prompt => ClientRequest::ListPromptsRequest(rmcp::model::ListPromptsRequest {
 				params,
+				extensions,
 				..Default::default()
 			}),
 		}
@@ -397,9 +410,10 @@ impl Relay {
 		kind: ResolveKind,
 		res: &'b str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		if self.needs_resolution() {
-			let target = self.resolve_unprefixed(kind, res, ctx).await?;
+			let target = self.resolve_unprefixed(kind, res, ctx, meta).await?;
 			return Ok((Cow::Owned(target.to_string()), res));
 		}
 		let (target, name) = self.parse_resource_name(res)?;
@@ -415,12 +429,13 @@ impl Relay {
 		kind: ResolveKind,
 		name: &str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<Strng, UpstreamError> {
 		let futs: Vec<_> = self
 			.upstreams
 			.iter_named()
 			.map(|(target, con)| async move {
-				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx).await;
+				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx, meta).await;
 				(target, res)
 			})
 			.collect();
@@ -462,6 +477,7 @@ impl Relay {
 		kind: ResolveKind,
 		name: &str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<bool, UpstreamError> {
 		// Gateway-generated ids: reusing the client's id here would make the upstream
 		// see it twice (list probe, then the forwarded call) in one session.
@@ -473,7 +489,7 @@ impl Relay {
 			let seq = RESOLVE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 			let req = JsonRpcRequest::new(
 				RequestId::String(format!("agw-resolve-{seq}").into()),
-				kind.list_request(cursor),
+				kind.list_request(cursor, meta),
 			);
 			let Some(result) =
 				Self::first_response(con.generic_stream(target_name, req, ctx).await?).await?

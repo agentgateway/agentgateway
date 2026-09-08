@@ -16,7 +16,7 @@ use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
 	Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId,
-	ServerJsonRpcMessage,
+	RequestMetaObject, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -189,10 +189,11 @@ impl Session {
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		let (service_name, prompt) = self
 			.relay
-			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
+			.resolve_resource_name(ResolveKind::Prompt, name, ctx, meta)
 			.await?;
 		log.non_atomic_mutate(|l| {
 			l.set_prompt(service_name.to_string(), prompt.to_string());
@@ -565,10 +566,15 @@ impl Session {
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
+						// Propagate the client's `_meta` to the resolve list request so modern
+						// (2026-07-28) upstreams that require the per-request envelope accept it.
+						let resolve_meta = ctr.extensions.get::<RequestMetaObject>().cloned();
+						let resolve_meta_opt = resolve_meta.as_ref().and_then(non_empty_meta);
 						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Tool,
 							&name,
 							&ctx,
+							resolve_meta_opt,
 						))
 						.await?;
 						let call_arguments = ctr.params.arguments.clone();
@@ -600,10 +606,15 @@ impl Session {
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
+						// Propagate the client's `_meta` to the resolve list request so modern
+						// (2026-07-28) upstreams that require the per-request envelope accept it.
+						let resolve_meta = gpr.extensions.get::<RequestMetaObject>().cloned();
+						let resolve_meta_opt = resolve_meta.as_ref().and_then(non_empty_meta);
 						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Prompt,
 							&name,
 							&ctx,
+							resolve_meta_opt,
 						))
 						.await?;
 						log.non_atomic_mutate(|l| {
@@ -696,8 +707,19 @@ impl Session {
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
-							let (service_name, prompt_name) =
-								Box::pin(self.authorize_prompt_request(&name, &method, &log, &cel, &ctx)).await?;
+							// Propagate the client's `_meta` to the resolve list request so modern
+							// (2026-07-28) upstreams that require the per-request envelope accept it.
+							let resolve_meta = cr.extensions.get::<RequestMetaObject>().cloned();
+							let resolve_meta_opt = resolve_meta.as_ref().and_then(non_empty_meta);
+							let (service_name, prompt_name) = Box::pin(self.authorize_prompt_request(
+								&name,
+								&method,
+								&log,
+								&cel,
+								&ctx,
+								resolve_meta_opt,
+							))
+							.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
 							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},
@@ -778,6 +800,19 @@ impl Session {
 		};
 		self.strip_unsupported_client_capabilities(&mut capabilities, ctx);
 		message.get_meta_mut().set_client_capabilities(capabilities);
+	}
+}
+
+/// Return a reference to `meta` if it carries at least one key, or `None` if empty.
+///
+/// Used to avoid propagating an empty `_meta` envelope onto gateway-internal resolve
+/// requests: legacy clients and modern clients with no envelope both yield an empty
+/// `RequestMetaObject`, and forwarding that adds no value.
+fn non_empty_meta(meta: &RequestMetaObject) -> Option<&RequestMetaObject> {
+	if meta.0.0.is_empty() {
+		None
+	} else {
+		Some(meta)
 	}
 }
 
