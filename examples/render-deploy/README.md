@@ -54,7 +54,7 @@ flowchart LR
 
 | Fact | Value |
 |------|--------|
-| Service | Web Service, Docker, **Starter** |
+| Service | Web Service, Docker, **0.5c-512mb** |
 | URL | `https://<your-service>.onrender.com` — **HTTPS only** |
 | Disk | **`agw-config`** → **`/config`**, 1 GB |
 | UI | `/ui/` basic auth via `UI_USER` + `UI_PASSWORD` |
@@ -109,7 +109,7 @@ Render prompts for `UI_PASSWORD` on first Blueprint create. Pin `PORT=4000`. Gen
 
 ### 3. Disk
 
-The Blueprint already declares **`agw-config`** → **`/config`**, 1 GB. Disks are not available on Render Free — Starter is the floor. Without the volume, config and analytics reset on every deploy.
+The Blueprint already declares **`agw-config`** → **`/config`**, 1 GB. Disks are not available on Render Free — **0.5c-512mb** is the floor (Render still accepts `starter` as an alias). Without the volume, config and analytics reset on every deploy.
 
 ### 4. Deploy
 
@@ -147,7 +147,7 @@ Render publishes **HTTPS :443** to one container port. That port is `4000`. Ther
 | `:4000` on the public hostname | Do not use |
 | `:15000` | No — loopback only |
 
-Starter is enough for a demo. The disk is the persistence story.
+0.5c-512mb is enough for a demo. The disk is the persistence story.
 
 ## Security
 

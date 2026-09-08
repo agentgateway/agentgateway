@@ -19,7 +19,9 @@ services:
   - type: web
     name: agentgateway
     runtime: docker
-    plan: starter
+    # Render renamed plans; "starter" still resolves. 0.5c-512mb is the
+    # default for a new web service and the smallest plan that can attach a disk.
+    plan: 0.5c-512mb
     numInstances: 1
     # Replaces the deprecated autoDeploy boolean. Render rejects a Blueprint
     # that sets both. Rebuild on commits that touch this example only.
