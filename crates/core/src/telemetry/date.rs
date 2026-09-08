@@ -12,8 +12,11 @@ pub fn build() -> String {
 	w
 }
 pub(crate) fn write(dst: &mut String) {
+	write_at(dst, SystemTime::now());
+}
+
+fn write_at(dst: &mut String, now: SystemTime) {
 	CACHED.with(|cache| {
-		let now = SystemTime::now();
 		cache.borrow_mut().check(&now);
 		// Push the base
 		dst.push_str(cache.borrow().buffer());
@@ -96,5 +99,30 @@ impl fmt::Write for CachedDate {
 		self.bytes[self.pos..self.pos + len].copy_from_slice(s.as_bytes());
 		self.pos += len;
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn timestamp_fraction_has_six_digits() {
+		let base = UNIX_EPOCH + Duration::from_secs(1_750_000_000);
+		// The cache normally starts at the current time; seed it for this fixed timestamp.
+		CACHED.with(|cache| cache.borrow_mut().update(&base));
+
+		for (micros, expected) in [
+			(0, "000000"),
+			(1, "000001"),
+			(3270, "003270"),
+			(99_999, "099999"),
+			(100_000, "100000"),
+			(999_999, "999999"),
+		] {
+			let mut buf = String::new();
+			write_at(&mut buf, base + Duration::from_micros(micros));
+			assert_eq!(buf, format!("2025-06-15T15:06:40.{expected}Z"));
+		}
 	}
 }
