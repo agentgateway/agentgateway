@@ -7964,192 +7964,45 @@ async fn mcp_guardrails_mutated_resource_read_reaches_upstream() {
 	assert!(text.contains("Business Intelligence Memo"));
 }
 
-/// Mock upstream that strictly enforces the `2026-07-28` `_meta` envelope:
-/// every non-initialize/non-discover request must carry
-/// `io.modelcontextprotocol/protocolVersion` and
-/// `io.modelcontextprotocol/clientCapabilities` in `params._meta`.
-///
-/// This replicates the behavior of modern Python FastMCP/mcp 2.x upstreams,
-/// which reject requests lacking these keys with `-32602`.
-async fn mock_modern_strict_streamable_http_server(tool_name: &str) -> MockServer {
-	agent_core::telemetry::testing::setup_test_logging();
-	let (tx, rx) = tokio::sync::oneshot::channel();
-	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
-	let init_counter_clone = init_counter.clone();
-	let tool_name = tool_name.to_string();
-	let router = axum::Router::new().route(
-		"/mcp",
-		axum::routing::post(move |body: axum::Json<serde_json::Value>| {
-			let init_counter = init_counter_clone.clone();
-			let tool_name = tool_name.clone();
-			async move {
-				let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
-				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
-
-				// Strict _meta validation for modern protocol, matching Python mcp 2.x behavior.
-				// initialize and server/discover are exempt because they set up the session.
-				let requires_meta = !matches!(method, "initialize" | "server/discover");
-				if requires_meta {
-					let meta = body.pointer("/params/_meta");
-					let has_pv = meta
-						.and_then(|m| m.get("io.modelcontextprotocol/protocolVersion"))
-						.is_some();
-					let has_cc = meta
-						.and_then(|m| m.get("io.modelcontextprotocol/clientCapabilities"))
-						.is_some();
-					if !has_pv || !has_cc {
-						return Ok::<_, http::StatusCode>(axum::Json(serde_json::json!({
-							"jsonrpc": "2.0",
-							"id": id,
-							"error": {
-								"code": -32602,
-								"message": "params._meta is missing the required envelope key(s): io.modelcontextprotocol/protocolVersion, io.modelcontextprotocol/clientCapabilities"
-							}
-						})));
-					}
-				}
-
-				let result = match method {
-					"server/discover" => serde_json::json!({
-						"resultType": "complete",
-						"supportedVersions": ["2026-07-28"],
-						"capabilities": {"tools": {}},
-						"serverInfo": {"name": "strict-modern-mock", "version": "0.0.1"}
-					}),
-					"initialize" => {
-						*init_counter.lock().await += 1;
-						serde_json::json!({
-							"protocolVersion": "2026-07-28",
-							"capabilities": {"tools": {}},
-							"serverInfo": {"name": "strict-modern-mock", "version": "0.0.1"}
-						})
-					},
-					"tools/list" => serde_json::json!({
-						"resultType": "complete",
-						"tools": [{
-							"name": tool_name,
-							"description": format!("Mock tool {tool_name}"),
-							"inputSchema": {"type": "object"}
-						}]
-					}),
-					"tools/call" => {
-						let name = body
-							.pointer("/params/name")
-							.and_then(|n| n.as_str())
-							.unwrap_or("");
-						serde_json::json!({
-							"resultType": "complete",
-							"content": [{"type": "text", "text": format!("{name}:ok")}],
-							"isError": false
-						})
-					},
-					_ => {
-						return Ok::<_, http::StatusCode>(axum::Json(serde_json::json!({
-							"jsonrpc": "2.0",
-							"id": id,
-							"error": {"code": -32601, "message": method}
-						})));
-					},
-				};
-				Ok::<_, http::StatusCode>(axum::Json(serde_json::json!({
-					"jsonrpc": "2.0",
-					"id": id,
-					"result": result
-				})))
-			}
-		}),
-	);
-	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-	let addr = tcp_listener.local_addr().unwrap();
-	tokio::spawn(async move {
-		let _ = axum::serve(tcp_listener, router)
-			.with_graceful_shutdown(async {
-				let _ = rx.await;
-			})
-			.await;
-	});
-	MockServer {
-		addr,
-		init_counter,
-		_cancel: tx,
-	}
-}
-
-/// Reproduces https://github.com/agentgateway/agentgateway/issues/3357
-///
-/// With two or more modern (`2026-07-28`) MCP targets, a client request that
-/// carries the per-request `_meta` envelope gets `-32602` from the gateway's
-/// own internal resolve request — the resolve `tools/list` that the gateway
-/// issues to figure out which target owns a tool does not propagate the
-/// client's `_meta`, so strict modern upstreams reject it.
-///
-/// With a single target the call succeeds (no resolve round-trip needed).
+// Regression for https://github.com/agentgateway/agentgateway/issues/3357.
 #[tokio::test]
 async fn modern_multi_target_resolve_propagates_meta() {
-	let alpha = mock_modern_strict_streamable_http_server("alpha_ping").await;
-	let beta = mock_modern_strict_streamable_http_server("beta_ping").await;
+	let (mock, capture) = mock_mrtr_streamable_http_server().await;
+	let other = mock_modern_streamable_http_server().await;
 	let t = never_prefix_proxy(
-		vec![("alpha", alpha.addr, false), ("beta", beta.addr, false)],
+		vec![("a", mock.addr, false), ("b", other.addr, false)],
 		false,
 	);
 	let io = t.serve_real_listener(strng::new("bind")).await;
-
-	let client = reqwest::Client::new();
-	let url = format!("http://{io}/mcp");
 	let meta = modern_meta();
-
 	let body = serde_json::json!({
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "tools/call",
 		"params": {
-			"name": "alpha_ping",
+			"name": "guarded_echo",
 			"arguments": {},
 			"_meta": meta
 		}
 	});
-	let resp = mcp_json_post(&client, &url, &body)
+	let resp = mcp_json_post(&reqwest::Client::new(), &format!("http://{io}/mcp"), &body)
 		.header("mcp-protocol-version", "2026-07-28")
 		.header("mcp-method", "tools/call")
-		.header("mcp-name", "alpha_ping")
+		.header("mcp-name", "guarded_echo")
 		.send()
 		.await
 		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let result = terminal_result(&resp.text().await.unwrap(), 1);
+	assert_eq!(result["content"][0]["text"], "no-elicitation-capability");
 
-	let status = resp.status();
-	let content_type = resp
-		.headers()
-		.get("content-type")
-		.map(|v| v.to_str().unwrap_or("").to_string())
-		.unwrap_or_default();
-	let raw_body = resp.text().await.unwrap();
-
-	// Before the fix, the resolve request fails with -32602 from the upstream
-	// because it lacks _meta. After the fix, the call succeeds with 200.
-	assert_eq!(
-		status,
-		reqwest::StatusCode::OK,
-		"tools/call should succeed with multi-target modern upstreams; got {status}: {raw_body}"
-	);
-
-	// The gateway may return either JSON or SSE depending on the request.
-	// Parse accordingly.
-	let resp_body = if content_type.contains("text/event-stream") {
-		// SSE: find the "data:" line with a JSON-RPC response.
-		raw_body
-			.lines()
-			.find(|line| line.starts_with("data: "))
-			.map(|line| {
-				serde_json::from_str::<serde_json::Value>(line.trim_start_matches("data: ")).unwrap()
-			})
-			.unwrap_or_else(|| panic!("no data: line in SSE response: {raw_body}"))
-	} else {
-		serde_json::from_str(&raw_body).expect("response should be valid JSON")
-	};
-
-	let result_text = resp_body
-		.pointer("/result/content/0/text")
-		.and_then(|v| v.as_str())
-		.unwrap_or("");
-	assert_eq!(result_text, "alpha_ping:ok");
+	// Check the gateway-generated list probe, not just the forwarded tool call.
+	let requests = capture.lock().unwrap();
+	let probe = requests
+		.iter()
+		.find(|r| r["method"] == "tools/list")
+		.unwrap();
+	for (key, value) in meta.as_object().unwrap() {
+		assert_eq!(&probe["params"]["_meta"][key], value, "{key}");
+	}
 }

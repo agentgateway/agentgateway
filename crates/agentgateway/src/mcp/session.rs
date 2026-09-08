@@ -568,13 +568,15 @@ impl Session {
 						let name = ctr.params.name.clone();
 						// Propagate the client's `_meta` to the resolve list request so modern
 						// (2026-07-28) upstreams that require the per-request envelope accept it.
-						let resolve_meta = ctr.extensions.get::<RequestMetaObject>().cloned();
-						let resolve_meta_opt = resolve_meta.as_ref().and_then(non_empty_meta);
+						let resolve_meta = ctr
+							.extensions
+							.get::<RequestMetaObject>()
+							.and_then(non_empty_meta);
 						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Tool,
 							&name,
 							&ctx,
-							resolve_meta_opt,
+							resolve_meta,
 						))
 						.await?;
 						let call_arguments = ctr.params.arguments.clone();
@@ -608,13 +610,15 @@ impl Session {
 						let name = gpr.params.name.clone();
 						// Propagate the client's `_meta` to the resolve list request so modern
 						// (2026-07-28) upstreams that require the per-request envelope accept it.
-						let resolve_meta = gpr.extensions.get::<RequestMetaObject>().cloned();
-						let resolve_meta_opt = resolve_meta.as_ref().and_then(non_empty_meta);
+						let resolve_meta = gpr
+							.extensions
+							.get::<RequestMetaObject>()
+							.and_then(non_empty_meta);
 						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Prompt,
 							&name,
 							&ctx,
-							resolve_meta_opt,
+							resolve_meta,
 						))
 						.await?;
 						log.non_atomic_mutate(|l| {
@@ -709,15 +713,17 @@ impl Session {
 							let name = prompt.name.clone();
 							// Propagate the client's `_meta` to the resolve list request so modern
 							// (2026-07-28) upstreams that require the per-request envelope accept it.
-							let resolve_meta = cr.extensions.get::<RequestMetaObject>().cloned();
-							let resolve_meta_opt = resolve_meta.as_ref().and_then(non_empty_meta);
+							let resolve_meta = cr
+								.extensions
+								.get::<RequestMetaObject>()
+								.and_then(non_empty_meta);
 							let (service_name, prompt_name) = Box::pin(self.authorize_prompt_request(
 								&name,
 								&method,
 								&log,
 								&cel,
 								&ctx,
-								resolve_meta_opt,
+								resolve_meta,
 							))
 							.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
