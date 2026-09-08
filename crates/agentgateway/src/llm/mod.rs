@@ -3209,7 +3209,13 @@ fn response_prompt_guard_headers(
 	headers
 }
 
-fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
+/// Tokens to subtract from the rate-limit bucket now that the real usage is known.
+///
+/// The request was already charged `request.input_tokens`, our own tokenizer count over the whole
+/// prompt, which always includes cached content. `normalized_input_tokens` puts the provider's
+/// count on that same footing, so the two are comparable and a cached prompt does not read as a
+/// refund.
+fn tokens_to_amend(llm_resp: &LLMInfo) -> i64 {
 	let input_mismatch = match (
 		llm_resp.request.input_tokens,
 		llm_resp.normalized_input_tokens(),
@@ -3222,7 +3228,11 @@ fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec
 		(_, Some(resp)) => resp as i64,
 	};
 	let response = llm_resp.response.output_tokens.unwrap_or_default();
-	let tokens_to_remove = input_mismatch + (response as i64);
+	input_mismatch + (response as i64)
+}
+
+fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
+	let tokens_to_remove = tokens_to_amend(llm_resp);
 
 	for lrl in &rate_limit.local_rate_limit {
 		lrl.amend_tokens(tokens_to_remove)

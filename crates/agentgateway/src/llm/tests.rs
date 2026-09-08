@@ -3778,6 +3778,94 @@ async fn vertex_gemini_to_messages_stream_captures_tool_call_after_finish_reason
 	assert_eq!(tool_calls[0].name.as_str(), "late_tool");
 }
 
+fn amend_info(
+	convention: CacheTokenConvention,
+	request_input: Option<u64>,
+	response_input: Option<u64>,
+	cached: Option<u64>,
+	output: Option<u64>,
+) -> LLMInfo {
+	LLMInfo {
+		request: LLMRequest {
+			input_tokens: request_input,
+			input_format: InputFormat::Messages,
+			cache_convention: convention,
+			request_model: "gemini-2.5-pro".into(),
+			provider: "vertex".into(),
+			streaming: false,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse {
+			input_tokens: response_input,
+			cached_input_tokens: cached,
+			output_tokens: output,
+			..Default::default()
+		},
+	}
+}
+
+#[test]
+fn amend_tokens_does_not_refund_cache_reads_on_exclusive_convention() {
+	// The request was charged our tokenizer count over the whole prompt (20000). The provider
+	// reports input_tokens excluding the 19000 cached tokens, so they must be added back before
+	// the counts are compared, or the difference becomes a large negative refund.
+	let info = amend_info(
+		CacheTokenConvention::InputExcludesCache,
+		Some(20000),
+		Some(1000),
+		Some(19000),
+		Some(500),
+	);
+	assert_eq!(
+		tokens_to_amend(&info),
+		500,
+		"only the output tokens are still uncharged"
+	);
+}
+
+#[test]
+fn amend_tokens_uses_response_input_directly_on_inclusive_convention() {
+	let info = amend_info(
+		CacheTokenConvention::InputIncludesCache,
+		Some(20000),
+		Some(20000),
+		Some(19000),
+		Some(500),
+	);
+	assert_eq!(tokens_to_amend(&info), 500);
+}
+
+#[test]
+fn amend_tokens_still_charges_underestimated_prompts() {
+	// A genuine under-count of the prompt must still be charged the difference.
+	let info = amend_info(
+		CacheTokenConvention::InputExcludesCache,
+		Some(1000),
+		Some(1200),
+		None,
+		Some(50),
+	);
+	assert_eq!(tokens_to_amend(&info), 250);
+}
+
+#[test]
+fn amend_tokens_counts_full_response_when_request_was_not_counted() {
+	let info = amend_info(
+		CacheTokenConvention::InputExcludesCache,
+		None,
+		Some(200),
+		Some(800),
+		Some(50),
+	);
+	assert_eq!(
+		tokens_to_amend(&info),
+		1050,
+		"uncounted request charges the full cache-inclusive input plus output"
+	);
+}
+
 fn vertex_provider(model: &str) -> AIProvider {
 	AIProvider::Vertex(vertex::Provider {
 		model: Some(strng::new(model)),

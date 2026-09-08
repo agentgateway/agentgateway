@@ -2535,10 +2535,17 @@ pub mod to_messages {
 			if chunk.usage_metadata.is_some() || chunk.model_version.is_some() {
 				log.update(|r| {
 					if let Some(um) = &chunk.usage_metadata {
-						let (prompt, completion, total) = um.counts();
-						r.response.input_tokens = Some(prompt);
+						// Mirror the non-streaming path (types::messages::Response::to_llm_response):
+						// `input_tokens` excludes cached content and `total_tokens` is input + output,
+						// so a streamed record and a buffered one for the same response agree.
+						let usage = build_usage_messages(Some(um));
+						let input = usage.input_tokens as u64;
+						let (_, completion, _) = um.counts();
+						r.response.input_tokens = Some(input);
 						r.response.output_tokens = Some(completion);
-						r.response.total_tokens = Some(total);
+						r.response.total_tokens = Some(input.saturating_add(completion));
+						// Read the raw field, not `usage.cache_read_input_tokens`: the wire body omits a
+						// zero cache read, but the log should record an explicit 0 as 0.
 						r.response.cached_input_tokens = um.cached_content_token_count;
 						r.response.reasoning_tokens = um.thoughts_token_count;
 					}
