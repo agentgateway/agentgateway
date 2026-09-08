@@ -3380,8 +3380,8 @@ func (in *JWTProvider) DeepCopyInto(out *JWTProvider) {
 		copy(*out, *in)
 	}
 	in.JWKS.DeepCopyInto(&out.JWKS)
-	if in.JWTValidationOptions != nil {
-		in, out := &in.JWTValidationOptions, &out.JWTValidationOptions
+	if in.Validation != nil {
+		in, out := &in.Validation, &out.Validation
 		*out = new(JWTValidationOptions)
 		(*in).DeepCopyInto(*out)
 	}
@@ -3402,8 +3402,12 @@ func (in *JWTValidationOptions) DeepCopyInto(out *JWTValidationOptions) {
 	*out = *in
 	if in.RequiredClaims != nil {
 		in, out := &in.RequiredClaims, &out.RequiredClaims
-		*out = make([]string, len(*in))
-		copy(*out, *in)
+		*out = new([]JWTClaim)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]JWTClaim, len(*in))
+			copy(*out, *in)
+		}
 	}
 }
 
@@ -3817,8 +3821,8 @@ func (in *MCPAuthentication) DeepCopyInto(out *MCPAuthentication) {
 		copy(*out, *in)
 	}
 	in.JWKS.DeepCopyInto(&out.JWKS)
-	if in.JWTValidationOptions != nil {
-		in, out := &in.JWTValidationOptions, &out.JWTValidationOptions
+	if in.Validation != nil {
+		in, out := &in.Validation, &out.Validation
 		*out = new(JWTValidationOptions)
 		(*in).DeepCopyInto(*out)
 	}

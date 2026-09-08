@@ -767,7 +767,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 		jp := &api.TrafficPolicySpec_JWTProvider{
 			Issuer:               pp.Issuer,
 			Audiences:            pp.Audiences,
-			JwtValidationOptions: translateJWTValidationOptions(pp.JWTValidationOptions),
+			JwtValidationOptions: translateJWTValidationOptions(pp.Validation),
 		}
 		if i := pp.JWKS.Inline; i != nil {
 			var ks jose.JSONWebKeySet
@@ -828,9 +828,9 @@ func translateJWTValidationOptions(opts *agentgateway.JWTValidationOptions) *api
 	if opts == nil {
 		return nil
 	}
-	claims := opts.RequiredClaims
-	if claims == nil {
-		claims = []string{"exp"}
+	claims := []string{"exp"}
+	if opts.RequiredClaims != nil {
+		claims = cast(*opts.RequiredClaims)
 	}
 	return &api.JWTValidationOptions{RequiredClaims: claims}
 }

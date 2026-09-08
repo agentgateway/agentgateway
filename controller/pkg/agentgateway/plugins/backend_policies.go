@@ -715,7 +715,7 @@ func translateMCPAuthenticationSpec(
 		JwksInline:           translatedInlineJwks,
 		Mode:                 mode,
 		ClientId:             authnPolicy.ClientID,
-		JwtValidationOptions: translateJWTValidationOptions(authnPolicy.JWTValidationOptions),
+		JwtValidationOptions: translateJWTValidationOptions(authnPolicy.Validation),
 	}
 
 	if authnPolicy.ClientSecretRef != nil {

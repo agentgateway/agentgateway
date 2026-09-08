@@ -15729,26 +15729,6 @@ spec:
                                 must be set
                               rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
                                 == 1
-                          jwtValidationOptions:
-                            description: |-
-                              Options that control which JWT claims must be present
-                              before validation. If unset, the data plane defaults to
-                              requiring `exp`. An empty `requiredClaims` list drops
-                              presence requirements; claim values are still checked
-                              when present.
-                            properties:
-                              requiredClaims:
-                                description: |-
-                                  Claims that must be present in the token payload.
-                                  Recognized values: `exp`, `nbf`, `aud`, `iss`, `sub`.
-                                  Defaults to `["exp"]` when this object is set but the
-                                  field is omitted. Use an empty list to require no claims.
-                                items:
-                                  type: string
-                                maxItems: 5
-                                type: array
-                                x-kubernetes-list-type: atomic
-                            type: object
                           mode:
                             default: Strict
                             description: Validation mode for JWT authentication.
@@ -15771,6 +15751,35 @@ spec:
                             additionalProperties:
                               x-kubernetes-preserve-unknown-fields: true
                             description: Metadata to use for MCP resources.
+                            type: object
+                          validation:
+                            description: |-
+                              Additional JWT claim presence requirements. Defaults to requiring `exp`.
+                              Issuer validation always requires `iss`; a non-empty audiences list also
+                              requires `aud`, regardless of these options. An empty `requiredClaims`
+                              list removes only the additional presence requirements. Expiration is
+                              still checked whenever `exp` is present.
+                            properties:
+                              requiredClaims:
+                                description: |-
+                                  Additional claims that must be present in the token payload.
+                                  Recognized values: `exp`, `nbf`, `aud`, `sub`.
+                                  Defaults to `["exp"]` when omitted. An empty list adds no requirements
+                                  beyond `iss`, which is always required, and `aud`, which is required
+                                  when a non-empty audiences list is configured. Expiration is still
+                                  checked whenever `exp` is present.
+                                items:
+                                  description: JWTClaim is a JWT claim whose presence
+                                    can be required during validation.
+                                  enum:
+                                  - aud
+                                  - exp
+                                  - nbf
+                                  - sub
+                                  type: string
+                                maxItems: 4
+                                type: array
+                                x-kubernetes-list-type: atomic
                             type: object
                         required:
                         - jwks

@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -108,10 +109,20 @@ func TestProcessJWTAuthenticationPolicyTranslatesEmptyRequiredClaims(t *testing.
 		Providers: []agentgateway.JWTProvider{{
 			Issuer: "issuer.example",
 			JWKS:   agentgateway.JWKS{Inline: &inline},
-			JWTValidationOptions: &agentgateway.JWTValidationOptions{
-				RequiredClaims: []string{},
+			Validation: &agentgateway.JWTValidationOptions{
+				RequiredClaims: new([]agentgateway.JWTClaim{}),
 			},
 		}},
+	}
+
+	// Exercise the typed client's JSON boundary before translating the policy.
+	wire, err := json.Marshal(jwtAuth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwtAuth = &agentgateway.JWTAuthentication{}
+	if err := json.Unmarshal(wire, jwtAuth); err != nil {
+		t.Fatal(err)
 	}
 
 	policy, err := processJWTAuthenticationPolicy(
@@ -138,9 +149,9 @@ func TestProcessJWTAuthenticationPolicyDefaultsRequiredClaimsWhenOptionsEmpty(t 
 	jwtAuth := &agentgateway.JWTAuthentication{
 		Mode: agentgateway.JWTAuthenticationModeStrict,
 		Providers: []agentgateway.JWTProvider{{
-			Issuer:               "issuer.example",
-			JWKS:                 agentgateway.JWKS{Inline: &inline},
-			JWTValidationOptions: &agentgateway.JWTValidationOptions{},
+			Issuer:     "issuer.example",
+			JWKS:       agentgateway.JWKS{Inline: &inline},
+			Validation: &agentgateway.JWTValidationOptions{},
 		}},
 	}
 
@@ -196,9 +207,19 @@ func TestTranslateMCPAuthenticationSpecTranslatesEmptyRequiredClaims(t *testing.
 				},
 			},
 		},
-		JWTValidationOptions: &agentgateway.JWTValidationOptions{
-			RequiredClaims: []string{},
+		Validation: &agentgateway.JWTValidationOptions{
+			RequiredClaims: new([]agentgateway.JWTClaim{}),
 		},
+	}
+
+	// Exercise the typed client's JSON boundary before translating the policy.
+	wire, err := json.Marshal(authn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authn = &agentgateway.MCPAuthentication{}
+	if err := json.Unmarshal(wire, authn); err != nil {
+		t.Fatal(err)
 	}
 
 	spec, err := translateMCPAuthenticationSpec(
