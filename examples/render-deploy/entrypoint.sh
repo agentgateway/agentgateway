@@ -4,6 +4,11 @@
 # dashboard env changes take effect. Inline bcrypt in config.yaml is a
 # footgun: hashes contain $ and agentgateway env-expands $VARS. The htpasswd
 # file is read as raw bytes, so bcrypt is safe there.
+#
+# First boot writes UI basicAuth only. Add models and MCP in the UI after
+# login — do not seed $OPENAI_API_KEY / $GITHUB_PERSONAL_ACCESS_TOKEN.
+# agentgateway exits if config.yaml expands a $VAR that is unset, and
+# llm.models is required whenever an llm section is present.
 set -eu
 
 # Pinned, not configurable: render.yaml mounts the disk at /config and the
@@ -44,64 +49,7 @@ mkdir -p "${CONFIG_DIR}"
 umask 077
 printf '%s\n' "${UI_PASSWORD}" | htpasswd -niB -C 10 "${UI_USER}" > "${HTPASSWD_FILE}"
 
-# Lab seed (same shape as config.example.yaml). First boot writes the whole
-# file. An older UI-only disk gets missing llm/mcp appended; existing
-# operator-set sections are left alone.
-append_lab_llm() {
-  cat <<'EOF'
-llm:
-  gateways: [default]
-  policies:
-    apiKey:
-      mode: strict
-      keys:
-      - key: sk-lab-admin-...
-        metadata:
-          name: admin
-      - key: sk-lab-demo-...
-        metadata:
-          name: demo
-        allowedModels:
-        - gpt-4.1-nano
-        - gpt-4.1
-        - gpt-4o
-      - key: sk-lab-limited-...
-        metadata:
-          name: limited
-        allowedModels:
-        - gpt-4.1-nano
-        budgets:
-        - name: tokens
-          limit:
-            unit: Tokens
-            amount: 1000
-          window:
-            rolling: 1h
-          onBudgetExceeded: Block
-  models:
-  - name: '*'
-    provider: openAI
-    params:
-      apiKey: $OPENAI_API_KEY
-EOF
-}
-
-append_lab_mcp() {
-  cat <<'EOF'
-mcp:
-  gateways: [default]
-  targets:
-  - name: github
-    mcp:
-      host: https://api.githubcopilot.com/mcp/
-    policies:
-      backendAuth:
-        key:
-          value: $GITHUB_PERSONAL_ACCESS_TOKEN
-EOF
-}
-
-if [ ! -f "${CONFIG_FILE}" ]; then
+write_ui_seed() {
   cat > "${CONFIG_FILE}" <<'EOF'
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 config:
@@ -119,22 +67,18 @@ ui:
         file: /config/.htpasswd
       realm: agentgateway
 EOF
-  append_lab_llm >> "${CONFIG_FILE}"
-  append_lab_mcp >> "${CONFIG_FILE}"
-  echo "entrypoint: seeded ${CONFIG_FILE} (llm + mcp + ui basicAuth)" >&2
-else
-  lab=0
-  if ! grep -Eq '^llm:' "${CONFIG_FILE}"; then
-    append_lab_llm >> "${CONFIG_FILE}"
-    lab=1
-  fi
-  if ! grep -Eq '^mcp:' "${CONFIG_FILE}"; then
-    append_lab_mcp >> "${CONFIG_FILE}"
-    lab=1
-  fi
-  if [ "${lab}" = 1 ]; then
-    echo "entrypoint: updated ${CONFIG_FILE} (lab=true)" >&2
-  fi
+}
+
+if [ ! -f "${CONFIG_FILE}" ]; then
+  write_ui_seed
+  echo "entrypoint: seeded ${CONFIG_FILE} (ui basicAuth)" >&2
+elif grep -q '\$OPENAI_API_KEY\|\$GITHUB_PERSONAL_ACCESS_TOKEN\|sk-lab-admin' "${CONFIG_FILE}" && \
+     [ -z "${OPENAI_API_KEY:-}" ] && [ -z "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" ]; then
+  # Earlier revisions of this example appended lab llm/mcp that expand
+  # unset $VARS and crash the process. Replace that seed with UI-only;
+  # add models and MCP in the UI.
+  write_ui_seed
+  echo "entrypoint: replaced lab llm/mcp seed with UI-only ${CONFIG_FILE}" >&2
 fi
 
 # Root only on first boot to claim the disk; the gateway itself never runs

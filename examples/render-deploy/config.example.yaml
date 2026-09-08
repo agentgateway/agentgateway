@@ -1,9 +1,15 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 #
-# Example shape for a Render deployment — placeholders only.
-# The entrypoint seeds this onto the agw-config disk as /config/config.yaml
-# on first boot (and merges llm/mcp if an older UI-only seed is already there).
-# Do not commit real UI passwords, provider keys, or virtual API keys.
+# What first boot writes to /config/config.yaml on the agw-config disk.
+# Add LLM models and MCP servers in the UI after login — do not put
+# $OPENAI_API_KEY or $GITHUB_PERSONAL_ACCESS_TOKEN here unless those
+# env vars are set (agentgateway exits if a $VAR is missing, and
+# llm.models is required whenever llm is present).
+#
+# SQLite on the disk is the default. To use Render Postgres instead,
+# create a database (https://render.com/docs/postgresql-creating-connecting)
+# and change config.database.url in the UI to the connection string
+# (or $DATABASE_URL once that env var exists).
 #
 # Render publishes HTTPS :443 → container :4000. Admin :15000 stays loopback.
 
@@ -23,49 +29,3 @@ ui:
       htpasswd:
         file: /config/.htpasswd
       realm: agentgateway
-
-llm:
-  gateways: [default]
-  policies:
-    apiKey:
-      mode: strict
-      keys:
-      - key: sk-lab-admin-...
-        metadata:
-          name: admin
-      - key: sk-lab-demo-...
-        metadata:
-          name: demo
-        allowedModels:
-        - gpt-4.1-nano
-        - gpt-4.1
-        - gpt-4o
-      - key: sk-lab-limited-...
-        metadata:
-          name: limited
-        allowedModels:
-        - gpt-4.1-nano
-        budgets:
-        - name: tokens
-          limit:
-            unit: Tokens
-            amount: 1000
-          window:
-            rolling: 1h
-          onBudgetExceeded: Block
-  models:
-  - name: '*'
-    provider: openAI
-    params:
-      apiKey: $OPENAI_API_KEY
-
-mcp:
-  gateways: [default]
-  targets:
-  - name: github
-    mcp:
-      host: https://api.githubcopilot.com/mcp/
-    policies:
-      backendAuth:
-        key:
-          value: $GITHUB_PERSONAL_ACCESS_TOKEN

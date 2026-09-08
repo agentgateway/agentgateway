@@ -1,11 +1,11 @@
 # Standalone agentgateway — Render Blueprint
-# Canonical Blueprint Path for this example:
-#   examples/render-deploy/render.yaml
+# File: examples/render-deploy/render.yaml
 #
-# Deploy-to-Render button (use `path`, not blueprintPath):
+# Render looks for render.yaml at the repo root by default. This Blueprint
+# lives in a subdirectory, so:
+#   Deploy button:  ?path=examples/render-deploy/render.yaml
+#   Dashboard:      Blueprint Path = examples/render-deploy/render.yaml
 #   https://render.com/deploy?repo=https://github.com/agentgateway/agentgateway&path=examples/render-deploy/render.yaml
-#
-# Dashboard: New Blueprint → Blueprint Path = examples/render-deploy/render.yaml
 #
 # Builds examples/render-deploy/Dockerfile (entrypoint + official image).
 # Do not use runtime: image — that skips the Dockerfile and leaves /ui/
@@ -47,9 +47,6 @@ services:
       # Optional; entrypoint defaults to admin when unset.
       - key: UI_USER
         value: admin
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: GITHUB_PERSONAL_ACCESS_TOKEN
-        sync: false
+      # Provider keys are optional. Do not declare them with sync: false —
+      # Render would prompt as required, and a missing $VAR in config.yaml
+      # crashes the gateway. Add models / MCP in the UI after login.
