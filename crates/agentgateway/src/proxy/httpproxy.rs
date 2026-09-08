@@ -720,7 +720,7 @@ impl HTTPProxy {
 		});
 
 		log.with(|l| l.error = error.as_ref().map(|e| e.message.clone()));
-		let reason = match &ret {
+		let mut reason = match &ret {
 			Ok(_) => ProxyResponseReason::Upstream,
 			Err(e) => e.as_reason(),
 		};
@@ -755,10 +755,8 @@ impl HTTPProxy {
 			Ok(_) => resp,
 			Err(e) => {
 				is_upstream_response = false;
-				match e {
-					ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
-					ProxyResponse::DirectResponse(dr) => *dr,
-				}
+				reason = e.as_reason();
+				response_policy_failure(log.as_mut().unwrap(), e, is_grpc_request)
 			},
 		};
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
@@ -3594,6 +3592,36 @@ fn resolved_workload_target_hostname<'a>(
 	} else {
 		Some(workload_hostname)
 	}
+}
+
+pub(crate) fn response_policy_failure(
+	log: &mut RequestLog,
+	failure: ProxyResponse,
+	is_grpc_request: bool,
+) -> Response {
+	let reason = failure.as_reason();
+	let error = match &failure {
+		ProxyResponse::Error(error) => Some(cel::ErrorContext {
+			reason: reason.to_string(),
+			message: error.to_string(),
+		}),
+		ProxyResponse::DirectResponse(_) => None,
+	};
+	log.error = error.as_ref().map(|error| error.message.clone());
+	let mut response = match failure {
+		ProxyResponse::Error(error) => error.into_response_with_grpc(is_grpc_request),
+		ProxyResponse::DirectResponse(response) => *response,
+	};
+	if let Some(context) = response.extensions_mut().get_mut::<cel::ProxyContext>() {
+		context.error = error;
+	} else if error.is_some() {
+		response.extensions_mut().insert(cel::ProxyContext {
+			error,
+			..Default::default()
+		});
+	}
+	set_final_response_fields(log, &reason, &mut response);
+	response
 }
 
 fn set_final_response_fields(

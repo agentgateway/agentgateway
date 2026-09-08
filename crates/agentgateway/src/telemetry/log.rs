@@ -1367,9 +1367,10 @@ fn gen_ai_operation_failed(request: &RequestLog) -> bool {
 	// A provider 4xx (such as rate limiting) fails the GenAI operation even though
 	// an inbound HTTP server span does not classify client errors as server failures.
 	request.error.is_some()
-		|| request
-			.status
-			.is_some_and(|status| status.is_client_error() || status.is_server_error())
+		|| request.status.is_some_and(|status| {
+			status.is_server_error()
+				|| (status.is_client_error() && request.reason == Some(ProxyResponseReason::Upstream))
+		})
 }
 
 fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
@@ -3060,6 +3061,25 @@ mod tests {
 		for (status, error, reason, expected_error_type) in [
 			(http::StatusCode::OK, None, None, None),
 			(
+				http::StatusCode::BAD_REQUEST,
+				None,
+				Some(ProxyResponseReason::DirectResponse),
+				None,
+			),
+			(
+				http::StatusCode::TOO_MANY_REQUESTS,
+				None,
+				Some(ProxyResponseReason::DirectResponse),
+				None,
+			),
+			(http::StatusCode::TOO_MANY_REQUESTS, None, None, None),
+			(
+				http::StatusCode::BAD_REQUEST,
+				Some("invalid request"),
+				Some(ProxyResponseReason::InvalidRequest),
+				Some("_OTHER"),
+			),
+			(
 				http::StatusCode::TOO_MANY_REQUESTS,
 				None,
 				Some(ProxyResponseReason::Upstream),
@@ -3107,6 +3127,48 @@ mod tests {
 					"successful request unexpectedly has error.type: {count}"
 				),
 			}
+		}
+	}
+
+	#[test]
+	fn gen_ai_duration_uses_response_policy_replacement_outcome() {
+		use crate::proxy::{ProxyError, ProxyResponse};
+		for direct in [true, false] {
+			let (mut log, registry) = test_request_log_with_registry();
+			log.llm_request = Some(metric_test_llm_request());
+			log.status = Some(http::StatusCode::OK);
+			log.reason = Some(ProxyResponseReason::Upstream);
+			let failure = if direct {
+				ProxyResponse::DirectResponse(Box::new(
+					::http::Response::builder()
+						.status(http::StatusCode::TOO_MANY_REQUESTS)
+						.body(crate::http::Body::empty())
+						.unwrap(),
+				))
+			} else {
+				ProxyError::ProcessingString("response policy failed".to_string()).into()
+			};
+			let expected_reason = failure.as_reason();
+			let response = crate::proxy::httpproxy::response_policy_failure(&mut log, failure, false);
+			assert_eq!(log.reason, Some(expected_reason));
+			assert_ne!(log.reason, Some(ProxyResponseReason::Upstream));
+			assert_eq!(log.status, Some(response.status()));
+			assert_eq!(log.error.is_some(), !direct);
+			assert_eq!(
+				response
+					.extensions()
+					.get::<cel::ProxyContext>()
+					.and_then(|context| context.error.as_ref())
+					.is_some(),
+				!direct
+			);
+			drop(DropOnLog::from(log));
+			let encoded = encoded_metrics(&registry);
+			let count = encoded
+				.lines()
+				.find(|line| line.starts_with("gen_ai_server_request_duration_count"))
+				.unwrap();
+			assert_eq!(count.contains("error_type=\"_OTHER\""), !direct, "{count}");
 		}
 	}
 
