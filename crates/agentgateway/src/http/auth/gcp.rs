@@ -359,12 +359,12 @@ pub(super) async fn insert_token(
 				)
 				.await
 				.ctx("GCP ID token fetch timed out after 5s")
-				.map_err(BackendAuthError::CredentialProvider)?
+				.map_err(BackendAuthError::credential_provider)?
 				.map_err(classify_gcp_credential_error)?,
 				None => tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, fetch_id_token(aud.as_ref()))
 					.await
 					.ctx("GCP ID token fetch timed out after 5s")
-					.map_err(BackendAuthError::CredentialProvider)?
+					.map_err(BackendAuthError::credential_provider)?
 					.map_err(classify_gcp_credential_error)?,
 			}
 		},
@@ -373,15 +373,15 @@ pub(super) async fn insert_token(
 				tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, explicit_access_token(credential))
 					.await
 					.ctx("GCP access token fetch timed out after 5s")
-					.map_err(BackendAuthError::CredentialProvider)?
+					.map_err(BackendAuthError::credential_provider)?
 					.map_err(classify_gcp_credential_error)?
 			},
 			None => {
-				let credentials = creds().map_err(BackendAuthError::Local)?;
+				let credentials = creds().map_err(BackendAuthError::local)?;
 				let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, credentials.access_token())
 					.await
 					.ctx("GCP access token fetch timed out after 5s")
-					.map_err(BackendAuthError::CredentialProvider)?
+					.map_err(BackendAuthError::credential_provider)?
 					.map_err(|error| classify_gcp_credential_error(error.into()))?;
 				token.token
 			},
@@ -393,8 +393,8 @@ pub(super) async fn insert_token(
 }
 
 fn insert_provider_token(token: &str, headers: &mut HeaderMap) -> Result<(), BackendAuthError> {
-	let header = headers::Authorization::bearer(token)
-		.map_err(|error| BackendAuthError::CredentialProvider(error.into()))?;
+	let header =
+		headers::Authorization::bearer(token).map_err(BackendAuthError::credential_provider)?;
 	headers.typed_insert(header);
 	Ok(())
 }

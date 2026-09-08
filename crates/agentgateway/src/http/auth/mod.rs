@@ -127,6 +127,16 @@ pub enum BackendAuthError {
 	CredentialProvider(anyhow::Error),
 }
 
+impl BackendAuthError {
+	fn local(error: impl Into<anyhow::Error>) -> Self {
+		Self::Local(error.into())
+	}
+
+	fn credential_provider(error: impl Into<anyhow::Error>) -> Self {
+		Self::CredentialProvider(error.into())
+	}
+}
+
 impl BackendAuth {
 	pub fn new(kind: BackendAuthKind) -> Self {
 		Self {
@@ -229,9 +239,7 @@ fn insert_local_auth(
 	req: &mut Request,
 	value: &str,
 ) -> Result<(), BackendAuthError> {
-	location
-		.insert(req, value)
-		.map_err(|error| BackendAuthError::Local(error.into()))
+	location.insert(req, value).map_err(BackendAuthError::local)
 }
 
 async fn apply_backend_auth_kind(
@@ -285,10 +293,10 @@ async fn apply_backend_auth_kind(
 		BackendAuthKind::Copilot => {
 			copilot::insert_headers(req)
 				.await
-				.map_err(BackendAuthError::Local)?;
+				.map_err(BackendAuthError::local)?;
 		},
 		BackendAuthKind::JwtSign(cfg) => {
-			let token = cfg.sign().map_err(BackendAuthError::Local)?;
+			let token = cfg.sign().map_err(BackendAuthError::local)?;
 			let explicit = cfg.location().is_some();
 			let resolved = cfg.location().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			insert_local_auth(resolved, req, &token)?;

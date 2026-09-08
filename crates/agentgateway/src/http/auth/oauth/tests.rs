@@ -699,7 +699,10 @@ async fn id_jag_chained_exchange_client_error_is_upstream_failure() {
 		.await
 		.unwrap_err();
 	assert!(
-		matches!(&err, FetchError::CredentialProvider(_)),
+		matches!(
+			&err,
+			FetchError::Backend(BackendAuthError::CredentialProvider(_))
+		),
 		"got: {err:?}"
 	);
 	let msg = err.to_string();
@@ -1705,7 +1708,7 @@ async fn invalid_token_endpoint_backend_is_local_failure() {
 	)
 	.await
 	.unwrap_err();
-	let FetchError::Local(source) = &err else {
+	let FetchError::Backend(BackendAuthError::Local(source)) = &err else {
 		panic!("expected local failure, got: {err:?}");
 	};
 	assert!(source.downcast_ref::<ProxyError>().is_some());

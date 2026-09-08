@@ -568,13 +568,13 @@ pub(super) async fn sign_request(
 			assume_role
 				.tags
 				.resolve(req)
-				.map_err(BackendAuthError::Local)?,
+				.map_err(BackendAuthError::local)?,
 		),
 		_ => None,
 	};
 	let resolved_session_name = match aws_auth.assume_role().and_then(|a| a.session_name.as_ref()) {
 		Some(name @ AwsSessionName::Dynamic { .. }) => {
-			Some(name.resolve(req).map_err(BackendAuthError::Local)?)
+			Some(name.resolve(req).map_err(BackendAuthError::local)?)
 		},
 		_ => None,
 	};
@@ -603,7 +603,7 @@ pub(super) async fn sign_request(
 					.ok_or(anyhow::anyhow!(
 						"No region found in AWS config or request extensions"
 					))
-					.map_err(BackendAuthError::Local)?
+					.map_err(BackendAuthError::local)?
 			}
 		},
 	};
@@ -618,7 +618,7 @@ pub(super) async fn sign_request(
 	)
 	.await
 	.ctx("AWS credential fetch timed out after 5s")
-	.map_err(BackendAuthError::CredentialProvider)?
+	.map_err(BackendAuthError::credential_provider)?
 	.map_err(classify_aws_credentials_error)?
 	.into();
 
@@ -633,12 +633,12 @@ pub(super) async fn sign_request(
 		.time(std::time::SystemTime::now())
 		.settings(aws_sigv4::http_request::SigningSettings::default())
 		.build()
-		.map_err(|error| BackendAuthError::Local(error.into()))?
+		.map_err(BackendAuthError::local)?
 		.into();
 
 	let body = http::read_body_with_limit(orig_body, lim)
 		.await
-		.map_err(|error| BackendAuthError::Local(error.into()))?;
+		.map_err(BackendAuthError::local)?;
 	let signable_request = aws_sigv4::http_request::SignableRequest::new(
 		req.method().as_str(),
 		req.uri().to_string().replace("http://", "https://"),
@@ -654,17 +654,17 @@ pub(super) async fn sign_request(
 		// SignableBody::UnsignedPayload,
 		SignableBody::Bytes(body.as_ref()),
 	)
-	.map_err(|error| BackendAuthError::Local(error.into()))?;
+	.map_err(BackendAuthError::local)?;
 
 	let (signature, _sig) = sign(signable_request, &signing_params)
-		.map_err(|error| BackendAuthError::Local(error.into()))?
+		.map_err(BackendAuthError::local)?
 		.into_parts();
 	signature.apply_to_request_http1x(req);
 
 	req.headers_mut().insert(
 		http::header::CONTENT_LENGTH,
 		http::HeaderValue::from_str(&format!("{}", body.as_ref().len()))
-			.map_err(|error| BackendAuthError::Local(error.into()))?,
+			.map_err(BackendAuthError::local)?,
 	);
 	*req.body_mut() = http::Body::from(body);
 

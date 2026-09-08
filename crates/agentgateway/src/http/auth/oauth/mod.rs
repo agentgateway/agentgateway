@@ -382,21 +382,17 @@ impl OAuthTokenExchangeAuth {
 		req: &mut Request,
 		access_token: &str,
 	) -> Result<bool, ProxyError> {
-		::http::HeaderValue::try_from(access_token)
-			.map_err(|error| BackendAuthError::CredentialProvider(error.into()))?;
+		::http::HeaderValue::try_from(access_token).map_err(BackendAuthError::credential_provider)?;
 
 		// Replace the original credentials with the backend's.
 		self
 			.subject_token
 			.source
 			.remove(req)
-			.map_err(|error| BackendAuthError::Local(error.into()))?;
+			.map_err(BackendAuthError::local)?;
 
 		if let Some(actor) = &self.actor_token {
-			actor
-				.source
-				.remove(req)
-				.map_err(|error| BackendAuthError::Local(error.into()))?;
+			actor.source.remove(req).map_err(BackendAuthError::local)?;
 		}
 
 		super::insert_local_auth(&self.authorization_location, req, access_token)?;
