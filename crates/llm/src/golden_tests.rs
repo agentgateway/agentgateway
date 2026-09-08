@@ -164,15 +164,36 @@ mod requests {
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		(
 			"basic",
-			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+			&[
+				ANTHROPIC,
+				COMPLETIONS,
+				BEDROCK,
+				VERTEX,
+				RESPONSES,
+				VERTEX_GEMINI,
+			],
 		),
 		(
 			"system_message",
-			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+			&[
+				ANTHROPIC,
+				COMPLETIONS,
+				BEDROCK,
+				VERTEX,
+				RESPONSES,
+				VERTEX_GEMINI,
+			],
 		),
 		(
 			"tools",
-			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+			&[
+				ANTHROPIC,
+				COMPLETIONS,
+				BEDROCK,
+				VERTEX,
+				RESPONSES,
+				VERTEX_GEMINI,
+			],
 		),
 		(
 			"server_tools",
@@ -180,7 +201,14 @@ mod requests {
 		),
 		(
 			"reasoning",
-			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+			&[
+				ANTHROPIC,
+				COMPLETIONS,
+				BEDROCK,
+				VERTEX,
+				RESPONSES,
+				VERTEX_GEMINI,
+			],
 		),
 		(
 			"metadata",
@@ -375,6 +403,9 @@ mod requests {
 					}),
 					RESPONSES => test_request(RESPONSES, &path, |i| {
 						conversion::responses::from_messages::translate(i)
+					}),
+					VERTEX_GEMINI => test_request(VERTEX_GEMINI, &path, |i| {
+						conversion::vertex_gemini::from_messages::translate(i, Some("gemini-2.5-pro"))
 					}),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
