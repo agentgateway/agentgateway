@@ -1593,6 +1593,17 @@ pub mod from_messages {
 		}
 	}
 
+	/// Gemini counts thought tokens against `maxOutputTokens`, so a budget above the cap leaves
+	/// no room for the answer and the response comes back empty with `MAX_TOKENS`. Keep any
+	/// explicit budget within the cap. `-1` (dynamic) is not a size and is passed through.
+	fn clamp_thinking_budget(budget: i32, max_tokens: usize) -> i32 {
+		if budget < 0 {
+			return budget;
+		}
+		let cap = i32::try_from(max_tokens).unwrap_or(i32::MAX);
+		budget.min(cap)
+	}
+
 	fn build_thinking_config(
 		req: &types::messages::typed::Request,
 		model: &str,
@@ -1601,7 +1612,7 @@ pub mod from_messages {
 
 		// output_config.effort takes precedence when present.
 		if let Some(effort) = req.output_config.as_ref().and_then(|oc| oc.effort) {
-			return Some(effort_to_thinking_config(effort, model));
+			return Some(effort_to_thinking_config(effort, model, req.max_tokens));
 		}
 
 		match req.thinking.as_ref()? {
@@ -1638,7 +1649,10 @@ pub mod from_messages {
 				} else {
 					Some(vg::ThinkingConfig {
 						thinking_level: None,
-						thinking_budget: Some(i32::try_from(*budget_tokens).unwrap_or(i32::MAX)),
+						thinking_budget: Some(clamp_thinking_budget(
+							i32::try_from(*budget_tokens).unwrap_or(i32::MAX),
+							req.max_tokens,
+						)),
 						include_thoughts: Some(true),
 						rest: Default::default(),
 					})
@@ -1650,6 +1664,7 @@ pub mod from_messages {
 	fn effort_to_thinking_config(
 		effort: types::messages::typed::ThinkingEffort,
 		model: &str,
+		max_tokens: usize,
 	) -> vg::ThinkingConfig {
 		use types::messages::typed::ThinkingEffort;
 		if uses_thinking_levels(model) {
@@ -1672,7 +1687,7 @@ pub mod from_messages {
 			};
 			vg::ThinkingConfig {
 				thinking_level: None,
-				thinking_budget: Some(budget),
+				thinking_budget: Some(clamp_thinking_budget(budget, max_tokens)),
 				include_thoughts: Some(true),
 				rest: Default::default(),
 			}
