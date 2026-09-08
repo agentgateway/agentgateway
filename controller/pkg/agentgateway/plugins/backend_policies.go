@@ -712,9 +712,10 @@ func translateMCPAuthenticationSpec(
 		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
 			Extra: extraResourceMetadata,
 		},
-		JwksInline: translatedInlineJwks,
-		Mode:       mode,
-		ClientId:   authnPolicy.ClientID,
+		JwksInline:           translatedInlineJwks,
+		Mode:                 mode,
+		ClientId:             authnPolicy.ClientID,
+		JwtValidationOptions: translateJWTValidationOptions(authnPolicy.JWTValidationOptions),
 	}
 
 	if authnPolicy.ClientSecretRef != nil {

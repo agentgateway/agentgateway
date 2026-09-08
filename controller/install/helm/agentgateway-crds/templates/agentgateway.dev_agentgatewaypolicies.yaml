@@ -5782,6 +5782,26 @@ spec:
                                 must be set
                               rule: (has(self.backendRef)?1:0)+(has(self.url)?1:0)
                                 == 1
+                          jwtValidationOptions:
+                            description: |-
+                              Options that control which JWT claims must be present
+                              before validation. If unset, the data plane defaults to
+                              requiring `exp`. An empty `requiredClaims` list drops
+                              presence requirements; claim values are still checked
+                              when present.
+                            properties:
+                              requiredClaims:
+                                description: |-
+                                  Claims that must be present in the token payload.
+                                  Recognized values: `exp`, `nbf`, `aud`, `iss`, `sub`.
+                                  Defaults to `["exp"]` when this object is set but the
+                                  field is omitted. Use an empty list to require no claims.
+                                items:
+                                  type: string
+                                maxItems: 5
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            type: object
                           mode:
                             default: Strict
                             description: Validation mode for JWT authentication.
@@ -9832,6 +9852,26 @@ spec:
                                   must be set
                                 rule: (has(self.remote)?1:0)+(has(self.inline)?1:0)
                                   == 1
+                            jwtValidationOptions:
+                              description: |-
+                                Options that control which JWT claims must be present
+                                before validation. If unset, the data plane defaults to
+                                requiring `exp`. An empty `requiredClaims` list drops
+                                presence requirements; claim values are still checked
+                                when present.
+                              properties:
+                                requiredClaims:
+                                  description: |-
+                                    Claims that must be present in the token payload.
+                                    Recognized values: `exp`, `nbf`, `aud`, `iss`, `sub`.
+                                    Defaults to `["exp"]` when this object is set but the
+                                    field is omitted. Use an empty list to require no claims.
+                                  items:
+                                    type: string
+                                  maxItems: 5
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                              type: object
                           required:
                           - issuer
                           - jwks

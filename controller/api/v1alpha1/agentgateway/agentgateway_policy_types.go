@@ -1241,6 +1241,26 @@ type JWTProvider struct {
 	// JWT.
 	// +required
 	JWKS JWKS `json:"jwks"`
+	// Options that control which JWT claims must be present
+	// before validation. If unset, the data plane defaults to
+	// requiring `exp`. An empty `requiredClaims` list drops
+	// presence requirements; claim values are still checked
+	// when present.
+	// +optional
+	JWTValidationOptions *JWTValidationOptions `json:"jwtValidationOptions,omitempty"`
+}
+
+// JWTValidationOptions controls which JWT claims must be present
+// before validation proceeds.
+type JWTValidationOptions struct {
+	// Claims that must be present in the token payload.
+	// Recognized values: `exp`, `nbf`, `aud`, `iss`, `sub`.
+	// Defaults to `["exp"]` when this object is set but the
+	// field is omitted. Use an empty list to require no claims.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=5
+	RequiredClaims []string `json:"requiredClaims,omitempty"`
 }
 
 // MCP-specific extensions for JWT authentication.
@@ -2502,6 +2522,14 @@ type MCPAuthentication struct {
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
+
+	// Options that control which JWT claims must be present
+	// before validation. If unset, the data plane defaults to
+	// requiring `exp`. An empty `requiredClaims` list drops
+	// presence requirements; claim values are still checked
+	// when present.
+	// +optional
+	JWTValidationOptions *JWTValidationOptions `json:"jwtValidationOptions,omitempty"`
 
 	// Client ID to use for short-circuiting Dynamic Client Registration.
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
