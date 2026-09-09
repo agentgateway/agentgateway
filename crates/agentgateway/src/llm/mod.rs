@@ -940,32 +940,6 @@ pub(crate) fn encode_deferred_response(resp: &mut Response) {
 	resp.headers_mut().remove(header::TRANSFER_ENCODING);
 }
 
-/// Convert an `AIError::BadRequest` into a 400 in the Anthropic Messages error shape.
-///
-/// The translation layer reports client mistakes (e.g. an unknown `tool_use_id`) as
-/// `BadRequest`; returning a `Rejected` result keeps the proxy from wrapping it in
-/// `ProxyError::Processing`, which would surface as a 503. Only the Messages path can produce
-/// `BadRequest` today, so this is not wired into the other formats.
-fn bad_request_to_rejected(err: AIError) -> Result<RequestResult, AIError> {
-	let AIError::BadRequest(msg) = err else {
-		return Err(err);
-	};
-	let body = types::messages::typed::MessagesErrorResponse {
-		r#type: "error".to_string(),
-		error: types::messages::typed::MessagesError {
-			r#type: "invalid_request_error".to_string(),
-			message: msg.to_string(),
-		},
-	};
-	let body = serde_json::to_vec(&body).map_err(AIError::RequestMarshal)?;
-	let resp = ::http::Response::builder()
-		.status(::http::StatusCode::BAD_REQUEST)
-		.header(::http::header::CONTENT_TYPE, "application/json")
-		.body(Body::from(body))
-		.expect("static response is always valid");
-	Ok(RequestResult::Rejected(resp))
-}
-
 impl AIProvider {
 	pub fn provider(&self) -> Strng {
 		match self {
@@ -1703,7 +1677,7 @@ impl AIProvider {
 			.await?;
 		self.apply_model_alias(policies, &mut req);
 
-		let result = self
+		self
 			.process_chat_request(
 				backend_info,
 				policies,
@@ -1716,8 +1690,7 @@ impl AIProvider {
 				catalog,
 				types::ChatRequest::Messages,
 			)
-			.await;
-		result.or_else(bad_request_to_rejected)
+			.await
 	}
 
 	pub async fn process_gemini_request(
