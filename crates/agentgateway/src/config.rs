@@ -23,6 +23,18 @@ use crate::{
 const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
 const DEFAULT_UI_GROUP_ATTRIBUTE: &str = r#"coalesce(apiKey.group, jwt.groups[0], null)"#;
 
+pub(crate) fn expand_yaml_environment_variables(contents: &str) -> anyhow::Result<String> {
+	let mut sanitized = String::with_capacity(contents.len());
+	for line in contents.split_inclusive('\n') {
+		if line.trim_start().starts_with('#') {
+			sanitized.extend(line.chars().filter(|character| *character != '$'));
+		} else {
+			sanitized.push_str(line);
+		}
+	}
+	Ok(shellexpand::full(&sanitized)?.into_owned())
+}
+
 #[derive(Default)]
 struct TracingEnvOverrides {
 	endpoint: Option<String>,
@@ -34,9 +46,7 @@ pub fn parse_config(
 	contents: String,
 	local_config_source: Option<ConfigSource>,
 ) -> anyhow::Result<Config> {
-	// Shellexpend before parsing it
-	let contents = contents.replace("# yaml-language-server: $schema", "#");
-	let contents = shellexpand::full(&contents)?;
+	let contents = expand_yaml_environment_variables(&contents)?;
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
@@ -1614,6 +1624,28 @@ config:
 			None,
 		)
 		.expect("config with schema comment should parse");
+
+		assert_eq!(config.network.as_str(), "static-network");
+	}
+
+	#[test]
+	fn does_not_expand_environment_variables_in_full_line_comments() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("TEST_EXPAND_COMMENT_MISSING");
+		}
+
+		let config = parse_config(
+			r#"
+# ${TEST_EXPAND_COMMENT_MISSING}
+  # $TEST_EXPAND_COMMENT_MISSING
+config:
+  network: "static-network"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config with environment variables in comments should parse");
 
 		assert_eq!(config.network.as_str(), "static-network");
 	}
