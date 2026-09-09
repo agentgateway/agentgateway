@@ -65,8 +65,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: backend default/test-jwks not found, policy default/jwt-remote-resolver-backend-missing'
+        message: 'Policy is attached; part of its configuration was rejected: backend
+          default/test-jwks not found, policy default/jwt-remote-resolver-backend-missing'
         reason: Attached
         status: "True"
         type: Attached

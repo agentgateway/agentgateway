@@ -1137,8 +1137,6 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 	return result, nil
 }
 
-const crossAppAccessTranslationError = "crossAppAccess configuration is invalid"
-
 func invalidCrossAppAccess() *api.CrossAppAccessAuth {
 	// Keep this fallback loadable but fail-closed for older OAuth-capable proxies
 	invalidEndpoint := func() *api.CrossAppAccessAuth_Endpoint {
@@ -1154,7 +1152,7 @@ func invalidCrossAppAccess() *api.CrossAppAccessAuth {
 		IdentityProvider:            invalidEndpoint(),
 		ResourceAuthorizationServer: invalidEndpoint(),
 		Audience:                    "invalid",
-		TranslationError:            new(crossAppAccessTranslationError),
+		TranslationError:            new(sanitizedTranslationError),
 	}
 }
 
@@ -1241,8 +1239,8 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		}
 	}
 
-	additionalParams := castCELMap(auth.AdditionalParams, func(key string, _ agentgateway.CELExpression) {
-		errs = append(errs, fmt.Errorf("oauth additionalParams %q is not a valid CEL expression", key))
+	additionalParams := castCELMap(auth.AdditionalParams, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("oauth additionalParams %q is not a valid CEL expression: %s", key, expr))
 	})
 	for key := range auth.AdditionalParams {
 		if isOAuthReservedAdditionalParam(key) {
@@ -1313,12 +1311,15 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 	return oauth, nil
 }
 
-const oauthTokenExchangeTranslationError = "oauthTokenExchange configuration is invalid"
+// The data plane renders this as the detail of its own "configuration is invalid"
+// warning, so it must not repeat that. The full error stays on the policy status
+// to keep resolved secret names and CEL expressions out of proxy logs.
+const sanitizedTranslationError = "see the AgentgatewayPolicy status for details"
 
 func invalidOAuthTokenExchange() *api.OAuthTokenExchange {
 	// An omitted endpoint fails closed on older OAuth-capable proxies
 	return &api.OAuthTokenExchange{
-		TranslationError: new(oauthTokenExchangeTranslationError),
+		TranslationError: new(sanitizedTranslationError),
 	}
 }
 

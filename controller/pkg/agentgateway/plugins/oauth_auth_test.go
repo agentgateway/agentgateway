@@ -404,7 +404,7 @@ func TestTranslateBackendAuthPreservesInvalidCrossAppAccessPolicy(t *testing.T) 
 	if crossAppAccess == nil {
 		t.Fatalf("translateBackendAuth() policy = %v, want cross-app access auth", p)
 	}
-	if crossAppAccess.GetTranslationError() != crossAppAccessTranslationError {
+	if crossAppAccess.GetTranslationError() != sanitizedTranslationError {
 		t.Fatalf("translationError = %q, want sanitized error", crossAppAccess.GetTranslationError())
 	}
 	want := invalidCrossAppAccess()
