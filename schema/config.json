@@ -8144,6 +8144,13 @@
             }
           ]
         },
+        "sseKeepAlive": {
+          "description": "Interval at which SSE keep-alive comments are sent on long-lived MCP streams.\nDisabled when unset. Set this when a load balancer or API gateway sits in front\nof agentgateway and reaps connections that carry no traffic.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dnsRebindingProtection": {
           "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
           "type": "boolean"
@@ -12516,6 +12523,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "sseKeepAlive": {
+          "description": "Interval at which SSE keep-alive comments are sent on long-lived MCP streams.\nDisabled when unset. Set this when a load balancer or API gateway sits in front\nof agentgateway and reaps connections that carry no traffic.",
+          "type": [
+            "string",
+            "null"
           ]
         },
         "dnsRebindingProtection": {

@@ -769,6 +769,7 @@ impl TestBind {
 				prefix_mode: Default::default(),
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				sse_keep_alive: None,
 				dns_rebinding_protection,
 			},
 		);
@@ -888,6 +889,7 @@ impl TestBind {
 				prefix_mode,
 				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				sse_keep_alive: None,
 				dns_rebinding_protection: false,
 			},
 		);

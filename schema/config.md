@@ -5736,6 +5736,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`binds[].listeners[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -24626,6 +24627,7 @@
 |`backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -40390,6 +40392,7 @@
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`routeGroups[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -58804,6 +58807,7 @@
 |`routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`routes[].backends[].ai`|object||
 |`routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
@@ -76709,6 +76713,7 @@
 |`mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`mcp.policies`|object|Policies applied to MCP requests.|
 |`mcp.policies.requestHeaderModifier`|object|Modify request headers before forwarding.|

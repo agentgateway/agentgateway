@@ -1787,6 +1787,7 @@ impl LocalBackend {
 					prefix_mode: tgt.prefix_mode.unwrap_or_default(),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
+					sse_keep_alive: tgt.sse_keep_alive,
 					dns_rebinding_protection: tgt.dns_rebinding_protection,
 				};
 				backends.push(Backend::MCP(name, m).into());
@@ -1854,6 +1855,16 @@ pub struct LocalMcpBackend {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub failure_mode: Option<FailureMode>,
+	/// Interval at which SSE keep-alive comments are sent on long-lived MCP streams.
+	/// Disabled when unset. Set this when a load balancer or API gateway sits in front
+	/// of agentgateway and reaps connections that carry no traffic.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub sse_keep_alive: Option<Duration>,
 	/// Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).
 	/// Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
