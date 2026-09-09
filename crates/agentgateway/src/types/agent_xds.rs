@@ -2057,7 +2057,7 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 				},
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
-				sse_keep_alive: None,
+				sse_keep_alive: m.sse_keep_alive.clone().map(convert_duration),
 				dns_rebinding_protection: false,
 			},
 		),
@@ -5526,6 +5526,51 @@ mod tests {
 		let path = config.get_path();
 		assert!(path.starts_with("/runtimes/"));
 		assert!(path.contains("qualifier=v1"));
+		Ok(())
+	}
+
+	fn mcp_proto_backend(sse_keep_alive: Option<prost_types::Duration>) -> proto::agent::Backend {
+		proto::agent::Backend {
+			key: "test-ns/mcp-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "mcp-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Mcp(proto::agent::McpBackend {
+				targets: vec![],
+				stateful_mode: proto::agent::mcp_backend::StatefulMode::Stateless as i32,
+				prefix_mode: proto::agent::mcp_backend::PrefixMode::Conditional as i32,
+				failure_mode: proto::agent::mcp_backend::FailureMode::FailClosed as i32,
+				sse_keep_alive,
+			})),
+			inline_policies: vec![],
+		}
+	}
+
+	#[test]
+	fn test_backend_kind_mcp_sse_keep_alive_from_xds() -> Result<(), ProtoError> {
+		let proto_backend = mcp_proto_backend(Some(prost_types::Duration {
+			seconds: 10,
+			nanos: 0,
+		}));
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::MCP(_, mcp_backend) = &bw.backend else {
+			panic!("Expected Backend::MCP, got {:?}", bw.backend);
+		};
+		assert_eq!(mcp_backend.sse_keep_alive, Some(Duration::from_secs(10)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_kind_mcp_sse_keep_alive_unset_from_xds() -> Result<(), ProtoError> {
+		let proto_backend = mcp_proto_backend(None);
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::MCP(_, mcp_backend) = &bw.backend else {
+			panic!("Expected Backend::MCP, got {:?}", bw.backend);
+		};
+		assert_eq!(mcp_backend.sse_keep_alive, None);
 		Ok(())
 	}
 

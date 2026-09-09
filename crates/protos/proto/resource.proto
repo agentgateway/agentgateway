@@ -1999,6 +1999,14 @@ message MCPBackend {
     FAIL_OPEN = 1;
   }
   FailureMode failure_mode = 5;
+
+  // Interval at which SSE keep-alive comments are sent on long-lived MCP
+  // streams. Disabled when unset. Without it, a stream that legitimately
+  // carries no traffic (for example a FAIL_OPEN GET stream held open with
+  // no reachable upstream, or an idle session) is indistinguishable from a
+  // dead connection and is dropped by intermediaries such as load balancers
+  // and API gateways.
+  optional google.protobuf.Duration sse_keep_alive = 6;
 }
 
 message MCPTarget {
