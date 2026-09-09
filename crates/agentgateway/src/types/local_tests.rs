@@ -1218,7 +1218,6 @@ mcp:
 	);
 }
 
-
 #[tokio::test]
 async fn test_gateway_bind_address_is_per_gateway() {
 	let normalized = normalize_test_yaml(
