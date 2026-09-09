@@ -1090,9 +1090,12 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 	}, err
 }
 
+// BuildCrossAppAccess lowers cross-app access configuration into its xDS representation.
+// It always returns a non-nil object; validation failures return an error-only representation.
 func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.CrossAppAccessAuth, error) {
 	if auth == nil {
-		return nil, errors.New("crossAppAccess must not be nil")
+		err := errors.New("crossAppAccess must not be nil")
+		return invalidCrossAppAccess(), err
 	}
 
 	var errs []error
@@ -1119,7 +1122,7 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 	}
 	cache := translateOAuthTokenCache(auth.Cache)
 
-	return &api.CrossAppAccessAuth{
+	result := &api.CrossAppAccessAuth{
 		IdentityProvider:            identityProvider,
 		ResourceAuthorizationServer: resourceAuthorizationServer,
 		Audience:                    auth.Audience,
@@ -1128,7 +1131,30 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		AccessTokenScopes:           translateCrossAppAccessScopes(auth.AccessTokenScopes),
 		SubjectToken:                translateCrossAppAccessSubjectToken(auth.SubjectToken),
 		Cache:                       cache,
-	}, errors.Join(errs...)
+	}
+	if err := errors.Join(errs...); err != nil {
+		return invalidCrossAppAccess(), err
+	}
+	return result, nil
+}
+
+func invalidCrossAppAccess() *api.CrossAppAccessAuth {
+	// Keep this fallback loadable but fail-closed for older OAuth-capable proxies
+	invalidEndpoint := func() *api.CrossAppAccessAuth_Endpoint {
+		return &api.CrossAppAccessAuth_Endpoint{
+			TokenEndpoint: &api.BackendReference{},
+			ClientAuth: &api.OAuthClientAuth{
+				ClientId: "invalid",
+				Method:   api.OAuthClientAuth_CLIENT_SECRET_POST,
+			},
+		}
+	}
+	return &api.CrossAppAccessAuth{
+		IdentityProvider:            invalidEndpoint(),
+		ResourceAuthorizationServer: invalidEndpoint(),
+		Audience:                    "invalid",
+		TranslationError:            new(sanitizedTranslationError),
+	}
 }
 
 func translateCrossAppAccessScopes(scopes *[]string) *api.CrossAppAccessAuth_ScopeOverride {
@@ -1190,9 +1216,11 @@ func buildCrossAppAccessEndpoint(ctx PolicyCtx, endpoint *agentgateway.CrossAppA
 }
 
 // BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.
+// It always returns a non-nil object; validation failures return an error-only representation.
 func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
 	if auth == nil {
-		return nil, errors.New("oauthTokenExchange must not be nil")
+		err := errors.New("oauthTokenExchange must not be nil")
+		return invalidOAuthTokenExchange(), err
 	}
 
 	var errs []error
@@ -1278,7 +1306,22 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
 	}
 
-	return oauth, errors.Join(errs...)
+	if err := errors.Join(errs...); err != nil {
+		return invalidOAuthTokenExchange(), err
+	}
+	return oauth, nil
+}
+
+// The data plane renders this as the detail of its own "configuration is invalid"
+// warning, so it must not repeat that. The full error stays on the policy status
+// to keep resolved secret names and CEL expressions out of proxy logs.
+const sanitizedTranslationError = "see the AgentgatewayPolicy status for details"
+
+func invalidOAuthTokenExchange() *api.OAuthTokenExchange {
+	// An omitted endpoint fails closed on older OAuth-capable proxies
+	return &api.OAuthTokenExchange{
+		TranslationError: new(sanitizedTranslationError),
+	}
 }
 
 func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {
