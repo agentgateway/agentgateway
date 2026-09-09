@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"istio.io/istio/pkg/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -23,7 +22,7 @@ func TestCreateAgwRewriteFilterFullPath(t *testing.T) {
 			spec := CreateAgwRewriteFilter(&gwv1.HTTPURLRewriteFilter{
 				Path: &gwv1.HTTPPathModifier{
 					Type:            gwv1.FullPathHTTPPathModifier,
-					ReplaceFullPath: ptr.Of(tc.path),
+					ReplaceFullPath: new(tc.path),
 				},
 			})
 			rewrite := spec.GetUrlRewrite()
@@ -37,7 +36,7 @@ func TestCreateAgwRewriteFilterPrefix(t *testing.T) {
 	spec := CreateAgwRewriteFilter(&gwv1.HTTPURLRewriteFilter{
 		Path: &gwv1.HTTPPathModifier{
 			Type:               gwv1.PrefixMatchHTTPPathModifier,
-			ReplacePrefixMatch: ptr.Of("/app/"),
+			ReplacePrefixMatch: new("/app/"),
 		},
 	})
 	rewrite := spec.GetUrlRewrite()
@@ -60,7 +59,7 @@ func TestCreateAgwRedirectFilterFullPath(t *testing.T) {
 			redirect := CreateAgwRedirectFilter(&gwv1.HTTPRequestRedirectFilter{
 				Path: &gwv1.HTTPPathModifier{
 					Type:            gwv1.FullPathHTTPPathModifier,
-					ReplaceFullPath: ptr.Of(tc.path),
+					ReplaceFullPath: new(tc.path),
 				},
 			})
 			assert.Equal(t, tc.want, redirect.GetFull())
