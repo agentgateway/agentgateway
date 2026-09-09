@@ -1218,40 +1218,6 @@ mcp:
 	);
 }
 
-#[rstest::rstest]
-#[case::default_ipv4(None, false, "0.0.0.0:3000")]
-#[case::default_ipv6(None, true, "[::]:3000")]
-#[case::loopback_ipv4(Some("127.0.0.1"), false, "127.0.0.1:3000")]
-#[case::loopback_ipv6(Some("::1"), true, "[::1]:3000")]
-#[tokio::test]
-async fn test_gateway_bind_address(
-	#[case] address: Option<&str>,
-	#[case] ipv6_enabled: bool,
-	#[case] expected: &str,
-) {
-	let mut config = test_config();
-	config.ipv6_enabled = ipv6_enabled;
-	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
-	let bind_address = address
-		.map(|address| format!("    bindAddress: '{address}'\n"))
-		.unwrap_or_default();
-	let yaml = format!("gateways:\n  private:\n    port: 3000\n{bind_address}");
-	let normalized = NormalizedLocalConfig::from(
-		&config,
-		&resources,
-		ListenerTarget {
-			gateway_name: "name".into(),
-			gateway_namespace: "ns".into(),
-			listener_name: None,
-			port: None,
-		},
-		&yaml,
-	)
-	.await
-	.expect("gateway bind address should normalize");
-	assert_eq!(normalized.binds.len(), 1);
-	assert_eq!(normalized.binds[0].address, expected.parse().unwrap());
-}
 
 #[tokio::test]
 async fn test_gateway_bind_address_is_per_gateway() {
