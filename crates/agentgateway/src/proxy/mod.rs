@@ -871,6 +871,19 @@ mod tests {
 			StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyResponseReason::Internal,
 		);
+		// A client mistake surfaced by the translation layer (an unknown tool_use_id, say) must
+		// answer 400 here. It used to be converted to a rejection at the call site to dodge a
+		// retryable 503; classifying the variant is what makes that unnecessary.
+		assert_ai_error_mapping(
+			|| ProxyError::AIRequest(llm::AIError::BadRequest("unknown tool_use_id".into())),
+			StatusCode::BAD_REQUEST,
+			ProxyResponseReason::InvalidRequest,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIResponse(llm::AIError::BadRequest("unknown tool_use_id".into())),
+			StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyResponseReason::Internal,
+		);
 		assert_ai_error_mapping(
 			|| ProxyError::AIRequest(llm::AIError::StreamingUnsupported),
 			StatusCode::BAD_REQUEST,
