@@ -4021,12 +4021,7 @@ fn custom_provider_override_drives_provider_name() {
 fn vertex_anthropic_model_uses_exclusive_convention() {
 	let provider = vertex_provider("anthropic/claude-sonnet-4-5");
 	assert_eq!(
-		cache_convention_for(
-			&provider,
-			None,
-			"anthropic/claude-sonnet-4-5",
-			InputFormat::Completions
-		),
+		cache_convention_for(&provider, None, "anthropic/claude-sonnet-4-5"),
 		CacheTokenConvention::InputExcludesCache,
 	);
 }
@@ -4035,22 +4030,47 @@ fn vertex_anthropic_model_uses_exclusive_convention() {
 fn vertex_non_anthropic_model_uses_inclusive_convention() {
 	let provider = vertex_provider("gemini-2.0-flash");
 	assert_eq!(
-		cache_convention_for(
-			&provider,
-			None,
-			"gemini-2.0-flash",
-			InputFormat::Completions
-		),
+		cache_convention_for(&provider, None, "gemini-2.0-flash"),
 		CacheTokenConvention::InputIncludesCache,
 	);
 }
 
+/// The Messages -> native Gemini conversion subtracts cached content from `input_tokens`, so
+/// the convention follows the conversion, not the upstream. Every provider that can reach that
+/// conversion must agree, or a cached prompt reads as a refund in rate-limit amendment.
 #[test]
-fn vertex_gemini_messages_uses_exclusive_convention() {
+fn messages_to_vertex_gemini_uses_exclusive_convention() {
+	for provider in [
+		vertex_provider("gemini-2.0-flash"),
+		AIProvider::Gemini(gemini::Provider { model: None }),
+		custom_provider(custom::ProviderFormat::GenerateContent),
+	] {
+		let translation = provider
+			.chat_translation(InputFormat::Messages, Some("gemini-2.5-flash"), None)
+			.expect("messages routes to native gemini");
+		assert_eq!(translation.output, ChatFormat::VertexGemini);
+		assert_eq!(
+			translation.cache_convention(),
+			Some(CacheTokenConvention::InputExcludesCache),
+			"provider {} must exclude cache for Messages -> native Gemini",
+			provider.provider(),
+		);
+	}
+}
+
+/// Completions inbound renders through `to_completions`, which passes Gemini's
+/// `promptTokenCount` through unchanged, so it keeps the upstream's inclusive convention.
+#[test]
+fn completions_to_vertex_gemini_keeps_provider_convention() {
 	let provider = vertex_provider("gemini-2.0-flash");
+	let translation = provider
+		.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
+		.expect("completions routes to native gemini");
+	assert_eq!(translation.output, ChatFormat::VertexGemini);
+	assert_eq!(translation.cache_convention(), None);
 	assert_eq!(
-		cache_convention_for(&provider, None, "gemini-2.0-flash", InputFormat::Messages),
-		CacheTokenConvention::InputExcludesCache,
+		cache_convention_for(&provider, None, "gemini-2.0-flash"),
+		CacheTokenConvention::InputIncludesCache,
 	);
 }
 
@@ -4061,8 +4081,7 @@ fn custom_messages_backend_uses_exclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Messages),
-			"some-model",
-			InputFormat::Completions
+			"some-model"
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -4075,8 +4094,7 @@ fn custom_completions_backend_uses_inclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Completions),
-			"some-model",
-			InputFormat::Completions
+			"some-model"
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
@@ -4088,8 +4106,7 @@ fn fixed_providers_classify_by_family() {
 		cache_convention_for(
 			&AIProvider::Anthropic(anthropic::Provider { model: None }),
 			None,
-			"claude-sonnet-4-5",
-			InputFormat::Completions
+			"claude-sonnet-4-5"
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -4100,8 +4117,7 @@ fn fixed_providers_classify_by_family() {
 				moderation: None,
 			}),
 			Some(custom::ProviderFormat::Completions),
-			"gpt-4o",
-			InputFormat::Completions
+			"gpt-4o"
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
@@ -4181,6 +4197,12 @@ async fn vertex_gemini_messages_routes_natively_with_gemini_body() {
 		),
 		"provider_state must be VertexGemini for native path, got {:?}",
 		llm_request.provider_state
+	);
+	// The translation's convention override must actually reach the request, not just exist:
+	// to_messages reports input_tokens with cached content already subtracted.
+	assert_eq!(
+		llm_request.cache_convention,
+		CacheTokenConvention::InputExcludesCache,
 	);
 
 	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();

@@ -251,11 +251,15 @@ impl AIProvider {
 /// Classify how the upstream reports cached tokens, from the source wire format the
 /// gateway is about to parse — not the provider name, which can carry another
 /// provider's native semantics (e.g. Vertex serving Anthropic models).
+/// The convention the upstream itself reports on, before any conversion of ours.
+///
+/// This is a property of the provider and model alone. When one of our conversions re-renders
+/// the usage and changes the convention, that belongs on
+/// [`ChatTranslation::cache_convention`], which takes precedence over this.
 fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
 	request_model: &str,
-	input_format: InputFormat,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
@@ -265,11 +269,6 @@ fn cache_convention_for(
 			InputExcludesCache
 		},
 		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
-		AIProvider::Vertex(p)
-			if p.is_gemini_model(Some(request_model)) && input_format == InputFormat::Messages =>
-		{
-			InputExcludesCache
-		},
 		AIProvider::Custom(_) => match provider_format {
 			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
 			_ => InputIncludesCache,
@@ -515,6 +514,22 @@ fn render_bedrock_converse(
 }
 
 impl ChatTranslation {
+	/// Convention override owed to the conversion this translation performs, if any.
+	///
+	/// The convention describes the numbers the *client* is handed, so when a conversion
+	/// re-renders usage it, not the upstream, decides. `vertex_gemini::to_messages` subtracts
+	/// cached content from `input_tokens` to match Anthropic semantics, so every upstream that
+	/// reaches it excludes cache: Vertex, the Gemini API, and custom generateContent backends
+	/// alike. Keyed on the pair because it is the pair that selects the conversion.
+	fn cache_convention(&self) -> Option<CacheTokenConvention> {
+		match (self.input, self.output) {
+			(InputFormat::Messages, ChatFormat::VertexGemini) => {
+				Some(CacheTokenConvention::InputExcludesCache)
+			},
+			_ => None,
+		}
+	}
+
 	fn provider_format(&self) -> custom::ProviderFormat {
 		match self.output {
 			ChatFormat::OpenAICompletions => custom::ProviderFormat::Completions,
@@ -2085,6 +2100,7 @@ impl AIProvider {
 		req: &mut impl RequestType,
 		parts: &mut Parts,
 		provider_format: Option<custom::ProviderFormat>,
+		cache_convention: Option<CacheTokenConvention>,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<PreparedRequest, AIError> {
@@ -2124,12 +2140,9 @@ impl AIProvider {
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
-		llm_info.cache_convention = cache_convention_for(
-			self,
-			provider_format,
-			&llm_info.request_model,
-			original_format,
-		);
+		// A conversion that re-renders usage overrides the upstream's own convention.
+		llm_info.cache_convention = cache_convention
+			.unwrap_or_else(|| cache_convention_for(self, provider_format, &llm_info.request_model));
 		if let Some(log) = log
 			&& original_format.supports_prompt_guard()
 		{
@@ -2178,6 +2191,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				Some(provider_format),
+				chat_translation.cache_convention(),
 				tokenize,
 				log,
 			)
@@ -2264,6 +2278,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				provider_format,
+				None,
 				tokenize,
 				log,
 			)
