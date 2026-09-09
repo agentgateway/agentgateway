@@ -338,7 +338,7 @@ fn line(tokens: u64, rate: Option<&Money>) -> Decimal {
 	}
 }
 
-/// Token rates are quoted per `TOKENS_PER_UNIT`
+/// Unit rates are quoted per single unit
 fn unit_line(usage: Option<&UnitUsage>, rate: Option<&UnitRate>) -> Decimal {
 	match (usage, rate) {
 		(Some(usage), Some(rate)) if usage.unit == rate.unit => {
