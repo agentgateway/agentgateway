@@ -131,6 +131,28 @@ pub mod from_messages {
 			.map(str::to_owned)
 	}
 
+	/// Map an OpenAI finish reason to a Messages stop reason, plus whether a named stop
+	/// sequence may accompany it.
+	///
+	/// Shared by the buffered and streaming paths deliberately. They used to disagree on
+	/// `ContentFilter`, so the same upstream response reported a different `stop_reason`
+	/// depending only on whether the client streamed. Keeping one mapping makes that class of
+	/// divergence unrepresentable, including the `may_have_stop_sequence` half: only a natural
+	/// `stop` can carry a matched stop sequence.
+	pub(crate) fn stop_reason_for(
+		reason: Option<completions::FinishReason>,
+	) -> (messages::StopReason, bool) {
+		match reason {
+			Some(completions::FinishReason::Stop) => (messages::StopReason::EndTurn, true),
+			Some(completions::FinishReason::Length) => (messages::StopReason::MaxTokens, false),
+			Some(completions::FinishReason::ToolCalls | completions::FinishReason::FunctionCall) => {
+				(messages::StopReason::ToolUse, false)
+			},
+			Some(completions::FinishReason::ContentFilter) => (messages::StopReason::Refusal, false),
+			None => (messages::StopReason::EndTurn, false),
+		}
+	}
+
 	/// The stop sequence an engine reports on a buffered or streamed choice, if
 	/// any: vLLM uses `stop_reason`; SGLang uses `matched_stop`.
 	pub(crate) fn choice_stop_sequence(rest: &Value) -> Option<String> {
@@ -188,14 +210,7 @@ pub mod from_messages {
 			}));
 		}
 
-		let (mut stop_reason, may_have_stop_sequence) = match choice.finish_reason {
-			Some(completions::FinishReason::Stop) => (messages::StopReason::EndTurn, true),
-			Some(completions::FinishReason::Length) => (messages::StopReason::MaxTokens, false),
-			Some(completions::FinishReason::ToolCalls) => (messages::StopReason::ToolUse, false),
-			Some(completions::FinishReason::ContentFilter) => (messages::StopReason::Refusal, false),
-			Some(completions::FinishReason::FunctionCall) => (messages::StopReason::ToolUse, false),
-			None => (messages::StopReason::EndTurn, false),
-		};
+		let (mut stop_reason, may_have_stop_sequence) = stop_reason_for(choice.finish_reason);
 		// When the engine names the stop sequence that ended generation, the
 		// Messages contract is `stop_reason: "stop_sequence"` plus the matched
 		// string — not `end_turn`, which clients read as "the model finished".
@@ -717,18 +732,10 @@ pub mod from_messages {
 						}
 
 						if let Some(finish_reason) = &choice.finish_reason {
-							let mut stop_reason = match finish_reason {
-								completions::FinishReason::Stop => messages::StopReason::EndTurn,
-								completions::FinishReason::Length => messages::StopReason::MaxTokens,
-								completions::FinishReason::ToolCalls => messages::StopReason::ToolUse,
-								completions::FinishReason::ContentFilter => messages::StopReason::EndTurn,
-								completions::FinishReason::FunctionCall => messages::StopReason::ToolUse,
-							};
+							let (mut stop_reason, may_have_stop_sequence) = stop_reason_for(Some(*finish_reason));
 							// Same contract as the buffered path: a named stop sequence is
 							// `stop_sequence`, not `end_turn`.
-							if stop_reason == messages::StopReason::EndTurn
-								&& let Some(seq) = choice_stop_sequence(&choice.rest)
-							{
+							if may_have_stop_sequence && let Some(seq) = choice_stop_sequence(&choice.rest) {
 								stop_reason = messages::StopReason::StopSequence;
 								state.pending_stop_sequence = Some(seq);
 							}

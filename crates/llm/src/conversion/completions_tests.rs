@@ -168,6 +168,43 @@ mod stop_sequence_reporting_streaming {
 		assert!(out["choices"][0].get("rest").is_none());
 	}
 
+	/// Regression guard for a divergence that existed upstream: `content_filter` mapped to
+	/// `end_turn` when buffered but `refusal` when streamed, so the same response reported a
+	/// different stop_reason depending only on whether the client streamed. Both paths now read
+	/// one mapping, settled on `refusal` by #3514, and only a natural `stop` may carry a matched
+	/// stop sequence.
+	#[test]
+	fn stop_reason_mapping_is_identical_for_buffered_and_streaming() {
+		use super::super::from_messages::stop_reason_for;
+		use crate::types::messages::typed as messages;
+
+		assert_eq!(
+			stop_reason_for(Some(completions::FinishReason::ContentFilter)),
+			(messages::StopReason::Refusal, false),
+		);
+		assert_eq!(
+			stop_reason_for(Some(completions::FinishReason::Stop)),
+			(messages::StopReason::EndTurn, true),
+		);
+		assert_eq!(
+			stop_reason_for(Some(completions::FinishReason::Length)),
+			(messages::StopReason::MaxTokens, false),
+		);
+		for tool in [
+			completions::FinishReason::ToolCalls,
+			completions::FinishReason::FunctionCall,
+		] {
+			assert_eq!(
+				stop_reason_for(Some(tool)),
+				(messages::StopReason::ToolUse, false)
+			);
+		}
+		assert_eq!(
+			stop_reason_for(None),
+			(messages::StopReason::EndTurn, false)
+		);
+	}
+
 	#[test]
 	fn precedence_and_type_rules_are_shared_with_the_buffered_path() {
 		let v = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
