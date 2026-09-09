@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 0.0.0.0:15021
+  standardAttributes:
+    user: request.headers["x-netbird-user-id"]
+    group: request.headers["x-netbird-groups"]
+
+llm:
+  port: 3000
+  policies:
+    apiKey:
+      keys:
+      - key: $NETBIRD_VIRTUAL_KEY
+        metadata:
+          name: NetBird Agent Network
+      mode: strict
+      location:
+        header:
+          name: authorization
+          prefix: 'Bearer '
+  models:
+  - name: gpt-4o-mini
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+  - name: text-embedding-3-small
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+  - name: claude-haiku-4-5
+    provider: anthropic
+    params:
+      apiKey: $ANTHROPIC_API_KEY

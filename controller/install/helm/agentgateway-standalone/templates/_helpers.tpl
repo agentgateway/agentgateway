@@ -169,6 +169,17 @@ mcp:
 {{ toYaml $renderedConfig }}
 {{- end }}
 
+{{/*
+Hash only configuration that agentgateway reads at startup. All other sections of the
+rendered configuration, plus config.modelCatalog, are reloaded without restarting the pod.
+*/}}
+{{- define "agentgateway-standalone.startupConfig" -}}
+{{- $renderedConfig := include "agentgateway-standalone.renderedConfig" . | fromYaml -}}
+{{- $config := get $renderedConfig "config" | default dict | deepCopy -}}
+{{- $_ := unset $config "modelCatalog" -}}
+{{ toYaml $config }}
+{{- end }}
+
 {{- define "agentgateway-standalone.validate" -}}
 {{- $mode := .Values.mode -}}
 {{- if not (has $mode (list "readonly" "database")) -}}

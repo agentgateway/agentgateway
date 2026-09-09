@@ -1,7 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use ::http::StatusCode;
@@ -9,6 +9,7 @@ use quick_cache::sync::Cache;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tonic::Code;
 
+use super::ateattr::ResumeDisposition;
 use super::{ActorRef, CACHE_CAPACITY, TRACE_POLICY_KIND, valid_resource_name};
 use crate::http::{PolicyResponse, Request, Response};
 use crate::proxy::dtrace::{Severity, pol_event};
@@ -90,6 +91,8 @@ struct CachedAssignment {
 	target: SocketAddr,
 	expires_at: Instant,
 	generation: u64,
+	resumed: bool,
+	uid: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -113,8 +116,13 @@ impl ResolutionSource {
 	}
 }
 
-type ResolutionResult =
-	Result<(CachedAssignment, ResolutionSource), (ResumeError, ResolutionSource)>;
+struct Resolved {
+	assignment: CachedAssignment,
+	source: ResolutionSource,
+	resume: ResumeDisposition,
+}
+
+type ResolutionResult = Result<Resolved, (ResumeError, ResolutionSource)>;
 
 struct AssignmentCache {
 	entries: Cache<ActorRef, Result<CachedAssignment, ResumeError>>,
@@ -142,7 +150,9 @@ pub(crate) struct SubstrateRequestState {
 	actor_port: u16,
 	ingress: SubstrateIngress,
 	client: PolicyClient,
-	current: Arc<Mutex<Option<CachedAssignment>>>,
+	current: Option<CachedAssignment>,
+	resume: ResumeDisposition,
+	route_duration: Duration,
 }
 
 fn default_cache_ttl() -> Duration {
@@ -264,7 +274,7 @@ impl SubstrateIngress {
 		&self,
 		client: &PolicyClient,
 		actor: &ActorRef,
-	) -> Result<SocketAddr, ResumeError> {
+	) -> Result<(SocketAddr, bool, Option<String>), ResumeError> {
 		let budget = self.request_parking.budget();
 		let deadline = tokio::time::Instant::now() + budget;
 		let result = async {
@@ -295,11 +305,17 @@ impl SubstrateIngress {
 				.await;
 				match response {
 					Ok(Ok(response)) => {
-						let actor = response.into_inner().actor.ok_or_else(|| {
+						let response = response.into_inner();
+						let resumed = response.resumed;
+						let actor = response.actor.ok_or_else(|| {
 							ResumeError::InvalidResponse(
 								"ResumeActor response did not include an actor".to_owned(),
 							)
 						})?;
+						let uid = actor
+							.metadata
+							.map(|metadata| metadata.uid)
+							.filter(|uid| !uid.is_empty());
 						let assignment = actor
 							.status
 							.and_then(|status| status.worker_assignment)
@@ -317,7 +333,11 @@ impl SubstrateIngress {
 									assignment.worker_pod_ip
 								))
 							})?;
-						return Ok(SocketAddr::new(ip, self.connect_target_port.get()));
+						return Ok((
+							SocketAddr::new(ip, self.connect_target_port.get()),
+							resumed,
+							uid,
+						));
 					},
 					Ok(Err(status)) if self.retryable_while_parked(status.code()) => {
 						let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -372,7 +392,11 @@ impl SubstrateIngress {
 		if let Some(cached) = self.cache.entries.get(&actor) {
 			match cached {
 				Ok(cached) if cached.expires_at > Instant::now() => {
-					return Ok((cached, ResolutionSource::Cache));
+					return Ok(Resolved {
+						assignment: cached,
+						source: ResolutionSource::Cache,
+						resume: ResumeDisposition::None,
+					});
 				},
 				Ok(expired) => self.cache.remove_generation(&actor, expired.generation),
 				Err(_) => {
@@ -386,7 +410,12 @@ impl SubstrateIngress {
 		loop {
 			match self.cache.entries.get_value_or_guard_async(&actor).await {
 				Ok(Ok(cached)) if cached.expires_at > Instant::now() => {
-					return Ok((cached, ResolutionSource::Cache));
+					let resume = ResumeDisposition::for_resumed(cached.resumed, true);
+					return Ok(Resolved {
+						assignment: cached,
+						source: ResolutionSource::Cache,
+						resume,
+					});
 				},
 				Ok(Ok(expired)) => {
 					self.cache.remove_generation(&actor, expired.generation);
@@ -399,10 +428,12 @@ impl SubstrateIngress {
 					let result = self
 						.resume_actor(client, &actor)
 						.await
-						.map(|target| CachedAssignment {
+						.map(|(target, resumed, uid)| CachedAssignment {
 							target,
 							expires_at: Instant::now() + self.cache_ttl,
 							generation: self.cache.next_generation.fetch_add(1, Ordering::Relaxed),
+							resumed,
+							uid,
 						});
 					let _ = guard.insert(result.clone());
 					match &result {
@@ -415,7 +446,11 @@ impl SubstrateIngress {
 						Ok(_) => {},
 					}
 					return result
-						.map(|assignment| (assignment, ResolutionSource::AteApi))
+						.map(|assignment| Resolved {
+							resume: ResumeDisposition::for_resumed(assignment.resumed, false),
+							assignment,
+							source: ResolutionSource::AteApi,
+						})
 						.map_err(|error| (error, ResolutionSource::AteApi));
 				},
 			}
@@ -424,6 +459,14 @@ impl SubstrateIngress {
 }
 
 impl SubstrateRequestState {
+	pub(crate) fn resume(&self) -> ResumeDisposition {
+		self.resume
+	}
+
+	pub(crate) fn route_duration(&self) -> Duration {
+		self.route_duration
+	}
+
 	/// The authority sent to atunnel when proxying a raw CONNECT tunnel. atunnel
 	/// authenticates the router connection and uses this stable actor DNS name
 	/// plus port to select the currently active actor process.
@@ -434,8 +477,15 @@ impl SubstrateRequestState {
 		)
 	}
 
-	pub(crate) async fn resolve_target(&self) -> Result<Target, crate::proxy::ProxyResponse> {
-		if let Some(current) = self.current.lock().unwrap().as_ref() {
+	pub(crate) fn actor_uid(&self) -> Option<String> {
+		self
+			.current
+			.as_ref()
+			.and_then(|current| current.uid.clone())
+	}
+
+	pub(crate) async fn resolve_target(&mut self) -> Result<Target, crate::proxy::ProxyResponse> {
+		if let Some(current) = self.current.as_ref() {
 			pol_event!(
 				TRACE_POLICY_KIND,
 				Severity::Info,
@@ -446,13 +496,21 @@ impl SubstrateRequestState {
 					"source": ResolutionSource::Request.name(),
 					"cached": true,
 					"lookedUp": false,
+					"resume": ResumeDisposition::None.as_str(),
 					"target": current.target.to_string(),
 				}),
 			);
 			return Ok(Target::Address(current.target));
 		}
-		match self.ingress.resolve(&self.client, self.actor.clone()).await {
-			Ok((assignment, source)) => {
+		let started = tokio::time::Instant::now();
+		let resolution = self.ingress.resolve(&self.client, self.actor.clone()).await;
+		self.route_duration = self.route_duration.saturating_add(started.elapsed());
+		match resolution {
+			Ok(Resolved {
+				assignment,
+				source,
+				resume,
+			}) => {
 				let target = assignment.target;
 				pol_event!(
 					TRACE_POLICY_KIND,
@@ -464,10 +522,14 @@ impl SubstrateRequestState {
 						"source": source.name(),
 						"cached": source.cached(),
 						"lookedUp": matches!(source, ResolutionSource::AteApi),
+						"resume": resume.as_str(),
 						"target": target.to_string(),
 					}),
 				);
-				*self.current.lock().unwrap() = Some(assignment);
+				// Policy events describe a single resolution attempt; this describes the request. A
+				// stale-assignment retry can therefore log `triggered` while its last event says `none`.
+				self.resume = self.resume.max(resume);
+				self.current = Some(assignment);
 				Ok(Target::Address(target))
 			},
 			Err((error, source)) => {
@@ -481,6 +543,7 @@ impl SubstrateRequestState {
 						"source": source.name(),
 						"cached": source.cached(),
 						"lookedUp": matches!(source, ResolutionSource::AteApi),
+						"resume": ResumeDisposition::None.as_str(),
 						"error": error.to_string(),
 					}),
 				);
@@ -509,8 +572,8 @@ impl SubstrateRequestState {
 		}
 	}
 
-	pub(crate) fn evict(&self) {
-		if let Some(current) = self.current.lock().unwrap().take() {
+	pub(crate) fn evict(&mut self) {
+		if let Some(current) = self.current.take() {
 			self
 				.ingress
 				.cache
@@ -592,7 +655,7 @@ impl RequestPolicyTrait for SubstrateIngress {
 			atespace: atespace.to_owned(),
 			name: name.to_owned(),
 		};
-		log.ate_actor_id = Some(actor.name.clone());
+		log.ate_actor_name = Some(actor.name.clone());
 		log.ate_atespace = Some(actor.atespace.clone());
 		// Ordinary atunnel ingress uses this header to select the actor port and
 		// strips it before forwarding. Raw CONNECT carries the port in its
@@ -608,7 +671,9 @@ impl RequestPolicyTrait for SubstrateIngress {
 			actor_port,
 			ingress: self.clone(),
 			client: client.clone(),
-			current: Arc::new(Mutex::new(None)),
+			current: None,
+			resume: ResumeDisposition::None,
+			route_duration: Duration::ZERO,
 		});
 		Ok(PolicyResponse::default())
 	}
@@ -618,6 +683,7 @@ impl RequestPolicyTrait for SubstrateIngress {
 mod tests {
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::time::{Duration, Instant};
 
 	use ::http::Method;
 	use protos::ateapi::control_server::{Control, ControlServer};
@@ -644,6 +710,7 @@ mod tests {
 	struct MockControl {
 		pod_ip: String,
 		calls: Arc<AtomicUsize>,
+		resumed: bool,
 	}
 
 	#[tonic::async_trait]
@@ -667,18 +734,20 @@ mod tests {
 			Ok(GrpcResponse::new(ResumeActorResponse {
 				actor: Some(Actor {
 					status: Some(ActorStatus {
+						state: 0,
 						worker_assignment: Some(protos::ateapi::WorkerAssignment {
 							worker_pod_ip: self.pod_ip.clone(),
 						}),
 					}),
 					..Default::default()
 				}),
+				resumed: self.resumed,
 			}))
 		}
 	}
 
 	#[tokio::test]
-	async fn stale_assignment_is_refreshed_then_cached() {
+	async fn stale_assignment_retries_wait_for_assignment_convergence() {
 		let actor = MockServer::start().await;
 		let actor_calls = Arc::new(AtomicUsize::new(0));
 		let responder_calls = actor_calls.clone();
@@ -688,7 +757,7 @@ mod tests {
 				"my-actor.my-space.actors.resources.substrate.ate.dev",
 			))
 			.respond_with(move |_: &wiremock::Request| {
-				if responder_calls.fetch_add(1, Ordering::Relaxed) == 0 {
+				if responder_calls.fetch_add(1, Ordering::Relaxed) < 2 {
 					ResponseTemplate::new(421).insert_header(STALE_ASSIGNMENT_HEADER, "true")
 				} else {
 					ResponseTemplate::new(200)
@@ -700,6 +769,7 @@ mod tests {
 		let control = crate::test_helpers::spawn_service(ControlServer::new(MockControl {
 			pod_ip: actor.address().ip().to_string(),
 			calls: control_calls.clone(),
+			resumed: true,
 		}))
 		.await;
 
@@ -720,6 +790,7 @@ mod tests {
 			.await;
 		let client = proxy.serve_http("bind".into());
 
+		let started = Instant::now();
 		for _ in 0..2 {
 			let response = send_request(
 				client.clone(),
@@ -729,8 +800,9 @@ mod tests {
 			.await;
 			assert_eq!(response.status(), ::http::StatusCode::OK);
 		}
-		assert_eq!(actor_calls.load(Ordering::Relaxed), 3);
-		assert_eq!(control_calls.load(Ordering::Relaxed), 2);
+		assert!(started.elapsed() >= Duration::from_millis(200));
+		assert_eq!(actor_calls.load(Ordering::Relaxed), 4);
+		assert_eq!(control_calls.load(Ordering::Relaxed), 3);
 	}
 
 	#[tokio::test]
@@ -747,6 +819,7 @@ mod tests {
 		let control = crate::test_helpers::spawn_service(ControlServer::new(MockControl {
 			pod_ip: actor.address().ip().to_string(),
 			calls: Arc::new(AtomicUsize::new(0)),
+			resumed: true,
 		}))
 		.await;
 

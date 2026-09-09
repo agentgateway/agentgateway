@@ -5,7 +5,7 @@ package e2e_test
 import (
 	"fmt"
 	"io"
-	"math/rand"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -23,17 +23,50 @@ import (
 const (
 	collectorLogTimeout = 20 * time.Second
 	collectorLogPoll    = 500 * time.Millisecond
+	otelTestIDHeader    = "x-otel-test-id"
+)
+
+var (
+	collectorSection         = regexp.MustCompile(`(?m)^[ \t]*(?:ResourceSpans?|ScopeSpans?|Span|ResourceLogs?|ScopeLogs?|LogRecord) #\d+[ \t]*$`)
+	deprecatedHTTPAttributes = [...]string{"src.addr", "http.method", "http.host", "http.path", "http.version", "http.status"}
+	otelHTTPAttributes       = [...]string{
+		"client.address",
+		"http.request.method",
+		"server.address",
+		"url.path",
+		"url.query",
+		"url.scheme",
+		"network.protocol.version",
+		"http.response.status_code",
+	}
 )
 
 func TestOTel(tt *testing.T) {
 	t := New(tt)
 	t.ApplyPersistent(otelManifest("setup.yaml"))
+	t.Apply(otelManifest("route.yaml"))
 
 	t.Run("Tracing", func(t base.Test) {
 		testOTelTracing(t)
 	})
 	t.Run("AccessLog", func(t base.Test) {
 		testOTelAccessLog(t)
+	})
+	t.Run("StdoutLegacy", func(t base.Test) {
+		testStdoutAccessLog(
+			t,
+			"accesslog-stdout-legacy.yaml",
+			"agw-accesslog-stdout-legacy",
+			false,
+		)
+	})
+	t.Run("StdoutOtel", func(t base.Test) {
+		testStdoutAccessLog(
+			t,
+			"accesslog-stdout-otel.yaml",
+			"agw-accesslog-stdout-otel",
+			true,
+		)
 	})
 }
 
@@ -42,43 +75,60 @@ func testOTelTracing(t base.Test) {
 
 	assertions.EventuallyAgwPolicyCondition(t, "agw", base.Namespace, "Accepted", metav1.ConditionTrue)
 
-	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification
+	testID := fmt.Sprintf("trace-%d", time.Now().UnixNano())
+	marker := fmt.Sprintf("-> test.request.id: Str(%s)", testID)
 
 	retry.UntilSuccessOrFail(t, func() error {
-		t.Send("www.example.com/status/200", base.ExpectOK(), curl.WithHeader("x-header-tag", headerValue))
+		t.Send(
+			"www.example.com:8080/status/200?otel-test="+testID,
+			base.ExpectOK(),
+			curl.WithHeader(otelTestIDHeader, testID),
+		)
 
 		logs, err := getCollectorLogs(t)
 		if err != nil {
 			return fmt.Errorf("failed to get collector pod logs: %w", err)
 		}
+		span, ok := findCollectorBlock(
+			logs,
+			"Span",
+			marker,
+			`-> server.address: Str(www.example.com)`,
+			`-> http.response.status_code: Int(200)`,
+		)
+		if !ok {
+			return fmt.Errorf("no successful SERVER span found for test request %q", testID)
+		}
 
 		mustContain := []string{
-			`-> http.method: Str(GET)`,
-			`-> deployment.environment.name: Str(production)`,
-			`-> service.version: Str(test)`,
+			`-> client.address:`,
+			`-> http.request.method: Str(GET)`,
+			`-> server.address: Str(www.example.com)`,
+			`-> server.port: Int(8080)`,
+			`-> url.path: Str(/status/200)`,
+			fmt.Sprintf("-> url.query: Str(otel-test=%s)", testID),
+			`-> network.protocol.version: Str(1.1)`,
+			`-> http.response.status_code: Int(200)`,
+			`-> url.scheme: Str(http)`,
 			`-> custom: Str(literal)`,
-			fmt.Sprintf("-> request: Str(%s)", headerValue),
+			marker,
 		}
 
 		var missing []string
 		for _, line := range mustContain {
-			if !strings.Contains(logs, line) {
+			if !strings.Contains(span, line) {
 				missing = append(missing, line)
 			}
 		}
 		if len(missing) > 0 {
 			return fmt.Errorf("missing required trace lines: %v", missing)
 		}
-
-		hasHTTPURL := strings.Contains(logs, `-> url.scheme: Str(http)`) &&
-			strings.Contains(logs, `-> http.host: Str(www.example.com)`) &&
-			strings.Contains(logs, `-> http.path: Str(/status/200)`)
-		if !hasHTTPURL {
-			return fmt.Errorf("missing expected URL/host/path attributes in traces")
+		if err := rejectDeprecatedHTTPAttributes(span); err != nil {
+			return fmt.Errorf("SERVER span: %w", err)
 		}
-
-		if !strings.Contains(logs, `-> http.status: Int(200)`) {
-			return fmt.Errorf("missing expected HTTP status attribute in traces")
+		if !strings.Contains(logs, `-> deployment.environment.name: Str(production)`) ||
+			!strings.Contains(logs, `-> service.version: Str(test)`) {
+			return fmt.Errorf("missing expected trace resource attributes")
 		}
 		return nil
 	}, retry.Timeout(collectorLogTimeout), retry.Delay(collectorLogPoll), retry.Message("should find traces in collector pod logs"))
@@ -88,34 +138,223 @@ func testOTelAccessLog(t base.Test) {
 	t.Apply(otelManifest("accesslog-otlp.yaml"))
 
 	assertions.EventuallyAgwPolicyCondition(t, "agw-accesslog", base.Namespace, "Accepted", metav1.ConditionTrue)
+	testID := fmt.Sprintf("log-%d", time.Now().UnixNano())
+	marker := fmt.Sprintf("-> test.request.id: Str(%s)", testID)
 
 	retry.UntilSuccessOrFail(t, func() error {
-		t.Send("www.example.com/status/200", base.ExpectOK())
+		t.Send(
+			"www.example.com/status/200?otel-test="+testID,
+			base.ExpectOK(),
+			curl.WithHeader(otelTestIDHeader, testID),
+		)
 
 		logs, err := getCollectorLogs(t)
 		if err != nil {
 			return fmt.Errorf("failed to get collector pod logs: %w", err)
 		}
+		record, ok := findCollectorBlock(
+			logs,
+			"LogRecord",
+			marker,
+			`-> http.response.status_code: Int(200)`,
+		)
+		if !ok {
+			return fmt.Errorf("no successful OTLP LogRecord found for test request %q", testID)
+		}
 
 		mustContain := []string{
-			`ScopeLogs`,
-			`LogRecord #0`,
-			`-> http.method: Str(GET)`,
-			`-> http.path: Str(/status/200)`,
-			`-> http.status: Int(200)`,
+			`-> client.address:`,
+			`-> http.request.method: Str(GET)`,
+			`-> server.address: Str(www.example.com)`,
+			`-> url.path: Str(/status/200)`,
+			fmt.Sprintf("-> url.query: Str(otel-test=%s)", testID),
+			`-> network.protocol.version: Str(1.1)`,
+			`-> url.scheme: Str(http)`,
+			`-> http.response.status_code: Int(200)`,
+			marker,
 		}
 
 		var missing []string
 		for _, line := range mustContain {
-			if !strings.Contains(logs, line) {
+			if !strings.Contains(record, line) {
 				missing = append(missing, line)
 			}
 		}
 		if len(missing) > 0 {
 			return fmt.Errorf("missing required access log lines in collector output: %v", missing)
 		}
+		if strings.Contains(record, `-> server.port:`) {
+			return fmt.Errorf("unexpected server.port without an explicit port")
+		}
+		if err := rejectDeprecatedHTTPAttributes(record); err != nil {
+			return fmt.Errorf("OTLP LogRecord: %w", err)
+		}
 		return nil
 	}, retry.Timeout(collectorLogTimeout), retry.Delay(collectorLogPoll), retry.Message("should find access logs in collector pod logs"))
+}
+
+func findLogLine(logs, marker string) (string, bool) {
+	var found string
+	for line := range strings.SplitSeq(logs, "\n") {
+		if strings.Contains(line, marker) {
+			found = line
+		}
+	}
+	return found, found != ""
+}
+
+func logLineHasKey(line, key string) bool {
+	pattern := `(^|[\s,{])"?` + regexp.QuoteMeta(key) + `"?\s*[:=]`
+	return regexp.MustCompile(pattern).MatchString(line)
+}
+
+func getGatewayLogs(t base.Test) (string, error) {
+	pods := &corev1.PodList{}
+	err := t.TestInstallation.ClusterContext.ControllerClient.List(
+		t.Ctx,
+		pods,
+		client.InNamespace(base.Namespace),
+		client.MatchingLabels{
+			"gateway.networking.k8s.io/gateway-name": "gateway",
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var logs strings.Builder
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.DeletionTimestamp != nil ||
+			pod.Status.Phase != corev1.PodRunning ||
+			!podReady(pod) {
+			continue
+		}
+
+		podLogs, err := t.TestInstallation.ClusterContext.Client.PodLogs(
+			t.Ctx,
+			pod.Name,
+			base.Namespace,
+			"agentgateway",
+			false,
+		)
+		if err != nil {
+			return "", err
+		}
+
+		logs.WriteString(podLogs)
+		logs.WriteByte('\n')
+	}
+
+	if logs.Len() == 0 {
+		return "", fmt.Errorf("no running gateway pods found")
+	}
+
+	return logs.String(), nil
+}
+
+func testStdoutAccessLog(t base.Test, manifestName, policyName string, otelPreset bool) {
+	t.Apply(otelManifest(manifestName))
+
+	assertions.EventuallyAgwPolicyCondition(
+		t,
+		policyName,
+		base.Namespace,
+		"Accepted",
+		metav1.ConditionTrue,
+	)
+
+	testID := fmt.Sprintf("stdout-%d", time.Now().UnixNano())
+
+	retry.UntilSuccessOrFail(t, func() error {
+		t.Send(
+			"www.example.com/get?otel-test="+testID,
+			base.ExpectOK(),
+		)
+
+		logs, err := getGatewayLogs(t)
+		if err != nil {
+			return err
+		}
+
+		line, ok := findLogLine(logs, testID)
+		if !ok {
+			return fmt.Errorf("no stdout access log found for test request %q", testID)
+		}
+
+		if otelPreset {
+			for _, key := range otelHTTPAttributes {
+				if !logLineHasKey(line, key) {
+					return fmt.Errorf("OTel stdout log missing %q", key)
+				}
+			}
+			if logLineHasKey(line, "server.port") {
+				return fmt.Errorf("OTel stdout log contains server.port without an explicit port")
+			}
+
+			for _, key := range deprecatedHTTPAttributes {
+				if logLineHasKey(line, key) {
+					return fmt.Errorf("OTel stdout log contains deprecated %q", key)
+				}
+			}
+
+			return nil
+		}
+
+		for _, key := range deprecatedHTTPAttributes {
+			if !logLineHasKey(line, key) {
+				return fmt.Errorf("legacy stdout log missing %q", key)
+			}
+		}
+
+		for _, key := range otelHTTPAttributes {
+			if logLineHasKey(line, key) {
+				return fmt.Errorf("legacy stdout log contains OTel attribute %q", key)
+			}
+		}
+
+		return nil
+	}, retry.Timeout(collectorLogTimeout), retry.Delay(collectorLogPoll))
+}
+
+func findCollectorBlock(logs, kind, marker string, required ...string) (string, bool) {
+	sections := collectorSection.FindAllStringIndex(logs, -1)
+	for i, section := range sections {
+		header := strings.TrimSpace(logs[section[0]:section[1]])
+		if !strings.HasPrefix(header, kind+" #") {
+			continue
+		}
+		end := len(logs)
+		if i+1 < len(sections) {
+			end = sections[i+1][0]
+		}
+
+		block := logs[section[0]:end]
+		if !strings.Contains(block, marker) {
+			continue
+		}
+
+		matches := true
+		for _, requiredLine := range required {
+			if !strings.Contains(block, requiredLine) {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return block, true
+		}
+	}
+	return "", false
+}
+
+func rejectDeprecatedHTTPAttributes(block string) error {
+	for _, key := range deprecatedHTTPAttributes {
+		if strings.Contains(block, "-> "+key+":") {
+			return fmt.Errorf("deprecated attribute %q is present", key)
+		}
+	}
+	return nil
 }
 
 func otelManifest(name string) string {

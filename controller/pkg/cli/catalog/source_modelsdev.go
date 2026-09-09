@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -57,10 +58,16 @@ type modelsDevProvider struct {
 }
 
 type modelsDevModel struct {
-	ID     string         `json:"id"`
-	Name   string         `json:"name"`
-	Status string         `json:"status"`
-	Cost   *modelsDevCost `json:"cost"`
+	ID               string                     `json:"id"`
+	Name             string                     `json:"name"`
+	Family           string                     `json:"family"`
+	Status           string                     `json:"status"`
+	Cost             *modelsDevCost             `json:"cost"`
+	ReasoningOptions []modelsDevReasoningOption `json:"reasoning_options"`
+}
+
+type modelsDevReasoningOption struct {
+	Type string `json:"type"`
 }
 
 type modelsDevRates struct {
@@ -197,6 +204,22 @@ func modelsDevTransform(api map[string]modelsDevProvider, providers []string, le
 func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(format string, args ...any)) (Model, error) {
 	label := provider + "/" + model
 	var entry Model
+	if strings.HasPrefix(m.Family, "claude-") {
+		var effort, budgetTokens bool
+		for _, option := range m.ReasoningOptions {
+			switch option.Type {
+			case "effort":
+				effort = true
+			case "budget_tokens":
+				budgetTokens = true
+			}
+		}
+		if budgetTokens {
+			entry.Tags = append(entry.Tags, "legacy_thinking")
+		} else if effort {
+			entry.Tags = append(entry.Tags, "adaptive_thinking")
+		}
+	}
 
 	if m.Cost != nil {
 		rates, err := modelsDevBuildRates(&m.Cost.modelsDevRates, label)

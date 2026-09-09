@@ -181,17 +181,22 @@ func TestAzureAuthBuildsExplicitAndImplicitConfigs(t *testing.T) {
 	t.Run("workloadIdentity", func(t *testing.T) {
 		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
 			WorkloadIdentity: &agentgateway.AzureWorkloadIdentity{},
+			Scopes:           []string{"https://graph.microsoft.com/.default"},
 		}, "default")
 		assert.NoError(t, err)
 		explicit := policy.GetAzure().GetExplicitConfig()
 		assert.Equal(t, explicit != nil, true)
 		assert.Equal(t, explicit.GetWorkloadIdentityCredential() != nil, true)
+		assert.Equal(t, policy.GetAzure().GetScopes(), []string{"https://graph.microsoft.com/.default"})
 	})
 
 	t.Run("implicit when no credential source is set", func(t *testing.T) {
-		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{}, "default")
+		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
+			Scopes: []string{"https://graph.microsoft.com/.default"},
+		}, "default")
 		assert.NoError(t, err)
 		assert.Equal(t, policy.GetAzure().GetImplicit() != nil, true)
+		assert.Equal(t, policy.GetAzure().GetScopes(), []string{"https://graph.microsoft.com/.default"})
 	})
 }
 

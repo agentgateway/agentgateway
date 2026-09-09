@@ -377,6 +377,7 @@ impl ResponseBuilder {
 			top_p: None,
 			truncation: None,
 			usage,
+			prompt_cache_diagnostics: None,
 		}
 	}
 
@@ -1071,6 +1072,7 @@ mod tests {
 			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
+			r#async: None,
 		})]);
 
 		let llm_response = response.to_llm_response(crate::LogContentFields {
@@ -1101,6 +1103,7 @@ mod tests {
 			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
+			r#async: None,
 		})]);
 
 		let llm_response = response.to_llm_response(crate::LogContentFields::default());

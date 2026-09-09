@@ -1096,6 +1096,68 @@ fn bedrock_blocked_intervention_with_canned_output_rejects() {
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 }
 
+async fn bedrock_rejected_body(outcome: GuardrailOutcome<TextReplacements>) -> Bytes {
+	let GuardrailOutcome::Rejected(resp) = outcome else {
+		panic!("expected a rejection outcome");
+	};
+	resp.into_body().collect().await.unwrap().to_bytes()
+}
+
+fn bedrock_blocked_response() -> bedrock_guardrails::ApplyGuardrailResponse {
+	bedrock_intervened(
+		&["Sorry, I can't help with that."],
+		serde_json::json!([{
+			"topicPolicy": {"topics": [{"action": "BLOCKED", "name": "Finance", "type": "DENY"}]}
+		}]),
+	)
+}
+
+#[tokio::test]
+async fn bedrock_block_passes_block_message_through() {
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		bedrock_blocked_response(),
+		1,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	assert_eq!(
+		bedrock_rejected_body(outcome).await,
+		Bytes::from("Sorry, I can't help with that.")
+	);
+}
+
+/// A configured custom rejection body always wins over Bedrock's block message.
+#[tokio::test]
+async fn bedrock_blocked_custom_rejection_body_wins() {
+	let rejection = RequestRejection {
+		body: Bytes::from("custom denied"),
+		..Default::default()
+	};
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		bedrock_blocked_response(),
+		1,
+		&rejection,
+		&bedrock_test_config(),
+	);
+	assert_eq!(
+		bedrock_rejected_body(outcome).await,
+		Bytes::from("custom denied")
+	);
+}
+
+/// A non-block intervention keeps the default body; masked content never leaks.
+#[tokio::test]
+async fn bedrock_anonymize_mismatch_keeps_default_body() {
+	let resp = bedrock_intervened(&["Email {EMAIL}"], bedrock_anonymized_assessments());
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		resp,
+		2,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	assert_eq!(bedrock_rejected_body(outcome).await, default_body());
+}
+
 /// Automated reasoning findings carry no `action` field; even when the output count
 /// happens to match, the canned message must not be applied as a mask.
 #[test]

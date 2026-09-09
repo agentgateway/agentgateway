@@ -86,6 +86,7 @@ fn native_anthropic_applies_prompt_caching_policy() {
 				provider: &provider,
 				headers: &HeaderMap::new(),
 				prompt_caching: Some(&caching),
+				catalog: None,
 			},
 		)
 		.unwrap();
@@ -341,6 +342,7 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 		.render_request(
 			types::ChatRequest::Gemini(inner),
 			&ChatRequestContext {
+				catalog: None,
 				provider: &provider,
 				headers: &HeaderMap::new(),
 				prompt_caching: None,
@@ -2214,7 +2216,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 	}))
 	.expect("valid completions request");
 
-	let translated = conversion::messages::from_completions::translate(&request)
+	let translated = conversion::messages::from_completions::translate(&request, None)
 		.expect("completions->messages translation");
 	let translated: Value =
 		serde_json::from_slice(&translated).expect("translated request should be valid json");
@@ -2251,7 +2253,7 @@ fn test_completions_json_schema_response_format_maps_to_anthropic_output_config(
 	}))
 	.expect("valid completions request");
 
-	let translated = conversion::messages::from_completions::translate(&request)
+	let translated = conversion::messages::from_completions::translate(&request, None)
 		.expect("completions->messages translation");
 	let translated: Value =
 		serde_json::from_slice(&translated).expect("translated request should be valid json");

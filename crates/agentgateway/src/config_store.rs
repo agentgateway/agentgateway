@@ -797,7 +797,7 @@ pub fn merge_model_catalog_sources(
 		let mut inline: crate::llm::catalog::Catalog = serde_json::from_value(base.clone())?;
 		if inline.metadata.is_none() {
 			inline.metadata = Some(crate::llm::catalog::CatalogMetadata {
-				source: "models.dev".to_string(),
+				source: None,
 				// Legacy base catalogs predate generatedAt. Treat them as older than every
 				// timestamped catalog rather than guessing from the resource timestamp,
 				// which may also reflect an unrelated custom-overlay edit.
@@ -1864,7 +1864,7 @@ mod tests {
 		assert_eq!(
 			inline.metadata,
 			Some(crate::llm::catalog::CatalogMetadata {
-				source: "models.dev".to_string(),
+				source: None,
 				generated_at: DateTime::<Utc>::UNIX_EPOCH,
 			})
 		);

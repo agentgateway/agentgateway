@@ -1361,7 +1361,7 @@ fn backend_auth_kind_from_proto(
 			BackendAuthKind::Aws(aws_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Azure(a)) => {
-			let azure_auth = match a.kind {
+			let kind = match a.kind {
 				Some(proto::agent::azure::Kind::ExplicitConfig(config)) => {
 					let src = match config.credential_source {
 						Some(azure_explicit_config::CredentialSource::ClientSecret(cs)) => {
@@ -1395,22 +1395,25 @@ fn backend_auth_kind_from_proto(
 							return Err(ProtoError::MissingRequiredField);
 						},
 					};
-					auth::azure::AzureAuth::ExplicitConfig {
+					auth::azure::AzureAuthKind::ExplicitConfig {
 						credential_source: src,
 						cached_cred: Default::default(),
 					}
 				},
 				Some(proto::agent::azure::Kind::DeveloperImplicit(_)) => {
-					auth::azure::AzureAuth::DeveloperImplicit {
+					auth::azure::AzureAuthKind::DeveloperImplicit {
 						cached_cred: Default::default(),
 					}
 				},
-				Some(proto::agent::azure::Kind::Implicit(_)) => auth::azure::AzureAuth::Implicit {
+				Some(proto::agent::azure::Kind::Implicit(_)) => auth::azure::AzureAuthKind::Implicit {
 					cached_cred: Default::default(),
 				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
-			BackendAuthKind::Azure(azure_auth)
+			BackendAuthKind::Azure(auth::azure::AzureAuth {
+				kind,
+				scopes: a.scopes,
+			})
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
 			BackendAuthKind::OAuthTokenExchange(Box::new(
@@ -2283,6 +2286,15 @@ fn backend_policy_from_proto(
 				failure_mode,
 			})
 		},
+		Some(bps::Kind::SessionAffinity(sa)) => {
+			BackendTrafficPolicy::SessionAffinity(http::sessionaffinity::Policy {
+				source: permissive_cel_expression_arc(
+					diagnostics,
+					"backend.sessionAffinity.source",
+					&sa.source,
+				),
+			})
+		},
 		Some(bps::Kind::BackendHttp(bhttp)) => {
 			let ver = bps::backend_http::HttpVersion::try_from(bhttp.version)?;
 			BackendTrafficPolicy::HTTP(backend::HTTP {
@@ -2489,6 +2501,11 @@ fn traffic_policy_from_proto(
 			request_timeout: t.request.as_ref().map(|d| (*d).try_into()).transpose()?,
 			backend_request_timeout: t
 				.backend_request
+				.as_ref()
+				.map(|d| (*d).try_into())
+				.transpose()?,
+			response_idle_timeout: t
+				.response_idle
 				.as_ref()
 				.map(|d| (*d).try_into())
 				.transpose()?,
@@ -3516,7 +3533,12 @@ fn frontend_policy_from_proto(
 					})
 				})
 				.transpose()?;
+			let preset = match fps::logging::Preset::try_from(p.preset) {
+				Ok(fps::logging::Preset::Otel) => Some(frontend::AccessLogPreset::Otel),
+				Ok(fps::logging::Preset::Unspecified) | Err(_) => None,
+			};
 			let mut logging_policy = frontend::LoggingPolicy {
+				preset,
 				filter: p
 					.filter
 					.as_ref()
@@ -3618,6 +3640,10 @@ fn tracing_config_from_proto(
 		.client_sampling
 		.as_ref()
 		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.clientSampling", s));
+	let parent_not_sampled = t
+		.parent_not_sampled
+		.as_ref()
+		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.parentNotSampled", s));
 	let filter = t
 		.filter
 		.as_ref()
@@ -3644,6 +3670,7 @@ fn tracing_config_from_proto(
 		remove: t.remove.clone(),
 		random_sampling,
 		client_sampling,
+		parent_not_sampled,
 		filter,
 		path,
 		protocol,
@@ -3884,7 +3911,6 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
 		TrafficPolicy::RemoteRateLimit(_) => "remoteRateLimit",
 		TrafficPolicy::ExtAuthz(_) => "extAuthz",
-		TrafficPolicy::SubstrateEgress(_) => "substrateEgress",
 		TrafficPolicy::SubstrateIngress(_) => "substrateIngress",
 		TrafficPolicy::ExtProc(_) => "extProc",
 		TrafficPolicy::JwtAuth(_) => "jwt",
@@ -5168,6 +5194,29 @@ mod tests {
 		};
 		assert_eq!(service_name.as_deref(), Some("bedrock-agentcore"));
 		assert_eq!(region.as_deref(), Some("us-east-1"));
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_auth_azure_scope_conversion() -> Result<(), ProtoError> {
+		let auth = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(proto::agent::backend_auth_policy::Kind::Azure(
+					proto::agent::Azure {
+						kind: Some(proto::agent::azure::Kind::Implicit(
+							proto::agent::AzureImplicit {},
+						)),
+						scopes: vec!["https://graph.microsoft.com/.default".to_string()],
+					},
+				)),
+				credentials: vec![],
+			},
+			&mut Diagnostics::default(),
+		)?;
+		let Some(BackendAuthKind::Azure(auth::azure::AzureAuth { scopes, .. })) = auth else {
+			panic!("Expected Azure auth, got {auth:?}");
+		};
+		assert_eq!(scopes, ["https://graph.microsoft.com/.default"]);
 		Ok(())
 	}
 

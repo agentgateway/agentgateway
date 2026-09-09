@@ -57,6 +57,7 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.mcp may not be used with a Service target"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))))",message="backend.mcp may not target an AgentgatewayBackend sectionName"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.ai may not be used with a Service target"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.sessionAffinity) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))))",message="backend.sessionAffinity must target the whole AgentgatewayBackend, not an individual AI provider"
 // +kubebuilder:validation:XValidation:rule="!(has(self.traffic) && has(self.traffic.jwtAuthentication) && has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))",message="traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy"
 // +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind == 'Gateway') : true",message="the 'frontend' field can only target a Gateway"
 // +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind == 'Gateway') : true",message="the 'frontend' field can only target a Gateway"
@@ -202,6 +203,14 @@ type BackendSimple struct {
 	// Settings for managing authentication to the backend
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
+}
+
+// Configures best-effort session affinity using an existing request attribute.
+type SessionAffinity struct {
+	// CEL expression evaluated against request state. It must return a string or bytes value.
+	// For example, `request.headers["x-session-id"]` or `string(source.address)`.
+	// +required
+	Source CELExpression `json:"source"`
 }
 
 // PolicyBackendEndpoint identifies a backend used by policy features.
@@ -385,6 +394,12 @@ type BackendWithAI struct {
 // +kubebuilder:validation:AtLeastOneFieldSet
 type BackendFull struct {
 	BackendSimple `json:",inline"`
+
+	// Configures best-effort session affinity using an existing request attribute.
+	// For AI backends, this applies across the backend's provider groups and must not
+	// be configured on an individual provider.
+	// +optional
+	SessionAffinity *SessionAffinity `json:"sessionAffinity,omitempty"`
 
 	// Settings for AI workloads. This is only applicable when
 	// connecting to a `Backend` of type `ai`.
@@ -1226,7 +1241,40 @@ type JWTProvider struct {
 	// JWT.
 	// +required
 	JWKS JWKS `json:"jwks"`
+	// Additional JWT claim presence requirements. Defaults to requiring `exp`.
+	// Issuer validation always requires `iss`; a non-empty audiences list also
+	// requires `aud`, regardless of these options. An empty `requiredClaims`
+	// list removes only the additional presence requirements. Expiration is
+	// still checked whenever `exp` is present.
+	// +optional
+	Validation *JWTValidationOptions `json:"validation,omitempty"`
 }
+
+// JWTValidationOptions controls claim presence requirements in addition to
+// those imposed by issuer and audience validation.
+type JWTValidationOptions struct {
+	// Additional claims that must be present in the token payload.
+	// Recognized values: `exp`, `nbf`, `aud`, `sub`.
+	// Defaults to `["exp"]` when omitted. An empty list adds no requirements
+	// beyond `iss`, which is always required, and `aud`, which is required
+	// when a non-empty audiences list is configured. Expiration is still
+	// checked whenever `exp` is present.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=4
+	RequiredClaims *[]JWTClaim `json:"requiredClaims,omitempty"`
+}
+
+// JWTClaim is a JWT claim whose presence can be required during validation.
+// +k8s:enum
+type JWTClaim string
+
+const (
+	JWTClaimExpiration JWTClaim = "exp"
+	JWTClaimNotBefore  JWTClaim = "nbf"
+	JWTClaimAudience   JWTClaim = "aud"
+	JWTClaimSubject    JWTClaim = "sub"
+)
 
 // MCP-specific extensions for JWT authentication.
 type JWTMCPConfig struct {
@@ -2172,7 +2220,17 @@ type AwsSessionTag struct {
 // Workload Identity when running on Kubernetes.
 //
 // +kubebuilder:validation:AtMostOneOf=secretRef;managedIdentity;workloadIdentity
+// +kubebuilder:validation:XValidation:rule="!has(self.managedIdentity) || !has(self.scopes) || self.scopes.size() == 1",message="managedIdentity supports exactly one scope"
 type AzureAuth struct {
+	// Scopes requested for the Azure access token. When omitted, the scope is
+	// inferred from the backend hostname. Managed Identity supports exactly one
+	// scope.
+	//
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
+
 	// Credential source for Azure credentials, defaulting to a Kubernetes
 	// `Secret`. The default Secret resolver expects `clientID`, `tenantID`, and
 	// `clientSecret` keys.
@@ -2477,6 +2535,14 @@ type MCPAuthentication struct {
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
+
+	// Additional JWT claim presence requirements. Defaults to requiring `exp`.
+	// Issuer validation always requires `iss`; a non-empty audiences list also
+	// requires `aud`, regardless of these options. An empty `requiredClaims`
+	// list removes only the additional presence requirements. Expiration is
+	// still checked whenever `exp` is present.
+	// +optional
+	Validation *JWTValidationOptions `json:"validation,omitempty"`
 
 	// Client ID to use for short-circuiting Dynamic Client Registration.
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
@@ -3314,12 +3380,28 @@ type HostnameRewrite struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Timeouts struct {
-	// Timeout for an individual request from the gateway to a backend. This covers the time from when
-	// the request first starts being sent from the gateway to when the full response has been received from the backend.
+	// Maximum time allowed from the start of downstream request processing until response headers
+	// are received. The response body is not included; use `responseIdle` to bound gaps between body frames.
 	//
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="request must be at least 1ms"
 	// +optional
 	Request *Duration `json:"request,omitempty"`
+
+	// Maximum time the response body may go without producing data. The window restarts on every
+	// body frame, so this bounds the gap between frames rather than the total time a response may
+	// take. It is what terminates a backend that stops producing data mid-stream without capping
+	// how long a legitimately long response may run.
+	//
+	// This complements Request rather than overlapping it: Request stops applying once the response
+	// headers arrive, so it places no bound on how long the response body may take, and it cannot
+	// distinguish a stalled stream from a slow one.
+	//
+	// This does not apply to responses that switch protocols, so upgraded WebSocket connections and
+	// CONNECT tunnels are never terminated by it.
+	//
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="responseIdle must be at least 1ms"
+	// +optional
+	ResponseIdle *Duration `json:"responseIdle,omitempty"`
 }
 
 // Artificial latency injection for fault-injection testing.
@@ -3355,8 +3437,23 @@ type Retry struct {
 	Condition *CELExpression `json:"condition,omitempty"`
 }
 
+// +k8s:enum
+type AccessLogPreset string
+
+const (
+	// AccessLogPresetOtel uses the OTel-aligned built-in HTTP field set for
+	// stdout access logs.
+	AccessLogPresetOtel AccessLogPreset = "Otel"
+)
+
 // Per-request access log settings.
 type AccessLog struct {
+	// Preset selects the built-in field set for standard output access logs.
+	// When unset, legacy human-oriented fields are used.
+	// `Otel` selects the OTel-aligned built-in HTTP field set.
+	// +optional
+	Preset *AccessLogPreset `json:"preset,omitempty"`
+
 	// CEL expression used to filter logs. A log
 	// will only be emitted if the expression evaluates to `true`.
 	// +optional
@@ -3503,11 +3600,25 @@ type Tracing struct {
 	RandomSampling *CELExpression `json:"randomSampling,omitempty"`
 	// Expression that determines the amount of client
 	// sampling. Client sampling determines whether to initiate a new trace
-	// span if the incoming request does have a trace already. This should
+	// span if the incoming request does have a trace already. This only
+	// applies when that trace is sampled (`-01`); use `parentNotSampled` for
+	// requests whose trace is not. This should
 	// evaluate to a float between `0.0` and `1.0`, or a boolean (`true` or
 	// `false`). If unspecified, client sampling is `100%` enabled.
 	// +optional
 	ClientSampling *CELExpression `json:"clientSampling,omitempty"`
+	// Expression that determines whether to trace a request that arrives with
+	// a `traceparent` whose sampled flag is unset (`-00`), meaning the client
+	// asked for it not to be traced. When this is `true` the request is traced
+	// anyway, and `-01` is sent upstream so downstream services trace it too.
+	// This should evaluate to a float between `0.0` and `1.0`, or a boolean
+	// (`true` or `false`). If unspecified, the client's choice is honored and
+	// the request is not traced.
+	//
+	// Only one of `randomSampling`, `clientSampling` and `parentNotSampled`
+	// applies to any given request; the incoming `traceparent` decides which.
+	// +optional
+	ParentNotSampled *CELExpression `json:"parentNotSampled,omitempty"`
 
 	// Expression that determines whether a sampled span is exported.
 	// This uses keep semantics: spans are exported only when the expression

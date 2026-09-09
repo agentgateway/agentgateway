@@ -1,9 +1,9 @@
 import type * as Monaco from 'monaco-editor';
 
-import { publicAssetPath } from '@/basePath';
+import celSchema from '@/generated/cel-schema.json';
 
 let celConfigured = false;
-let schemaPromise: Promise<CelSchemaIndex> | null = null;
+let schemaIndex: CelSchemaIndex | null = null;
 
 export const celLanguage = 'cel';
 
@@ -601,13 +601,8 @@ function expressionPathAtPosition(model: Monaco.editor.ITextModel, position: Mon
 }
 
 function loadCelSchemaIndex() {
-	schemaPromise ??= fetch(publicAssetPath('cel-schema.json'))
-		.then(response =>
-			response.ok ? (response.json() as Promise<JsonSchemaNode>) : { properties: {} }
-		)
-		.then(buildSchemaIndex)
-		.catch(() => ({ globals: [], propertiesByPath: {} }));
-	return schemaPromise;
+	schemaIndex ??= buildSchemaIndex(celSchema as unknown as JsonSchemaNode);
+	return schemaIndex;
 }
 
 function buildSchemaIndex(schema: JsonSchemaNode): CelSchemaIndex {

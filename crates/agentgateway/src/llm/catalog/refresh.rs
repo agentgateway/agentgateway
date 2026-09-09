@@ -1,13 +1,11 @@
-use std::collections::BTreeMap;
 use std::path::Path;
-use std::str::FromStr;
 
-use anyhow::{Context, bail};
-use chrono::Utc;
-use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use anyhow::Context;
+use serde::Serialize;
 
 use crate::llm::catalog::{ModelCatalog, model};
+
+const CATALOG_URL: &str = "https://agentgateway.dev/model-catalog";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,13 +16,12 @@ pub struct RefreshBaseCatalogResponse {
 	pub catalog: model::Catalog,
 }
 
-pub async fn refresh_models_dev_base_catalog(
+pub async fn refresh_base_catalog(
 	file: &Path,
 	model_catalog: Option<&ModelCatalog>,
 ) -> anyhow::Result<RefreshBaseCatalogResponse> {
-	let refreshed = fetch_models_dev_base_catalog().await?;
-	let catalog = refreshed.catalog.clone();
-	let json = serde_json::to_vec_pretty(&catalog).context("marshal models.dev catalog")?;
+	let refreshed = fetch_base_catalog().await?;
+	let json = serde_json::to_vec_pretty(&refreshed.catalog).context("marshal model catalog")?;
 	if let Some(parent) = file.parent() {
 		fs_err::tokio::create_dir_all(parent).await?;
 	}
@@ -35,12 +32,21 @@ pub async fn refresh_models_dev_base_catalog(
 	Ok(refreshed)
 }
 
-pub async fn fetch_models_dev_base_catalog() -> anyhow::Result<RefreshBaseCatalogResponse> {
-	let mut catalog = fetch_models_dev_catalog().await?;
-	catalog.metadata = Some(model::CatalogMetadata {
-		source: MODELS_DEV_SOURCE.to_string(),
-		generated_at: Utc::now(),
-	});
+pub async fn fetch_base_catalog() -> anyhow::Result<RefreshBaseCatalogResponse> {
+	let client = reqwest::Client::builder()
+		.redirect(reqwest::redirect::Policy::limited(10))
+		.build()?;
+	let catalog: model::Catalog = client
+		.get(CATALOG_URL)
+		.send()
+		.await
+		.context("fetch model catalog from GitHub")?
+		.error_for_status()
+		.context("fetch model catalog from GitHub")?
+		.json()
+		.await
+		.context("decode model catalog from GitHub")?;
+	catalog.validate()?;
 	let providers = catalog.providers.len();
 	let models = catalog
 		.providers
@@ -53,166 +59,3 @@ pub async fn fetch_models_dev_base_catalog() -> anyhow::Result<RefreshBaseCatalo
 		catalog,
 	})
 }
-
-const MODELS_DEV_SOURCE: &str = "models.dev";
-
-async fn fetch_models_dev_catalog() -> anyhow::Result<model::Catalog> {
-	let response = reqwest::get("https://models.dev/api.json")
-		.await
-		.context("fetch models.dev api.json")?
-		.error_for_status()
-		.context("fetch models.dev api.json")?;
-	let api: BTreeMap<String, ModelsDevProvider> = response
-		.json()
-		.await
-		.context("decode models.dev api.json")?;
-	models_dev_transform(api)
-}
-
-fn models_dev_transform(
-	api: BTreeMap<String, ModelsDevProvider>,
-) -> anyhow::Result<model::Catalog> {
-	let mut catalog = model::Catalog::default();
-	for (source_id, gateway_id) in MODELS_DEV_PROVIDER_IDS {
-		let Some(source) = api.get(*source_id) else {
-			continue;
-		};
-		for (model_id, model) in &source.models {
-			if model.status == "deprecated" {
-				continue;
-			}
-			let Some(cost) = &model.cost else {
-				continue;
-			};
-			let entry = model::Model {
-				rates: models_dev_rates(&cost.rates).with_context(|| format!("{gateway_id}/{model_id}"))?,
-				tiers: models_dev_tiers(&cost.tiers).with_context(|| format!("{gateway_id}/{model_id}"))?,
-				..Default::default()
-			};
-			if entry.rates.is_empty() && entry.tiers.is_empty() {
-				continue;
-			}
-			catalog
-				.providers
-				.entry((*gateway_id).to_string())
-				.or_default()
-				.models
-				.insert(model_id.clone(), entry);
-		}
-	}
-	if catalog.providers.is_empty() {
-		bail!("models.dev did not contain any supported priced models");
-	}
-	catalog.validate()?;
-	Ok(catalog)
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevProvider {
-	#[serde(default)]
-	models: BTreeMap<String, ModelsDevModel>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevModel {
-	#[serde(default)]
-	status: String,
-	cost: Option<ModelsDevCost>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevCost {
-	#[serde(flatten)]
-	rates: ModelsDevRates,
-	#[serde(default)]
-	tiers: Vec<ModelsDevTier>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct ModelsDevRates {
-	input: Option<serde_json::Number>,
-	output: Option<serde_json::Number>,
-	cache_read: Option<serde_json::Number>,
-	cache_write: Option<serde_json::Number>,
-	reasoning: Option<serde_json::Number>,
-	input_audio: Option<serde_json::Number>,
-	output_audio: Option<serde_json::Number>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevTier {
-	#[serde(flatten)]
-	rates: ModelsDevRates,
-	tier: ModelsDevTierKind,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevTierKind {
-	#[serde(rename = "type")]
-	kind: String,
-	size: u64,
-}
-
-fn models_dev_tiers(tiers: &[ModelsDevTier]) -> anyhow::Result<Vec<model::Tier>> {
-	let mut converted = Vec::new();
-	for tier in tiers {
-		if tier.tier.kind != "context" || tier.tier.size == 0 {
-			continue;
-		}
-		converted.push(model::Tier {
-			context_over: tier.tier.size,
-			rates: models_dev_rates(&tier.rates)?,
-		});
-	}
-	converted.sort_by_key(|tier| tier.context_over);
-	Ok(converted)
-}
-
-fn models_dev_rates(rates: &ModelsDevRates) -> anyhow::Result<model::Rates> {
-	Ok(model::Rates {
-		input: models_dev_money(&rates.input)?,
-		output: models_dev_money(&rates.output)?,
-		cache_read: models_dev_money(&rates.cache_read)?,
-		cache_write: models_dev_money(&rates.cache_write)?,
-		reasoning: models_dev_money(&rates.reasoning)?,
-		input_audio: models_dev_money(&rates.input_audio)?,
-		output_audio: models_dev_money(&rates.output_audio)?,
-	})
-}
-
-fn models_dev_money(value: &Option<serde_json::Number>) -> anyhow::Result<Option<model::Money>> {
-	let Some(value) = value else {
-		return Ok(None);
-	};
-	let decimal = Decimal::from_str(&value.to_string()).map_err(|e| anyhow::anyhow!("{e}"))?;
-	let rounded = if decimal.scale() > 6 {
-		decimal.round_dp(6)
-	} else {
-		decimal
-	};
-	model::Money::parse(&rounded.to_string())
-		.map(Some)
-		.map_err(anyhow::Error::msg)
-}
-
-const MODELS_DEV_PROVIDER_IDS: &[(&str, &str)] = &[
-	("openai", "openai"),
-	("anthropic", "anthropic"),
-	("amazon-bedrock", "aws.bedrock"),
-	("google", "gcp.gemini"),
-	("google-vertex", "gcp.vertex_ai"),
-	("azure", "azure"),
-	("github-copilot", "copilot"),
-	("cohere", "cohere"),
-	("baseten", "baseten"),
-	("cerebras", "cerebras"),
-	("deepinfra", "deepinfra"),
-	("deepseek", "deepseek"),
-	("groq", "groq"),
-	("huggingface", "huggingface"),
-	("mistral", "mistral"),
-	("openrouter", "openrouter"),
-	("togetherai", "togetherai"),
-	("xai", "xai"),
-	("fireworks-ai", "fireworks"),
-];

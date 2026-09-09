@@ -225,6 +225,8 @@ type Settings struct {
 
 	// EnableAgentgatewayModels enables the experimental AgentgatewayModel API.
 	EnableAgentgatewayModels bool `split_words:"true" default:"false"`
+	// EnableXBackend enables the experimental Gateway API XBackend resource.
+	EnableXBackend bool `split_words:"true" default:"false"`
 
 	// ProxyImageRegistry is the default image registry to use for the proxy image.
 	ProxyImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`

@@ -132,6 +132,7 @@ impl Service {
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
 		dataplane_handle: Handle,
+		ui_assets: &'static include_dir::Dir<'static>,
 	) -> anyhow::Result<Self> {
 		let state = Arc::new(AdminState {
 			config,
@@ -143,7 +144,7 @@ impl Service {
 			dataplane_handle,
 		});
 		let service = AdminService {
-			router: admin_router(state.clone()),
+			router: admin_router(state.clone(), ui_assets),
 		};
 		Server::<AdminService>::bind(
 			"admin",
@@ -182,7 +183,7 @@ impl AdminService {
 	}
 }
 
-fn admin_router(state: Arc<AdminState>) -> Router {
+fn admin_router(state: Arc<AdminState>, ui_assets: &'static include_dir::Dir<'static>) -> Router {
 	let router = Router::new();
 	#[cfg(target_os = "linux")]
 	let router = router.route("/debug/pprof/profile", get(handle_pprof));
@@ -202,6 +203,7 @@ fn admin_router(state: Arc<AdminState>) -> Router {
 			state.model_catalog.clone(),
 			state.config_resource_store.clone(),
 			state.resource_manager.clone(),
+			ui_assets,
 		))
 	} else {
 		router.route("/", get(handle_dashboard))

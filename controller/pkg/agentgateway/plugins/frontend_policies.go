@@ -139,6 +139,13 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		})
 	}
 
+	var parentNotSampled *string
+	if tracing.ParentNotSampled != nil {
+		parentNotSampled = castCELPtr(tracing.ParentNotSampled, func(expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("frontend tracing parentNotSampled is not a valid CEL expression: %s", expr))
+		})
+	}
+
 	var filter *string
 	if tracing.Filter != nil {
 		filter = castCELPtr(tracing.Filter, func(expr agentgateway.CELExpression) {
@@ -174,16 +181,17 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		Kind: &api.Policy_Frontend{
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Tracing_{Tracing: &api.FrontendPolicySpec_Tracing{
-					ProviderBackend: provider,
-					InlinePolicies:  inlinePolicies,
-					Attributes:      addAttributes,
-					Remove:          rmAttributes,
-					Resources:       addResources,
-					Protocol:        protocol,
-					Path:            path,
-					RandomSampling:  randomSampling,
-					ClientSampling:  clientSampling,
-					Filter:          filter,
+					ProviderBackend:  provider,
+					InlinePolicies:   inlinePolicies,
+					Attributes:       addAttributes,
+					Remove:           rmAttributes,
+					Resources:        addResources,
+					Protocol:         protocol,
+					Path:             path,
+					RandomSampling:   randomSampling,
+					ClientSampling:   clientSampling,
+					ParentNotSampled: parentNotSampled,
+					Filter:           filter,
 				}},
 			},
 		},
@@ -200,6 +208,12 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	logging := policy.Spec.Frontend.AccessLog
 	spec := &api.FrontendPolicySpec_Logging{}
 	var errs []error
+	if preset := logging.Preset; preset != nil {
+		switch *preset {
+		case agentgateway.AccessLogPresetOtel:
+			spec.Preset = api.FrontendPolicySpec_Logging_OTEL
+		}
+	}
 	if f := logging.Filter; f != nil {
 		spec.Filter = castCELPtr(f, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend accessLog filter is not a valid CEL expression: %s", expr))

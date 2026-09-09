@@ -1210,6 +1210,7 @@ pub mod to_completions {
 				completions::FinishReason::Stop
 			};
 			vec![completions::ChatChoice {
+				rest: Default::default(),
 				index: 0,
 				message: assistant_message(Some(String::new()), None, None),
 				finish_reason: Some(finish),
@@ -1277,6 +1278,7 @@ pub mod to_completions {
 		let tool_calls = has_tool_calls.then_some(tool_calls);
 
 		completions::ChatChoice {
+			rest: Default::default(),
 			index,
 			message: assistant_message(content, reasoning, tool_calls),
 			finish_reason: Some(finish),
@@ -1438,6 +1440,7 @@ pub mod to_completions {
 				.map(build_usage);
 			let choices = if has_delta || finish.is_some() {
 				vec![completions::ChatChoiceStream {
+					rest: Default::default(),
 					index: 0,
 					delta,
 					finish_reason: finish,

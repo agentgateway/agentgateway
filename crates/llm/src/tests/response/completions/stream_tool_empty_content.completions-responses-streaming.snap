@@ -6,46 +6,52 @@ event: event
 data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"claude-opus-4-8","object":"response","output":[],"status":"in_progress"}}
 
 event: event
-data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"claude-opus-4-8","object":"response","output":[],"status":"in_progress"}}
 
 event: event
-data: {"type":"response.content_part.added","sequence_number":3,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
 
 event: event
-data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"delta":""}
+data: {"type":"response.content_part.added","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
 
 event: event
-data: {"type":"response.output_item.added","sequence_number":5,"output_index":1,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"Bash","id":"","status":"in_progress"}}
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"","output_index":0,"content_index":0,"delta":""}
 
 event: event
-data: {"type":"response.output_text.delta","sequence_number":6,"item_id":"","output_index":0,"content_index":0,"delta":""}
+data: {"type":"response.output_item.added","sequence_number":6,"output_index":1,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"Bash","id":"","status":"in_progress"}}
 
 event: event
-data: {"type":"response.function_call_arguments.delta","sequence_number":7,"item_id":"","output_index":1,"delta":"{\"com"}
+data: {"type":"response.output_text.delta","sequence_number":7,"item_id":"","output_index":0,"content_index":0,"delta":""}
 
 event: event
-data: {"type":"response.output_text.delta","sequence_number":8,"item_id":"","output_index":0,"content_index":0,"delta":""}
+data: {"type":"response.function_call_arguments.delta","sequence_number":8,"item_id":"","output_index":1,"delta":"{\"com"}
 
 event: event
-data: {"type":"response.function_call_arguments.delta","sequence_number":9,"item_id":"","output_index":1,"delta":"mand\":\"pwd\"}"}
+data: {"type":"response.output_text.delta","sequence_number":9,"item_id":"","output_index":0,"content_index":0,"delta":""}
 
 event: event
-data: {"type":"response.output_text.delta","sequence_number":10,"item_id":"","output_index":0,"content_index":0,"delta":""}
+data: {"type":"response.function_call_arguments.delta","sequence_number":10,"item_id":"","output_index":1,"delta":"mand\":\"pwd\"}"}
 
 event: event
-data: {"type":"response.function_call_arguments.done","name":"Bash","sequence_number":11,"item_id":"","output_index":1,"arguments":"{\"command\":\"pwd\"}"}
+data: {"type":"response.output_text.delta","sequence_number":11,"item_id":"","output_index":0,"content_index":0,"delta":""}
 
 event: event
-data: {"type":"response.output_item.done","sequence_number":12,"output_index":1,"item":{"type":"function_call","arguments":"{\"command\":\"pwd\"}","call_id":"call_xxx","name":"Bash","id":"","status":"completed"}}
+data: {"type":"response.function_call_arguments.done","name":"Bash","sequence_number":12,"item_id":"","output_index":1,"arguments":"{\"command\":\"pwd\"}"}
 
 event: event
-data: {"type":"response.content_part.done","sequence_number":13,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":1,"item":{"type":"function_call","arguments":"{\"command\":\"pwd\"}","call_id":"call_xxx","name":"Bash","id":"","status":"completed"}}
 
 event: event
-data: {"type":"response.output_item.done","sequence_number":14,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+data: {"type":"response.output_text.done","sequence_number":14,"item_id":"","output_index":0,"content_index":0,"text":"","logprobs":null}
 
 event: event
-data: {"type":"response.completed","sequence_number":15,"response":{"created_at":123,"id":"","model":"claude-opus-4-8","object":"response","output":[],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
+data: {"type":"response.content_part.done","sequence_number":15,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":16,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":""}],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":17,"response":{"created_at":123,"id":"","model":"claude-opus-4-8","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":""}],"id":"","role":"assistant","status":"completed"},{"type":"function_call","arguments":"{\"command\":\"pwd\"}","call_id":"call_xxx","name":"Bash","id":"","status":"completed"}],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
 
 
 

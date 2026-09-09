@@ -208,12 +208,18 @@ fn merge_deprecated_frontend_policies(
 	let log = &deprecated.logging;
 	let has_deprecated_log = has_deprecated_frontend_log_fields(log);
 	if has_deprecated_log {
+		for _ in 0..5 {
+			tracing::warn!(
+				"config.logging.filter and config.logging.fields are deprecated; migrate to frontendPolicies.accessLog"
+			);
+		}
 		if frontend_policies.access_log.is_some() {
 			anyhow::bail!(
 				"cannot use deprecated config.logging together with frontendPolicies.accessLog"
 			);
 		}
 		frontend_policies.access_log = Some(frontend::LoggingPolicy {
+			preset: None,
 			filter: log.filter.clone(),
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),
@@ -223,6 +229,9 @@ fn merge_deprecated_frontend_policies(
 		});
 	}
 	if let Some(tracing) = deprecated.tracing.clone() {
+		for _ in 0..5 {
+			tracing::warn!("config.tracing is deprecated; migrate to frontendPolicies.tracing");
+		}
 		if frontend_policies.tracing.is_some() {
 			anyhow::bail!("cannot use deprecated config.tracing together with frontendPolicies.tracing");
 		}
@@ -271,6 +280,7 @@ fn merge_deprecated_frontend_policies(
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
 				random_sampling,
 				client_sampling,
+				parent_not_sampled: None,
 				path,
 				protocol: match protocol {
 					Protocol::Grpc => crate::types::agent::TracingProtocol::Grpc,
@@ -2464,6 +2474,9 @@ struct LocalLLMPolicy {
 	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
+	/// Set request timeout limits.
+	#[serde(default)]
+	timeout: Option<timeout::Policy>,
 }
 
 #[apply(schema_de!)]
@@ -2881,6 +2894,9 @@ struct LocalFrontendPolicies {
 	/// HTTP external authorization performed once for each downstream network connection.
 	#[serde(default)]
 	pub network_ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Validate the originating actor before accepting a CONNECT tunnel.
+	#[serde(default)]
+	pub substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
 	/// Enable downstream PROXY protocol handling on this gateway or port, including
 	/// version matching and whether PROXY headers are required or optional.
 	#[serde(default, rename = "proxyProtocol", alias = "proxy")]
@@ -2984,9 +3000,6 @@ pub struct FilterOrPolicy {
 	/// Resolve Substrate actor hostnames for dynamic route backends on ingress.
 	#[serde(default)]
 	substrate_ingress: Option<crate::http::substrate::SubstrateIngress>,
-	/// Authorize CONNECT egress using the originating actor's dynamic policy.
-	#[serde(default)]
-	substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
 	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
@@ -4290,6 +4303,7 @@ async fn convert_llm_config(
 			guardrails,
 			local_rate_limit,
 			remote_rate_limit,
+			timeout,
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		shared_prompt_guard = guardrails;
@@ -4299,6 +4313,7 @@ async fn convert_llm_config(
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
+				timeout,
 				..Default::default()
 			},
 			None,
@@ -5148,6 +5163,7 @@ async fn split_frontend_policies(
 		tcp,
 		network_authorization,
 		network_ext_authz,
+		substrate_egress,
 		proxy_protocol,
 		connect,
 		access_log,
@@ -5176,6 +5192,9 @@ async fn split_frontend_policies(
 			FrontendPolicy::NetworkExtAuthz(Arc::new(p.with_configured_cache_store())),
 			"networkExtAuthz",
 		);
+	}
+	if let Some(p) = substrate_egress {
+		add(FrontendPolicy::SubstrateEgress(p), "substrateEgress");
 	}
 	if let Some(p) = proxy_protocol {
 		add(FrontendPolicy::Proxy(p), "proxy");
@@ -5261,7 +5280,6 @@ pub(crate) async fn split_policies_for_target(
 		ext_authz,
 		ext_proc,
 		substrate_ingress,
-		substrate_egress,
 		buffer,
 		timeout,
 		retry,
@@ -5442,9 +5460,6 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = substrate_ingress {
 		route_policies.push(TrafficPolicy::SubstrateIngress(RequestPolicy::single(p)))
-	}
-	if let Some(p) = substrate_egress {
-		route_policies.push(TrafficPolicy::SubstrateEgress(RequestPolicy::single(p)))
 	}
 	if let Some(p) = local_rate_limit
 		&& !p.is_empty()

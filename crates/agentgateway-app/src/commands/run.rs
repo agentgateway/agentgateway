@@ -23,7 +23,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 		return Ok(());
 	}
 	if version_long {
-		println!("{}", version::BuildInfo::new());
+		println!("{}", build_info());
 		return Ok(());
 	}
 	if let Some(copy_self) = copy_self {
@@ -46,7 +46,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				&config.logging.level,
 				config.logging.format == LoggingFormat::Json,
 			);
-			info!("version: {}", version::BuildInfo::new());
+			info!("version: {}", build_info());
 			info!(
 				"running with config: {}",
 				serdes::yamlviajson::to_string(&config)?
@@ -103,6 +103,13 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 			}
 			result
 		})
+}
+
+fn build_info() -> version::BuildInfo {
+	version::BuildInfo::new().with_crypto(
+		agentgateway::crypto::CRYPTO_BACKEND,
+		agentgateway::crypto::provider().fips(),
+	)
 }
 
 #[cfg(not(target_env = "musl"))]
@@ -189,6 +196,10 @@ async fn proxy(
 	cfg: Arc<Config>,
 	config_resource_store: Option<agentgateway::config_store::ConfigResourceStore>,
 ) -> anyhow::Result<()> {
+	#[cfg(feature = "ui")]
+	let bound =
+		agentgateway::app::run_with_ui_assets(cfg, config_resource_store, &crate::UI_ASSETS).await?;
+	#[cfg(not(feature = "ui"))]
 	let bound = agentgateway::app::run(cfg, config_resource_store).await?;
 	spawn_readiness(&bound);
 	bound.wait_termination().await

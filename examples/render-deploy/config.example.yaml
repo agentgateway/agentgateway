@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# What first boot writes to /config/config.yaml on the agw-config disk.
+# Add LLM models and MCP servers in the UI after login — do not put
+# $OPENAI_API_KEY or $GITHUB_PERSONAL_ACCESS_TOKEN here unless those
+# env vars are set (agentgateway exits if a $VAR is missing, and
+# llm.models is required whenever llm is present).
+#
+# SQLite on the disk is the default. To use Render Postgres instead,
+# create a database (https://render.com/docs/postgresql-creating-connecting)
+# and change config.database.url in the UI to the connection string
+# (or $DATABASE_URL once that env var exists).
+#
+# Render publishes HTTPS :443 → container :4000. Admin :15000 stays loopback.
+
+config:
+  database:
+    url: sqlite:///config/data.db
+
+gateways:
+  default:
+    port: 4000
+
+ui:
+  gateways: [default]
+  policies:
+    basicAuth:
+      mode: strict
+      htpasswd:
+        file: /config/.htpasswd
+      realm: agentgateway

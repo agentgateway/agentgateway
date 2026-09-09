@@ -2,13 +2,34 @@
   "providers": {
     "anthropic": {
       "models": {
+        "claude-opus-4-6": {
+          "rates": {
+            "input": "5",
+            "output": "25"
+          },
+          "tags": [
+            "legacy_thinking"
+          ]
+        },
+        "claude-opus-4-7": {
+          "rates": {
+            "input": "5",
+            "output": "25"
+          },
+          "tags": [
+            "adaptive_thinking"
+          ]
+        },
         "claude-sonnet-4-5": {
           "rates": {
             "input": "3",
             "output": "15",
             "cacheRead": "0.3",
             "cacheWrite": "3.75"
-          }
+          },
+          "tags": [
+            "legacy_thinking"
+          ]
         }
       }
     },

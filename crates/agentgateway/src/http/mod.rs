@@ -146,7 +146,22 @@ impl<'a> From<&'a mut Response> for RequestOrResponse<'a> {
 	}
 }
 
+pub fn replace_body<'a>(message: impl Into<RequestOrResponse<'a>>, body: Body) {
+	message.into().replace_body(body);
+}
+
+pub fn replace_body_bytes<'a>(message: impl Into<RequestOrResponse<'a>>, body: Bytes) {
+	message.into().replace_body_bytes(body);
+}
+
 impl RequestOrResponse<'_> {
+	fn extensions(&mut self) -> &mut ::http::Extensions {
+		match self {
+			RequestOrResponse::Request(r) => r.extensions_mut(),
+			RequestOrResponse::Response(r) => r.extensions_mut(),
+		}
+	}
+
 	pub fn headers(&mut self) -> &mut http::HeaderMap {
 		match self {
 			RequestOrResponse::Request(r) => r.headers_mut(),
@@ -159,6 +174,44 @@ impl RequestOrResponse<'_> {
 			RequestOrResponse::Response(r) => r.body_mut(),
 		}
 	}
+
+	// Keep RecordedBodyHandle across replacements. It may describe the previous body stream, but
+	// retaining a stale logging-only value is preferable to silently dropping the configured field.
+	pub fn replace_body(&mut self, body: Body) {
+		*self.body() = body;
+		self.headers().remove(header::CONTENT_LENGTH);
+		self.invalidate_body_cache();
+	}
+
+	fn invalidate_body_cache(&mut self) {
+		self.extensions().remove::<crate::cel::BufferedBody>();
+	}
+
+	pub fn replace_body_bytes(&mut self, body: Bytes) {
+		*self.body() = Body::from(body.clone());
+		self.headers().remove(header::CONTENT_LENGTH);
+		self.refresh_body_cache(body);
+	}
+
+	fn refresh_body_cache(&mut self, body: Bytes) {
+		let body_was_buffered = self
+			.extensions()
+			.get::<crate::cel::BufferedBody>()
+			.is_some();
+		if body_was_buffered {
+			let limit = match self {
+				RequestOrResponse::Request(req) => buffer_limit(req),
+				RequestOrResponse::Response(resp) => response_buffer_limit(resp),
+			};
+			let buffered = if body.len() > limit {
+				crate::cel::BufferedBody::exceeded_limit(body.slice(..limit))
+			} else {
+				crate::cel::BufferedBody::complete(body)
+			};
+			self.extensions().insert(buffered);
+		}
+	}
+
 	pub fn apply_header(
 		&mut self,
 		k: &HeaderOrPseudo,
@@ -1026,6 +1079,26 @@ mod tests {
 		assert_eq!(req.headers().get("x-test").unwrap(), "value");
 		let body = read_body_with_limit(req.into_body(), 100).await.unwrap();
 		assert_eq!(body, "body");
+	}
+
+	#[test]
+	fn replace_body_bytes_preserves_buffer_limit() {
+		let mut req = ::http::Request::new(Body::empty());
+		req.extensions_mut().insert(BufferLimit::new(4));
+		req
+			.extensions_mut()
+			.insert(crate::cel::BufferedBody::complete(Bytes::new()));
+
+		replace_body_bytes(&mut req, Bytes::from_static(b"too large"));
+
+		assert!(
+			req
+				.extensions()
+				.get::<crate::cel::BufferedBody>()
+				.unwrap()
+				.bytes()
+				.is_none()
+		);
 	}
 
 	#[test]

@@ -18,13 +18,14 @@ fuzz_target!(|data: &[u8]| {
 	}
 
 	if let Ok(req) = serde_json::from_slice::<types::completions::Request>(data) {
-		let _ = conversion::messages::from_completions::translate(&req);
-		let _ = conversion::bedrock::from_completions::translate(&req, &BEDROCK_PROVIDER, None, None);
+		let _ = conversion::messages::from_completions::translate(&req, None);
+		let _ =
+			conversion::bedrock::from_completions::translate(&req, &BEDROCK_PROVIDER, None, None, None);
 	}
 
 	if let Ok(req) = serde_json::from_slice::<types::messages::Request>(data) {
 		let _ = conversion::completions::from_messages::translate(&req);
-		let _ = conversion::bedrock::from_messages::translate(&req, &BEDROCK_PROVIDER, None);
+		let _ = conversion::bedrock::from_messages::translate(&req, &BEDROCK_PROVIDER, None, None);
 	}
 
 	if let Ok(req) = serde_json::from_slice::<types::responses::Request>(data) {

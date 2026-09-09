@@ -95,9 +95,7 @@ impl DynamicCaCertResolver {
 		];
 
 		let private_key = PrivatePkcs8KeyDer::from(key_der);
-		let signing_key = self
-			.provider
-			.key_provider
+		let signing_key = crate::crypto::tls::key_provider(&self.provider)
 			.load_private_key(private_key.into())
 			.ok()?;
 
@@ -158,7 +156,7 @@ pub(super) fn build_dynamic_ca_server_config(
 	key_exchange_groups: &[tls::KeyExchangeGroup],
 	cache_config: &crate::DynamicCaCertCacheConfig,
 ) -> anyhow::Result<rustls::ServerConfig> {
-	let provider = tls::provider_with_options(cipher_suites, key_exchange_groups);
+	let provider = tls::provider_with_options_validated(cipher_suites, key_exchange_groups)?;
 
 	let versions = super::agent::tls_versions_for_range(min_version, max_version)?;
 	let mut config = rustls::ServerConfig::builder_with_provider(Arc::clone(&provider))
@@ -260,7 +258,7 @@ mod tests {
 				DynamicCa::from_pem(ca_cert.pem().as_bytes(), ca_key.serialize_pem().as_bytes())
 					.expect("parse CA"),
 			),
-			provider: tls::provider_with_options(&[], &[]),
+			provider: tls::provider(),
 			cache: Cache::new(crate::DynamicCaCertCacheConfig::default().capacity),
 			cache_ttl: crate::DynamicCaCertCacheConfig::default().ttl,
 		}
@@ -340,7 +338,7 @@ mod tests {
 		.expect("parse intermediate CA");
 		let resolver = DynamicCaCertResolver {
 			ca: Arc::new(dynamic_ca),
-			provider: tls::provider_with_options(&[], &[]),
+			provider: tls::provider(),
 			cache: Cache::new(crate::DynamicCaCertCacheConfig::default().capacity),
 			cache_ttl: crate::DynamicCaCertCacheConfig::default().ttl,
 		};

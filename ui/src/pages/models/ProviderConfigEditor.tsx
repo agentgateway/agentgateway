@@ -551,7 +551,11 @@ function AzureCredentials(props: {
 }) {
 	const azure = canonicalAuth(props.auth, 'azure')?.azure ?? null;
 	const managed =
-		azure && 'explicitConfig' in azure && 'managedIdentity' in azure.explicitConfig
+		azure &&
+		'explicitConfig' in azure &&
+		typeof azure.explicitConfig === 'object' &&
+		azure.explicitConfig !== null &&
+		'managedIdentity' in azure.explicitConfig
 			? azure.explicitConfig.managedIdentity
 			: null;
 	const [mode, setMode] = useState<AzureCredentialMode>(

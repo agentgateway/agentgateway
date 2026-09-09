@@ -22,6 +22,7 @@ import (
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 	"sigs.k8s.io/yaml"
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
@@ -242,6 +243,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		ReferenceGrants:      krttest.GetMockCollection[*gwv1b1.ReferenceGrant](mock),
 		BackendTLSPolicies:   krttest.GetMockCollection[*gwv1.BackendTLSPolicy](mock),
 		ListenerSets:         krttest.GetMockCollection[*gwv1.ListenerSet](mock),
+		XBackends:            krttest.GetMockCollection[*gwxv1a1.XBackend](mock),
 		InferencePools:       krttest.GetMockCollection[*inf.InferencePool](mock),
 		Backends:             krttest.GetMockCollection[*agwv1alpha1.AgentgatewayBackend](mock),
 		Models:               krttest.GetMockCollection[*agwv1alpha1.AgentgatewayModel](mock),

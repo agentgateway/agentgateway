@@ -28,10 +28,11 @@ try {
 	rmSync(sanitizedAdminSchemaPath, { force: true });
 }
 
-copyFileSync(join(rootDir, 'schema/config.json'), join(uiDir, 'public/config-schema.json'));
+rmSync(join(uiDir, 'public/config-schema.json'), { force: true });
+rmSync(join(uiDir, 'public/admin-schema.json'), { force: true });
+rmSync(join(uiDir, 'public/cel-schema.json'), { force: true });
 copyFileSync(join(rootDir, 'schema/config.json'), join(uiDir, 'src/generated/schema.json'));
-copyFileSync(join(rootDir, 'schema/admin.json'), join(uiDir, 'public/admin-schema.json'));
-copyFileSync(join(rootDir, 'schema/cel.json'), join(uiDir, 'public/cel-schema.json'));
+copyFileSync(join(rootDir, 'schema/cel.json'), join(uiDir, 'src/generated/cel-schema.json'));
 
 function sanitizeSchemaForTypes(value) {
 	if (Array.isArray(value)) {

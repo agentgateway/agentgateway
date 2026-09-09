@@ -195,6 +195,8 @@ where
 	}
 }
 
+// This isolated integration-test server does not use production TLS construction.
+#[allow(clippy::disallowed_methods)]
 fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 	// Generate certificates using rcgen with static test keys
 	use std::time::{Duration, SystemTime};

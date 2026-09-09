@@ -1,0 +1,49 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/reasoning-adaptive.json
+info:
+  model: custom-adaptive-model
+  messages:
+    - role: user
+      content: Think carefully.
+  reasoning_effort: high
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Think carefully."
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
+    },
+    "additionalModelRequestFields": {
+      "thinking": {
+        "type": "adaptive"
+      },
+      "output_config": {
+        "effort": "high"
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "custom-adaptive-model",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Think carefully."
+      }
+    ]
+  }
+}

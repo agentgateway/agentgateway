@@ -5,6 +5,7 @@ import (
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 	GatewayClassKind     = "GatewayClass"
 	ReferenceGrantKind   = "ReferenceGrant"
 	BackendTLSPolicyKind = "BackendTLSPolicy"
+	XBackendKind         = "XBackend"
 
 	// Kind string for ListenerSet resource
 	ListenerSetKind = "ListenerSet"
@@ -125,6 +127,16 @@ var (
 		Version:  gwv1.GroupVersion.Version,
 		Resource: "backendtlspolicies",
 	}
+	XBackendGVK = schema.GroupVersionKind{
+		Group:   gwxv1a1.GroupVersion.Group,
+		Version: gwxv1a1.GroupVersion.Version,
+		Kind:    XBackendKind,
+	}
+	XBackendGVR = schema.GroupVersionResource{
+		Group:    gwxv1a1.GroupVersion.Group,
+		Version:  gwxv1a1.GroupVersion.Version,
+		Resource: "xbackends",
+	}
 
 	ListenerSetGVK = schema.GroupVersionKind{
 		Group:   GatewayGroup,
@@ -147,6 +159,7 @@ var KnownGvkByKind = map[string]schema.GroupVersionKind{
 	GRPCRouteGVK.Kind:        GRPCRouteGVK,
 	ReferenceGrantGVK.Kind:   ReferenceGrantGVK,
 	BackendTLSPolicyGVK.Kind: BackendTLSPolicyGVK,
+	XBackendGVK.Kind:         XBackendGVK,
 	InferencePoolGVK.Kind:    InferencePoolGVK,
 	ListenerSetGVK.Kind:      ListenerSetGVK,
 	ServiceEntryGVK.Kind:     ServiceEntryGVK,

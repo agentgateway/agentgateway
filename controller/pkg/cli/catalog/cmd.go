@@ -57,7 +57,7 @@ func importSourceList() string {
 
 func importCmd() *cobra.Command {
 	f := &importFlags{
-		source: modelsDevSourceName,
+		source: githubSourceName,
 	}
 	cmd := &cobra.Command{
 		Use:   "import",
@@ -118,9 +118,10 @@ func runImport(cmd *cobra.Command, f *importFlags) error {
 		}
 		cat.overlayWith(&overlay)
 	}
-	cat.Metadata = &CatalogMetadata{
-		Source:      f.source,
-		GeneratedAt: time.Now().UTC().Truncate(time.Second),
+	if cat.Metadata == nil {
+		cat.Metadata = &CatalogMetadata{
+			GeneratedAt: time.Now().UTC().Truncate(time.Second),
+		}
 	}
 	if err := cat.Validate(); err != nil {
 		return fmt.Errorf("invalid catalog: %w", err)

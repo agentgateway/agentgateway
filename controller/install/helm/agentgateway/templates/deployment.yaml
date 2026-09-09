@@ -179,6 +179,10 @@ spec:
             - name: AGW_ENABLE_AGENTGATEWAY_MODELS
               value: "true"
             {{- end }}
+            {{- if .Values.xBackend.enabled }}
+            - name: AGW_ENABLE_X_BACKEND
+              value: "true"
+            {{- end }}
             - name: AGW_XDS_MODE
               value: {{ .Values.controller.xds.mode | quote }}
             {{- if .Values.gatewayClassName }}

@@ -51,8 +51,11 @@ impl TCPProxy {
 			tcp.clone(),
 		)
 		.into();
-		// Set source context for TCP logging
-		log.with(|l| l.source_context = Some(src));
+		// Set TCP-specific logging context before any operation that can fail.
+		log.with(|l| {
+			l.source_context = Some(src);
+			l.backend_protocol = Some(cel::BackendProtocol::tcp);
+		});
 		let ret = self.proxy_internal(connection, log.as_mut().unwrap()).await;
 		if let Err(e) = ret {
 			log.with(|l| l.error = Some(e.to_string()));
@@ -121,7 +124,6 @@ impl TCPProxy {
 				.await?;
 		}
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
-		log.backend_protocol = Some(cel::BackendProtocol::tcp);
 		let tcp_labels = TCPLabels {
 			bind: Some(&self.bind_name).into(),
 			gateway: Some(&self.selected_listener.name.as_gateway_name()).into(),

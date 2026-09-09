@@ -27,6 +27,7 @@ spec:
   - port: metrics
     path: /metrics
     interval: 30s
+
 ---
 # Source: agentgateway/templates/monitoring.yaml
 apiVersion: monitoring.coreos.com/v1

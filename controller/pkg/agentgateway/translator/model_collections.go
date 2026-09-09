@@ -62,43 +62,91 @@ func AgwModelCollection(
 // extractModelAncestorBackends mirrors extractAncestorBackends for AgentgatewayModels, so
 // backends referenced only by a model (spec.custom.backendRef) still resolve to their
 // Gateways in the reference index.
+// It also handles the indirect relationship: virtualModel.failover → concrete model → backendRef.
+// When a virtual model uses failover to reference a concrete model whose Custom provider
+// targets a backend (e.g. InferencePool), the virtual model's Gateways are propagated to
+// that backend's ancestor index.
 func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.AgentgatewayModel) []*utils.AncestorBackend {
-	custom := model.Spec.Custom
-	if custom == nil || custom.BackendRef == nil {
-		return nil
-	}
 	source := utils.TypedNamespacedName{
 		Namespace: model.Namespace,
 		Name:      model.Name,
 		Kind:      wellknown.AgentgatewayModelGVK.Kind,
 	}
+
+	// Collect the model's parent gateways (shared by both direct and indirect cases).
 	gateways := sets.Set[types.NamespacedName]{}
 	for _, parent := range FilteredReferences(extractModelParentReferenceInfo(ctx, model)) {
 		gateways.Insert(parent.ParentGateway)
 	}
-	kind := wellknown.ServiceKind
-	if custom.BackendRef.Kind != nil {
-		kind = *custom.BackendRef.Kind
+	if len(gateways) == 0 {
+		return nil
 	}
-	backend := utils.TypedNamespacedName{
-		// backendRef may target only namespace-local resources.
-		Namespace: model.Namespace,
-		Name:      custom.BackendRef.Name,
-		Kind:      kind,
+
+	// Collect all reachable backends (deduplicated).
+	backends := sets.Set[utils.TypedNamespacedName]{}
+
+	// Case 1: Direct Custom provider backendRef (existing behavior).
+	if custom := model.Spec.Custom; custom != nil && custom.BackendRef != nil {
+		backends.Insert(backendRefToTypedNamespacedName(model.Namespace, custom.BackendRef))
 	}
+
+	// Case 2: Virtual model failover → concrete model → Custom backendRef.
+	// Failover targets must be concrete models (enforced by modelFailoverBackend runtime check).
+	// Concrete models' Custom.backendRef can only target Service or InferencePool (CEL constraint).
+	if vm := model.Spec.VirtualModel; vm != nil && vm.Failover != nil {
+		for _, target := range vm.Failover.Targets {
+			refModel, _, err := resolveModelTarget(ctx, model.Namespace, target.ModelTargetReference)
+			if err != nil {
+				continue // Unresolvable targets are skipped; modelFailoverBackend reports the error.
+			}
+			if refModel.Spec.Provider == nil {
+				continue // Not a concrete model; skip.
+			}
+			if refCustom := refModel.Spec.Custom; refCustom != nil && refCustom.BackendRef != nil {
+				// backendRef is namespace-local; use the concrete model's namespace.
+				backends.Insert(backendRefToTypedNamespacedName(refModel.Namespace, refCustom.BackendRef))
+			}
+		}
+	}
+
+	if len(backends) == 0 {
+		return nil
+	}
+
+	// Generate sorted cartesian product of gateways × backends.
 	gtw := gateways.UnsortedList()
 	slices.SortFunc(gtw, func(a, b types.NamespacedName) int {
 		return strings.Compare(a.String(), b.String())
 	})
-	res := make([]*utils.AncestorBackend, 0, len(gtw))
+	bes := backends.UnsortedList()
+	slices.SortFunc(bes, func(a, b utils.TypedNamespacedName) int {
+		return strings.Compare(a.String(), b.String())
+	})
+	res := make([]*utils.AncestorBackend, 0, len(gtw)*len(bes))
 	for _, gw := range gtw {
-		res = append(res, &utils.AncestorBackend{
-			Gateway: gw,
-			Backend: backend,
-			Source:  source,
-		})
+		for _, be := range bes {
+			res = append(res, &utils.AncestorBackend{
+				Gateway: gw,
+				Backend: be,
+				Source:  source,
+			})
+		}
 	}
 	return res
+}
+
+// backendRefToTypedNamespacedName converts a LocalBackendObjectReference to a TypedNamespacedName.
+// backendRef can only target Service or InferencePool (CEL constraint); Kind defaults to Service.
+func backendRefToTypedNamespacedName(namespace string, ref *agentgateway.LocalBackendObjectReference) utils.TypedNamespacedName {
+	kind := wellknown.ServiceKind
+	if ref.Kind != nil {
+		kind = *ref.Kind
+	}
+	return utils.TypedNamespacedName{
+		Namespace: namespace,
+		Name:      ref.Name,
+		Kind:      kind,
+	}
 }
 
 // extractModelParentReferenceInfo resolves an HTTPRoute parent to that route's

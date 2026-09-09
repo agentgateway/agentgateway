@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
@@ -61,6 +62,7 @@ type AgentGwStatusSyncer struct {
 	tcpRoutes          StatusSyncer[*gwv1.TCPRoute, *gwv1.TCPRouteStatus]
 	tlsRoutes          StatusSyncer[*gwv1.TLSRoute, *gwv1.TLSRouteStatus]
 	backendTLSPolicies StatusSyncer[*gwv1.BackendTLSPolicy, gwv1.PolicyStatus]
+	xBackends          StatusSyncer[*gwxv1a1.XBackend, *gwxv1a1.BackendStatus]
 	inferencePools     StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]
 
 	extraAgwResourceStatusHandlers map[schema.GroupVersionKind]ResourceStatusSyncer
@@ -75,6 +77,7 @@ func NewAgwStatusSyncer(
 	extraHandlers map[schema.GroupVersionKind]ResourceStatusSyncer,
 	enableInference bool,
 	enableAgentgatewayModels bool,
+	enableXBackend bool,
 ) *AgentGwStatusSyncer {
 	f := kclient.Filter{ObjectFilter: client.ObjectFilter()}
 	syncer := &AgentGwStatusSyncer{
@@ -186,6 +189,16 @@ func NewAgwStatusSyncer(
 			},
 		},
 	}
+	if enableXBackend {
+		syncer.xBackends = StatusSyncer[*gwxv1a1.XBackend, *gwxv1a1.BackendStatus]{
+			Name:           "xBackend",
+			ControllerName: controllerName,
+			Client:         kclient.NewFilteredDelayed[*gwxv1a1.XBackend](client, wellknown.XBackendGVR, f),
+			Build: func(om metav1.ObjectMeta, s *gwxv1a1.BackendStatus) *gwxv1a1.XBackend {
+				return &gwxv1a1.XBackend{ObjectMeta: om, Status: *s}
+			},
+		}
+	}
 	if enableInference {
 		syncer.inferencePools = StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]{
 			Name:           "inferencePools",
@@ -240,6 +253,13 @@ func (s *AgentGwStatusSyncer) Start(ctx context.Context) error {
 		s.agentgatewayBackends.Client.HasSynced,
 		s.agentgatewayPolicies.Client.HasSynced,
 	)
+	if s.xBackends.Client != nil {
+		s.client.WaitForCacheSync(
+			"agent gateway status clients",
+			ctx.Done(),
+			s.xBackends.Client.HasSynced,
+		)
+	}
 	if s.inferencePools.Client != nil {
 		s.client.WaitForCacheSync(
 			"agent gateway status clients",
@@ -290,6 +310,10 @@ func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status.Re
 		}
 	case wellknown.BackendTLSPolicyGVK:
 		s.backendTLSPolicies.ApplyStatus(ctx, resource, statusObj)
+	case wellknown.XBackendGVK:
+		if s.xBackends.Client != nil {
+			s.xBackends.ApplyStatus(ctx, resource, statusObj)
+		}
 	case wellknown.InferencePoolGVK:
 		if s.inferencePools.Client != nil {
 			s.inferencePools.ApplyStatus(ctx, resource, statusObj)
@@ -411,6 +435,13 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 				merged.Parents = mergeInferencePoolParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)
 				mergedAny = merged
 			}
+		case *gwxv1a1.BackendStatus:
+			cur, ok := any(current).(*gwxv1a1.XBackend)
+			if ok {
+				merged := *desired
+				merged.Ancestors = mergeXBackendAncestorStatuses(s.ControllerName, cur.Status.Ancestors, desired.Ancestors)
+				mergedAny = &merged
+			}
 		}
 
 		merged, ok := mergedAny.(S)
@@ -460,6 +491,25 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 	} else {
 		logger.Debug("updated policy status")
 	}
+}
+
+func mergeXBackendAncestorStatuses(ourControllerName string, existing, desired []gwxv1a1.BackendAncestorStatus) []gwxv1a1.BackendAncestorStatus {
+	out := make([]gwxv1a1.BackendAncestorStatus, 0, len(existing)+len(desired))
+	for _, ancestor := range existing {
+		if string(ancestor.ControllerName) != ourControllerName {
+			out = append(out, ancestor)
+		}
+	}
+	ours := make([]gwxv1a1.BackendAncestorStatus, 0, len(desired))
+	for _, ancestor := range desired {
+		if string(ancestor.ControllerName) == ourControllerName {
+			ours = append(ours, ancestor)
+		}
+	}
+	slices.SortFunc(ours, func(a, b gwxv1a1.BackendAncestorStatus) int {
+		return compareParentReference(a.AncestorRef, b.AncestorRef)
+	})
+	return append(out, ours...)
 }
 
 func mergePolicyAncestorStatuses(ourControllerName string, existing []gwv1.PolicyAncestorStatus, desired []gwv1.PolicyAncestorStatus) []gwv1.PolicyAncestorStatus {

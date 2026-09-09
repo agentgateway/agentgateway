@@ -1606,8 +1606,8 @@ func copyDetailsToNativeClipboard(text string) error {
 	if clipboardInitErr != nil {
 		return clipboardInitErr
 	}
-	clipboard.Write(clipboard.FmtText, []byte(text))
-	return nil
+	_, err := clipboard.Write(context.Background(), clipboard.FmtText, []byte(text))
+	return err
 }
 
 func isSSHSession() bool {

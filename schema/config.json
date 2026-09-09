@@ -564,8 +564,12 @@
       "type": "object",
       "properties": {
         "source": {
-          "description": "Upstream used to generate this base catalog, such as `models.dev`.",
-          "type": "string"
+          "description": "Legacy provenance field retained for compatibility with older generated catalogs.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "writeOnly": true
         },
         "generatedAt": {
           "description": "Time the generated catalog contents last changed.",
@@ -575,7 +579,6 @@
       },
       "additionalProperties": false,
       "required": [
-        "source",
         "generatedAt"
       ]
     },
@@ -2032,18 +2035,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/SubstrateIngress"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "substrateEgress": {
-          "description": "Authorize CONNECT egress using the originating actor's dynamic policy.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SubstrateEgress"
             },
             {
               "type": "null"
@@ -3577,6 +3568,17 @@
       ]
     },
     "AzureAuth": {
+      "type": "object",
+      "properties": {
+        "scopes": {
+          "description": "Scopes requested for the Azure access token. When unset, the scope is\ninferred from the backend hostname.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false,
       "oneOf": [
         {
           "description": "Use explicit Azure credentials",
@@ -3655,8 +3657,7 @@
           },
           "required": [
             "explicitConfig"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
@@ -3669,8 +3670,7 @@
           },
           "required": [
             "developerImplicit"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
           "description": "Automatically detect authentication method based on environment.\nUses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.",
@@ -3683,8 +3683,7 @@
           },
           "required": [
             "implicit"
-          ],
-          "additionalProperties": false
+          ]
         }
       ]
     },
@@ -7694,81 +7693,6 @@
       },
       "additionalProperties": false
     },
-    "SubstrateEgress": {
-      "description": "Authorizes an actor's egress to the hostname recovered from an internal CONNECT listener.",
-      "type": "object",
-      "properties": {
-        "policies": {
-          "description": "Backend policies used when connecting to the service.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "unevaluatedProperties": false,
-      "oneOf": [
-        {
-          "description": "Service reference. Service must be defined in the top level services list.",
-          "type": "object",
-          "properties": {
-            "service": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "description": "Name of the target Service, as defined in the top-level `services` list.",
-                  "$ref": "#/$defs/NamespacedHostname"
-                },
-                "port": {
-                  "description": "Port on the target Service to route to.",
-                  "type": "integer",
-                  "format": "uint16",
-                  "minimum": 0,
-                  "maximum": 65535
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name",
-                "port"
-              ]
-            }
-          },
-          "required": [
-            "service"
-          ]
-        },
-        {
-          "description": "Hostname or IP address",
-          "type": "object",
-          "properties": {
-            "host": {
-              "description": "Hostname or IP address",
-              "type": "string"
-            }
-          },
-          "required": [
-            "host"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "backend": {
-              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
-              "type": "string"
-            }
-          },
-          "required": [
-            "backend"
-          ]
-        }
-      ]
-    },
     "LocalExplicitOrConditional_LocalTransformationConfig": {
       "anyOf": [
         {
@@ -7908,7 +7832,7 @@
       "type": "object",
       "properties": {
         "requestTimeout": {
-          "description": "Maximum time allowed for the full downstream request and response.",
+          "description": "Maximum time allowed from the start of downstream request processing until response headers\nare received. The response body is not included; use `responseIdleTimeout` to bound gaps\nbetween body frames.",
           "type": [
             "string",
             "null"
@@ -7916,6 +7840,13 @@
         },
         "backendRequestTimeout": {
           "description": "Maximum time allowed for the upstream backend request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseIdleTimeout": {
+          "description": "Maximum time the response body may go without producing data.\n\nThe window restarts on every body frame, so this bounds the gap between frames rather than\nthe total time a response may take. It is what terminates a backend that stops producing\ndata mid-stream without capping how long a legitimately long response may run.\n\nThis complements the other two rather than overlapping them: both `requestTimeout` and\n`backendRequestTimeout` stop applying once the response headers arrive, so neither places\nany bound on how long the response body may take, and neither can distinguish a stalled\nstream from a slow one.\n\nThe timeout is disabled when this field is unset or set to zero. It does not apply to\nresponses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never\nterminated by it.",
           "type": [
             "string",
             "null"
@@ -9815,6 +9746,18 @@
           ],
           "default": null
         },
+        "substrateEgress": {
+          "description": "Validate the originating actor before accepting a CONNECT tunnel.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubstrateEgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "proxy": {
           "description": "Enable downstream PROXY protocol handling on this gateway or port, including\nversion matching and whether PROXY headers are required or optional.",
           "anyOf": [
@@ -10128,6 +10071,81 @@
       "description": "CEL authorization rules for downstream network connections.",
       "$ref": "#/$defs/RuleSet"
     },
+    "SubstrateEgress": {
+      "description": "Validates an actor's identity before accepting a CONNECT tunnel.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
     "Proxy": {
       "type": "object",
       "properties": {
@@ -10212,6 +10230,17 @@
     "LoggingPolicy": {
       "type": "object",
       "properties": {
+        "preset": {
+          "description": "Selects the built-in fields for stdout access logs.\nIf unset, human-oriented legacy fields are used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccessLogPreset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "filter": {
           "description": "CEL expression that decides whether a request is logged.",
           "anyOf": [
@@ -10262,6 +10291,15 @@
         }
       },
       "additionalProperties": false
+    },
+    "AccessLogPreset": {
+      "oneOf": [
+        {
+          "description": "Use the OTel-aligned built-in HTTP field set for stdout access logs.",
+          "type": "string",
+          "const": "otel"
+        }
+      ]
     },
     "OtlpLoggingConfig": {
       "type": "object",
@@ -10480,7 +10518,19 @@
           "default": null
         },
         "clientSampling": {
-          "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy.",
+          "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy. Only applies to requests arriving with a sampled\n`traceparent` (`-01`); use `parentNotSampled` for requests whose trace is not sampled.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StringBoolFloat"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parentNotSampled": {
+          "description": "Whether to trace a request that arrives with a `traceparent` whose sampled flag is unset\n(`-00`), meaning the client asked for it not to be traced. When this is `true` the request\nis traced anyway, and `-01` is sent upstream so downstream services trace it too. If\nunspecified, the client's choice is honored and the request is not traced.\n\nOnly one of `randomSampling`, `clientSampling` and `parentNotSampled` applies to any given\nrequest; the incoming `traceparent` decides which.",
           "anyOf": [
             {
               "$ref": "#/$defs/StringBoolFloat"
@@ -12396,6 +12446,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/RemoteRateLimit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timeout": {
+          "description": "Set request timeout limits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeoutPolicy"
             },
             {
               "type": "null"

@@ -55,8 +55,23 @@ func sampleAPI() map[string]modelsDevProvider {
 			},
 		}},
 		"anthropic": {ID: "anthropic", Models: map[string]modelsDevModel{
+			"claude-opus-4-7": {
+				Family:           "claude-opus",
+				Cost:             &modelsDevCost{Input: "5", Output: "25"},
+				ReasoningOptions: []modelsDevReasoningOption{{Type: "effort"}},
+			},
+			"claude-opus-4-6": {
+				Family: "claude-opus",
+				Cost:   &modelsDevCost{Input: "5", Output: "25"},
+				ReasoningOptions: []modelsDevReasoningOption{
+					{Type: "effort"},
+					{Type: "budget_tokens"},
+				},
+			},
 			"claude-sonnet-4-5": {
-				Cost: &modelsDevCost{Input: "3", Output: "15", CacheRead: "0.3", CacheWrite: "3.75"},
+				Family:           "claude-sonnet",
+				Cost:             &modelsDevCost{Input: "3", Output: "15", CacheRead: "0.3", CacheWrite: "3.75"},
+				ReasoningOptions: []modelsDevReasoningOption{{Type: "budget_tokens"}},
 			},
 		}},
 		"google": {ID: "google", Models: map[string]modelsDevModel{

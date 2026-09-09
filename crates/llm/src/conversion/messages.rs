@@ -698,24 +698,32 @@ pub mod from_completions {
 	}
 
 	/// translate an OpenAI completions request to an anthropic messages request
-	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {
-		translate_with_prompt_caching(req, None)
+	pub fn translate(
+		req: &types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		translate_with_prompt_caching(req, None, catalog)
 	}
 
 	pub fn translate_with_prompt_caching(
 		req: &types::completions::Request,
 		prompt_caching: Option<&PromptCachingConfig>,
+		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
 		let model_id = typed.model.clone().unwrap_or_default();
-		let mut xlated = translate_internal(typed, model_id);
+		let mut xlated = translate_internal(typed, model_id, catalog);
 		if let Some(caching) = prompt_caching {
 			super::apply_prompt_caching_typed(&mut xlated, caching);
 		}
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
-	fn translate_internal(req: completions::Request, model_id: String) -> messages::Request {
+	fn translate_internal(
+		req: completions::Request,
+		model_id: String,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> messages::Request {
 		let max_tokens = req.max_tokens();
 		let stop_sequences = req.stop_sequence();
 		let mut system_blocks = Vec::new();
@@ -888,17 +896,37 @@ pub mod from_completions {
 			},
 			_ => None,
 		};
-		let thinking = req
-			.vendor_extensions
-			.thinking_budget_tokens
-			.or_else(|| {
-				req
-					.reasoning_effort
-					.as_ref()
-					.and_then(crate::types::thinking_budget_for_reasoning_effort)
-			})
-			.and_then(|budget_tokens| super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens))
-			.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens });
+		let capabilities = crate::model_catalog::anthropic_thinking_capabilities(&model_id, catalog);
+		let explicit_budget = req.vendor_extensions.thinking_budget_tokens;
+		let effort = req
+			.reasoning_effort
+			.as_ref()
+			.and_then(crate::types::anthropic_effort_for_reasoning_effort);
+		let (thinking, effort) = if let Some(budget_tokens) = explicit_budget
+			&& capabilities.legacy
+		{
+			(
+				super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens)
+					.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens }),
+				None,
+			)
+		} else if (explicit_budget.is_some() || effort.is_some()) && capabilities.adaptive {
+			(
+				Some(messages::ThinkingInput::Adaptive {}),
+				Some(effort.unwrap_or(messages::ThinkingEffort::High)),
+			)
+		} else {
+			let budget_tokens =
+				explicit_budget.or_else(|| effort.map(crate::types::thinking_budget_for_anthropic_effort));
+			(
+				budget_tokens
+					.and_then(|budget_tokens| {
+						super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens)
+					})
+					.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens }),
+				None,
+			)
+		};
 
 		let response_format = match req.response_format {
 			Some(completions::ResponseFormat::JsonSchema { json_schema }) => {
@@ -914,9 +942,9 @@ pub mod from_completions {
 			}),
 			Some(completions::ResponseFormat::Text) | None => None,
 		};
-		let output_config = if response_format.is_some() {
+		let output_config = if response_format.is_some() || effort.is_some() {
 			Some(messages::OutputConfig {
-				effort: None,
+				effort,
 				format: response_format,
 			})
 		} else {
@@ -1017,6 +1045,7 @@ pub mod from_completions {
 		let finish_reason = resp.stop_reason.as_ref().map(super::translate_stop_reason);
 		// Only one choice for anthropic
 		let choice = completions::ChatChoice {
+			rest: Default::default(),
 			index: 0,
 			message,
 			finish_reason,
@@ -1179,6 +1208,7 @@ pub mod from_completions {
 						);
 
 						let choice = completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta: completions::StreamResponseDelta {
@@ -1244,6 +1274,7 @@ pub mod from_completions {
 					};
 					if emit_chunk {
 						let choice = completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta: dr,
@@ -1285,6 +1316,7 @@ pub mod from_completions {
 					});
 					let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
 						vec![completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta: completions::StreamResponseDelta::default(),
@@ -1325,6 +1357,7 @@ pub mod from_completions {
 							// If no arguments were emitted for a tool call, send a synthetic `{}`
 							// for compatibility.
 							let choice = completions::ChatChoiceStream {
+								rest: Default::default(),
 								index: 0,
 								logprobs: None,
 								delta: completions::StreamResponseDelta {

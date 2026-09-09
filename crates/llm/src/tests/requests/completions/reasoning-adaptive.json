@@ -1,0 +1,10 @@
+{
+  "model": "custom-adaptive-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Think carefully."
+    }
+  ],
+  "reasoning_effort": "high"
+}

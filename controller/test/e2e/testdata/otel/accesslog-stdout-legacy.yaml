@@ -1,0 +1,12 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw-accesslog-stdout-legacy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: gateway
+      group: gateway.networking.k8s.io
+  frontend:
+    accessLog: {}

@@ -14,6 +14,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     another-label: "true"
     extra-label-key: extra-label-value
+
 ---
 # Source: agentgateway/templates/service.yaml
 apiVersion: v1

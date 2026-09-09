@@ -12,6 +12,7 @@ metadata:
     app.kubernetes.io/instance: test-release
     app.kubernetes.io/version: "0.0.0-dev"
     app.kubernetes.io/managed-by: Helm
+
 ---
 # Source: agentgateway/templates/role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -140,6 +141,7 @@ rules:
 - apiGroups: [autoscaling]
   resources: [horizontalpodautoscalers]
   verbs: [get, list, watch]
+
 ---
 # Source: agentgateway/templates/role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -171,6 +173,7 @@ rules:
 - apiGroups: [""]
   resources: [events]
   verbs: [create, patch]
+
 ---
 # Source: agentgateway/templates/serviceaccount.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -185,6 +188,7 @@ roleRef:
   kind: ClusterRole
   name: agentgateway-default
   apiGroup: rbac.authorization.k8s.io
+
 ---
 # Source: agentgateway/templates/serviceaccount.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -236,6 +240,7 @@ roleRef:
   kind: Role
   name: agentgateway-default-local
   apiGroup: rbac.authorization.k8s.io
+
 ---
 # Source: agentgateway/templates/service.yaml
 apiVersion: v1
