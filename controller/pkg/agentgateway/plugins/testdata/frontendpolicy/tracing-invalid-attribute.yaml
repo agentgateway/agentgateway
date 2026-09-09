@@ -77,9 +77,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: frontend tracing attribute "trace.id" is not a valid CEL expression:
-          foolen_{{request.id}}'
+        message: 'Policy is attached; part of its configuration was rejected: frontend
+          tracing attribute "trace.id" is not a valid CEL expression: foolen_{{request.id}}'
         reason: Attached
         status: "True"
         type: Attached

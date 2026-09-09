@@ -197,9 +197,9 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached with invalid configuration: failed to build extAuth:
-          backendRef backend-ns/denied-backend not accessible to an AgentgatewayPolicy
-          in namespace "default" (missing a ReferenceGrant?)'
+        message: 'Policy is attached; part of its configuration was rejected: failed
+          to build extAuth: backendRef backend-ns/denied-backend not accessible to
+          an AgentgatewayPolicy in namespace "default" (missing a ReferenceGrant?)'
         reason: Attached
         status: "True"
         type: Attached

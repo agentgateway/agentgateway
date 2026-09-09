@@ -81,9 +81,8 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: 'Policy is attached; requests that rely on invalid configuration
-          are rejected: mcpGuardrails metadata "tenant" is not a valid CEL expression:
-          foolen_{{jwt.sub}}'
+        message: 'Policy is attached; part of its configuration was rejected: mcpGuardrails
+          metadata "tenant" is not a valid CEL expression: foolen_{{jwt.sub}}'
         reason: Attached
         status: "True"
         type: Attached
