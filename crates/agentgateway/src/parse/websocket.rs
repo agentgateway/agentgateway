@@ -76,6 +76,7 @@ impl<IO> Parser<IO> {
 						output_messages: None,
 						first_token: None,
 						count_tokens: None,
+						pages: None,
 						reasoning_tokens: None,
 						cache_creation_input_tokens: None,
 						cached_input_tokens: usage
@@ -555,6 +556,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 												output_messages: None,
 												first_token: None,
 												count_tokens: None,
+												pages: None,
 												reasoning_tokens: None,
 												cache_creation_input_tokens: None,
 												cached_input_tokens: usage_clone

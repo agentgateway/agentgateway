@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::{apply, schema};
+use crate::{apply, schema, schema_enum};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -130,6 +130,9 @@ pub struct Rates {
 	/// Cost per 1M output audio tokens. Falls back to the output rate if unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub output_audio: Option<Money>,
+	/// Cost for a non-token billing unit, such as a page for document OCR models.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub per_unit: Option<UnitRate>,
 }
 
 impl Rates {
@@ -147,8 +150,26 @@ impl Rates {
 			reasoning: pick(&self.reasoning, &delta.reasoning),
 			input_audio: pick(&self.input_audio, &delta.input_audio),
 			output_audio: pick(&self.output_audio, &delta.output_audio),
+			per_unit: delta.per_unit.clone().or_else(|| self.per_unit.clone()),
 		}
 	}
+}
+
+/// Providers that do not bill by token report their own unit in the response
+#[apply(schema_enum!)]
+pub enum BillingUnit {
+	/// A page of a document, as reported by document/OCR models.
+	Page,
+}
+
+/// A price attached to the unit it applies to.
+#[apply(schema!)]
+#[derive(PartialEq, Eq)]
+pub struct UnitRate {
+	/// The unit this price applies to.
+	pub unit: BillingUnit,
+	/// Cost of a single unit.
+	pub price: Money,
 }
 
 #[apply(schema!)]
@@ -218,6 +239,7 @@ pub struct Usage {
 	pub reasoning: u64,
 	pub input_audio: u64,
 	pub output_audio: u64,
+	pub units: Option<UnitUsage>,
 }
 
 impl Usage {
@@ -230,6 +252,13 @@ impl Usage {
 	}
 }
 
+/// A provider-reported count of a non-token billing unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct UnitUsage {
+	pub unit: BillingUnit,
+	pub count: u64,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Breakdown {
 	pub input: Decimal,
@@ -239,6 +268,7 @@ pub struct Breakdown {
 	pub reasoning: Decimal,
 	pub input_audio: Decimal,
 	pub output_audio: Decimal,
+	pub units: Decimal,
 }
 
 impl Breakdown {
@@ -250,6 +280,7 @@ impl Breakdown {
 			+ self.reasoning
 			+ self.input_audio
 			+ self.output_audio
+			+ self.units
 	}
 }
 
@@ -269,6 +300,7 @@ impl Rates {
 			reasoning: line(usage.reasoning, reasoning_rate) / unit,
 			input_audio: line(usage.input_audio, input_audio_rate) / unit,
 			output_audio: line(usage.output_audio, output_audio_rate) / unit,
+			units: unit_line(usage.units.as_ref(), self.per_unit.as_ref()),
 		}
 	}
 }
@@ -303,6 +335,16 @@ fn line(tokens: u64, rate: Option<&Money>) -> Decimal {
 	match rate {
 		Some(Money(r)) => Decimal::from(tokens) * *r,
 		None => Decimal::ZERO,
+	}
+}
+
+/// Token rates are quoted per `TOKENS_PER_UNIT`
+fn unit_line(usage: Option<&UnitUsage>, rate: Option<&UnitRate>) -> Decimal {
+	match (usage, rate) {
+		(Some(usage), Some(rate)) if usage.unit == rate.unit => {
+			Decimal::from(usage.count) * rate.price.0
+		},
+		_ => Decimal::ZERO,
 	}
 }
 
@@ -497,6 +539,7 @@ mod tests {
 				reasoning: Some(m("15")),
 				input_audio: Some(m("40")),
 				output_audio: Some(m("80")),
+				per_unit: None,
 			},
 			vec![],
 		);
@@ -508,6 +551,7 @@ mod tests {
 			reasoning: 100,
 			input_audio: 50,
 			output_audio: 25,
+			units: None,
 		};
 		let b = e.breakdown(&u);
 		assert_eq!(b.input, d("0.003"));
@@ -682,5 +726,75 @@ mod tests {
 			..Default::default()
 		};
 		assert_eq!(e.price(&u), d("0.000024975"));
+	}
+
+	fn page_rate(price: &str) -> Rates {
+		Rates {
+			per_unit: Some(UnitRate {
+				unit: BillingUnit::Page,
+				price: m(price),
+			}),
+			..Default::default()
+		}
+	}
+
+	fn pages(count: u64) -> Usage {
+		Usage {
+			units: Some(UnitUsage {
+				unit: BillingUnit::Page,
+				count,
+			}),
+			..Default::default()
+		}
+	}
+
+	#[test]
+	fn unit_rate_is_priced_per_unit_not_per_million() {
+		let b = entry(page_rate("0.005"), vec![]).breakdown(&pages(4));
+		assert_eq!(b.units, d("0.02"), "a perUnit rate is not divided by 1M");
+		assert_eq!(b.total(), d("0.02"));
+	}
+
+	#[test]
+	fn unit_and_token_pricing_do_not_leak_into_each_other() {
+		// A token-priced model is unaffected by a unit count it has no rate for.
+		let b = entry(rates("3", "15"), vec![]).breakdown(&Usage {
+			input: 1000,
+			..pages(4)
+		});
+		assert_eq!(b.units, Decimal::ZERO, "no unit rate -> units not billed");
+		assert_eq!(b.total(), d("0.003"), "token cost unchanged by unit count");
+
+		// And a unit-priced model does not bill tokens.
+		let b = entry(page_rate("0.005"), vec![]).breakdown(&Usage {
+			input: 1000,
+			output: 500,
+			..Default::default()
+		});
+		assert_eq!(b.total(), Decimal::ZERO);
+	}
+
+	#[test]
+	fn unit_rate_round_trips_through_json() {
+		let json = r#"{"providers":{"mistral":{"models":{"ocr":{"rates":{"perUnit":{"unit":"page","price":"0.005"}}}}}}}"#;
+		let c = super::from_json(json).unwrap();
+		let model = &c.providers["mistral"].models["ocr"];
+		assert_eq!(
+			model.rates.per_unit,
+			Some(UnitRate {
+				unit: BillingUnit::Page,
+				price: m("0.005")
+			})
+		);
+		assert_eq!(serde_json::to_string(&c).unwrap(), json);
+	}
+
+	#[test]
+	fn tier_can_override_a_unit_rate() {
+		let overlaid = page_rate("0.005").overlay(&page_rate("0.004"));
+		assert_eq!(overlaid.per_unit.unwrap().price, m("0.004"));
+		// An overlay that sets no unit rate keeps the base one.
+		let kept = page_rate("0.005").overlay(&rates("3", "15"));
+		assert_eq!(kept.per_unit.unwrap().price, m("0.005"));
 	}
 }
