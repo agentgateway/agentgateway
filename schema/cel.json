@@ -693,6 +693,10 @@
             "outputAudio": {
               "type": "number",
               "format": "double"
+            },
+            "units": {
+              "type": "number",
+              "format": "double"
             }
           },
           "additionalProperties": false,
@@ -704,7 +708,8 @@
             "cacheWrite",
             "reasoning",
             "inputAudio",
-            "outputAudio"
+            "outputAudio",
+            "units"
           ]
         },
         "costRates": {
@@ -757,6 +762,13 @@
               "format": "double"
             },
             "outputAudio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "perUnit": {
               "type": [
                 "number",
                 "null"
