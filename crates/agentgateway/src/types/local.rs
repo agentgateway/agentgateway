@@ -1115,11 +1115,15 @@ struct LocalGateway {
 	/// port is the port to listen on for this gateway.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
+	/// bindAddress is the IPv4 or IPv6 address to listen on. Use `127.0.0.1` or `::1` for loopback.
+	/// When omitted, listens on all interfaces (`::` on Unix with IPv6 enabled, otherwise `0.0.0.0`).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	bind_address: Option<IpAddr>,
 	/// protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways
 	/// default to HTTP, or HTTPS when tls is set.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	protocol: Option<LocalGatewayProtocol>,
-	/// listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.
+	/// listeners defines multiple named listeners under this gateway. When set, only `port` and `bindAddress` may be configured on the top level gateway.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	listeners: Vec<LocalGatewayListener>,
 
@@ -3650,15 +3654,16 @@ async fn convert_gateways(
 			}
 			refs.insert(gateway_name, listener_keys);
 		}
-		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+		let default_address = if cfg!(target_family = "unix") && config.ipv6_enabled {
+			IpAddr::V6(Ipv6Addr::UNSPECIFIED)
 		} else {
-			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+			IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 		};
+		let address = gateway_config.bind_address.unwrap_or(default_address);
 		all_binds.push(BindSnapshot {
 			bind: Arc::new(Bind {
 				key: strng::format!("bind/{port}"),
-				address: sockaddr,
+				address: SocketAddr::new(address, port),
 				protocol: detect_bind_protocol(&listeners),
 				tunnel_protocol: TunnelProtocol::Direct,
 				mode: BindMode::Standard,

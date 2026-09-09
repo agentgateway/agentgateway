@@ -8,6 +8,31 @@ The `default` gateway listens on port 3000. Because the gateway is named
 `default`, the top-level `llm`, `mcp`, and `ui` sections attach to it without
 setting explicit `gateways` fields.
 
+### Choosing a listen address
+
+Set `bindAddress` on a gateway to choose its IPv4 or IPv6 listen address:
+
+```yaml
+gateways:
+  default:
+    port: 3000
+    bindAddress: 127.0.0.1
+  shared:
+    port: 4000
+    bindAddress: 0.0.0.0
+```
+
+Here, the `default` gateway accepts connections only through IPv4 loopback.
+In a Kubernetes pod without `hostNetwork`, all containers in that pod can
+connect to it, but other pods cannot connect directly. Use `::1` for IPv6 loopback.
+The `shared` gateway listens on all IPv4 interfaces; attach routes to it using
+`gateways: shared`.
+
+When `bindAddress` is omitted, the existing default remains: `::` on Unix with
+IPv6 enabled, otherwise `0.0.0.0`. All named listeners within a gateway share
+its address and port. Gateways must still use different ports, even when their
+addresses differ.
+
 ### Running the example
 
 Set the provider API key:

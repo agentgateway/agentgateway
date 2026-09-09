@@ -11042,6 +11042,14 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "bindAddress": {
+          "description": "bindAddress is the IPv4 or IPv6 address to listen on. Use `127.0.0.1` or `::1` for loopback.\nWhen omitted, listens on all interfaces (`::` on Unix with IPv6 enabled, otherwise `0.0.0.0`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "ip"
+        },
         "protocol": {
           "description": "protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways\ndefault to HTTP, or HTTPS when tls is set.",
           "anyOf": [
@@ -11054,7 +11062,7 @@
           ]
         },
         "listeners": {
-          "description": "listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.",
+          "description": "listeners defines multiple named listeners under this gateway. When set, only `port` and `bindAddress` may be configured on the top level gateway.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalGatewayListener"

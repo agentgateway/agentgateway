@@ -1218,6 +1218,86 @@ mcp:
 	);
 }
 
+#[rstest::rstest]
+#[case::default_ipv4(None, false, "0.0.0.0:3000")]
+#[case::default_ipv6(None, true, "[::]:3000")]
+#[case::loopback_ipv4(Some("127.0.0.1"), false, "127.0.0.1:3000")]
+#[case::loopback_ipv6(Some("::1"), true, "[::1]:3000")]
+#[tokio::test]
+async fn test_gateway_bind_address(
+	#[case] address: Option<&str>,
+	#[case] ipv6_enabled: bool,
+	#[case] expected: &str,
+) {
+	let mut config = test_config();
+	config.ipv6_enabled = ipv6_enabled;
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
+	let bind_address = address
+		.map(|address| format!("    bindAddress: '{address}'\n"))
+		.unwrap_or_default();
+	let yaml = format!("gateways:\n  private:\n    port: 3000\n{bind_address}");
+	let normalized = NormalizedLocalConfig::from(
+		&config,
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml,
+	)
+	.await
+	.expect("gateway bind address should normalize");
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].address, expected.parse().unwrap());
+}
+
+#[tokio::test]
+async fn test_gateway_bind_address_is_per_gateway() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  private:
+    port: 3000
+    bindAddress: 127.0.0.1
+  shared:
+    port: 4000
+    bindAddress: 0.0.0.0
+    listeners:
+    - name: first
+      hostname: first.example.com
+    - name: second
+      hostname: second.example.com
+"#,
+	)
+	.await
+	.expect("gateways with different bind addresses should normalize");
+	assert_eq!(normalized.binds.len(), 2);
+	let private = normalized
+		.binds
+		.iter()
+		.find(|b| b.address.port() == 3000)
+		.unwrap();
+	let shared = normalized
+		.binds
+		.iter()
+		.find(|b| b.address.port() == 4000)
+		.unwrap();
+	assert_eq!(private.address, "127.0.0.1:3000".parse().unwrap());
+	assert_eq!(shared.address, "0.0.0.0:4000".parse().unwrap());
+	assert_eq!(shared.listeners.iter().count(), 2);
+}
+
+#[tokio::test]
+async fn test_gateway_bind_address_rejects_invalid_ip() {
+	let err =
+		normalize_test_yaml("gateways:\n  private:\n    port: 3000\n    bindAddress: localhost\n")
+			.await
+			.expect_err("bindAddress must be an IP address");
+	assert!(err.to_string().contains("IP address"), "{err:?}");
+}
+
 #[tokio::test]
 async fn test_gateways_attach_llm_mcp_and_ui_to_one_listener() {
 	let normalized = normalize_test_yaml(&format!(

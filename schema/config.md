@@ -50552,8 +50552,9 @@
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`gateways`|object|gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.<br>Each gateway defines a port that proxy will listen on, and optionally TLS settings for that port.|
 |`gateways.*.port`|integer|port is the port to listen on for this gateway.|
+|`gateways.*.bindAddress`|string|bindAddress is the IPv4 or IPv6 address to listen on. Use `127.0.0.1` or `::1` for loopback.<br>When omitted, listens on all interfaces (`::` on Unix with IPv6 enabled, otherwise `0.0.0.0`).|
 |`gateways.*.protocol`|enum|protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways<br>default to HTTP, or HTTPS when tls is set.<br>Possible values: `HTTP`, `HTTPS`, `TCP`, `TLS`, `null`.|
-|`gateways.*.listeners`|[]object|listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.|
+|`gateways.*.listeners`|[]object|listeners defines multiple named listeners under this gateway. When set, only `port` and `bindAddress` may be configured on the top level gateway.|
 |`gateways.*.listeners[].name`|string|name identifies this listener for gateway references like `gateways: gateway-name/listener-name`.|
 |`gateways.*.listeners[].hostname`|string|Hostname defines what hostnames are served under this listener. Can be a wildcard.<br>This allows serving multiple domains with different TLS configurations.<br>If unset, all domains will be served (implicit wildcard).|
 |`gateways.*.listeners[].protocol`|enum|protocol controls whether this listener accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, listeners<br>default to HTTP, or HTTPS when tls is set.<br>Possible values: `HTTP`, `HTTPS`, `TCP`, `TLS`, `null`.|
