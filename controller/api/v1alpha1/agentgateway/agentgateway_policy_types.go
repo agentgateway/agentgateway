@@ -534,7 +534,7 @@ const (
 )
 
 // LocalCACertificateRef references a same-namespace CA certificate source.
-// An omitted kind defaults to ConfigMap.
+// An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
 //
 // +structType=atomic
 type LocalCACertificateRef struct {
@@ -547,6 +547,15 @@ type LocalCACertificateRef struct {
 	// +kubebuilder:validation:Enum=ConfigMap;Secret
 	// +optional
 	Kind string `json:"kind,omitempty"`
+
+	// Key within the referenced source holding the PEM-encoded CA bundle.
+	// Omitted defaults to `ca.crt`.
+	// +kubebuilder:default="ca.crt"
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 // BackendTLSCertificateSource selects where the gateway's client identity and trust roots come
@@ -585,8 +594,9 @@ type BackendTLS struct {
 	// +optional
 	MtlsCertificateRef []LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
 	// CA certificate source to use to verify the server certificate. Omitted kind
-	// and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-	// key is required. If unset, the system's trusted certificates are used.
+	// and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+	// read from the `ca.crt` key unless `key` names a different one. If unset, the
+	// system's trusted certificates are used.
 	//
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1

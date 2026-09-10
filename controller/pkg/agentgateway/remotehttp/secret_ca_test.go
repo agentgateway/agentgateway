@@ -153,13 +153,13 @@ func TestResolveCAReferenceKindsAndErrors(t *testing.T) {
 			name:    "Secret missing ca.crt",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
 			source:  &corev1.Secret{Name: "ca", Namespace: namespace},
-			wantErr: "missing ca.crt",
+			wantErr: `missing key "ca.crt"`,
 		},
 		{
 			name:    "Secret with invalid PEM",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
 			source:  &corev1.Secret{Name: "ca", Namespace: namespace, Data: map[string][]byte{"ca.crt": []byte("invalid")}},
-			wantErr: "invalid ca.crt in Secret default/ca",
+			wantErr: `invalid CA certificate in Secret default/ca key "ca.crt"`,
 		},
 		{
 			name:    "Secret does not fall back to ConfigMap",
