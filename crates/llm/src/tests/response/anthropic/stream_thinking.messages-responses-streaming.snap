@@ -1,0 +1,54 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_thinking.json
+---
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"created_at":123,"id":"resp_msg_018XasA6jgabsibaUtstx4bg","model":"claude-opus-4-6","object":"response","output":[],"service_tier":"default","status":"in_progress"}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":1,"response":{"created_at":123,"id":"resp_msg_018XasA6jgabsibaUtstx4bg","model":"claude-opus-4-6","object":"response","output":[],"service_tier":"default","status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","role":"assistant","status":"in_progress"}}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","sequence_number":3,"item_id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","output_index":0,"content_index":0,"delta":"I don't have access to real"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","output_index":0,"content_index":0,"delta":"\" in your browser\n\nIs there something"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":6,"item_id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","output_index":0,"content_index":0,"delta":" specific about San Francisco's climate patterns"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":7,"item_id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","output_index":0,"content_index":0,"delta":" you'd like to know more about?"}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","sequence_number":8,"item_id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","output_index":0,"content_index":0,"text":"I don't have access to real\" in your browser\n\nIs there something specific about San Francisco's climate patterns you'd like to know more about?","logprobs":null}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","sequence_number":9,"item_id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"I don't have access to real\" in your browser\n\nIs there something specific about San Francisco's climate patterns you'd like to know more about?"}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":10,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"I don't have access to real\" in your browser\n\nIs there something specific about San Francisco's climate patterns you'd like to know more about?"}],"id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","role":"assistant","phase":"final_answer","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":11,"response":{"created_at":123,"id":"resp_msg_018XasA6jgabsibaUtstx4bg","model":"claude-opus-4-6","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"I don't have access to real\" in your browser\n\nIs there something specific about San Francisco's climate patterns you'd like to know more about?"}],"id":"msg_msg_018XasA6jgabsibaUtstx4bg_1","role":"assistant","phase":"final_answer","status":"completed"}],"service_tier":"default","status":"completed","usage":{"input_tokens":47,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"output_tokens":264,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":311}}}
+
+
+
+{
+  "input_tokens": 47,
+  "output_tokens": 264,
+  "total_tokens": 311,
+  "cache_creation_input_tokens": 0,
+  "cached_input_tokens": 0,
+  "service_tier": "standard",
+  "provider_model": "claude-opus-4-6",
+  "completion": [
+    "I don't have access to real\" in your browser\n\nIs there something specific about San Francisco's climate patterns you'd like to know more about?"
+  ]
+}

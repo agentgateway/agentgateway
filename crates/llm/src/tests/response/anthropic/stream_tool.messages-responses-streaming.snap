@@ -1,0 +1,56 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_tool.json
+---
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"created_at":123,"id":"resp_msg_tool","model":"claude-haiku-4-5-20251001","object":"response","output":[],"status":"in_progress"}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":1,"response":{"created_at":123,"id":"resp_msg_tool","model":"claude-haiku-4-5-20251001","object":"response","output":[],"status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"function_call","arguments":"","call_id":"toolu_01A","name":"get_weather","id":"fc_msg_tool_0","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":3,"item_id":"fc_msg_tool_0","output_index":0,"delta":"{\"location\":"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":4,"item_id":"fc_msg_tool_0","output_index":0,"delta":"\"San Francisco\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","name":"get_weather","sequence_number":5,"item_id":"fc_msg_tool_0","output_index":0,"arguments":"{\"location\":\"San Francisco\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":6,"output_index":0,"item":{"type":"function_call","arguments":"{\"location\":\"San Francisco\"}","call_id":"toolu_01A","name":"get_weather","id":"fc_msg_tool_0","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":7,"response":{"created_at":123,"id":"resp_msg_tool","model":"claude-haiku-4-5-20251001","object":"response","output":[{"type":"function_call","arguments":"{\"location\":\"San Francisco\"}","call_id":"toolu_01A","name":"get_weather","id":"fc_msg_tool_0","status":"completed"}],"status":"completed","usage":{"input_tokens":15,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":12,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27}}}
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 12,
+  "total_tokens": 27,
+  "cached_input_tokens": 0,
+  "provider_model": "claude-haiku-4-5-20251001",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "toolu_01A",
+          "name": "get_weather",
+          "arguments": {
+            "location": "San Francisco"
+          }
+        }
+      ],
+      "finish_reason": "completed"
+    }
+  ]
+}

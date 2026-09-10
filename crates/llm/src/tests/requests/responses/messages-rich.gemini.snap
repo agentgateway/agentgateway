@@ -1,0 +1,236 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/messages-rich.json
+info:
+  model: claude-sonnet-4-5
+  store: false
+  instructions: Return one inventory decision as JSON.
+  input:
+    - role: system
+      content: Use the warehouse policy dated 2026-07-15.
+    - role: developer
+      content:
+        - type: input_text
+          text: Keep item IDs unchanged.
+    - role: user
+      content:
+        - type: input_text
+          text: Check item A-17 against these records.
+        - type: input_image
+          image_url: "data:image/png;base64,aQ=="
+        - type: input_file
+          file_data: "data:application/pdf;base64,JVBERi0xLjQK"
+          filename: policy.pdf
+        - type: input_file
+          file_data: "data:text/plain;base64,c2hlbGYgQjEy"
+          filename: location.txt
+    - role: assistant
+      content: I will check the live record.
+    - type: function_call
+      id: fc_weather
+      call_id: call_weather
+      name: weather
+      arguments: "{\"city\":\"Seattle\"}"
+      status: completed
+    - type: function_call_output
+      call_id: call_weather
+      output:
+        - type: input_text
+          text: "Rain, 12 C"
+        - type: input_image
+          image_url: "data:image/png;base64,aQ=="
+      status: completed
+  max_output_tokens: 512
+  parallel_tool_calls: true
+  text:
+    verbosity: high
+    format:
+      type: json_schema
+      name: inventory_decision
+      strict: true
+      schema:
+        type: object
+        properties:
+          item_id:
+            type: string
+          available:
+            type: boolean
+        required:
+          - item_id
+          - available
+        additionalProperties: false
+  tools:
+    - type: function
+      name: weather
+      description: Read current weather for a city.
+      parameters:
+        type: object
+        properties:
+          city:
+            type: string
+        required:
+          - city
+      strict: false
+    - type: function
+      name: inventory
+      description: Read an inventory record.
+      parameters:
+        type: object
+        properties:
+          item_id:
+            type: string
+        required:
+          - item_id
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "developer",
+        "content": "Return one inventory decision as JSON."
+      },
+      {
+        "role": "developer",
+        "content": "Use the warehouse policy dated 2026-07-15."
+      },
+      {
+        "role": "developer",
+        "content": [
+          {
+            "type": "text",
+            "text": "Keep item IDs unchanged."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Check item A-17 against these records."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": "I will check the live record."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "id": "call_weather",
+            "function": {
+              "name": "weather",
+              "arguments": "{\"city\":\"Seattle\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "Rain, 12 C",
+        "tool_call_id": "call_weather"
+      }
+    ],
+    "model": "claude-sonnet-4-5",
+    "max_completion_tokens": 512,
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "inventory_decision",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "item_id": {
+              "type": "string"
+            },
+            "available": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "item_id",
+            "available"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    },
+    "stream": false,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "description": "Read current weather for a city.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "inventory",
+          "description": "Read an inventory record.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ]
+          }
+        }
+      }
+    ],
+    "parallel_tool_calls": true
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-5",
+    "provider": "gemini",
+    "streaming": false,
+    "params": {
+      "max_tokens": 512
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "Return one inventory decision as JSON."
+      },
+      {
+        "role": "system",
+        "content": "Use the warehouse policy dated 2026-07-15."
+      },
+      {
+        "role": "developer",
+        "content": "Keep item IDs unchanged."
+      },
+      {
+        "role": "user",
+        "content": "Check item A-17 against these records."
+      },
+      {
+        "role": "assistant",
+        "content": "I will check the live record."
+      }
+    ]
+  }
+}

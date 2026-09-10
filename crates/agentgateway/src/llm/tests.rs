@@ -459,6 +459,374 @@ fn fixture_path(relative_path: &str) -> PathBuf {
 }
 
 #[test]
+fn copilot_claude_formats_prefer_messages() {
+	for model in ["claude-sonnet-4", "Claude-Sonnet-4"] {
+		assert_eq!(
+			copilot::Provider::supported_formats_for_model(Some(model), None),
+			vec![ChatFormat::AnthropicMessages],
+			"{model}"
+		);
+	}
+}
+
+#[test]
+fn copilot_non_claude_formats_are_unchanged() {
+	for (model, expected) in [
+		("gpt-4o", &[ChatFormat::OpenAICompletions][..]),
+		(
+			"gpt-5.4",
+			&[ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses][..],
+		),
+		("gpt-5", &[ChatFormat::OpenAIResponses][..]),
+		("gemini-2.5-pro", &[ChatFormat::OpenAICompletions][..]),
+		("mai-ds-r1", &[ChatFormat::OpenAIResponses][..]),
+		("unknown-model", &[ChatFormat::OpenAICompletions][..]),
+		("GPT-5", &[ChatFormat::OpenAIResponses][..]),
+	] {
+		assert_eq!(
+			copilot::Provider::supported_formats_for_model(Some(model), None).as_slice(),
+			expected,
+			"{model}"
+		);
+	}
+}
+
+#[test]
+fn copilot_claude_surface_routes_stay_native() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let model = Some("Claude-Sonnet-4");
+
+	for input in [
+		InputFormat::Messages,
+		InputFormat::Responses,
+		InputFormat::Completions,
+	] {
+		assert_eq!(
+			provider
+				.chat_translation(input, model, None)
+				.unwrap()
+				.output,
+			ChatFormat::AnthropicMessages,
+			"{input:?}"
+		);
+	}
+}
+
+#[test]
+fn responses_to_messages_routing_follows_messages_capability() {
+	let providers = [
+		(
+			"Copilot",
+			AIProvider::Copilot(copilot::Provider { model: None }),
+			"claude-sonnet-4-5",
+		),
+		(
+			"Anthropic",
+			AIProvider::Anthropic(anthropic::Provider { model: None }),
+			"claude-sonnet-4-5",
+		),
+		(
+			"Azure Foundry",
+			AIProvider::azure(azure::Provider {
+				model: None,
+				resource_name: strng::new("example"),
+				resource_type: azure::AzureResourceType::Foundry,
+				api_version: None,
+				project_name: Some(strng::new("project")),
+			}),
+			"claude-sonnet-4-5",
+		),
+		(
+			"Vertex",
+			vertex_provider("anthropic/claude-sonnet-4-5"),
+			"anthropic/claude-sonnet-4-5",
+		),
+		(
+			"custom Messages",
+			custom_provider(custom::ProviderFormat::Messages),
+			"claude-sonnet-4-5",
+		),
+	];
+
+	for (name, provider, model) in providers {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Responses, Some(model), None)
+				.expect("Responses-to-Messages routing should be available")
+				.output,
+			ChatFormat::AnthropicMessages,
+			"{name} did not select Responses-to-Messages routing"
+		);
+	}
+}
+
+#[test]
+fn responses_routing_preserves_non_messages_formats() {
+	let providers = [
+		(
+			"OpenAI",
+			AIProvider::OpenAI(openai::Provider {
+				model: None,
+				moderation: None,
+			}),
+			"gpt-5",
+			ChatFormat::OpenAIResponses,
+		),
+		(
+			"custom Responses",
+			custom_provider(custom::ProviderFormat::Responses),
+			"custom-model",
+			ChatFormat::OpenAIResponses,
+		),
+		(
+			"Bedrock",
+			AIProvider::bedrock(bedrock::Provider {
+				model: None,
+				region: strng::new("us-west-2"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+			}),
+			"anthropic.claude-sonnet-4-5-v1:0",
+			ChatFormat::BedrockConverse,
+		),
+		(
+			"Vertex Gemini",
+			vertex_provider("gemini-2.0-flash"),
+			"gemini-2.0-flash",
+			ChatFormat::OpenAICompletions,
+		),
+	];
+
+	for (name, provider, model, expected) in providers {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Responses, Some(model), None)
+				.expect("Responses routing should remain available")
+				.output,
+			expected,
+			"{name} changed Responses routing"
+		);
+	}
+}
+
+#[test]
+fn responses_to_messages_buffered_requires_matching_provider_state() {
+	let translation = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::AnthropicMessages,
+	};
+	let upstream = Bytes::from_static(b"{}");
+	let wrong_state = ProviderState::VertexGemini;
+
+	for provider_state in [None, Some(&wrong_state)] {
+		let result = translation.render_response(
+			&upstream,
+			&ChatResponseContext {
+				model: "claude-sonnet-4-5",
+				buffer_limit: 1024 * 1024,
+				provider_state,
+			},
+		);
+		let Err(error) = result else {
+			panic!("missing or wrong conversion state must fail")
+		};
+
+		assert_eq!(
+			error.to_string(),
+			"unsupported conversion: missing Responses-to-Messages state"
+		);
+	}
+}
+
+#[tokio::test]
+async fn copilot_claude_responses_request_uses_messages_route() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.githubcopilot.com", 443)),
+		inputs,
+	};
+	for (has_host_override, expected_path) in [(false, "/v1/messages"), (true, "/v1/responses")] {
+		let req = ::http::Request::builder()
+			.uri("https://api.githubcopilot.com/v1/responses")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(
+				br#"{
+					"model":"Claude-Sonnet-4-5",
+					"input":"say hi",
+					"max_output_tokens":64,
+					"store":false,
+					"tools":[
+						{"type":"web_search","external_web_access":false},
+						{"type":"function","name":"get_weather","description":"Get weather","parameters":{"type":"object"}}
+					]
+				}"#
+					.to_vec(),
+			))
+			.expect("request");
+
+		let RequestResult::Success {
+			mut request,
+			llm_request,
+			upstream_route_type,
+		} = provider
+			.process_responses_request(&backend_info, None, req, false, &mut None, None)
+			.await
+			.expect("Copilot Claude Responses request should process")
+		else {
+			panic!("expected forwarded request");
+		};
+
+		assert_eq!(upstream_route_type, RouteType::Messages);
+		assert_eq!(llm_request.request_model, "Claude-Sonnet-4-5");
+		assert!(matches!(
+			llm_request.provider_state,
+			Some(ProviderState::ResponsesToMessages { .. })
+		));
+		provider
+			.setup_request(
+				&mut request,
+				upstream_route_type,
+				Some(&llm_request),
+				None,
+				None,
+				has_host_override,
+			)
+			.expect("Copilot request setup");
+		assert_eq!(request.uri().path(), expected_path);
+		assert_eq!(request.headers()["anthropic-version"], "2023-06-01");
+		let body = request.collect().await.unwrap().to_bytes();
+		let body: Value = serde_json::from_slice(&body).expect("forwarded request should be JSON");
+		let tools = body["tools"].as_array().expect("translated tools");
+		assert_eq!(tools.len(), 1);
+		assert_eq!(tools[0]["name"], "get_weather");
+	}
+}
+
+#[test]
+fn cache_only_web_search_policy_is_copilot_only() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let translation = provider
+		.chat_translation(InputFormat::Responses, Some("claude-sonnet-4-5"), None)
+		.expect("Responses-to-Messages translation");
+	let request = serde_json::from_value(json!({
+		"input": "say hi",
+		"tools": [{"type": "web_search", "external_web_access": false}]
+	}))
+	.expect("Responses request");
+
+	let Err(error) = translation.render_request(
+		types::ChatRequest::Responses(request),
+		&ChatRequestContext {
+			catalog: None,
+			provider: &provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+		},
+	) else {
+		panic!("non-Copilot provider must retain generic built-in handling");
+	};
+	assert_eq!(
+		error.to_string(),
+		"unsupported conversion: Responses built-in tools require a separate Anthropic Messages tool mapping"
+	);
+}
+
+#[tokio::test]
+async fn copilot_claude_error_responses_route_preserves_status_and_redacts_provider_data() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Responses;
+	req.request_model = "claude-sonnet-4-5".into();
+	req.provider_state = Some(ProviderState::ResponsesToMessages {
+		state: Arc::new(conversion::messages::from_responses::State::default()),
+	});
+	let marker = "SENSITIVE_SIGNATURE_REDACTED_DATA_AND_TOOL_ARGUMENTS";
+	let upstream = Bytes::from(format!(
+		r#"{{"type":"error","error":{{"type":"rate_limit_error","message":"{marker}"}}}}"#
+	));
+
+	let mut upstream_response = Response::new(Body::from(upstream));
+	*upstream_response.status_mut() = ::http::StatusCode::TOO_MANY_REQUESTS;
+	upstream_response.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"application/json".parse().expect("content type"),
+	);
+	let translated = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			LLMLogging::default(),
+			None,
+			upstream_response,
+		)
+		.await
+		.expect("Copilot Claude Responses error should translate");
+	assert_eq!(translated.status(), ::http::StatusCode::TOO_MANY_REQUESTS);
+	let translated = translated
+		.collect()
+		.await
+		.expect("translated body")
+		.to_bytes();
+	let body: Value = serde_json::from_slice(&translated).expect("Responses error JSON");
+	assert_eq!(body["error"]["type"], "rate_limit_error");
+	assert_eq!(
+		body["error"]["message"],
+		"Upstream Anthropic request failed with HTTP 429"
+	);
+	assert!(!String::from_utf8_lossy(&translated).contains(marker));
+}
+
+#[tokio::test]
+async fn copilot_claude_responses_stream_missing_or_wrong_state_returns_sanitized_error() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	for provider_state in [None, Some(ProviderState::VertexGemini)] {
+		let mut req = llm_request_with_tokens(None);
+		req.input_format = InputFormat::Responses;
+		req.request_model = "claude-sonnet-4-5".into();
+		req.provider_state = provider_state;
+		let marker = "SENSITIVE_UPSTREAM_STREAM_BODY";
+		let mut response = Response::new(Body::from(marker));
+		response.headers_mut().insert(
+			::http::header::CONTENT_TYPE,
+			"text/event-stream".parse().expect("content type"),
+		);
+
+		let result = provider.process_streaming(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			LLMLogging::default(),
+			None,
+			response,
+		);
+		let Err(error) = result else {
+			panic!("missing or wrong conversion state must fail")
+		};
+		let message = error.to_string();
+		assert_eq!(
+			message,
+			"unsupported conversion: missing Responses-to-Messages state"
+		);
+		assert!(!message.contains(marker));
+	}
+}
+
+#[test]
 fn response_prompt_guard_headers_copies_request_traceparent() {
 	let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 		.parse()
@@ -1366,6 +1734,7 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 	let buffered = BufferedResponse {
 		parts: ::http::Response::new(()).into_parts().0,
 		bytes: bytes::Bytes::from_static(body),
+		buffer_limit: 1024 * 1024,
 	};
 
 	let log = AsyncLog::<llm::LLMInfo>::default();
@@ -1405,6 +1774,7 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 	let buffered = BufferedResponse {
 		parts,
 		bytes: body.clone(),
+		buffer_limit: 1024 * 1024,
 	};
 
 	let resp = provider
@@ -2925,6 +3295,30 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 
 	assert_eq!(req.uri().path(), "/v1beta/openai/chat/completions");
 	assert_eq!(req.uri().query(), Some("key=abc&%24key=def"));
+}
+
+#[test]
+fn native_copilot_messages_host_override_no_prefix_preserves_client_path() {
+	// A native (unconverted) Copilot Messages request under a host override with no explicit
+	// pathPrefix must keep trusting the client's own path, same as every other non-Custom provider.
+	let llm_request = llm_request_for_path("gpt-4o");
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/tenant/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(req.uri().path(), "/tenant/v1/messages");
 }
 
 #[test]

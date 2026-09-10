@@ -287,6 +287,15 @@ pub struct Response {
 	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+	#[serde(skip)]
+	telemetry: Option<ResponseTelemetry>,
+}
+
+#[derive(Debug, Clone)]
+struct ResponseTelemetry {
+	input_tokens: u64,
+	output_tokens: u64,
+	service_tier: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -792,7 +801,7 @@ impl ResponseType for Response {
 			None
 		};
 
-		LLMResponse {
+		let mut response = LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -848,7 +857,14 @@ impl ResponseType for Response {
 			},
 			output_messages,
 			first_token: Default::default(),
+		};
+		if let Some(telemetry) = &self.telemetry {
+			response.input_tokens = Some(telemetry.input_tokens);
+			response.output_tokens = Some(telemetry.output_tokens);
+			response.total_tokens = telemetry.input_tokens.checked_add(telemetry.output_tokens);
+			response.service_tier = telemetry.service_tier.as_deref().map(strng::new);
 		}
+		response
 	}
 
 	fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice> {
@@ -936,22 +952,41 @@ impl ResponseType for Response {
 	}
 }
 
+impl Response {
+	pub(crate) fn set_provider_telemetry(
+		&mut self,
+		input_tokens: u64,
+		output_tokens: u64,
+		service_tier: Option<String>,
+	) {
+		self.telemetry = Some(ResponseTelemetry {
+			input_tokens,
+			output_tokens,
+			service_tier,
+		});
+	}
+}
+
 pub mod typed {
 	use async_openai::types::responses as openai_responses;
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
 		AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
-		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
-		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
-		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
-		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		Reasoning, ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
-		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
+		CustomToolParamFormat, EasyInputContent, EasyInputMessage, ErrorObject, FileInputDetail,
+		FunctionCallOutput, FunctionToolCall, ImageDetail, IncompleteDetails, InputContent,
+		InputFileContent, InputImageContent, InputItem, InputMessage, InputParam, InputRole,
+		InputTextContent, InputTokenDetails, Item, MessageItem, MessagePhase, OutputContent,
+		OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
+		OutputTokenDetails, PromptCacheRetention, Reasoning, ReasoningEffort, RefusalContent, Response,
+		ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
+		ResponseCreatedEvent, ResponseCustomToolCallInputDeltaEvent,
+		ResponseCustomToolCallInputDoneEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
 		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
 		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role,
+		ServiceTier, Status, TextResponseFormatConfiguration, Tool, ToolCallCaller, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam, Truncation,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -990,6 +1025,12 @@ pub mod typed {
 		/// Emitted when function-call arguments are finalized.
 		#[serde(rename = "response.function_call_arguments.done")]
 		ResponseFunctionCallArgumentsDone(openai_responses::ResponseFunctionCallArgumentsDoneEvent),
+		/// Emitted when custom tool input is streamed.
+		#[serde(rename = "response.custom_tool_call_input.delta")]
+		ResponseCustomToolCallInputDelta(openai_responses::ResponseCustomToolCallInputDeltaEvent),
+		/// Emitted when custom tool input is finalized.
+		#[serde(rename = "response.custom_tool_call_input.done")]
+		ResponseCustomToolCallInputDone(openai_responses::ResponseCustomToolCallInputDoneEvent),
 		/// Emitted when a content part is done.
 		#[serde(rename = "response.content_part.done")]
 		ResponseContentPartDone(openai_responses::ResponseContentPartDoneEvent),
@@ -1025,6 +1066,7 @@ mod tests {
 			service_tier: None,
 			usage: None,
 			rest: serde_json::Value::Null,
+			telemetry: None,
 		}
 	}
 

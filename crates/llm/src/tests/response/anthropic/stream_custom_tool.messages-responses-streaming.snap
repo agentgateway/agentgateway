@@ -1,0 +1,52 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_custom_tool.json
+---
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"created_at":123,"id":"resp_msg_custom_tool","model":"claude-sonnet-4-5","object":"response","output":[],"service_tier":"default","status":"in_progress"}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":1,"response":{"created_at":123,"id":"resp_msg_custom_tool","model":"claude-sonnet-4-5","object":"response","output":[],"service_tier":"default","status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"custom_tool_call","call_id":"toolu_python","input":"","name":"python","id":"ctc_msg_custom_tool_0"}}
+
+event: response.custom_tool_call_input.delta
+data: {"type":"response.custom_tool_call_input.delta","sequence_number":3,"output_index":0,"item_id":"ctc_msg_custom_tool_0","delta":"print(6 * 7)"}
+
+event: response.custom_tool_call_input.done
+data: {"type":"response.custom_tool_call_input.done","sequence_number":4,"output_index":0,"item_id":"ctc_msg_custom_tool_0","input":"print(6 * 7)"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"custom_tool_call","call_id":"toolu_python","input":"print(6 * 7)","name":"python","id":"ctc_msg_custom_tool_0"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":6,"response":{"created_at":123,"id":"resp_msg_custom_tool","model":"claude-sonnet-4-5","object":"response","output":[{"type":"custom_tool_call","call_id":"toolu_python","input":"print(6 * 7)","name":"python","id":"ctc_msg_custom_tool_0"}],"service_tier":"default","status":"completed","usage":{"input_tokens":20,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":12,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":32}}}
+
+
+
+{
+  "input_tokens": 20,
+  "output_tokens": 12,
+  "total_tokens": 32,
+  "cached_input_tokens": 0,
+  "service_tier": "standard",
+  "provider_model": "claude-sonnet-4-5",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "toolu_python",
+          "name": "python",
+          "arguments": "print(6 * 7)"
+        }
+      ],
+      "finish_reason": "completed"
+    }
+  ]
+}
