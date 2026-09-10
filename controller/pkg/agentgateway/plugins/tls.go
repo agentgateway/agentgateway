@@ -15,12 +15,6 @@ var (
 	InvalidTlsSecretError = func(n, ns string, err error) error {
 		return fmt.Errorf("%w %s/%s: %v", ErrInvalidTlsSecret, ns, n, err)
 	}
-
-	ErrMissingCACertKey = errors.New("ca.crt key missing")
-
-	ErrInvalidCACertificate = func(n, ns string, err error) error {
-		return fmt.Errorf("invalid ca.crt in ConfigMap %s/%s: %v", ns, n, err)
-	}
 )
 
 func ValidateTlsSecretData(n, ns string, sslSecretData map[string][]byte) (cleanedCertChain string, err error) {
@@ -60,34 +54,4 @@ func cleanedSslKeyPair(certChain, privateKey, rootCa string) (cleanedChain strin
 	cleanedChain = string(cleanedChainBytes)
 
 	return cleanedChain, err
-}
-
-// GetCACertFromConfigMap validates and extracts the ca.crt string from a ConfigMap
-func GetCACertFromConfigMap(cm *corev1.ConfigMap) (string, error) {
-	caCrt, ok := cm.Data["ca.crt"]
-	if !ok {
-		return "", ErrMissingCACertKey
-	}
-	return getCACertFromBytes([]byte(caCrt), cm.Name, cm.Namespace)
-}
-
-// getCACertFromBytes validates and extracts the ca.crt string from certificate bytes
-func getCACertFromBytes(caCrtBytes []byte, name, namespace string) (string, error) {
-	if len(caCrtBytes) == 0 {
-		return "", ErrMissingCACertKey
-	}
-
-	// Validate CA certificate by trying to parse it
-	candidateCert, err := cert.ParseCertsPEM(caCrtBytes)
-	if err != nil {
-		return "", ErrInvalidCACertificate(name, namespace, err)
-	}
-
-	// Clean and encode the certificate to ensure proper formatting
-	cleanedChainBytes, err := cert.EncodeCertificates(candidateCert...)
-	if err != nil {
-		return "", ErrInvalidCACertificate(name, namespace, err)
-	}
-
-	return string(cleanedChainBytes), nil
 }

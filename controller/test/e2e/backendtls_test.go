@@ -54,6 +54,43 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 	})
 }
 
+// TestBackendTLSPolicySecretCA covers the implementation-specific `kind: Secret` CA reference.
+// Upstream grants Core support only to ConfigMap, but explicitly permits other kinds.
+func TestBackendTLSPolicySecretCA(tt *testing.T) {
+	t := New(tt, base.WithMinGwApiVersion(base.GwApiRequireBackendTLSPolicy))
+	t.Apply(
+		manifest("backendtls", "secret.yaml"),
+		manifest("backendtls", "secret-base.yaml"),
+	)
+
+	backendTLSPolicy := &gwv1.BackendTLSPolicy{
+		Name:      "tls-policy-secret",
+		Namespace: base.Namespace,
+	}
+	err := t.TestInstallation.ClusterContext.ControllerClient.Get(t.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
+	assert.NoError(t, err)
+
+	t.Send("secret.example.com", base.ExpectOK())
+
+	assertBackendTLSPolicyStatus(t, backendTLSPolicy, metav1.Condition{
+		Type:               agentgateway.PolicyConditionAccepted,
+		Status:             metav1.ConditionTrue,
+		Reason:             string(gwv1.PolicyReasonAccepted),
+		ObservedGeneration: backendTLSPolicy.Generation,
+	})
+
+	// Deleting the Secret must invalidate the policy, proving the controller watches Secrets the
+	// same way it watches ConfigMaps.
+	t.Delete(manifest("backendtls", "secret.yaml"))
+
+	assertBackendTLSPolicyStatus(t, backendTLSPolicy, metav1.Condition{
+		Type:               string(gwv1.PolicyConditionAccepted),
+		Status:             metav1.ConditionFalse,
+		Reason:             string(gwv1.BackendTLSPolicyReasonNoValidCACertificate),
+		ObservedGeneration: backendTLSPolicy.Generation,
+	})
+}
+
 func assertBackendTLSPolicyStatus(t base.Test, policy *gwv1.BackendTLSPolicy, inCondition metav1.Condition) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {

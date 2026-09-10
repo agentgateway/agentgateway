@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/cacert"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
@@ -91,7 +93,7 @@ func translatePoliciesForBackendTLS(
 		},
 	}
 
-	caCert, err := getBackendTLSCACert(krtctx, cfgmaps, btls, conds)
+	caCert, err := getBackendTLSCACert(krtctx, cfgmaps, secrets, btls, conds)
 	if err != nil {
 		conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
 			Reason:  string(gwv1.BackendTLSPolicyReasonNoValidCACertificate),
@@ -348,6 +350,7 @@ func applyGatewayBackendClientCert(
 func getBackendTLSCACert(
 	krtctx krt.HandlerContext,
 	cfgmaps krt.Collection[*corev1.ConfigMap],
+	secrets krt.Collection[*corev1.Secret],
 	btls *gwv1.BackendTLSPolicy,
 	conds map[string]*Condition,
 ) ([]byte, error) {
@@ -374,32 +377,11 @@ func getBackendTLSCACert(
 
 	var sb strings.Builder
 	for _, ref := range validation.CACertificateRefs {
-		if ref.Group != gwv1.Group(wellknown.ConfigMapGVK.Group) || ref.Kind != gwv1.Kind(wellknown.ConfigMapGVK.Kind) {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
-				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidKind),
-				Message: "Certificate reference invalid: " + string(ref.Kind),
-			}
-			return nil, fmt.Errorf("invalid certificate reference: %v", ref)
-		}
-		nn := types.NamespacedName{
-			Name:      string(ref.Name),
-			Namespace: btls.Namespace,
-		}
-		cfgmap := krt.FetchOne(krtctx, cfgmaps, krt.FilterObjectName(nn))
-		if cfgmap == nil {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
-				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
-				Message: "Certificate reference not found",
-			}
-			return nil, fmt.Errorf("certificate reference not found: %v", ref)
-		}
-		caCert, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+		caCert, err := cacert.ResolveGatewayRef(krtctx, cfgmaps, secrets, btls.Namespace, ref)
 		if err != nil {
-			conds[string(gwv1.BackendTLSPolicyReasonResolvedRefs)].Error = &ConfigError{
-				Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
-				Message: "Certificate invalid: " + err.Error(),
-			}
-			return nil, fmt.Errorf("certificate invalid: %v", err)
+			configErr, accepted := caCertificateRefError(ref, err)
+			conds[string(gwv1.BackendTLSPolicyConditionResolvedRefs)].Error = configErr
+			return nil, accepted
 		}
 		if sb.Len() > 0 {
 			sb.WriteString("\n")
@@ -407,4 +389,26 @@ func getBackendTLSCACert(
 		sb.WriteString(caCert)
 	}
 	return []byte(sb.String()), nil
+}
+
+// caCertificateRefError maps a CA resolution failure onto the ResolvedRefs reason Gateway API
+// requires for it, along with the error carried by the Accepted condition.
+func caCertificateRefError(ref gwv1.LocalObjectReference, err error) (*ConfigError, error) {
+	switch {
+	case errors.Is(err, cacert.ErrUnsupportedKind):
+		return &ConfigError{
+			Reason:  string(gwv1.BackendTLSPolicyReasonInvalidKind),
+			Message: "Certificate reference invalid: " + string(ref.Kind),
+		}, fmt.Errorf("invalid certificate reference: %v", ref)
+	case errors.Is(err, cacert.ErrNotFound):
+		return &ConfigError{
+			Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
+			Message: "Certificate reference not found",
+		}, fmt.Errorf("certificate reference not found: %v", ref)
+	default:
+		return &ConfigError{
+			Reason:  string(gwv1.BackendTLSPolicyReasonInvalidCACertificateRef),
+			Message: "Certificate invalid: " + err.Error(),
+		}, fmt.Errorf("certificate invalid: %v", err)
+	}
 }

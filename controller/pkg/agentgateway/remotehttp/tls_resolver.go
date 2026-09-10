@@ -38,7 +38,7 @@ func (r *defaultResolver) resolveTLS(
 		return resolvedTLSFromBackendTLS(krtctx, r.cfgmaps, r.secrets, namespace, agwPolicy.Spec.Backend.TLS)
 	}
 	if backendTLSPolicy := r.policySelector.BestMatchingBackendTLSPolicy(krtctx, namespace, group, kind, name, backendTLSSections); backendTLSPolicy != nil {
-		return resolvedTLSFromBackendTLSPolicy(krtctx, r.cfgmaps, namespace, backendTLSPolicy)
+		return resolvedTLSFromBackendTLSPolicy(krtctx, r.cfgmaps, r.secrets, namespace, backendTLSPolicy)
 	}
 	return nil, nil
 }
@@ -46,6 +46,7 @@ func (r *defaultResolver) resolveTLS(
 func resolvedTLSFromBackendTLSPolicy(
 	krtctx krt.HandlerContext,
 	cfgmaps krt.Collection[*corev1.ConfigMap],
+	secrets krt.Collection[*corev1.Secret],
 	namespace string,
 	policy *gwv1.BackendTLSPolicy,
 ) (*resolvedTLS, error) {
@@ -64,7 +65,7 @@ func resolvedTLSFromBackendTLSPolicy(
 		return resolved, nil
 	}
 
-	rootCAs, caBundleHash, err := caBundleFromGatewayRefs(krtctx, cfgmaps, namespace, policy.Spec.Validation.CACertificateRefs)
+	rootCAs, caBundleHash, err := caBundleFromGatewayRefs(krtctx, cfgmaps, secrets, namespace, policy.Spec.Validation.CACertificateRefs)
 	if err != nil {
 		return nil, err
 	}

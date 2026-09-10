@@ -16,6 +16,7 @@ import (
 	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/cacert"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
@@ -159,19 +160,9 @@ func translateXBackendTLS(
 	} else {
 		var roots strings.Builder
 		for _, ref := range tls.Validation.CACertificateRefs {
-			if ref.Group != gwv1.Group(wellknown.ConfigMapGVK.Group) || ref.Kind != gwv1.Kind(wellknown.ConfigMapKind) {
-				return nil, fmt.Errorf("CA certificate reference %s must refer to a core ConfigMap", ref.Name)
-			}
-			configMap := ptr.Flatten(krt.FetchOne(krtctx, agw.ConfigMaps, krt.FilterObjectName(types.NamespacedName{
-				Namespace: backend.Namespace,
-				Name:      string(ref.Name),
-			})))
-			if configMap == nil {
-				return nil, fmt.Errorf("CA certificate ConfigMap %s/%s not found", backend.Namespace, ref.Name)
-			}
-			root, err := plugins.GetCACertFromConfigMap(configMap)
+			root, err := cacert.ResolveGatewayRef(krtctx, agw.ConfigMaps, agw.Secrets, backend.Namespace, ref)
 			if err != nil {
-				return nil, fmt.Errorf("invalid CA certificate ConfigMap %s/%s: %w", backend.Namespace, ref.Name, err)
+				return nil, fmt.Errorf("CA certificate reference %s is invalid: %w", ref.Name, err)
 			}
 			if roots.Len() > 0 {
 				roots.WriteByte('\n')
