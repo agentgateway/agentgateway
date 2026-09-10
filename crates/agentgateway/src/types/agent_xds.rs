@@ -2057,7 +2057,7 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 				},
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
-				sse_keep_alive: m.sse_keep_alive.clone().map(convert_duration),
+				sse_keep_alive: m.sse_keep_alive.map(convert_duration),
 				dns_rebinding_protection: false,
 			},
 		),
