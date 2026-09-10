@@ -155,11 +155,15 @@ pub mod from_messages {
 			.ok_or_else(|| AIError::InvalidResponse(strng::literal!("chat response missing choices")))?;
 
 		let mut content: Vec<messages::ContentBlock> = Vec::new();
-		// Engines report reasoning beside the text; the Messages contract puts it first.
-		if let Some(thinking) = choice.message.reasoning_content.filter(|r| !r.is_empty()) {
+		// Engines report reasoning beside the text; the Messages contract puts it first. A turn whose
+		// reasoning text is withheld carries the signature alone, so the signature is enough to send
+		// the block: it is what the next turn has to replay.
+		let thinking = choice.message.reasoning_content.unwrap_or_default();
+		let signature = choice.message.reasoning_signature.unwrap_or_default();
+		if !thinking.is_empty() || !signature.is_empty() {
 			content.push(messages::ContentBlock::Thinking {
 				thinking,
-				signature: choice.message.reasoning_signature.unwrap_or_default(),
+				signature,
 			});
 		}
 		if let Some(text) = choice.message.content {
@@ -629,13 +633,16 @@ pub mod from_messages {
 							);
 						}
 						// The signature goes out when the block closes, as a Messages stream sends it.
-						if state.thinking_block_index.is_some()
-							&& let Some(signature) = choice
-								.delta
-								.reasoning_signature
-								.as_deref()
-								.filter(|s| !s.is_empty())
+						// Reasoning that is withheld arrives as a signature with no text, before any block
+						// has been opened, and opens one of its own to carry it.
+						if let Some(signature) = choice
+							.delta
+							.reasoning_signature
+							.as_deref()
+							.filter(|s| !s.is_empty())
+							&& (state.thinking_block_index.is_some() || state.next_block_index == 0)
 						{
+							open_thinking_block(&mut state, &mut events);
 							state.thinking_signature = Some(signature.to_string());
 						}
 						if let Some(content) = choice.delta.content.as_deref().filter(|s| !s.is_empty()) {
