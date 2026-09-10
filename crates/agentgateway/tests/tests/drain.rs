@@ -183,3 +183,25 @@ async fn drain_deadline_includes_minimum() {
 		"drain must end at the maximum, not minimum + maximum: {elapsed:?}"
 	);
 }
+
+#[tokio::test]
+async fn drain_refuses_new_connections_after_minimum() {
+	let (backend, mut in_flight) = holding_backend(Duration::from_secs(2)).await;
+	let (test, addr) = gateway("300ms", "30s", backend).await;
+
+	let request = tokio::spawn(get(http1_client(), addr));
+	in_flight.recv().await.unwrap();
+	let drained = tokio::spawn(test.start_drain());
+	tokio::time::sleep(Duration::from_millis(600)).await;
+
+	get(http1_client(), addr)
+		.await
+		.expect_err("new connections must be refused once the minimum passes");
+
+	let headers = assert_full_response(request.await.unwrap().unwrap()).await;
+	assert_eq!(headers[header::CONNECTION], "close");
+	tokio::time::timeout(Duration::from_secs(1), drained)
+		.await
+		.expect("drain must finish right after the last connection closes")
+		.unwrap();
+}

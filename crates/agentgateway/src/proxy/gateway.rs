@@ -292,10 +292,10 @@ impl Gateway {
 		// Therefor, we should have a minimum drain time and a maximum drain time.
 		// No matter what, we will continue accepting connections for <min time>. Any new connections will
 		// be "discouraged" via disabling keepalive.
-		// After that, we will continue processing connections as long as there are any remaining open.
-		// This handles gracefully serving any long-running requests.
-		// New connections may still be made during this time which we will attempt to serve, though they
-		// are at increased risk of early termination.
+		// After that, we close the listener and stop accepting new connections. A refused connection can be
+		// retried transparently; a request cut mid-flight cannot.
+		// Existing connections keep serving until they close or the maximum drain time passes, whichever
+		// comes first. This handles gracefully serving any long-running requests.
 		let accept = |drain: DrainWatcher, force_shutdown: watch::Receiver<()>| async move {
 			// We will need to be able to watch for drains, so take a copy
 			let drain_watch = drain.clone();
@@ -387,35 +387,12 @@ impl Gateway {
 					}
 				}
 			};
+			drop(listener);
 			upgrader.disable();
 			drop(drain_mode);
-			// Keep accepting while the drain runs. Connections accepted from here on are not tracked, so
-			// they are at risk of a forced close. This future never completes on its own: run_with_drain
-			// drops it once every tracked connection has finished or the deadline passes.
-			backoff = BACKOFF_INITIAL;
-			loop {
-				match listener.accept().await {
-					Ok((stream, _peer)) => {
-						backoff = BACKOFF_INITIAL;
-						handle_stream(stream, &upgrader);
-					},
-					Err(e) => {
-						if is_accept_error_permanent(&e) {
-							error!(bind=?name, "fatal accept error during drain, stopping listener: {e}");
-							std::future::pending::<()>().await;
-						}
-						if is_accept_error_per_connection(&e) {
-							debug!(bind=?name, "per-connection accept error during drain: {e}");
-							continue;
-						}
-						warn!(bind=?name, "accept error during drain: {e}");
-						let jittered =
-							Duration::from_millis(rand::rng().random_range(0..=backoff.as_millis() as u64));
-						tokio::time::sleep(jittered).await;
-						backoff = (backoff * 2).min(BACKOFF_MAX);
-					},
-				}
-			}
+			// Returning here would force-close every spawned connection. Park instead, so run_with_drain
+			// decides when to stop: once every tracked connection has finished or the deadline passes.
+			std::future::pending::<()>().await;
 		};
 
 		drain::run_with_drain(component, drain, max_deadline, min_deadline, accept).await;

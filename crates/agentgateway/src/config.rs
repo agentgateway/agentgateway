@@ -322,11 +322,14 @@ pub fn parse_config(
 			None => Duration::from_secs(5),
 		},
 	};
-	if termination_min_deadline > termination_max_deadline {
-		anyhow::bail!(
-			"connectionMinTerminationDeadline ({termination_min_deadline:?}) must not exceed connectionTerminationDeadline ({termination_max_deadline:?})"
+	let termination_min_deadline = if termination_min_deadline > termination_max_deadline {
+		warn!(
+			"connectionMinTerminationDeadline ({termination_min_deadline:?}) exceeds connectionTerminationDeadline ({termination_max_deadline:?}); using the maximum for both"
 		);
-	}
+		termination_max_deadline
+	} else {
+		termination_min_deadline
+	};
 	let tracing_env = resolve_tracing_env_overrides().ctx("invalid tracing environment overrides")?;
 
 	let mut otlp_headers = raw
@@ -1259,10 +1262,10 @@ config:
 	}
 
 	#[test]
-	fn min_termination_deadline_must_not_exceed_max() {
+	fn min_termination_deadline_clamps_to_max() {
 		let _env_lock = lock_env();
 
-		let err = parse_config(
+		let config = parse_config(
 			r#"
 config:
   connectionMinTerminationDeadline: 10s
@@ -1271,21 +1274,17 @@ config:
 			.to_string(),
 			None,
 		)
-		.expect_err("min above max should fail");
+		.unwrap();
 
-		assert!(
-			err
-				.to_string()
-				.contains("must not exceed connectionTerminationDeadline"),
-			"unexpected error: {err}"
-		);
+		assert_eq!(config.termination_max_deadline, Duration::from_secs(5));
+		assert_eq!(config.termination_min_deadline, Duration::from_secs(5));
 	}
 
 	#[test]
-	fn min_termination_deadline_must_not_exceed_derived_max() {
+	fn min_termination_deadline_clamps_to_derived_max() {
 		let _env_lock = lock_env();
 
-		let err = parse_config(
+		let config = parse_config(
 			r#"
 config:
   connectionMinTerminationDeadline: 10s
@@ -1293,14 +1292,10 @@ config:
 			.to_string(),
 			None,
 		)
-		.expect_err("min above the default 5s max should fail");
+		.unwrap();
 
-		assert!(
-			err
-				.to_string()
-				.contains("must not exceed connectionTerminationDeadline"),
-			"unexpected error: {err}"
-		);
+		assert_eq!(config.termination_max_deadline, Duration::from_secs(5));
+		assert_eq!(config.termination_min_deadline, Duration::from_secs(5));
 	}
 
 	#[test]
