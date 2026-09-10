@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-09T08:34:18Z"
+    "generatedAt": "2026-09-10T08:35:04Z"
   },
   "providers": {
     "anthropic": {
@@ -3003,7 +3003,7 @@
           "rates": {
             "input": "0.44",
             "output": "1.32",
-            "cacheRead": "0.14"
+            "cacheRead": "0.014"
           }
         },
         "deepseek-ai/DeepSeek-V4-Pro": {
