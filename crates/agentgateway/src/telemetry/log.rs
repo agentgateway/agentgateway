@@ -2418,11 +2418,14 @@ impl OtelAccessLogger {
 				.build()
 		};
 
-		let logger = provider.logger("agentgateway.access");
+		Ok(Self::from_provider(provider))
+	}
 
-		Ok(Self {
+	fn from_provider(provider: SdkLoggerProvider) -> Self {
+		let logger = provider.logger("agentgateway.access");
+		Self {
 			inner: super::NonBlockingDrop::new(OtelAccessLoggerInner { provider, logger }),
-		})
+		}
 	}
 
 	pub fn shutdown(&self) {
@@ -2431,7 +2434,7 @@ impl OtelAccessLogger {
 }
 
 impl OtelLogSink for OtelAccessLogger {
-	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
+	fn emit<'v>(&self, level: &str, _target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
 		let severity = match level {
 			"error" => Severity::Error,
 			"warn" => Severity::Warn,
@@ -2452,7 +2455,6 @@ impl OtelLogSink for OtelAccessLogger {
 		let mut record = self.inner.logger.create_log_record();
 		record.set_severity_number(severity);
 		record.set_severity_text(severity_text);
-		record.set_target(target.to_string());
 
 		let mut trace_id_val: Option<u128> = None;
 		let mut span_id_val: Option<u64> = None;
@@ -2735,6 +2737,7 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 
+	use opentelemetry::InstrumentationScope;
 	use opentelemetry::trace::SpanKind;
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
@@ -2747,6 +2750,44 @@ mod tests {
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
 	use crate::types::frontend::{DatabaseLlmMode, LoggingPolicy};
+
+	#[derive(Clone, Debug, Default)]
+	struct RecordingLogExporter {
+		records: Arc<Mutex<Vec<(opentelemetry_sdk::logs::SdkLogRecord, InstrumentationScope)>>>,
+	}
+
+	impl opentelemetry_sdk::logs::LogExporter for RecordingLogExporter {
+		fn export(
+			&self,
+			batch: opentelemetry_sdk::logs::LogBatch<'_>,
+		) -> impl std::future::Future<Output = OTelSdkResult> + Send {
+			let mut records = self.records.lock().unwrap();
+			for (record, scope) in batch.iter() {
+				records.push((record.clone(), scope.clone()));
+			}
+			ready(Ok(()))
+		}
+	}
+
+	#[test]
+	fn otlp_access_log_scope_is_logger_name_not_tracing_target() {
+		let exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(exporter.clone())
+			.build();
+		let logger = OtelAccessLogger::from_provider(provider);
+
+		let kv = [("http.request.method", Some(ValueBag::from("GET")))];
+		logger.emit("info", "request", &kv);
+		logger.inner.provider.force_flush().unwrap();
+
+		let records = exporter.records.lock().unwrap();
+		assert_eq!(records.len(), 1);
+		let (record, scope) = &records[0];
+		assert_eq!(scope.name(), "agentgateway.access");
+		// opentelemetry-proto uses a record target as the wire scope name when one is set.
+		assert!(record.target().is_none());
+	}
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
