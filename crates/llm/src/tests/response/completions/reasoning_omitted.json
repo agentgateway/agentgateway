@@ -1,0 +1,28 @@
+{
+  "id": "chatcmpl-C3kBOLGARFj2WJrm5MRyuTiK4u6eH",
+  "object": "chat.completion",
+  "created": 1755008546,
+  "model": "qwen3",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Two plus two is 4.",
+        "reasoning_content": "",
+        "reasoning_signature": "SIG-omitted==",
+        "refusal": null
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 17,
+    "completion_tokens": 23,
+    "total_tokens": 40,
+    "completion_tokens_details": {
+      "reasoning_tokens": 12
+    }
+  }
+}
