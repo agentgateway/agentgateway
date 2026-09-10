@@ -4585,7 +4585,7 @@ async fn convert_llm_config(
 			model_aliases: Default::default(),
 			wildcard_patterns: Arc::new(vec![]),
 			prompt_caching: model_config.prompt_caching.clone(),
-			server_tools: model_config.server_tools.clone().map(Arc::new),
+			server_tools: model_config.server_tools.clone().map(local_server_tools),
 			routes: Default::default(),
 		})));
 		let resolved_inline_policies = pols.clone();
@@ -5735,6 +5735,18 @@ impl LocalTLSServerConfig {
 
 pub fn local_name(name: Strng) -> ResourceName {
 	ResourceName::new(name, "".into())
+}
+
+/// Local backends have no namespace, so a backend named in `serverTools` is the store key
+/// `/{name}`, the form every other local reference to a backend takes.
+fn local_server_tools(mut st: ServerToolsConfig) -> Arc<ServerToolsConfig> {
+	for tool in &mut st.tools {
+		tool.mcp.backend = strng::format!("/{}", tool.mcp.backend);
+	}
+	for server in &mut st.mcp_servers {
+		server.backend = strng::format!("/{}", server.backend);
+	}
+	Arc::new(st)
 }
 
 pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(

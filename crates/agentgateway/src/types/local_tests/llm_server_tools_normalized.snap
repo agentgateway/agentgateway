@@ -84,7 +84,7 @@ backends:
             tools:
               - type: web_search_*
                 mcp:
-                  backend: searxng
+                  backend: /searxng
                   target: search
                   tool: search
                   arguments:
@@ -92,7 +92,7 @@ backends:
                     max_results: "5"
               - type: web_fetch_20250910
                 mcp:
-                  backend: searxng
+                  backend: /searxng
                   tool: fetch
                 description: Fetch a web page
                 inputSchema:
@@ -105,7 +105,7 @@ backends:
             mcpServers:
               - label: search
                 url: "https://mcp.example.com/mcp"
-                backend: searxng
+                backend: /searxng
                 target: search
                 skipApproval: true
             maxIterations: 4
