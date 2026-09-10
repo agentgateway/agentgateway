@@ -186,7 +186,7 @@ def filter_pods(expr: str) -> str:
   return (
     f"{expr} "
     f"* on(pod, namespace) group_left(gateway_networking_k8s_io_gateway_name) "
-    f"agentgateway_build_info{{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"}}"
+    f'agentgateway_build_info{{namespace=~"$namespace",gateway_networking_k8s_io_gateway_name=~"$gateway_name"}}'
   )
 
 
@@ -489,10 +489,7 @@ def build_dashboard() -> Dashboard:
     .with_row(Row("MCP").collapsed(True).with_panel(mcp_tools).with_panel(mcp_list))
     .with_row(Row("Latency").collapsed(True).with_panel(latency_by_route))
     .with_row(
-      Row("XDS")
-      .collapsed(True)
-      .with_panel(xds_messages)
-      .with_panel(xds_average_size)
+      Row("XDS").collapsed(True).with_panel(xds_messages).with_panel(xds_average_size)
     )
     .with_row(
       Row("Runtime")
@@ -503,6 +500,157 @@ def build_dashboard() -> Dashboard:
       .with_panel(build_info)
     )
   )
+
+
+def build_standalone_dashboard() -> Dashboard:
+  dashboard = (
+    new_dashboard("Agentgateway (Standalone)", "agentgateway-standalone")
+    .description(
+      "Request, LLM, MCP, and runtime metrics for standalone Agentgateway deployments."
+    )
+    .tags(["agentgateway", "standalone"])
+    .time("now-1h", "now")
+    .with_row(Row("Requests"))
+    .with_panel(
+      rps_timeseries("Request Rate").with_target(
+        query(prom_sum(rate("agentgateway_requests_total")), "requests/s")
+      )
+    )
+  )
+  for label in ["status", "route", "reason"]:
+    dashboard.with_panel(
+      rps_timeseries(f"Requests (by {label.title()})").with_target(
+        query(
+          prom_sum(rate("agentgateway_requests_total"), by=[label]),
+          "{{" + label + "}}",
+        )
+      )
+    )
+
+  dashboard.with_row(
+    Row("Latency")
+    .collapsed(True)
+    .with_panel(
+      add_targets(
+        seconds_timeseries("Latency by Route"),
+        [
+          (
+            quantile(
+              value,
+              prom_sum(
+                rate("agentgateway_request_duration_seconds_bucket"),
+                by=["le", "route"],
+              ),
+            ),
+            "{{route}} " + percentile,
+          )
+          for value, percentile in [("0.50", "p50"), ("0.95", "p95"), ("0.99", "p99")]
+        ],
+      )
+    )
+  )
+  llm = (
+    Row("LLM")
+    .collapsed(True)
+    .with_panel(
+      tps_timeseries("Token Consumption").with_target(
+        query(
+          prom_sum(
+            rate("agentgateway_gen_ai_client_token_usage_sum"),
+            by=["gen_ai_token_type", "gen_ai_request_model"],
+          ),
+          "{{gen_ai_request_model}} ({{gen_ai_token_type}})",
+        )
+      )
+    )
+    .with_panel(
+      usd_timeseries("USD Cost per Interval").with_target(
+        query(
+          prom_sum(
+            increase("agentgateway_gen_ai_client_cost_usd_total"),
+            by=["gen_ai_request_model"],
+          ),
+          "{{gen_ai_request_model}}",
+        )
+      )
+    )
+  )
+  for title, metric, tokens_per_second in [
+    (
+      "Time to First Token (p50)",
+      "agentgateway_gen_ai_server_time_to_first_token_bucket",
+      False,
+    ),
+    (
+      "Request Duration (p50)",
+      "agentgateway_gen_ai_server_request_duration_bucket",
+      False,
+    ),
+    (
+      "Tokens per Second (p50)",
+      "agentgateway_gen_ai_server_time_per_output_token_bucket",
+      True,
+    ),
+  ]:
+    expr = quantile("0.5", prom_sum(rate(metric), by=["le", "gen_ai_request_model"]))
+    panel = tps_timeseries(title) if tokens_per_second else seconds_timeseries(title)
+    llm.with_panel(
+      panel.with_target(
+        query("1 / " + expr if tokens_per_second else expr, "{{gen_ai_request_model}}")
+      )
+    )
+  dashboard.with_row(llm)
+  dashboard.with_row(
+    Row("MCP")
+    .collapsed(True)
+    .with_panel(
+      rps_timeseries("MCP Calls (by Method)").with_target(
+        query(
+          prom_sum(rate("agentgateway_mcp_requests_total"), by=["method"]), "{{method}}"
+        )
+      )
+    )
+    .with_panel(
+      rps_timeseries("Tool Calls (by Tool)").with_target(
+        query(
+          prom_sum(
+            rate(labels("agentgateway_mcp_requests_total", {"method": "tools/call"})),
+            by=["server", "resource"],
+          ),
+          "{{server}}/{{resource}}",
+        )
+      )
+    )
+  )
+  dashboard.with_row(
+    Row("Runtime")
+    .collapsed(True)
+    .with_panel(
+      base_timeseries("Build Versions").with_target(
+        query(prom_sum("agentgateway_build_info", by=["tag"]), "{{tag}}")
+      )
+    )
+    .with_panel(
+      add_targets(
+        base_timeseries("Tokio Runtime"),
+        [
+          ("agentgateway_tokio_num_workers", "workers"),
+          ("agentgateway_tokio_num_alive_tasks", "alive tasks"),
+          ("agentgateway_tokio_global_queue_depth", "queue depth"),
+        ],
+      )
+    )
+    .with_panel(
+      add_targets(
+        bytes_timeseries("Process Memory"),
+        [
+          ("agentgateway_process_rss", "rss"),
+          ("agentgateway_process_pss", "pss"),
+        ],
+      )
+    )
+  )
+  return dashboard
 
 
 class Manifest:
@@ -522,14 +670,18 @@ class Manifest:
     )
 
 
-def encode_dashboard() -> str:
-  dashboard = build_dashboard().build()
+def encode_dashboard(standalone: bool = False) -> str:
+  dashboard = (
+    build_standalone_dashboard() if standalone else build_dashboard()
+  ).build()
   encoder = JSONEncoder(sort_keys=True, indent=2)
   return encoder.encode(dashboard)
 
 
-def encode_manifest() -> str:
-  dashboard = build_dashboard().build()
+def encode_manifest(standalone: bool = False) -> str:
+  dashboard = (
+    build_standalone_dashboard() if standalone else build_dashboard()
+  ).build()
   manifest = Manifest.dashboard(dashboard)
   encoder = JSONEncoder(sort_keys=True, indent=2)
   return encoder.encode(manifest)
@@ -538,6 +690,11 @@ def encode_manifest() -> str:
 def main() -> None:
   parser = argparse.ArgumentParser()
   parser.add_argument(
+    "--standalone",
+    action="store_true",
+    help="generate the dashboard for standalone deployments",
+  )
+  parser.add_argument(
     "--legacy",
     action="store_true",
     help="emit the raw dashboard JSON instead of the dashboard.grafana.app manifest",
@@ -545,9 +702,9 @@ def main() -> None:
   args = parser.parse_args()
 
   if args.legacy:
-    print(encode_dashboard())
+    print(encode_dashboard(args.standalone))
   else:
-    print(encode_manifest())
+    print(encode_manifest(args.standalone))
 
 
 if __name__ == "__main__":
