@@ -115,6 +115,8 @@ jobs:
         corepack enable
         pnpm install --frozen-lockfile
         pnpm lint
+    - name: Install Playwright browser
+      run: pnpm exec playwright install --with-deps chromium
     - name: End-to-end tests
       run: pnpm test:e2e
     - name: Upload Playwright traces
