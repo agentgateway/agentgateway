@@ -305,6 +305,10 @@ monitoring:
       #    metrics port (15020) directly, without requiring a metrics port on the
       #    provisioned Service.
       enabled: true
+      # -- Pod labels copied onto scraped proxy metrics. The gateway name is required
+      #    by the bundled Grafana dashboard for gateway discovery and filtering.
+      podTargetLabels:
+        - gateway.networking.k8s.io/gateway-name
     # -- GatewayClass names whose proxy pods are selected by the proxy PodMonitor.
     gatewayClassNames:
       - agentgateway
