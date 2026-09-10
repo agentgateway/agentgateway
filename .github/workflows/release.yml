@@ -560,7 +560,7 @@ jobs:
 
           ## Quick Start
 
-          Follow the [Kubernetes](https://agentgateway.dev/docs/kubernetes/latest/quickstart/) or [Standalone](https://agentgateway.dev/docs/standalone/latest/quickstart/) quick start guide to get started!
+          Follow the [Kubernetes](https://agentgateway.dev/docs/kubernetes/latest/documentation/quickstart/) or [Standalone](https://agentgateway.dev/docs/standalone/latest/documentation/quickstart/) quick start guide to get started!
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       if: startsWith(github.ref, 'refs/tags/')

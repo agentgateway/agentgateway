@@ -251,7 +251,7 @@ request-log storage and retention, monitor every component, and consider HTTPS
 or mTLS between the NetBird proxy and private AI agentgateway when the Docker
 bridge is not an adequate trust boundary.
 
-Agentgateway's [model catalog](https://agentgateway.dev/docs/standalone/latest/llm/cost-controls/costs/),
-[request logging](https://agentgateway.dev/docs/standalone/latest/observability/access-logs/database/),
-and [dashboard](https://agentgateway.dev/docs/standalone/latest/llm/cost-controls/dashboard/)
+Agentgateway's [model catalog](https://agentgateway.dev/docs/standalone/latest/documentation/llm/cost-controls/costs/),
+[request logging](https://agentgateway.dev/docs/standalone/latest/documentation/observability/access-logs/database/),
+and [dashboard](https://agentgateway.dev/docs/standalone/latest/documentation/llm/cost-controls/dashboard/)
 are useful next steps for model discovery, cost reporting, and usage analysis.

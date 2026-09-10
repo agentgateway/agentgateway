@@ -546,5 +546,5 @@ The `x-netbird-groups` value is stored as one CSV string. For example,
 `Engineering,Platform` appears as one combined group dimension rather than two
 separate groups.
 
-[agentgateway-cost-dashboard]: https://agentgateway.dev/docs/kubernetes/latest/llm/cost-controls/dashboard/
-[agentgateway-admin-ui]: https://agentgateway.dev/docs/kubernetes/latest/observability/ui/
+[agentgateway-cost-dashboard]: https://agentgateway.dev/docs/kubernetes/latest/documentation/llm/cost-controls/dashboard/
+[agentgateway-admin-ui]: https://agentgateway.dev/docs/kubernetes/latest/documentation/observability/ui/

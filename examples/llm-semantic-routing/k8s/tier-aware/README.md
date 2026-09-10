@@ -72,9 +72,9 @@ This example requires:
 - Helm and `kubectl`.
 
 Follow the agentgateway guides to
-[install agentgateway](https://agentgateway.dev/docs/kubernetes/main/install/helm/)
+[install agentgateway](https://agentgateway.dev/docs/kubernetes/main/documentation/install/helm/)
 and
-[set up a Gateway](https://agentgateway.dev/docs/kubernetes/main/setup/gateway/).
+[set up a Gateway](https://agentgateway.dev/docs/kubernetes/main/documentation/setup/gateway/).
 
 For example, enable model routing on an existing Helm installation while
 retaining its other values:
@@ -313,7 +313,7 @@ The request header is directly supplied by `curl` only to keep this example
 focused on routing. Do not trust a client-provided entitlement header in
 production.
 
-Use [agentgateway policies](https://agentgateway.dev/docs/kubernetes/latest/about/policies/)
+Use [agentgateway policies](https://agentgateway.dev/docs/kubernetes/latest/documentation/about/policies/)
 for JWT, API key, or external authorization to authenticate the caller. Derive
 or overwrite `x-entitlement-tier` from trusted identity context before the
 conditional ExtProc policy runs. Retain model authorization as defense in
