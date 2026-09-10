@@ -541,6 +541,18 @@ impl UpstreamGroup {
 		self.backend.stateful
 	}
 
+	pub(crate) fn server_name_override(&self) -> Option<Strng> {
+		self.backend.server_name.clone()
+	}
+
+	pub(crate) fn server_version_override(&self) -> Option<Strng> {
+		self.backend.server_version.clone()
+	}
+
+	pub(crate) fn instructions_override(&self) -> Option<Strng> {
+		self.backend.instructions.clone()
+	}
+
 	/// True when some target's `delete` does teardown work even without an upstream
 	/// session id: stdio processes and SSE streams hold per-connection state.
 	pub(crate) fn has_connection_teardown(&self) -> bool {

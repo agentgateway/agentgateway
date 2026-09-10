@@ -771,6 +771,9 @@ impl TestBind {
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 				sse_keep_alive: None,
 				dns_rebinding_protection,
+				server_name: None,
+				server_version: None,
+				instructions: None,
 			},
 		);
 		{
@@ -891,6 +894,9 @@ impl TestBind {
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 				sse_keep_alive: None,
 				dns_rebinding_protection: false,
+				server_name: None,
+				server_version: None,
+				instructions: None,
 			},
 		);
 		{

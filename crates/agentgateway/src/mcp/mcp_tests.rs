@@ -6065,6 +6065,168 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 }
 
 #[test]
+fn test_merge_initialize_uses_server_name_override_when_multiplexing() {
+	use agent_core::version::BuildInfo;
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30117)),
+			)],
+			server_name: Some("custom-gateway".into()),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("alpha-server", "1.0")),
+		),
+	)];
+
+	let result = merge_fn(results, &empty_cel()).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	// Name is overridden; version and instructions preamble keep their defaults.
+	assert_eq!(info.server_info.name, "custom-gateway");
+	assert_eq!(info.server_info.version, BuildInfo::new().version.to_string());
+	let instructions = info.instructions.expect("instructions should be present");
+	assert_eq!(
+		instructions,
+		Relay::DEFAULT_GATEWAY_PREAMBLE,
+		"unset instructions override should keep the default preamble, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_initialize_uses_full_override_when_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30118)),
+			)],
+			server_name: Some("custom-gateway".into()),
+			server_version: Some("9.9.9".into()),
+			instructions: Some("Custom gateway preamble.".into()),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("alpha-server", "1.0"))
+				.with_instructions("Alpha server instructions."),
+		),
+	)];
+
+	let result = merge_fn(results, &empty_cel()).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	assert_eq!(info.server_info.name, "custom-gateway");
+	assert_eq!(info.server_info.version, "9.9.9");
+	let instructions = info.instructions.expect("instructions should be present");
+	assert!(instructions.starts_with("Custom gateway preamble."));
+	assert!(instructions.contains("Alpha server instructions."));
+	assert!(
+		!instructions.contains(Relay::DEFAULT_GATEWAY_PREAMBLE),
+		"default preamble text must not leak through when overridden, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_discover_uses_full_override_when_multiplexing() {
+	use rmcp::model::{DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30119))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30120))),
+			],
+			server_name: Some("custom-gateway".into()),
+			server_version: Some("9.9.9".into()),
+			instructions: Some("Custom gateway preamble.".into()),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let discover_merge = relay.merge_discover(true);
+	let results: Vec<(Strng, ServerResult)> = vec![
+		(
+			"alpha".into(),
+			ServerResult::DiscoverResult(
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("alpha-server", "1.0"))
+				.with_instructions("Alpha guidance."),
+			),
+		),
+		(
+			"beta".into(),
+			ServerResult::DiscoverResult(
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("beta-server", "1.0")),
+			),
+		),
+	];
+
+	let result = discover_merge(results, &empty_cel()).unwrap();
+	let discover = match result {
+		ServerResult::DiscoverResult(dr) => dr,
+		other => panic!("expected DiscoverResult, got: {:?}", other),
+	};
+
+	assert_eq!(discover.server_info.name, "custom-gateway");
+	assert_eq!(discover.server_info.version, "9.9.9");
+	let instructions = discover.instructions.expect("instructions should be present");
+	assert!(instructions.starts_with("Custom gateway preamble."));
+	assert!(instructions.contains("[alpha]\nAlpha guidance."));
+	assert!(
+		!instructions.contains(Relay::DEFAULT_GATEWAY_PREAMBLE),
+		"default preamble text must not leak through when overridden, got: {instructions}"
+	);
+}
+
+#[test]
 fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 	use rmcp::model::{
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,

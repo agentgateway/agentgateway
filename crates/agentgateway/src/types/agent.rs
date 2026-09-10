@@ -1849,6 +1849,18 @@ pub struct McpBackend {
 	/// agentgateway is typically not a browser-facing localhost MCP server.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub dns_rebinding_protection: bool,
+	/// Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`
+	/// when multiplexing multiple targets. Defaults to `agentgateway` when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server_name: Option<Strng>,
+	/// Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`
+	/// when multiplexing multiple targets. Defaults to the build version when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server_version: Option<Strng>,
+	/// Overrides the gateway preamble prepended to merged upstream instructions when
+	/// multiplexing multiple targets. Defaults to a generic gateway description when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub instructions: Option<Strng>,
 }
 
 impl McpBackend {
