@@ -116,21 +116,20 @@ impl Provider {
 		}
 	}
 
-	/// Chat formats for `request_model`: Converse on Runtime; on Mantle, the tag-declared native formats (all three if untagged).
 	pub fn supported_chat_formats(
 		&self,
 		request_model: Option<&str>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Vec<super::ChatFormat> {
 		use super::ChatFormat;
+		const NATIVE: [ChatFormat; 3] = [
+			ChatFormat::OpenAICompletions,
+			ChatFormat::AnthropicMessages,
+			ChatFormat::OpenAIResponses,
+		];
 		match self.chat_endpoint(request_model, catalog) {
 			BedrockEndpoint::Runtime => vec![ChatFormat::BedrockConverse],
 			BedrockEndpoint::Mantle => {
-				const NATIVE: [ChatFormat; 3] = [
-					ChatFormat::OpenAICompletions,
-					ChatFormat::AnthropicMessages,
-					ChatFormat::OpenAIResponses,
-				];
 				if let Some(tags) = request_model.and_then(|m| catalog.and_then(|c| c.get_model_tags(m))) {
 					let declared: Vec<ChatFormat> = NATIVE
 						.into_iter()
@@ -140,7 +139,11 @@ impl Provider {
 						return declared;
 					}
 				}
-				NATIVE.to_vec()
+				if self.is_anthropic_model(request_model) {
+					vec![ChatFormat::AnthropicMessages]
+				} else {
+					vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
+				}
 			},
 		}
 	}
@@ -361,11 +364,11 @@ mod tests {
 		let mantle = provider(BedrockEndpointPreference::MantleOnly);
 		assert_eq!(
 			mantle.supported_chat_formats(Some("any"), None),
-			vec![
-				ChatFormat::OpenAICompletions,
-				ChatFormat::AnthropicMessages,
-				ChatFormat::OpenAIResponses,
-			]
+			vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
+		);
+		assert_eq!(
+			mantle.supported_chat_formats(Some("anthropic.claude-3-sonnet"), None),
+			vec![ChatFormat::AnthropicMessages]
 		);
 		let runtime = provider(BedrockEndpointPreference::RuntimeOnly);
 		assert_eq!(

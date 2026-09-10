@@ -1437,12 +1437,8 @@ impl AIProvider {
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
-				// Model-aware host + Mantle signing name, from the endpoint resolved once in
-				// setup_request. The region is set in set_required_fields instead, so it still applies
-				// under a host override.
 				let endpoint = bedrock_endpoint.expect("setup_request resolves the Bedrock endpoint");
 				let host = provider.get_host(route_type, endpoint);
-				let signing_service = provider.signing_service_name(endpoint);
 				// Bedrock's Mantle-vs-Runtime host is model-dependent, so align the connection target with it.
 				if let Some(Target::Hostname(target_host, _)) = connection_target {
 					*target_host = host.clone();
@@ -1452,13 +1448,6 @@ impl AIProvider {
 						uri.authority = Some(Authority::from_str(&host)?);
 						Ok(())
 					})?;
-					if let Some(service) = signing_service {
-						req
-							.extensions
-							.insert(crate::http::auth::aws::DefaultAwsServiceName(
-								service.to_string(),
-							));
-					}
 					Ok(())
 				});
 			},
@@ -1571,6 +1560,16 @@ impl AIProvider {
 				req.extensions.insert(bedrock::AwsRegion {
 					region: provider.region.as_str().to_string(),
 				});
+				// Mantle signs under a different service name; set it here so it survives a host override.
+				if let Some(service) =
+					bedrock_endpoint.and_then(|endpoint| provider.signing_service_name(endpoint))
+				{
+					req
+						.extensions
+						.insert(crate::http::auth::aws::DefaultAwsServiceName(
+							service.to_string(),
+						));
+				}
 				// Mantle serves the Messages and count-tokens routes via the Anthropic-native API
 				if matches!(
 					route_type,
