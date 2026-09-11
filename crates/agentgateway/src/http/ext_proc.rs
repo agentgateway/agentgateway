@@ -982,6 +982,25 @@ impl ExtProcInstance {
 		let request_body_streamed_before_header_response =
 			req_body_mode == BodySendMode::FullDuplexStreamed && had_body;
 		if request_body_streamed_before_header_response {
+			// in case of FailOpen, try to detect connection issues by draining tx.
+			// once we start streaming the body, we can't restore the original body for fail-open.
+			// unless request_header_mode == Skip, this can detect the simple cases like
+			// Backend::Invalid.
+			if failure_mode == FailureMode::FailOpen {
+				let tx = tx.as_ref().unwrap();
+				if tx.capacity() < tx.max_capacity() {
+					if let Err(e) = tx.reserve_many(tx.max_capacity()).await {
+						trace!(?e, "fail open triggered");
+						self.skipped = true;
+						debug_assert_preserved_request_body(
+							&req,
+							had_body && rx_chunk.is_some(),
+							"fail_open_before_request_body_phase_preserves_original_body",
+						);
+						return Ok((req, None));
+					}
+				}
+			}
 			let (req_with_channel, body) = attach_request_body_channel(req, &mut rx_chunk);
 			req = req_with_channel;
 			pending_full_duplex_body = Some(body);
