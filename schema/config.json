@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "config": {
-      "description": "config defines top-level settings for DNS, admin, networking, observability, and session\nmanagement. Unlike other sections, these are applied only at startup, except modelCatalog,\nwhich is dynamically reloaded.",
+      "description": "config defines top-level settings for DNS, admin, networking, observability, and session\nmanagement. Unlike other sections, these are applied only at startup, except modelCatalog and\nstandardAttributes, which are dynamically reloaded.",
       "anyOf": [
         {
           "$ref": "#/$defs/RawConfig"
@@ -2035,6 +2035,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/SubstrateIngress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "substrateEgress": {
+          "description": "Enforce the CONNECT-pinned effective Substrate egress policy.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubstrateEgress"
             },
             {
               "type": "null"
@@ -7566,7 +7578,7 @@
       ]
     },
     "SubstrateIngress": {
-      "description": "Resolves Substrate actor hostnames through the ate-api for dynamic route backends.",
+      "description": "Resolves Substrate actors through the ate-api for dynamic route backends.",
       "type": "object",
       "properties": {
         "policies": {
@@ -7692,6 +7704,81 @@
         }
       },
       "additionalProperties": false
+    },
+    "SubstrateEgress": {
+      "description": "Retrieves and enforces the current Substrate egress policy for each request.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
     },
     "LocalExplicitOrConditional_LocalTransformationConfig": {
       "anyOf": [
@@ -7832,7 +7919,7 @@
       "type": "object",
       "properties": {
         "requestTimeout": {
-          "description": "Maximum time allowed for the full downstream request and response.",
+          "description": "Maximum time allowed from the start of downstream request processing until response headers\nare received. The response body is not included; use `responseIdleTimeout` to bound gaps\nbetween body frames.",
           "type": [
             "string",
             "null"
@@ -7840,6 +7927,13 @@
         },
         "backendRequestTimeout": {
           "description": "Maximum time allowed for the upstream backend request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseIdleTimeout": {
+          "description": "Maximum time the response body may go without producing data.\n\nThe window restarts on every body frame, so this bounds the gap between frames rather than\nthe total time a response may take. It is what terminates a backend that stops producing\ndata mid-stream without capping how long a legitimately long response may run.\n\nThis complements the other two rather than overlapping them: both `requestTimeout` and\n`backendRequestTimeout` stop applying once the response headers arrive, so neither places\nany bound on how long the response body may take, and neither can distinguish a stalled\nstream from a slow one.\n\nThe timeout is disabled when this field is unset or set to zero. It does not apply to\nresponses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never\nterminated by it.",
           "type": [
             "string",
             "null"
@@ -8137,15 +8231,19 @@
             }
           ]
         },
+        "sseKeepAlive": {
+          "description": "Interval at which SSE keep-alive comments are sent on long-lived MCP streams.\nDisabled when unset. Set this when a load balancer or API gateway sits in front\nof agentgateway and reaps connections that carry no traffic.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dnsRebindingProtection": {
           "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
           "type": "boolean"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "targets"
-      ]
+      "additionalProperties": false
     },
     "LocalMcpTarget": {
       "type": "object",
@@ -9753,11 +9851,11 @@
           ],
           "default": null
         },
-        "substrateEgress": {
+        "substrateEgressActorResolution": {
           "description": "Validate the originating actor before accepting a CONNECT tunnel.",
           "anyOf": [
             {
-              "$ref": "#/$defs/SubstrateEgress"
+              "$ref": "#/$defs/EgressActorResolution"
             },
             {
               "type": "null"
@@ -9862,11 +9960,14 @@
       "type": "object",
       "properties": {
         "maxBufferSize": {
-          "description": "Maximum request or response body size buffered by the frontend.",
-          "type": "integer",
+          "description": "Maximum request or response body size buffered by the frontend.\nDefaults to 2 MiB, or 32 MiB once the request enters LLM processing.",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint",
           "minimum": 0,
-          "default": 2097152
+          "default": null
         },
         "http1MaxHeaders": {
           "description": "Maximum number of headers allowed in an HTTP/1 request. Changing this value causes a\nperformance degradation, even when set lower than the default of 100.",
@@ -10078,7 +10179,7 @@
       "description": "CEL authorization rules for downstream network connections.",
       "$ref": "#/$defs/RuleSet"
     },
-    "SubstrateEgress": {
+    "EgressActorResolution": {
       "description": "Validates an actor's identity before accepting a CONNECT tunnel.",
       "type": "object",
       "properties": {
@@ -10525,7 +10626,19 @@
           "default": null
         },
         "clientSampling": {
-          "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy.",
+          "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy. Only applies to requests arriving with a sampled\n`traceparent` (`-01`); use `parentNotSampled` for requests whose trace is not sampled.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StringBoolFloat"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parentNotSampled": {
+          "description": "Whether to trace a request that arrives with a `traceparent` whose sampled flag is unset\n(`-00`), meaning the client asked for it not to be traced. When this is `true` the request\nis traced anyway, and `-01` is sent upstream so downstream services trace it too. If\nunspecified, the client's choice is honored and the request is not traced.\n\nOnly one of `randomSampling`, `clientSampling` and `parentNotSampled` applies to any given\nrequest; the incoming `traceparent` decides which.",
           "anyOf": [
             {
               "$ref": "#/$defs/StringBoolFloat"
@@ -11037,6 +11150,14 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "bindAddress": {
+          "description": "bindAddress is the IPv4 or IPv6 address to listen on. Use `127.0.0.1` or `::1` for loopback.\nWhen omitted, listens on all interfaces (`::` on Unix with IPv6 enabled, otherwise `0.0.0.0`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "ip"
+        },
         "protocol": {
           "description": "protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways\ndefault to HTTP, or HTTPS when tls is set.",
           "anyOf": [
@@ -11049,7 +11170,7 @@
           ]
         },
         "listeners": {
-          "description": "listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.",
+          "description": "listeners defines multiple named listeners under this gateway. When set, only `port` and `bindAddress` may be configured on the top level gateway.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalGatewayListener"
@@ -11530,10 +11651,7 @@
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "models"
-      ]
+      "additionalProperties": false
     },
     "LocalLLMProvider": {
       "type": "object",
@@ -11649,7 +11767,7 @@
           ]
         },
         "baseUrl": {
-          "description": "Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.",
+          "description": "Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.\nThe URL path is the upstream base path and defaults to / when omitted.\nProvider-specific endpoint paths are appended to this base path.\nFor example, https://api.openai.com/v1 sends completions to /v1/chat/completions,\nwhile https://api.openai.com sends them to /chat/completions.",
           "type": [
             "string",
             "null"
@@ -12452,6 +12570,18 @@
             }
           ],
           "default": null
+        },
+        "timeout": {
+          "description": "Set request timeout limits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeoutPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -12506,6 +12636,13 @@
             }
           ]
         },
+        "sseKeepAlive": {
+          "description": "Interval at which SSE keep-alive comments are sent on long-lived MCP streams.\nDisabled when unset. Set this when a load balancer or API gateway sits in front\nof agentgateway and reaps connections that carry no traffic.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dnsRebindingProtection": {
           "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
           "type": "boolean"
@@ -12522,10 +12659,7 @@
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "targets"
-      ]
+      "additionalProperties": false
     },
     "LocalUIConfig": {
       "type": "object",

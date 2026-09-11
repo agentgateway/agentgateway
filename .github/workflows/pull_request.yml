@@ -16,6 +16,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # Disable the Go cache program injected by Blacksmith runners.
+  GOCACHEPROG: ""
   CARGO_TERM_COLOR: always
   CI: true
   RUST_VERSION: "1.98.0"
@@ -115,6 +117,8 @@ jobs:
         corepack enable
         pnpm install --frozen-lockfile
         pnpm lint
+    - name: Install Playwright browser
+      run: pnpm exec playwright install --with-deps chromium
     - name: End-to-end tests
       run: pnpm test:e2e
     - name: Upload Playwright traces

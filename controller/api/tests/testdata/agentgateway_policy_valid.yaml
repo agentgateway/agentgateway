@@ -44,6 +44,37 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: backend-tls-custom-ca-key
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: corporate-trust
+          kind: Secret
+          key: corporate-roots.pem
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-explicit-default-ca-key
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: ca-bundle
+          key: ca.crt
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: backend-mtls
 spec:
   targetRefs:
@@ -589,6 +620,7 @@ spec:
       path: /custom/v1/traces
       randomSampling: '0.1'
       clientSampling: '1.0'
+      parentNotSampled: 'true'
 #---
 #apiVersion: agentgateway.dev/v1alpha1
 #kind: AgentgatewayPolicy
@@ -1406,3 +1438,53 @@ spec:
             method: ClientSecretPost
         audience: https://resource.example.com
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-required-claims-default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: issuer.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-required-claims-empty
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: issuer.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {requiredClaims: []}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-required-claims-supported
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: issuer.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {requiredClaims: [exp, nbf, aud, sub]}

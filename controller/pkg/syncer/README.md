@@ -1105,7 +1105,7 @@ Port-forward, and send a request through the gateway:
 
 The agentgateway data plane supports comprehensive observability through OpenTelemetry (OTEL) tracing. You can configure tracing using the `rawConfig` field in AgentgatewayParameters to integrate with various observability platforms and add custom trace fields for enhanced monitoring of your AI/LLM traffic.
 
-For detailed information about tracing configuration and observability features, see the [agentgateway observability documentation](https://agentgateway.dev/docs/reference/observability/traces/).
+For detailed information about tracing configuration and observability features, see the [agentgateway observability documentation](https://agentgateway.dev/docs/kubernetes/latest/documentation/observability/traces/).
 
 #### Configuring Tracing with RawConfig
 

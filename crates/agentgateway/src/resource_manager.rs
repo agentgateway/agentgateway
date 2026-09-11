@@ -477,6 +477,22 @@ impl ResourceManager {
 					return;
 				}
 				let next = Instant::now() + FAILED_HTTP_REFRESH;
+				// Keep the cached entry's `next_refresh` in sync with the retry being
+				// scheduled below. `should_refresh` gates the scheduler's eventual
+				// retry on this timestamp matching exactly; leaving it at the last
+				// success's (now past-due) value makes that retry silently no-op
+				// when it fires, and since only a `should_refresh`-approved refresh
+				// schedules the next one, this resource would never be refreshed
+				// again until the process restarts.
+				if let Some(entry) = self
+					.inner
+					.entries
+					.lock()
+					.expect("resource cache mutex poisoned")
+					.get_mut(&resource)
+				{
+					entry.next_refresh = Some(next);
+				}
 				let _ = self
 					.inner
 					.scheduler_tx
@@ -961,5 +977,59 @@ mod tests {
 			.await
 			.expect("resource deletion should notify")
 			.expect("change channel should remain open");
+	}
+
+	#[tokio::test]
+	async fn failed_http_refresh_reschedules_a_retry_that_will_actually_fire() {
+		// A closed local port fails at connect time (like a real transient
+		// network blip), rather than a non-2xx status -- `fetch_direct` only
+		// treats transport-level failures as errors, not HTTP error statuses.
+		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+		let addr = listener.local_addr().unwrap();
+		drop(listener);
+
+		let manager = ResourceManager::new(test_client()).unwrap();
+		let url: http::Uri = format!("http://{addr}/resource").parse().unwrap();
+		let resource = normalize_resource(ResourceRef::Http {
+			url,
+			kind: ResourceKind::Generic,
+		})
+		.unwrap();
+
+		// Simulate steady state after a prior successful fetch: cached content,
+		// active, with its next scheduled refresh far in the future.
+		let far_future = Instant::now() + Duration::from_secs(9_999);
+		manager.retain_resources(HashSet::from([resource.clone()]));
+		manager.store(
+			resource.clone(),
+			Bytes::from_static(b"v1"),
+			Some(far_future),
+		);
+
+		// This is the periodic scheduler's refresh attempt firing, exactly as
+		// `start_http_scheduler` invokes it -- it hits the closed port above.
+		manager
+			.refetch_and_notify_if_changed(resource.clone())
+			.await;
+
+		let entries = manager
+			.inner
+			.entries
+			.lock()
+			.expect("resource cache mutex poisoned");
+		let entry = entries.get(&resource).expect("entry should remain cached");
+		// A failed refresh must not touch the last-known-good content.
+		assert_eq!(entry.content, Bytes::from_static(b"v1"));
+		// The retry scheduled after the failure must be reflected in the cached
+		// entry's `next_refresh`, because `should_refresh` gates the scheduler's
+		// eventual retry on that value matching exactly. Before the fix,
+		// `next_refresh` here is still `far_future` (untouched by the failure
+		// path), so when the scheduler later pops the retry it never matches,
+		// the retry is silently dropped, and no refresh is ever scheduled again.
+		let scheduled_retry = entry.next_refresh.expect("a retry should be scheduled");
+		assert!(
+			scheduled_retry < far_future,
+			"failed refresh should reschedule sooner than the stale next_refresh from the last success"
+		);
 	}
 }

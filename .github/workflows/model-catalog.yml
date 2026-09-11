@@ -7,6 +7,10 @@ on:
 
 permissions: {}
 
+env:
+  # Disable the Go cache program injected by Blacksmith runners.
+  GOCACHEPROG: ""
+
 concurrency:
   group: refresh-model-catalog
   cancel-in-progress: false

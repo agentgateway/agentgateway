@@ -1,0 +1,245 @@
+{
+  "title": "agentgateway Overview",
+  "description": "Proxy and controller telemetry, including request, LLM, configuration, load-shedding, runtime, and reconciliation signals. Optional panels remain empty until matching traffic occurs. Cost includes only priced requests. Enable percentile aggregations on latency distributions.",
+  "layout_type": "ordered",
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "available_values": [],
+      "defaults": [
+        "*"
+      ]
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Requests per second",
+        "requests": [
+          {
+            "q": "sum:agentgateway.requests.count{$env,component:proxy} by {status}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "HTTP failures (5xx) per second",
+        "requests": [
+          {
+            "q": "sum:agentgateway.requests.count{$env,component:proxy,status:5*} by {route}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "HTTP latency p95 (enable distribution percentiles)",
+        "requests": [
+          {
+            "q": "p95:agentgateway.request.duration{$env,component:proxy} by {route}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "LLM time to first token p95",
+        "requests": [
+          {
+            "q": "p95:agentgateway.gen_ai.time_to_first_token{$env,component:proxy} by {request_model}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "LLM time per output token p95",
+        "requests": [
+          {
+            "q": "p95:agentgateway.gen_ai.time_per_output_token{$env,component:proxy} by {request_model}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Tokens per second — input includes cache tokens",
+        "requests": [
+          {
+            "q": "sum:agentgateway.gen_ai.token.usage.sum{$env,component:proxy} by {token_type}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Estimated USD per second — priced requests only",
+        "requests": [
+          {
+            "q": "sum:agentgateway.gen_ai.cost.usd.count{$env,component:proxy} by {request_model}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Cost catalog outcomes — missing is not free",
+        "requests": [
+          {
+            "q": "sum:agentgateway.cost_catalog.lookups.count{$env,component:proxy} by {status}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "MCP HTTP requests per second by status",
+        "requests": [
+          {
+            "q": "sum:agentgateway.requests.count{$env,component:proxy,protocol:mcp} by {status}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "MCP operations per second by method and resource type",
+        "requests": [
+          {
+            "q": "sum:agentgateway.mcp.requests.count{$env,component:proxy} by {method,resource_type}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Guardrail decisions",
+        "requests": [
+          {
+            "q": "sum:agentgateway.guardrail.checks.count{$env,component:proxy} by {action}.as_count()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Controller reconciliations",
+        "requests": [
+          {
+            "q": "sum:agentgateway.controller.reconciliations.count{$env,component:controller} by {result}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Controller reconciliation duration p95",
+        "requests": [
+          {
+            "q": "p95:agentgateway.controller.reconcile.duration{$env,component:controller} by {controller}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Proxy configuration synchronized",
+        "requests": [
+          {
+            "q": "min:agentgateway.config_synchronized{$env,component:proxy} by {host}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Retries and load shedding per second",
+        "requests": [
+          {
+            "q": "sum:agentgateway.retries.count{$env,component:proxy}.as_rate()",
+            "display_type": "line"
+          },
+          {
+            "q": "sum:agentgateway.requests_shed.count{$env,component:proxy} by {bind}.as_rate()",
+            "display_type": "line"
+          },
+          {
+            "q": "sum:agentgateway.downstream.connections_shed.count{$env,component:proxy} by {bind}.as_rate()",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Upstream call duration p95",
+        "requests": [
+          {
+            "q": "p95:agentgateway.upstream_call_duration_seconds{$env,component:proxy} by {kind,subtype}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Proxy memory usage",
+        "requests": [
+          {
+            "q": "max:agentgateway.process_rss{$env,component:proxy} by {host}",
+            "display_type": "line"
+          },
+          {
+            "q": "max:agentgateway.cgroup_working_set{$env,component:proxy} by {host}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Controller reconciliations running",
+        "requests": [
+          {
+            "q": "max:agentgateway.controller.reconciliations_running{$env,component:controller} by {controller}",
+            "display_type": "line"
+          }
+        ]
+      }
+    }
+  ]
+}

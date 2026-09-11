@@ -346,11 +346,11 @@ llm:
   - name: openai/*
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
   - name: direct-model
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
 "#,
 		mock.address(),
 		mock.address(),
@@ -389,7 +389,7 @@ llm:
       rules:
       - 'request.headers["x-model-auth"] == "yes"'
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     health:
       eviction: {{}}
       unhealthyExpression: 'response.code == 403'
@@ -397,7 +397,7 @@ llm:
     visibility: internal
     provider: openai
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     transformation:
       model: llmRequest.model.stripPrefix("prefix/")
   - name: direct-model
@@ -406,7 +406,7 @@ llm:
       rules:
       - 'request.headers["x-model-auth"] == "yes"'
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
   virtualModels:
   - name: virtual-model
     routing:
@@ -539,7 +539,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
   virtualModels:
   - name: public-model
     routing:
@@ -580,7 +580,7 @@ llm:
   - name: real-model
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     passthrough: detect
 "#,
 		mock.address()
@@ -631,7 +631,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     passthrough: detect
   virtualModels:
   - name: public-model
@@ -671,7 +671,7 @@ llm:
   - name: public-model
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
       model: upstream-model
     passthrough: opaque
 "#,
@@ -707,7 +707,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
       model: upstream-model
     passthrough: detect
   virtualModels:
@@ -749,7 +749,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     passthrough: opaque
   virtualModels:
   - name: public-model
@@ -1210,6 +1210,125 @@ async fn single_upstream_request(mock: &MockServer) -> wiremock::Request {
 		.expect("request recording should be enabled");
 	assert_eq!(requests.len(), 1);
 	requests.pop().unwrap()
+}
+
+#[rstest::rstest]
+#[case::retry_after(false)]
+#[case::denial_after_allowed_check(true)]
+#[tokio::test]
+async fn llm_remote_ratelimit_response(#[case] check_requests: bool) {
+	use agentgateway::http::remoteratelimit::proto;
+	use proto::rate_limit_response::rate_limit::Unit;
+	use proto::rate_limit_response::{Code, DescriptorStatus, RateLimit};
+
+	struct RateLimitHeaders;
+
+	#[async_trait::async_trait]
+	impl ratelimitmock::Handler for RateLimitHeaders {
+		async fn should_rate_limit(
+			&mut self,
+			request: &proto::RateLimitRequest,
+		) -> Result<proto::RateLimitResponse, tonic::Status> {
+			let statuses: Vec<_> = request
+				.descriptors
+				.iter()
+				.map(|descriptor| {
+					let (code, limit, remaining, reset, unit) = match descriptor.entries[0].key.as_str() {
+						"requests" => (Code::Ok, 60, 56, 12, Unit::Minute),
+						"tokens" => (Code::OverLimit, 100, 0, 38, Unit::Minute),
+						"spend" => (Code::OverLimit, 1000, 0, 2712, Unit::Hour),
+						key => panic!("unexpected descriptor: {key}"),
+					};
+					DescriptorStatus {
+						code: code as i32,
+						current_limit: Some(RateLimit {
+							name: descriptor.entries[0].key.clone(),
+							requests_per_unit: limit,
+							unit: unit as i32,
+						}),
+						limit_remaining: remaining,
+						duration_until_reset: Some(prost_types::Duration {
+							seconds: reset,
+							nanos: 0,
+						}),
+						..Default::default()
+					}
+				})
+				.collect();
+			Ok(proto::RateLimitResponse {
+				overall_code: if statuses.iter().any(|s| s.code == Code::OverLimit as i32) {
+					Code::OverLimit
+				} else {
+					Code::Ok
+				} as i32,
+				statuses,
+				..Default::default()
+			})
+		}
+	}
+
+	let rate_limit = ratelimitmock::RateLimitMock::new(|| RateLimitHeaders)
+		.spawn()
+		.await;
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
+		false,
+		"{}",
+	);
+	let mut descriptors = vec![
+		json!({"entries": [{"key": "tokens", "value": "\"model\""}], "type": "tokens"}),
+		json!({"entries": [{"key": "spend", "value": "\"user\""}], "type": "tokens"}),
+	];
+	if check_requests {
+		descriptors.insert(
+			0,
+			json!({
+				"entries": [{"key": "requests", "value": "\"user\""}], "type": "requests"
+			}),
+		);
+	}
+	bind
+		.attach_route_policy(json!({
+			"remoteRateLimit": {
+				"domain": "llm",
+				"host": rate_limit.address.to_string(),
+				"descriptors": descriptors,
+			}
+		}))
+		.await;
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo",
+		&completions_request_body(false),
+	)
+	.await;
+	assert!(mock.received_requests().await.unwrap().is_empty());
+	// Envoy's advisory selection keeps the first descriptor on a remaining-count tie.
+	// Retry-After must instead wait for every denied window, and an earlier allowed
+	// request check must not overwrite either set of denial headers.
+	assert_eq!(
+		json!({
+			"status": res.status().as_u16(),
+			"limit": res.hdr("x-ratelimit-limit"),
+			"remaining": res.hdr("x-ratelimit-remaining"),
+			"reset": res.hdr("x-ratelimit-reset"),
+			"retry-after": res.headers().get(header::RETRY_AFTER).map(|v| v.to_str().unwrap()),
+		}),
+		json!({
+			"status": 429,
+			"limit": "100",
+			"remaining": "0",
+			"reset": "38",
+			"retry-after": "2712",
+		})
+	);
 }
 
 async fn assert_llm_remote_rate_limit_cost(

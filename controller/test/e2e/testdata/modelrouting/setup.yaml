@@ -61,7 +61,7 @@ spec:
     name: model-routing
     sectionName: llm
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     transformations:
     - field: model
@@ -80,7 +80,7 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     transformations:
     - field: model
@@ -99,7 +99,7 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     transformations:
     - field: model
@@ -120,7 +120,7 @@ spec:
     model: internal/*
   visibility: Internal
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     transformations:
     - field: model
@@ -139,7 +139,7 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  baseURL: http://model-routing-primary.default.svc.cluster.local:9235/v1
   policies:
     health:
       eviction:
@@ -239,7 +239,7 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  baseURL: http://model-routing-primary.default.svc.cluster.local:9235/v1
   policies:
     authorization:
       policy:
@@ -265,7 +265,7 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     authorization:
       policy:
@@ -348,7 +348,7 @@ spec:
     name: scoped-models
     sectionName: models
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     transformations:
     - field: model
@@ -425,7 +425,7 @@ spec:
     name: tenant-a-models
     sectionName: models
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     transformations:
     - field: model
@@ -443,7 +443,7 @@ spec:
     name: tenant-b-models
     sectionName: models
   provider: OpenAI
-  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234/v1
   policies:
     transformations:
     - field: model

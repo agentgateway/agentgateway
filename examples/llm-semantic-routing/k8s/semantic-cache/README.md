@@ -21,7 +21,7 @@ when that process restarts. This example chooses Redis as a production-oriented
 backend because it provides shared, persistent cache state and can fit an
 existing Redis operational model. Redis is also used by other agentgateway
 features; for example, the [agentgateway global rate-limiting
-guide](https://agentgateway.dev/docs/kubernetes/main/security/rate-limit-global/)
+guide](https://agentgateway.dev/docs/kubernetes/main/documentation/security/rate-limit-global/)
 deploys a Redis-backed rate-limit service.
 
 See the [vSR semantic-cache documentation](https://vllm-semantic-router.com/docs/tutorials/plugin/semantic-cache/),
@@ -77,7 +77,7 @@ Install these tools:
 
 The example uses Kubernetes 1.36, agentgateway 1.4.1, the current vSR chart and
 image, and Redis Open Source 8.10.0. See the [agentgateway version-support
-reference](https://agentgateway.dev/docs/kubernetes/main/reference/versions/)
+reference](https://agentgateway.dev/docs/kubernetes/main/release-notes/versions/)
 for the supported Kubernetes and Gateway API versions. vSR downloads an
 embedding model on its first startup. Allocate at least 6 CPUs, 10 GiB of
 memory, and 15 GiB of free disk space to Docker.
@@ -89,9 +89,9 @@ for both connections:
 - Serve the vSR ExtProc gRPC endpoint with TLS, either directly or through a
   TLS-terminating sidecar, and configure agentgateway to originate TLS to the
   `semantic-router` Service. See the agentgateway [ExtProc
-  guide](https://agentgateway.dev/docs/kubernetes/main/traffic-management/extproc/)
+  guide](https://agentgateway.dev/docs/kubernetes/main/documentation/traffic-management/extproc/)
   and [BackendTLS
-  guide](https://agentgateway.dev/docs/kubernetes/main/security/backendtls/).
+  guide](https://agentgateway.dev/docs/kubernetes/main/documentation/security/backendtls/).
 - Configure Redis with a server certificate, private key, and trusted CA as
   described in the [Redis Open Source TLS
   documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/security/encryption/).

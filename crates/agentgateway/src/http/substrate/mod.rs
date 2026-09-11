@@ -1,8 +1,11 @@
 pub(crate) mod ateattr;
 mod egress;
+mod egress_actor_resolution;
 mod ingress;
 
 pub use egress::SubstrateEgress;
+pub(crate) use egress_actor_resolution::ActorIdentity;
+pub use egress_actor_resolution::EgressActorResolution;
 pub use ingress::SubstrateIngress;
 pub(crate) use ingress::{
 	STALE_ASSIGNMENT_HEADER, SubstrateRequestState, is_stale_assignment, stale_assignment_unavailable,

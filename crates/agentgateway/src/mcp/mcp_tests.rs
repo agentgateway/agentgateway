@@ -26,6 +26,92 @@ use crate::types::agent::{BackendTrafficPolicy, FrontendPolicy, PolicyTarget, Ta
 use crate::*;
 
 #[tokio::test]
+async fn token_exchange_rejections_preserve_http_status() {
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, ResponseTemplate};
+	for target_policy in [false, true] {
+		for (message_kind, status, expected_status) in [
+			("request", 400u16, 400u16),
+			("notification", 401, 500),
+			("legacy_initialize", 503, 502),
+		] {
+			let token = wiremock::MockServer::start().await;
+			let upstream = wiremock::MockServer::start().await;
+			Mock::given(method("POST"))
+				.and(path("/token"))
+				.respond_with(
+					ResponseTemplate::new(status).set_body_json(serde_json::json!({
+						"error": "invalid_grant"
+					})),
+				)
+				.mount(&token)
+				.await;
+			let auth = serde_json::from_value(serde_json::json!({
+				"host": token.address().to_string(), "path": "/token",
+				"cache": {"maxEntries": 0}
+			}))
+			.unwrap();
+			let policies = vec![BackendTrafficPolicy::backend_auth(
+				BackendAuthKind::OAuthTokenExchange(Box::new(auth)),
+			)];
+			let (mcp_policies, target_policies) = if target_policy {
+				(vec![], policies)
+			} else {
+				(policies, vec![])
+			};
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_mcp_backend_and_target_policies(
+					*upstream.address(),
+					false,
+					false,
+					mcp_policies,
+					target_policies,
+					false,
+				)
+				.with_bind(simple_bind())
+				.with_route(basic_route(*upstream.address()));
+			let io = t.serve_real_listener(BIND_KEY).await;
+			let body = match message_kind {
+				"request" => serde_json::json!({"jsonrpc": "2.0", "id": 1,
+					"method": "tools/call", "params": {"name": "echo", "arguments": {}, "_meta": task_meta()}}),
+				"notification" => {
+					serde_json::json!({"jsonrpc": "2.0", "method": "notifications/roots/list_changed"})
+				},
+				_ => mcp_initialize_body(),
+			};
+			let client = reqwest::Client::new();
+			let url = format!("http://{io}/mcp");
+			let mut request = mcp_json_post(&client, &url, &body).bearer_auth("subject-token");
+			if message_kind != "legacy_initialize" {
+				request = request.header("mcp-protocol-version", "2026-07-28");
+				if message_kind == "request" {
+					request = request
+						.header("mcp-method", "tools/call")
+						.header("mcp-name", "echo");
+				} else {
+					request = request.header("mcp-method", "notifications/roots/list_changed");
+				}
+			}
+			let response = request.send().await.unwrap();
+			let actual_status = response.status();
+			let text = response.text().await.unwrap();
+			let requests = token.received_requests().await.unwrap();
+			assert!(
+				!requests.is_empty(),
+				"token endpoint not reached: {target_policy} {message_kind} {status}: {actual_status} {text}"
+			);
+			assert!(upstream.received_requests().await.unwrap().is_empty());
+			assert_eq!(
+				actual_status.as_u16(),
+				expected_status,
+				"target_policy={target_policy} message={message_kind} token_status={status}: {text}"
+			);
+		}
+	}
+}
+
+#[tokio::test]
 async fn stream_to_stream_single() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -3661,6 +3747,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		key: "frontend/accessLog".into(),
 		name: None,
 		target: PolicyTarget::Gateway(listener_name.clone().into()),
+		creation_timestamp: 0,
 		inheritance: Default::default(),
 		policy: FrontendPolicy::AccessLog(access_log_payload_policy()).into(),
 	});
@@ -6280,16 +6367,20 @@ async fn mcp_local_ratelimit() {
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));
 
-	// Attach local rate limit policy
-	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
-	// Allow 5 total: overhead (3) + tool calls (2), then rate limit the 6th
+	// Only tool calls consume this limit; MCP initialization traffic does not match.
 	t.attach_route_policy(serde_json::json!({
-		"localRateLimit": [{
-			"maxTokens": 5,
-			"tokensPerFill": 1,
-			"fillInterval": "10s",
-			"type": "requests"
-		}]
+		"localRateLimit": {
+			"conditional": [{
+				"condition": format!(
+					"backend.name == '/{}' && backend.type == 'mcp' && mcp.tool.name == 'echo' && mcp.tool.arguments.n > 0",
+					mock.addr,
+				),
+				"maxTokens": 2,
+				"tokensPerFill": 1,
+				"fillInterval": "10s",
+				"type": "requests"
+			}]
+		}
 	}))
 	.await;
 
@@ -6329,8 +6420,57 @@ async fn mcp_local_ratelimit() {
 		"rate limit should map to RESOURCE_EXHAUSTED"
 	);
 	let data = e.data.as_ref().expect("error should carry retry data");
-	assert_eq!(data["limit"], 5);
+	assert_eq!(data["limit"], 2);
 	assert!(data.get("retryAfterSeconds").is_some());
+}
+
+#[tokio::test]
+async fn mcp_cached_request_reparsed_after_body_transformation() {
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+
+	t.attach_route_policy(serde_json::json!({
+		"transformations": {
+			"conditional": [{
+				"condition": "mcp.tool.name == 'echo'",
+				"request": {
+					"body": r#"{
+						"jsonrpc": "2.0",
+						"id": json(request.body).id,
+						"method": "tools/call",
+						"params": {
+							"name": mcp.tool.name,
+							"arguments": {"after": true}
+						}
+					}"#
+				}
+			}]
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"before": true})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("transformed tool call should succeed");
+
+	assert_eq!(
+		&result.content[0].as_text().unwrap().text,
+		r#"{"after":true}"#
+	);
 }
 
 #[tokio::test]
@@ -7909,4 +8049,47 @@ async fn mcp_guardrails_mutated_resource_read_reaches_upstream() {
 		})
 		.expect("resource should return text");
 	assert!(text.contains("Business Intelligence Memo"));
+}
+
+// Regression for https://github.com/agentgateway/agentgateway/issues/3357.
+#[tokio::test]
+async fn modern_multi_target_resolve_propagates_meta() {
+	let (mock, capture) = mock_mrtr_streamable_http_server().await;
+	let other = mock_modern_streamable_http_server().await;
+	let t = never_prefix_proxy(
+		vec![("a", mock.addr, false), ("b", other.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let meta = modern_meta();
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/call",
+		"params": {
+			"name": "guarded_echo",
+			"arguments": {},
+			"_meta": meta
+		}
+	});
+	let resp = mcp_json_post(&reqwest::Client::new(), &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/call")
+		.header("mcp-name", "guarded_echo")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let result = terminal_result(&resp.text().await.unwrap(), 1);
+	assert_eq!(result["content"][0]["text"], "no-elicitation-capability");
+
+	// Check the gateway-generated list probe, not just the forwarded tool call.
+	let requests = capture.lock().unwrap();
+	let probe = requests
+		.iter()
+		.find(|r| r["method"] == "tools/list")
+		.unwrap();
+	for (key, value) in meta.as_object().unwrap() {
+		assert_eq!(&probe["params"]["_meta"][key], value, "{key}");
+	}
 }

@@ -280,6 +280,7 @@ fn merge_deprecated_frontend_policies(
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
 				random_sampling,
 				client_sampling,
+				parent_not_sampled: None,
 				path,
 				protocol: match protocol {
 					Protocol::Grpc => crate::types::agent::TracingProtocol::Grpc,
@@ -321,6 +322,8 @@ fn parse_deprecated_tracing_endpoint(endpoint: &str) -> anyhow::Result<(Target, 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
 	#[serde(skip)]
+	pub(crate) standard_attributes: Arc<crate::telemetry::log::LoggingFields>,
+	#[serde(skip)]
 	pub(crate) budget_registration: crate::http::budget::BudgetRegistration,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model_catalog: Option<Vec<crate::ModelCatalogSource>>,
@@ -339,8 +342,8 @@ pub struct NormalizedLocalConfig {
 #[apply(schema_de!)]
 pub struct LocalConfig {
 	/// config defines top-level settings for DNS, admin, networking, observability, and session
-	/// management. Unlike other sections, these are applied only at startup, except modelCatalog,
-	/// which is dynamically reloaded.
+	/// management. Unlike other sections, these are applied only at startup, except modelCatalog and
+	/// standardAttributes, which are dynamically reloaded.
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
@@ -435,6 +438,7 @@ pub struct LocalLLMConfig {
 	/// models defines the set of models that can be served by this gateway. The model name refers to the
 	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
+	#[serde(default)]
 	models: Vec<LocalLLMModels>,
 	/// virtualModels defines a set of models that can be served from the gateway. The model name refers to the
 	/// model in the users request that is matched. However, unlike the `models` field, virtual models will
@@ -939,6 +943,10 @@ pub struct LocalLLMParams {
 	/// For Azure: the Foundry project name (required for foundry resource type)
 	azure_project_name: Option<Strng>,
 	/// Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.
+	/// The URL path is the upstream base path and defaults to / when omitted.
+	/// Provider-specific endpoint paths are appended to this base path.
+	/// For example, https://api.openai.com/v1 sends completions to /v1/chat/completions,
+	/// while https://api.openai.com sends them to /chat/completions.
 	#[serde(default)]
 	base_url: Option<Strng>,
 	/// Override the upstream host for this provider.
@@ -1066,11 +1074,11 @@ impl LocalLLMModels {
 			.host_override
 			.get_or_insert_with(|| (host, port).into());
 		let path = url.path().trim_end_matches('/');
-		if !path.is_empty() && self.params.path_override.is_none() {
+		if self.params.path_override.is_none() {
 			self
 				.params
 				.path_prefix
-				.get_or_insert_with(|| strng::new(path));
+				.get_or_insert_with(|| strng::new(if path.is_empty() { "/" } else { path }));
 		}
 		if url.scheme() == "https" && self.backend_tls.is_none() {
 			self.backend_tls = Some(http::backendtls::LocalBackendTLS::default());
@@ -1118,11 +1126,15 @@ struct LocalGateway {
 	/// port is the port to listen on for this gateway.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
+	/// bindAddress is the IPv4 or IPv6 address to listen on. Use `127.0.0.1` or `::1` for loopback.
+	/// When omitted, listens on all interfaces (`::` on Unix with IPv6 enabled, otherwise `0.0.0.0`).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	bind_address: Option<IpAddr>,
 	/// protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways
 	/// default to HTTP, or HTTPS when tls is set.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	protocol: Option<LocalGatewayProtocol>,
-	/// listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.
+	/// listeners defines multiple named listeners under this gateway. When set, only `port` and `bindAddress` may be configured on the top level gateway.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	listeners: Vec<LocalGatewayListener>,
 
@@ -1790,6 +1802,7 @@ impl LocalBackend {
 					prefix_mode: tgt.prefix_mode.unwrap_or_default(),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
+					sse_keep_alive: tgt.sse_keep_alive,
 					dns_rebinding_protection: tgt.dns_rebinding_protection,
 				};
 				backends.push(Backend::MCP(name, m).into());
@@ -1847,6 +1860,7 @@ pub enum McpStatefulMode {
 #[apply(schema_de!)]
 pub struct LocalMcpBackend {
 	/// MCP server targets to multiplex together.
+	#[serde(default)]
 	pub targets: Vec<Arc<LocalMcpTarget>>,
 	#[serde(default)]
 	pub stateful_mode: McpStatefulMode,
@@ -1857,6 +1871,16 @@ pub struct LocalMcpBackend {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub failure_mode: Option<FailureMode>,
+	/// Interval at which SSE keep-alive comments are sent on long-lived MCP streams.
+	/// Disabled when unset. Set this when a load balancer or API gateway sits in front
+	/// of agentgateway and reaps connections that carry no traffic.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub sse_keep_alive: Option<Duration>,
 	/// Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).
 	/// Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
@@ -2477,6 +2501,9 @@ struct LocalLLMPolicy {
 	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
+	/// Set request timeout limits.
+	#[serde(default)]
+	timeout: Option<timeout::Policy>,
 }
 
 #[apply(schema_de!)]
@@ -2896,7 +2923,7 @@ struct LocalFrontendPolicies {
 	pub network_ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
 	/// Validate the originating actor before accepting a CONNECT tunnel.
 	#[serde(default)]
-	pub substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
+	pub substrate_egress_actor_resolution: Option<crate::http::substrate::EgressActorResolution>,
 	/// Enable downstream PROXY protocol handling on this gateway or port, including
 	/// version matching and whether PROXY headers are required or optional.
 	#[serde(default, rename = "proxyProtocol", alias = "proxy")]
@@ -3000,6 +3027,9 @@ pub struct FilterOrPolicy {
 	/// Resolve Substrate actor hostnames for dynamic route backends on ingress.
 	#[serde(default)]
 	substrate_ingress: Option<crate::http::substrate::SubstrateIngress>,
+	/// Enforce the CONNECT-pinned effective Substrate egress policy.
+	#[serde(default)]
+	substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
 	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
@@ -3066,6 +3096,18 @@ async fn convert(
 		.cloned()
 		.map(serde_json::from_value)
 		.transpose()?;
+	let raw_attributes = local_runtime_config
+		.as_ref()
+		.as_ref()
+		.and_then(|config| config.get("standardAttributes"))
+		.filter(|value| !value.is_null())
+		.cloned()
+		.map(serde_json::from_value::<crate::RawStandardAttributes>)
+		.transpose()?;
+	let standard_attributes = Arc::new(
+		crate::config::standard_attributes(raw_attributes.as_ref())
+			.context("invalid config.standardAttributes")?,
+	);
 	merge_deprecated_frontend_policies(config, &mut frontend_policies)?;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -3165,6 +3207,7 @@ async fn convert(
 			}),
 			key: p.name.to_string().into(),
 			target: p.target,
+			creation_timestamp: 0,
 			inheritance: Default::default(),
 			policy: tp,
 		};
@@ -3346,6 +3389,7 @@ async fn convert(
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 	let normalized = NormalizedLocalConfig {
+		standard_attributes,
 		budget_registration: Default::default(),
 		model_catalog,
 		binds: all_binds,
@@ -3650,15 +3694,16 @@ async fn convert_gateways(
 			}
 			refs.insert(gateway_name, listener_keys);
 		}
-		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+		let default_address = if cfg!(target_family = "unix") && config.ipv6_enabled {
+			IpAddr::V6(Ipv6Addr::UNSPECIFIED)
 		} else {
-			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+			IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 		};
+		let address = gateway_config.bind_address.unwrap_or(default_address);
 		all_binds.push(BindSnapshot {
 			bind: Arc::new(Bind {
 				key: strng::format!("bind/{port}"),
-				address: sockaddr,
+				address: SocketAddr::new(address, port),
 				protocol: detect_bind_protocol(&listeners),
 				tunnel_protocol: TunnelProtocol::Direct,
 				mode: BindMode::Standard,
@@ -3729,6 +3774,7 @@ async fn convert_gateway_listener(
 				key: strng::format!("gateway/{reference}/{idx}"),
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
@@ -4303,6 +4349,7 @@ async fn convert_llm_config(
 			guardrails,
 			local_rate_limit,
 			remote_rate_limit,
+			timeout,
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		shared_prompt_guard = guardrails;
@@ -4312,6 +4359,7 @@ async fn convert_llm_config(
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
+				timeout,
 				..Default::default()
 			},
 			None,
@@ -4593,6 +4641,7 @@ async fn convert_llm_config(
 						.map(|target| llm::model_router::ConditionalTarget {
 							model: target.model.clone(),
 							when: target.when.clone(),
+							invalid: false,
 						})
 						.collect(),
 				)
@@ -4608,6 +4657,7 @@ async fn convert_llm_config(
 						.map(|target| llm::model_router::WeightedTarget {
 							model: target.model.clone(),
 							weight: target.weight,
+							invalid: false,
 						})
 						.collect(),
 				)
@@ -4727,6 +4777,7 @@ async fn convert_llm_config(
 				key,
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
@@ -4737,6 +4788,7 @@ async fn convert_llm_config(
 				key,
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Route).into(),
 			});
@@ -5013,6 +5065,7 @@ async fn convert_listener(
 				key,
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
@@ -5152,6 +5205,7 @@ async fn split_frontend_policies(
 			key: key.clone(),
 			name: None,
 			target: PolicyTarget::Gateway(gateway.clone()),
+			creation_timestamp: 0,
 			inheritance: Default::default(),
 			policy: p.into(),
 		});
@@ -5162,7 +5216,7 @@ async fn split_frontend_policies(
 		tcp,
 		network_authorization,
 		network_ext_authz,
-		substrate_egress,
+		substrate_egress_actor_resolution,
 		proxy_protocol,
 		connect,
 		access_log,
@@ -5192,8 +5246,11 @@ async fn split_frontend_policies(
 			"networkExtAuthz",
 		);
 	}
-	if let Some(p) = substrate_egress {
-		add(FrontendPolicy::SubstrateEgress(p), "substrateEgress");
+	if let Some(p) = substrate_egress_actor_resolution {
+		add(
+			FrontendPolicy::SubstrateEgressActorResolution(p),
+			"substrateEgressActorResolution",
+		);
 	}
 	if let Some(p) = proxy_protocol {
 		add(FrontendPolicy::Proxy(p), "proxy");
@@ -5279,6 +5336,7 @@ pub(crate) async fn split_policies_for_target(
 		ext_authz,
 		ext_proc,
 		substrate_ingress,
+		substrate_egress,
 		buffer,
 		timeout,
 		retry,
@@ -5459,6 +5517,9 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = substrate_ingress {
 		route_policies.push(TrafficPolicy::SubstrateIngress(RequestPolicy::single(p)))
+	}
+	if let Some(p) = substrate_egress {
+		route_policies.push(TrafficPolicy::SubstrateEgress(RequestPolicy::single(p)))
 	}
 	if let Some(p) = local_rate_limit
 		&& !p.is_empty()

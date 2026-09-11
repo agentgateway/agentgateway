@@ -169,19 +169,15 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
-	expect(gateway.postedConfigs[1].llm).toMatchObject({
-		port: 4000,
-		models: [],
-		providers: [],
-		virtualModels: []
+	expect(gateway.postedConfigs[1].llm).toEqual({
+		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 
 	await page.getByRole('button', { name: /MCP/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(3);
-	expect(gateway.postedConfigs[2].mcp).toMatchObject({
-		port: 3000,
-		targets: []
+	expect(gateway.postedConfigs[2].mcp).toEqual({
+		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 	await expect(page.getByText('3 of 3 enabled')).toBeVisible();
@@ -342,18 +338,14 @@ test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) =
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 	expect(gateway.postedConfigs[0].llm).toMatchObject({
-		gateways: 'default',
-		models: [],
-		providers: [],
-		virtualModels: []
+		gateways: 'default'
 	});
 	expect(gateway.postedConfigs[0].llm).not.toHaveProperty('port');
 
 	await page.getByRole('button', { name: /MCP/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
 	expect(gateway.postedConfigs[1].mcp).toMatchObject({
-		gateways: 'default',
-		targets: []
+		gateways: 'default'
 	});
 	expect(gateway.postedConfigs[1].mcp).not.toHaveProperty('port');
 

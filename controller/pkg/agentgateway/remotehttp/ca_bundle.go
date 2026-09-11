@@ -39,6 +39,8 @@ func caBundleFromBackendTLSRefs(
 		_, _ = h.Write([]byte{0})
 		_, _ = h.Write([]byte(nn.String()))
 		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(cacert.Key(ref)))
+		_, _ = h.Write([]byte{0})
 		_, _ = h.Write([]byte(caCRT))
 		_, _ = h.Write([]byte{0})
 	}

@@ -397,10 +397,10 @@ async fn upsert_config_resources(
 	kind: ConfigResourceKind,
 	mut request: ConfigResourceUpsertRequest,
 ) -> Result<UiConfigResourcesResponse, ErrorResponse> {
-	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind == ConfigResourceKind::McpSettings {
+	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind.settings_fields().is_some() {
 		let file_config = read_file_config(app).await?;
 		for resource in &mut request.resources {
-			remove_file_owned_mcp_settings(&file_config, &mut resource.value)?;
+			remove_file_owned_settings(kind, &file_config, &mut resource.value)?;
 		}
 	}
 	let prepared =
@@ -443,8 +443,8 @@ async fn update_config_resource(
 	} else {
 		None
 	};
-	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind == ConfigResourceKind::McpSettings {
-		remove_file_owned_mcp_settings(&read_file_config(&app).await?, &mut resource.value)?;
+	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind.settings_fields().is_some() {
+		remove_file_owned_settings(kind, &read_file_config(&app).await?, &mut resource.value)?;
 	}
 	let stored_resources = if app.state.storage.mode == ConfigStoreMode::Hybrid {
 		Some(
@@ -558,23 +558,25 @@ async fn update_config_resource(
 	Ok(Json(response.into()))
 }
 
-fn remove_file_owned_mcp_settings(
+fn remove_file_owned_settings(
+	kind: ConfigResourceKind,
 	file_config: &Value,
 	value: &mut Value,
 ) -> Result<(), ErrorResponse> {
+	let (section, fields) = kind.settings_fields().expect("settings resource");
 	let value = value.as_object_mut().ok_or_else(|| {
-		resource_api_error(ConfigResourceError::InvalidRequest(
-			"mcp.settings/default must be an object".to_string(),
-		))
+		resource_api_error(ConfigResourceError::InvalidRequest(format!(
+			"{kind}/default must be an object"
+		)))
 	})?;
-	let file_mcp = file_config.get("mcp").and_then(Value::as_object);
-	for field in crate::config_store::MCP_SETTINGS_FIELDS {
-		let Some(file_value) = file_mcp.and_then(|mcp| mcp.get(field)) else {
+	let file_settings = file_config.get(section).and_then(Value::as_object);
+	for &field in fields {
+		let Some(file_value) = file_settings.and_then(|settings| settings.get(field)) else {
 			continue;
 		};
 		if value.get(field).is_some_and(|value| value != file_value) {
 			return Err(resource_api_error(ConfigResourceError::Conflict(format!(
-				"file-owned mcp.settings/default field cannot be updated in hybrid mode: {field}"
+				"file-owned {kind}/default field cannot be updated in hybrid mode: {field}"
 			))));
 		}
 		value.remove(field);

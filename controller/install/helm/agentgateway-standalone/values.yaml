@@ -152,7 +152,7 @@ monitoring:
     # -- How often Prometheus scrapes the agentgateway proxy's metrics.
     interval: 15s
 
-# -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
+# -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. Changes outside the nested 'config' section, plus 'config.modelCatalog', are applied without restarting the pods. Changes to other nested 'config' settings restart the pods because agentgateway reads them only at startup. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
 config: {}
 
 # Postgres connection used by database mode.

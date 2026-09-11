@@ -28,6 +28,10 @@ spec:
   - port: metrics
     path: /metrics
     interval: {{ .Values.monitoring.serviceMonitor.interval }}
+  {{- with .Values.monitoring.proxy.podMonitor.podTargetLabels }}
+  podTargetLabels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}
 {{- if .Values.monitoring.serviceMonitor.enabled }}
 ---

@@ -5,7 +5,7 @@
       "Operator": "IsEquals",
       "DataType": "Boolean",
       "Operand": true,
-      "MoreInfoUrl": "https://agentgateway.dev/docs/kubernetes/latest/integrations/llm-clients/microsoft-intune/#manage-codex",
+      "MoreInfoUrl": "https://agentgateway.dev/docs/kubernetes/latest/integrations/llm/clients/microsoft-intune/#manage-codex",
       "RemediationStrings": [
         {
           "Language": "en_US",

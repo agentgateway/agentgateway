@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 0.0.0.0:15021
+
+binds:
+- port: 443
+  listeners:
+  - protocol: HTTPS
+    tls:
+      cert: /certs/tls.crt
+      key: /certs/tls.key
+    routes:
+    - name: netbird-server
+      matches:
+      - path:
+          pathPrefix: /relay
+      - path:
+          pathPrefix: /ws-proxy
+      - path:
+          pathPrefix: /api
+      - path:
+          pathPrefix: /oauth2
+      - path:
+          pathPrefix: /signalexchange.SignalExchange
+      - path:
+          pathPrefix: /management.ManagementService
+      - path:
+          pathPrefix: /management.ProxyService
+      backends:
+      - host: netbird-server:80
+    - name: netbird-dashboard
+      backends:
+      - host: netbird-dashboard:80

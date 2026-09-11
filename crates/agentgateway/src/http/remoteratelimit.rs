@@ -483,7 +483,7 @@ impl RemoteRateLimit {
 		if overall_code != (proto::rate_limit_response::Code::Ok as i32) {
 			let mut hm = HeaderMap::new();
 			process_headers(&mut hm, response_headers_to_add);
-			process_ratelimit_status_headers(&mut hm, &statuses);
+			process_ratelimit_status_headers(&mut hm, &statuses, true);
 			return Err(ProxyError::RemoteRateLimitExceeded {
 				status: ratelimit_status(&statuses),
 				raw_body,
@@ -495,7 +495,7 @@ impl RemoteRateLimit {
 		// Surface the standard x-ratelimit-* headers on allowed responses so clients can self-throttle.
 		let mut hm = HeaderMap::new();
 		process_headers(&mut hm, response_headers_to_add);
-		process_ratelimit_status_headers(&mut hm, &statuses);
+		process_ratelimit_status_headers(&mut hm, &statuses, false);
 		if !hm.is_empty() {
 			res.response_headers = Some(hm);
 		}
@@ -618,6 +618,7 @@ fn ratelimit_status(
 fn process_ratelimit_status_headers(
 	hm: &mut HeaderMap,
 	statuses: &[proto::rate_limit_response::DescriptorStatus],
+	denied: bool,
 ) {
 	if let Some(status) = ratelimit_status(statuses) {
 		http::x_headers::set_ratelimit_headers(
@@ -626,6 +627,20 @@ fn process_ratelimit_status_headers(
 			status.remaining,
 			status.reset_seconds,
 		);
+	}
+	// Only denials need Retry-After; allowed responses still get advisory quota headers.
+	// Like Envoy, derive the longest denied reset separately: current_limit may be
+	// absent, and advisory x-ratelimit headers may describe a different descriptor.
+	if denied
+		&& let Some(reset) = statuses
+			.iter()
+			.filter(|s| s.code == proto::rate_limit_response::Code::OverLimit as i32)
+			.filter_map(|s| s.duration_until_reset.as_ref())
+			.map(|d| (d.seconds.max(0) as u64 + u64::from(d.nanos > 0)).max(1))
+			.max()
+	{
+		hm.entry(::http::header::RETRY_AFTER)
+			.or_insert(reset.into());
 	}
 }
 

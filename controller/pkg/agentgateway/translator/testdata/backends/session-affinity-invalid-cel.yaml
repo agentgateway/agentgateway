@@ -1,0 +1,64 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: session-affinity-invalid-cel
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: provider-a
+        openai: {}
+        host: mock-llm.default.svc.cluster.local
+        port: 4801
+      - name: provider-b
+        openai: {}
+        host: mock-llm.default.svc.cluster.local
+        port: 4802
+  policies:
+    sessionAffinity:
+      source: "not( valid cel"
+
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - hostOverride:
+              host: mock-llm.default.svc.cluster.local
+              port: 4801
+            name: provider-a
+            openai: {}
+          - hostOverride:
+              host: mock-llm.default.svc.cluster.local
+              port: 4802
+            name: provider-b
+            openai: {}
+      inlinePolicies:
+      - sessionAffinity:
+          source: not( valid cel
+      key: default/session-affinity-invalid-cel
+      name:
+        name: session-affinity-invalid-cel
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: session-affinity-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: 'failed to translate backend: backend sessionAffinity source is not
+        a valid CEL expression: not( valid cel'
+      reason: PartiallyValid
+      status: "True"
+      type: Accepted

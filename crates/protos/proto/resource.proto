@@ -167,6 +167,9 @@ message Policy {
   // Controls whether more-specific child policy levels can be included when
   // computing the effective policy.
   Inheritance inheritance = 8;
+  // Kubernetes creationTimestamp as Unix seconds. Older policies take
+  // precedence when multiple policies of the same kind target the same level.
+  int64 creation_timestamp = 9;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;
@@ -329,6 +332,7 @@ enum Protocol {
 message Timeout {
   google.protobuf.Duration request = 1;
   google.protobuf.Duration backend_request = 2;
+  google.protobuf.Duration response_idle = 3;
 }
 
 message Retry {
@@ -866,9 +870,21 @@ message FrontendPolicySpec {
 
     // client_sampling is a CEL expression to determine the amount of client sampling.
     // Client sampling determines whether to initiate a new trace span if the incoming
-    // request already has a trace. This should evaluate to a float between 0.0-1.0,
-    // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
+    // request already has a trace. This only applies when that trace is sampled (-01);
+    // use parent_not_sampled for requests whose trace is not. This should evaluate to a
+    // float between 0.0-1.0, or a boolean (true/false). If unspecified, client sampling
+    // is 100% enabled.
     optional string client_sampling = 5;
+
+    // parent_not_sampled is a CEL expression deciding whether to trace a request that arrives
+    // with a traceparent whose sampled flag is unset (-00), meaning the client asked for it not
+    // to be traced. When true the request is traced anyway, and -01 is sent upstream so
+    // downstream services trace it too. This should evaluate to a float between 0.0-1.0, or a
+    // boolean (true/false). If unspecified, the client's choice is honored.
+    //
+    // Only one of random_sampling, client_sampling and parent_not_sampled applies to any given
+    // request; the incoming traceparent decides which.
+    optional string parent_not_sampled = 11;
 
     // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
     optional string path = 6;
@@ -1993,6 +2009,14 @@ message MCPBackend {
     FAIL_OPEN = 1;
   }
   FailureMode failure_mode = 5;
+
+  // Interval at which SSE keep-alive comments are sent on long-lived MCP
+  // streams. Disabled when unset. Without it, a stream that legitimately
+  // carries no traffic (for example a FAIL_OPEN GET stream held open with
+  // no reachable upstream, or an idle session) is indistinguishable from a
+  // dead connection and is dropped by intermediaries such as load balancers
+  // and API gateways.
+  optional google.protobuf.Duration sse_keep_alive = 6;
 }
 
 message MCPTarget {
@@ -2238,6 +2262,9 @@ message ModelRoute {
         // referenced resource name when match.model is omitted.
         string model = 1;
         uint32 weight = 2;
+        // The control plane could not resolve this target. If selected, the
+        // request fails instead of resolving model against wildcard routes.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }
@@ -2251,6 +2278,9 @@ message ModelRoute {
         // not a ModelRoute resource key.
         string model = 1;
         optional string when = 2;
+        // The control plane could not resolve this target. If its condition
+        // matches, the request fails instead of falling through.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }

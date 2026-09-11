@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datadog-model-catalog
+  namespace: agentgateway-system
+data:
+  catalog.json: |
+    {
+      "providers": {
+        "openai": {
+          "models": {
+            "datadog-test": {
+              "rates": {
+                "input": "1",
+                "output": "2",
+                "cacheRead": "0.5"
+              }
+            }
+          }
+        }
+      }
+    }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agentgateway-proxy
+  namespace: agentgateway-system
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: datadog-observability
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: datadog-fixture
+  namespace: agentgateway-system
+spec:
+  ai:
+    provider:
+      openai: {}
+      host: datadog-fixture.agentgateway-system.svc.cluster.local
+      port: 8080
+  policies:
+    auth:
+      passthrough: {}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: datadog-fixture
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: datadog-fixture
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: datadog-collector
+  namespace: agentgateway-system
+spec:
+  static:
+    host: datadog-collector.agentgateway-system.svc.cluster.local
+    port: 4318
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: datadog-tracing
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  frontend:
+    tracing:
+      backendRef:
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+        name: datadog-collector
+        port: 4318
+      protocol: HTTP
+      randomSampling: "true"
+      clientSampling: "true"
+      resources:
+      - name: service.name
+        expression: '"agentgateway"'
+      - name: service.version
+        expression: '"1.5.0"'
+      - name: service.namespace
+        expression: '"agentgateway-system"'
+      - name: deployment.environment.name
+        expression: '"datadog-dev"'
+      attributes:
+        add:
+        - name: env
+          expression: '"datadog-dev"'

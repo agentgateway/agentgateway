@@ -358,7 +358,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 		// Ref: https://gateway-api.sigs.k8s.io/geps/gep-1713/#listener-precedence
 		// - ListenerSet ordered by creation time (oldest first)
 		// - ListenerSet ordered alphabetically by “{namespace}/{name}”
-		slices.SortFunc(listenersFromSets, func(a, b ListenerSet) int {
+		slices.SortStableFunc(listenersFromSets, func(a, b ListenerSet) int {
 			// primary sort: creation timestamp (oldest first)
 			if r := a.ParentInfo.CreationTimestamp.Compare(b.ParentInfo.CreationTimestamp.Time); r != 0 {
 				return r
@@ -367,7 +367,10 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			if r := cmp.Compare(a.Parent.Namespace, b.Parent.Namespace); r != 0 {
 				return r
 			}
-			return cmp.Compare(a.Parent.Name, b.Parent.Name)
+			if r := cmp.Compare(a.Parent.Name, b.Parent.Name); r != 0 {
+				return r
+			}
+			return cmp.Compare(a.ListenerIndex, b.ListenerIndex)
 		})
 
 		for _, ls := range listenersFromSets {
@@ -445,6 +448,7 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 type ListenerSet struct {
 	Name          string               `json:"name"`
 	Parent        types.NamespacedName `json:"parent"`
+	ListenerIndex int                  `json:"listenerIndex"`
 	ParentInfo    ParentInfo           `json:"parentInfo"`
 	TLSInfo       *TLSInfo             `json:"tlsInfo"`
 	GatewayParent types.NamespacedName `json:"gatewayParent"`
@@ -475,6 +479,7 @@ func (g ListenerSet) Equals(other ListenerSet) bool {
 		g.Name == other.Name &&
 		g.GatewayParent == other.GatewayParent &&
 		g.Parent == other.Parent &&
+		g.ListenerIndex == other.ListenerIndex &&
 		g.ParentInfo.Equals(other.ParentInfo)
 }
 
@@ -553,16 +558,17 @@ func ListenerSetBuilder(
 
 		allowed, _ := GenerateSupportedKinds(standardListener, enableAgentgatewayModels)
 		pri := ParentInfo{
-			ParentGateway:    config.NamespacedName(parentGwObj),
-			ListenerKey:      name,
-			AllowedKinds:     allowed,
-			Hostnames:        hostnames,
-			OriginalHostname: string(ptr.OrEmpty(l.Hostname)),
-			SectionName:      l.Name,
-			Port:             l.Port,
-			Protocol:         l.Protocol,
-			TLSPassthrough:   l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough,
-			Internal:         internalPorts.Has(l.Port),
+			ParentGateway:     config.NamespacedName(parentGwObj),
+			ListenerKey:       name,
+			AllowedKinds:      allowed,
+			Hostnames:         hostnames,
+			OriginalHostname:  string(ptr.OrEmpty(l.Hostname)),
+			SectionName:       l.Name,
+			Port:              l.Port,
+			Protocol:          l.Protocol,
+			TLSPassthrough:    l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough,
+			Internal:          internalPorts.Has(l.Port),
+			CreationTimestamp: obj.CreationTimestamp,
 		}
 
 		res := ListenerSet{
@@ -571,6 +577,7 @@ func ListenerSetBuilder(
 			TLSInfo:       tlsInfo,
 			Parent:        config.NamespacedName(obj),
 			GatewayParent: config.NamespacedName(parentGwObj),
+			ListenerIndex: i,
 			ParentInfo:    pri,
 		}
 		result = append(result, res)

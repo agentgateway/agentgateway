@@ -377,6 +377,7 @@ impl ResponseBuilder {
 			top_p: None,
 			truncation: None,
 			usage,
+			prompt_cache_diagnostics: None,
 		}
 	}
 
@@ -847,6 +848,8 @@ impl ResponseType for Response {
 			},
 			output_messages,
 			first_token: Default::default(),
+			last_token_at: Default::default(),
+			inter_chunk_latencies: Default::default(),
 		}
 	}
 
@@ -944,8 +947,9 @@ pub mod typed {
 		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
 		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
 		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		Reasoning, ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
-		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
+		Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
+		Response, ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
+		ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
 		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
 		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
@@ -1071,6 +1075,7 @@ mod tests {
 			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
+			r#async: None,
 		})]);
 
 		let llm_response = response.to_llm_response(crate::LogContentFields {
@@ -1101,6 +1106,7 @@ mod tests {
 			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
+			r#async: None,
 		})]);
 
 		let llm_response = response.to_llm_response(crate::LogContentFields::default());

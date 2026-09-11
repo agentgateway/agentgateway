@@ -120,8 +120,10 @@ fn set_required_fields_leaves_oauth_bearer_tokens_untouched() {
 	}
 }
 
-#[test]
-fn set_required_fields_moves_api_keys_to_x_goog_api_key_on_native_routes() {
+#[rstest::rstest]
+#[case("AIzaTestKey123")]
+#[case("AQ.TestKey123")]
+fn set_required_fields_moves_api_keys_to_x_goog_api_key_on_native_routes(#[case] api_key: &str) {
 	// The native endpoints authenticate API keys via `x-goog-api-key`; a key left in
 	// `Authorization: Bearer` (the backend-auth default location) would be rejected as an
 	// invalid OAuth token.
@@ -139,7 +141,7 @@ fn set_required_fields_moves_api_keys_to_x_goog_api_key_on_native_routes() {
 		let mut req = crate::http::tests_common::request(
 			"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
 			::http::Method::POST,
-			&[("authorization", "Bearer AIzaTestKey123")],
+			&[("authorization", &format!("Bearer {api_key}"))],
 		);
 
 		provider
@@ -152,17 +154,22 @@ fn set_required_fields_moves_api_keys_to_x_goog_api_key_on_native_routes() {
 		);
 		assert_eq!(
 			req.headers().get("x-goog-api-key").unwrap(),
-			"AIzaTestKey123",
+			api_key,
 			"{route_type:?}"
 		);
 	}
 }
 
-#[test]
-fn set_required_fields_keeps_api_keys_on_the_compat_shim_and_explicit_locations() {
+#[rstest::rstest]
+#[case("AIzaTestKey123")]
+#[case("AQ.TestKey123")]
+fn set_required_fields_keeps_api_keys_on_the_compat_shim_and_explicit_locations(
+	#[case] api_key: &str,
+) {
 	// The OpenAI-compat shim accepts `Authorization: Bearer <api key>`, so a non-native
 	// route keeps the client's header.
 	let provider = gemini_provider(None);
+	let authorization = format!("Bearer {api_key}");
 	let shim_request = LLMRequest {
 		input_format: InputFormat::Completions,
 		provider_state: None,
@@ -171,14 +178,14 @@ fn set_required_fields_keeps_api_keys_on_the_compat_shim_and_explicit_locations(
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/chat/completions",
 		::http::Method::POST,
-		&[("authorization", "Bearer AIzaTestKey123")],
+		&[("authorization", &authorization)],
 	);
 	provider
 		.set_required_fields(&mut req, RouteType::Completions, Some(&shim_request), None)
 		.unwrap();
 	assert_eq!(
 		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
-		"Bearer AIzaTestKey123"
+		authorization.as_str()
 	);
 	assert!(!req.headers().contains_key("x-goog-api-key"));
 
@@ -186,7 +193,7 @@ fn set_required_fields_keeps_api_keys_on_the_compat_shim_and_explicit_locations(
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
 		::http::Method::POST,
-		&[("authorization", "Bearer AIzaTestKey123")],
+		&[("authorization", &authorization)],
 	);
 	req
 		.extensions_mut()
@@ -201,7 +208,7 @@ fn set_required_fields_keeps_api_keys_on_the_compat_shim_and_explicit_locations(
 		.unwrap();
 	assert_eq!(
 		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
-		"Bearer AIzaTestKey123"
+		authorization.as_str()
 	);
 	assert!(!req.headers().contains_key("x-goog-api-key"));
 }

@@ -1,0 +1,150 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/tool_result_unknown_part.json
+info:
+  model: claude-sonnet-4-6
+  max_tokens: 1024
+  tools:
+    - name: ToolSearch
+      description: Find and load deferred tool schemas.
+      input_schema:
+        type: object
+        properties:
+          query:
+            type: string
+        required:
+          - query
+    - name: mcp__example__list_widgets
+      description: Lists widgets.
+      input_schema:
+        type: object
+        properties: {}
+      defer_loading: true
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: List the widgets.
+    - role: assistant
+      content:
+        - type: tool_use
+          id: toolu_01AAAA
+          name: ToolSearch
+          input:
+            query: widgets
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: toolu_01AAAA
+          content:
+            - type: text
+              text: 3 widgets found
+            - type: future_block
+              foo: 1
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "List the widgets."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "toolu_01AAAA",
+              "name": "ToolSearch",
+              "input": {
+                "query": "widgets"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "toolu_01AAAA",
+              "content": [
+                {
+                  "text": "3 widgets found"
+                }
+              ],
+              "status": null
+            }
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "ToolSearch",
+            "description": "Find and load deferred tool schemas.",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "toolSpec": {
+            "name": "mcp__example__list_widgets",
+            "description": "Lists widgets.",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-6",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "List the widgets."
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ]
+  }
+}

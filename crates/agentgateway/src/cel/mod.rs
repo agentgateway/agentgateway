@@ -307,6 +307,10 @@ impl ContextBuilder {
 	pub fn needs_llm_tool_calls(&self) -> bool {
 		self.any_has(Attributes::LlmToolCalls)
 	}
+
+	pub fn needs_mcp(&self) -> bool {
+		self.before_log_has(Attributes::Mcp)
+	}
 }
 
 impl Expression {

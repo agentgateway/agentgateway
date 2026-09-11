@@ -170,38 +170,40 @@ export function ensureMcp(config: GatewayConfig): McpConfig {
 	return config.mcp;
 }
 
-export function startupLlmConfig(config: GatewayConfig, port: number): LlmConfig {
-	const gateways = config.ui?.gateways;
-	if (gateways) {
-		return {
-			gateways,
-			models: [],
-			providers: [],
-			virtualModels: []
-		};
-	}
-	return {
-		port,
-		models: [],
-		providers: [],
-		virtualModels: []
-	};
-}
-
-export function startupMcpConfig(config: GatewayConfig, port: number): McpConfig {
-	const gateways = config.ui?.gateways;
-	if (gateways) {
-		return {
-			gateways,
-			targets: []
-		};
-	}
-	return { port, targets: [] };
-}
-
-export function usesUiGateways(config: GatewayConfig | undefined) {
+export function startupGatewayRefs(config: GatewayConfig | undefined): string | string[] {
 	const gateways = config?.ui?.gateways;
-	return Array.isArray(gateways) ? gateways.length > 0 : Boolean(gateways);
+	if (gateways && (!Array.isArray(gateways) || gateways.length > 0)) return gateways;
+	if (config?.gateways?.default) return 'default';
+	return Object.keys(config?.gateways ?? {})[0] ?? 'default';
+}
+
+function ensureStartupGateway(config: GatewayConfig, gateways: string | string[]) {
+	if (Object.keys(config.gateways ?? {}).length) return;
+	const occupiedPorts = new Set([
+		...(config.binds ?? []).map(bind => bind.port),
+		config.llm ? (config.llm.port ?? 4000) : undefined,
+		config.mcp ? (config.mcp.port ?? 3000) : undefined
+	]);
+	let port = 4000;
+	while (occupiedPorts.has(port)) port++;
+	const name = (Array.isArray(gateways) ? gateways[0] : gateways).split('/')[0];
+	config.gateways = { [name]: { port } };
+}
+
+export function startupLlmConfig(
+	config: GatewayConfig,
+	gateways = startupGatewayRefs(config)
+): LlmConfig {
+	ensureStartupGateway(config, gateways);
+	return { gateways };
+}
+
+export function startupMcpConfig(
+	config: GatewayConfig,
+	gateways = startupGatewayRefs(config)
+): McpConfig {
+	ensureStartupGateway(config, gateways);
+	return { gateways };
 }
 
 export function upsertModel(config: GatewayConfig, model: LlmModel, previousId?: string) {
@@ -288,6 +290,7 @@ export function setLlmGuardrails(config: GatewayConfig, guardrails: LlmGuardrail
 
 export function upsertMcpTarget(config: GatewayConfig, target: McpTarget, previousName?: string) {
 	const mcp = ensureMcp(config);
+	mcp.targets ??= [];
 	const index = mcp.targets.findIndex(item => item.name === (previousName ?? target.name));
 	if (index >= 0) {
 		mcp.targets[index] = target;

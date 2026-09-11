@@ -50,6 +50,7 @@ spec:
       protocol: GRPC
       clientSampling: "true"
       randomSampling: "true"
+      parentNotSampled: "true"
       resources:
         - name: service.name
           expression: "agent-gateway"
@@ -181,6 +182,7 @@ output:
           - name: http.useragent
             value: request.headers["user-agent"]
           clientSampling: "true"
+          parentNotSampled: "true"
           protocol: GRPC
           randomSampling: "true"
           remove:

@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -35,6 +35,7 @@ use value_bag::visit::Visit;
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::substrate::ateattr;
+use crate::http::substrate::ateattr::{ResumeDisposition, RouteOutcome};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
@@ -42,7 +43,7 @@ use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
-	OutboundCallLabels, RouteIdentifier,
+	OutboundCallLabels, RouteIdentifier, SubstrateRouteLabels,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, semconv, trc};
@@ -393,8 +394,9 @@ pub struct Config {
 	pub filter: Option<Arc<cel::Expression>>,
 	/// Deprecated: use frontendPolicies.accessLog
 	pub fields: LoggingFields,
-	/// Database-only request log fields.
-	pub database_fields: LoggingFields,
+	/// Compiled standard attributes, replaced on config reload and snapshotted per request.
+	#[serde(skip)]
+	pub database_fields: Arc<arc_swap::ArcSwap<LoggingFields>>,
 	/// Level sets the level for logs
 	pub level: String,
 	/// Format sets the logging format (text or json)
@@ -535,37 +537,42 @@ fn original_model_from_metadata<'a>(
 		.and_then(Value::as_str)
 }
 
+/// The incoming trace context picks which setting applies: `random_sampling` when the request has
+/// no trace, `client_sampling` when it has one that is sampled, `parent_not_sampled` when it has
+/// one that is not.
 #[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	pub client_sampling: Option<Arc<cel::Expression>>,
+	pub parent_not_sampled: Option<Arc<cel::Expression>>,
 }
 
 impl TraceSampler {
+	/// Exactly one of the three settings applies to any given request.
 	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> (bool, &'static str) {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
+			parent_not_sampled,
 		} = &self;
-		let (expr, client) = if tp.is_some() {
-			let Some(cs) = client_sampling else {
-				// If client_sampling is not set, default to include it
-				return (true, "sample (client)");
-			};
-			(cs, true)
-		} else {
-			let Some(rs) = random_sampling else {
-				// If random_sampling is not set, default to NOT include it
-				return (false, "not sampled (random)");
-			};
-			(rs, false)
+		let eval = |expr: &Option<Arc<cel::Expression>>, default: bool| match expr {
+			Some(e) => cel::Executor::new_request(req).eval_rng(e.as_ref()),
+			None => default,
 		};
-		let exec = cel::Executor::new_request(req);
-		match (exec.eval_rng(expr.as_ref()), client) {
-			(true, true) => (true, "sample (client)"),
-			(true, false) => (true, "sample (random)"),
-			(false, true) => (false, "not sampled (client)"),
-			(false, false) => (false, "not sampled (random)"),
+
+		match tp {
+			None => match eval(random_sampling, false) {
+				true => (true, "sample (random)"),
+				false => (false, "not sampled (random)"),
+			},
+			Some(tp) if tp.is_sampled() => match eval(client_sampling, true) {
+				true => (true, "sample (client)"),
+				false => (false, "not sampled (client)"),
+			},
+			Some(_) => match eval(parent_not_sampled, false) {
+				true => (true, "sample (unsampled parent)"),
+				false => (false, "not sampled (unsampled parent)"),
+			},
 		}
 	}
 }
@@ -717,6 +724,11 @@ impl<'a> CelLoggingExecutor<'a> {
 
 impl CelLogging {
 	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
+		let database_fields = if cfg.database.is_some() {
+			cfg.database_fields.load().as_ref().clone()
+		} else {
+			LoggingFields::default()
+		};
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
 			cel_context.register_log_expression(f.as_ref());
@@ -724,7 +736,7 @@ impl CelLogging {
 		for v in cfg.fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
-		for v in cfg.database_fields.add.values_unordered() {
+		for v in database_fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
 		for v in metrics.metric_fields.add.values_unordered() {
@@ -740,7 +752,7 @@ impl CelLogging {
 			fields: cfg.fields,
 			otlp_filter: None,
 			otlp_fields: LoggingFields::default(),
-			database_fields: cfg.database_fields,
+			database_fields,
 			metric_fields: metrics.metric_fields,
 		}
 	}
@@ -998,6 +1010,20 @@ impl DropOnLog {
 					.get_or_create(&gen_ai_labels)
 					.observe(time_per_output_token.as_secs_f64());
 			}
+			if !llm_response.inter_chunk_latencies.is_empty() {
+				let hist = log
+					.metrics
+					.gen_ai_inter_chunk_latency
+					.get_or_create(&gen_ai_labels);
+				// Replay the bucketed summary: each bucket's mean is observed `count`
+				// times, so the resulting histogram's per-bucket counts and sum are
+				// identical to what observing every raw gap would have produced.
+				for (count, mean) in llm_response.inter_chunk_latencies.iter() {
+					for _ in 0..count {
+						hist.observe(mean);
+					}
+				}
+			}
 		}
 	}
 }
@@ -1111,9 +1137,12 @@ impl RequestLog {
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
-			ate_actor_id: None,
+			ate_actor_name: None,
+			ate_actor_uid: None,
 			ate_atespace: None,
 			ate_router_resume: None,
+			ate_router_route_duration: None,
+			ate_router_outcome: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -1289,9 +1318,12 @@ pub struct RequestLog {
 
 	pub inference_pool: Option<SocketAddr>,
 
-	pub ate_actor_id: Option<String>,
+	pub ate_actor_name: Option<String>,
+	pub ate_actor_uid: Option<String>,
 	pub ate_atespace: Option<String>,
-	pub ate_router_resume: Option<&'static str>,
+	pub ate_router_resume: Option<ResumeDisposition>,
+	pub ate_router_route_duration: Option<Duration>,
+	pub ate_router_outcome: Option<RouteOutcome>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1438,6 +1470,18 @@ impl Drop for DropOnLog {
 				.request_duration
 				.get_or_create(&http_labels)
 				.observe(duration.as_secs_f64());
+			if let (Some(route_duration), Some(outcome)) =
+				(log.ate_router_route_duration, log.ate_router_outcome)
+			{
+				log
+					.metrics
+					.substrate_route_duration
+					.get_or_create(&SubstrateRouteLabels {
+						ate_router_outcome: outcome.into(),
+						ate_router_resume: log.ate_router_resume.unwrap_or_default().into(),
+					})
+					.observe(route_duration.as_secs_f64());
+			}
 
 			if let Some(retry_count) = log.retry_attempt {
 				log
@@ -1510,6 +1554,9 @@ impl Drop for DropOnLog {
 			}
 
 			let dur = format!("{}ms", duration.as_millis());
+			let route_duration = log
+				.ate_router_route_duration
+				.map(|duration| duration.as_secs_f64());
 			let grpc = log.grpc_status.load();
 
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
@@ -1541,7 +1588,13 @@ impl Drop for DropOnLog {
 				None
 			};
 
-			let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
+			// Falls back to the incoming trace so unsampled requests stay correlatable. There is no
+			// span id to report when nothing was recorded.
+			let trace_id = log
+				.outgoing_span
+				.as_ref()
+				.or(log.incoming_span.as_ref())
+				.map(|id| id.trace_id());
 			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
 			let fields = cel_exec.fields;
 			let reason = log.reason.and_then(|r| match r {
@@ -1709,9 +1762,14 @@ impl Drop for DropOnLog {
 					"inferencepool.selected_endpoint",
 					log.inference_pool.display(),
 				),
-				("ate.actor.id", log.ate_actor_id.display()),
+				(ateattr::ATE_ACTOR_NAME, log.ate_actor_name.display()),
+				(ateattr::ATE_ACTOR_UID, log.ate_actor_uid.display()),
 				(ateattr::ATE_ATESPACE, log.ate_atespace.display()),
 				(ateattr::ATE_ROUTER_RESUME, log.ate_router_resume.display()),
+				(
+					ateattr::ATE_ROUTER_ROUTE_DURATION,
+					route_duration.map(Into::into),
+				),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",
@@ -2137,6 +2195,7 @@ impl<B> LogBody<B> {
 impl<B: Body + Debug> Body for LogBody<B>
 where
 	B::Data: Debug,
+	B::Error: Display,
 {
 	type Data = B::Data;
 	type Error = B::Error;
@@ -2162,7 +2221,18 @@ where
 				}
 				Poll::Ready(Some(Ok(frame)))
 			},
-			res => Poll::Ready(res),
+			Some(Err(e)) => {
+				// The head is long gone by the time the body fails, so nothing else records this:
+				// without it a stream torn down mid-flight is logged as whatever status we already
+				// sent, indistinguishable from one the client read to completion.
+				if let Some(log) = this.log.as_mut()
+					&& log.error.is_none()
+				{
+					log.error = Some(format!("response body failed: {e}"));
+				}
+				Poll::Ready(Some(Err(e)))
+			},
+			None => Poll::Ready(None),
 		}
 	}
 
@@ -2362,11 +2432,14 @@ impl OtelAccessLogger {
 				.build()
 		};
 
-		let logger = provider.logger("agentgateway.access");
+		Ok(Self::from_provider(provider))
+	}
 
-		Ok(Self {
+	fn from_provider(provider: SdkLoggerProvider) -> Self {
+		let logger = provider.logger("agentgateway.access");
+		Self {
 			inner: super::NonBlockingDrop::new(OtelAccessLoggerInner { provider, logger }),
-		})
+		}
 	}
 
 	pub fn shutdown(&self) {
@@ -2375,7 +2448,7 @@ impl OtelAccessLogger {
 }
 
 impl OtelLogSink for OtelAccessLogger {
-	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
+	fn emit<'v>(&self, level: &str, _target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
 		let severity = match level {
 			"error" => Severity::Error,
 			"warn" => Severity::Warn,
@@ -2396,7 +2469,6 @@ impl OtelLogSink for OtelAccessLogger {
 		let mut record = self.inner.logger.create_log_record();
 		record.set_severity_number(severity);
 		record.set_severity_text(severity_text);
-		record.set_target(target.to_string());
 
 		let mut trace_id_val: Option<u128> = None;
 		let mut span_id_val: Option<u64> = None;
@@ -2679,6 +2751,7 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 
+	use opentelemetry::InstrumentationScope;
 	use opentelemetry::trace::SpanKind;
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
@@ -2691,6 +2764,44 @@ mod tests {
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
 	use crate::types::frontend::{DatabaseLlmMode, LoggingPolicy};
+
+	#[derive(Clone, Debug, Default)]
+	struct RecordingLogExporter {
+		records: Arc<Mutex<Vec<(opentelemetry_sdk::logs::SdkLogRecord, InstrumentationScope)>>>,
+	}
+
+	impl opentelemetry_sdk::logs::LogExporter for RecordingLogExporter {
+		fn export(
+			&self,
+			batch: opentelemetry_sdk::logs::LogBatch<'_>,
+		) -> impl std::future::Future<Output = OTelSdkResult> + Send {
+			let mut records = self.records.lock().unwrap();
+			for (record, scope) in batch.iter() {
+				records.push((record.clone(), scope.clone()));
+			}
+			ready(Ok(()))
+		}
+	}
+
+	#[test]
+	fn otlp_access_log_scope_is_logger_name_not_tracing_target() {
+		let exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(exporter.clone())
+			.build();
+		let logger = OtelAccessLogger::from_provider(provider);
+
+		let kv = [("http.request.method", Some(ValueBag::from("GET")))];
+		logger.emit("info", "request", &kv);
+		logger.inner.provider.force_flush().unwrap();
+
+		let records = exporter.records.lock().unwrap();
+		assert_eq!(records.len(), 1);
+		let (record, scope) = &records[0];
+		assert_eq!(scope.name(), "agentgateway.access");
+		// opentelemetry-proto uses a record target as the wire scope name when one is set.
+		assert!(record.target().is_none());
+	}
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
@@ -2731,6 +2842,10 @@ mod tests {
 	}
 
 	fn test_request_log() -> RequestLog {
+		test_request_log_with_registry().0
+	}
+
+	fn test_request_log_with_registry() -> (RequestLog, Registry) {
 		let cel = CelLogging {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
@@ -2746,7 +2861,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		));
-		RequestLog::new(
+		let log = RequestLog::new(
 			cel,
 			metrics,
 			ModelCatalog::empty(),
@@ -2757,7 +2872,107 @@ mod tests {
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
-		)
+		);
+		(log, registry)
+	}
+
+	#[test]
+	fn substrate_route_metric_uses_resolution_outcome_not_application_status() {
+		let (mut log, registry) = test_request_log_with_registry();
+		log.status = Some(crate::http::StatusCode::NOT_FOUND);
+		log.ate_router_resume = Some(ateattr::ResumeDisposition::Triggered);
+		log.ate_router_route_duration = Some(Duration::from_millis(10));
+		log.ate_router_outcome = Some(ateattr::RouteOutcome::Ok);
+		drop(DropOnLog::from(log));
+
+		let mut encoded = String::new();
+		prometheus_client::encoding::text::encode(&mut encoded, &registry).unwrap();
+		assert!(
+			encoded.contains("atenet_router_route_duration_seconds_bucket")
+				&& encoded.contains("ate_router_outcome=\"ok\"")
+				&& encoded.contains("ate_router_resume=\"triggered\""),
+			"{encoded}"
+		);
+		assert!(!encoded.contains("ate_router_outcome=\"resume_error\""));
+	}
+
+	fn sampler_request() -> crate::http::Request {
+		::http::Request::builder()
+			.method(::http::Method::GET)
+			.uri("http://example.com/trace")
+			.body(crate::http::Body::empty())
+			.unwrap()
+	}
+
+	fn sampling_expr(v: &str) -> Option<Arc<cel::Expression>> {
+		Some(Arc::new(cel::Expression::new_strict(v).unwrap()))
+	}
+
+	fn traceparent(sampled: bool) -> TraceParent {
+		let mut tp = TraceParent::new();
+		tp.flags = u8::from(sampled);
+		tp
+	}
+
+	/// The full sampling matrix. `parentNotSampled` is the only new capability: every other cell
+	/// pins pre-existing behavior. `incoming` is `None` for a request with no `traceparent`,
+	/// otherwise the parent's sampled flag.
+	#[test]
+	fn trace_sampled_matrix() {
+		// (random, client, parent_not_sampled, incoming, sampled)
+		let cases = [
+			// No incoming traceparent: `randomSampling` applies, default off.
+			(None, None, None, None, false),
+			(Some("true"), None, None, None, true),
+			(Some("false"), None, None, None, false),
+			// Incoming `-01`: `clientSampling` applies, default on.
+			(None, None, None, Some(true), true),
+			(None, Some("true"), None, Some(true), true),
+			(None, Some("false"), None, Some(true), false),
+			// Incoming `-00`: `parentNotSampled` applies, default off.
+			(None, None, None, Some(false), false),
+			(None, None, Some("false"), Some(false), false),
+			(None, None, Some("true"), Some(false), true),
+			// `clientSampling` has no say over an unsampled parent, in either direction.
+			(None, Some("true"), None, Some(false), false),
+			(None, Some("false"), Some("true"), Some(false), true),
+			(None, Some("true"), Some("false"), Some(false), false),
+			// `parentNotSampled` has no say over an already-sampled parent.
+			(None, Some("false"), Some("true"), Some(true), false),
+			// `randomSampling` has no say once a traceparent is present.
+			(Some("false"), None, None, Some(true), true),
+			(Some("true"), None, None, Some(false), false),
+		];
+
+		for (random, client, parent_not_sampled, incoming, want) in cases {
+			let sampler = TraceSampler {
+				random_sampling: random.and_then(sampling_expr),
+				client_sampling: client.and_then(sampling_expr),
+				parent_not_sampled: parent_not_sampled.and_then(sampling_expr),
+			};
+			let tp = incoming.map(traceparent);
+			let (got, reason) = sampler.trace_sampled(&sampler_request(), tp.as_ref());
+			assert_eq!(
+				got, want,
+				"random={random:?} client={client:?} parentNotSampled={parent_not_sampled:?} incoming={incoming:?} reason={reason}"
+			);
+		}
+	}
+
+	#[test]
+	fn trace_sampled_reports_unsampled_parent_reason() {
+		let req = sampler_request();
+		let unsampled = traceparent(false);
+
+		let (_, honored) = TraceSampler::default().trace_sampled(&req, Some(&unsampled));
+		assert_eq!(honored, "not sampled (unsampled parent)");
+
+		let (_, forced) = TraceSampler {
+			parent_not_sampled: sampling_expr("true"),
+			..Default::default()
+		}
+		.trace_sampled(&req, Some(&unsampled));
+		assert_eq!(forced, "sample (unsampled parent)");
 	}
 
 	fn llm_context_with_content() -> LLMContext {

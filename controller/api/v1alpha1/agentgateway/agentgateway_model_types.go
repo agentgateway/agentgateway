@@ -104,6 +104,10 @@ type AgentgatewayModelSpec struct {
 	// BaseURL overrides the provider address and base path prefix. It must use the
 	// http or https scheme. Backend policies may override the default TLS
 	// configuration. Query parameters, fragments, and user info are not supported.
+	// The URL path is the upstream base path and defaults to / when omitted.
+	// Provider-specific endpoint paths are appended to this base path.
+	// For example, https://api.openai.com/v1 sends completions to /v1/chat/completions,
+	// while https://api.openai.com sends them to /chat/completions.
 	// +kubebuilder:validation:Format=uri
 	// +optional
 	BaseURL *LongString `json:"baseURL,omitempty"`

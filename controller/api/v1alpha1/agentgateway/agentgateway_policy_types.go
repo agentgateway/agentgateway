@@ -534,7 +534,7 @@ const (
 )
 
 // LocalCACertificateRef references a same-namespace CA certificate source.
-// An omitted kind defaults to ConfigMap.
+// An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
 //
 // +structType=atomic
 type LocalCACertificateRef struct {
@@ -547,6 +547,15 @@ type LocalCACertificateRef struct {
 	// +kubebuilder:validation:Enum=ConfigMap;Secret
 	// +optional
 	Kind string `json:"kind,omitempty"`
+
+	// Key within the referenced source holding the PEM-encoded CA bundle.
+	// Omitted defaults to `ca.crt`.
+	// +kubebuilder:default="ca.crt"
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 // BackendTLSCertificateSource selects where the gateway's client identity and trust roots come
@@ -585,8 +594,9 @@ type BackendTLS struct {
 	// +optional
 	MtlsCertificateRef []LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
 	// CA certificate source to use to verify the server certificate. Omitted kind
-	// and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-	// key is required. If unset, the system's trusted certificates are used.
+	// and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+	// read from the `ca.crt` key unless `key` names a different one. If unset, the
+	// system's trusted certificates are used.
 	//
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
@@ -1241,7 +1251,40 @@ type JWTProvider struct {
 	// JWT.
 	// +required
 	JWKS JWKS `json:"jwks"`
+	// Additional JWT claim presence requirements. Defaults to requiring `exp`.
+	// Issuer validation always requires `iss`; a non-empty audiences list also
+	// requires `aud`, regardless of these options. An empty `requiredClaims`
+	// list removes only the additional presence requirements. Expiration is
+	// still checked whenever `exp` is present.
+	// +optional
+	Validation *JWTValidationOptions `json:"validation,omitempty"`
 }
+
+// JWTValidationOptions controls claim presence requirements in addition to
+// those imposed by issuer and audience validation.
+type JWTValidationOptions struct {
+	// Additional claims that must be present in the token payload.
+	// Recognized values: `exp`, `nbf`, `aud`, `sub`.
+	// Defaults to `["exp"]` when omitted. An empty list adds no requirements
+	// beyond `iss`, which is always required, and `aud`, which is required
+	// when a non-empty audiences list is configured. Expiration is still
+	// checked whenever `exp` is present.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=4
+	RequiredClaims *[]JWTClaim `json:"requiredClaims,omitempty"`
+}
+
+// JWTClaim is a JWT claim whose presence can be required during validation.
+// +k8s:enum
+type JWTClaim string
+
+const (
+	JWTClaimExpiration JWTClaim = "exp"
+	JWTClaimNotBefore  JWTClaim = "nbf"
+	JWTClaimAudience   JWTClaim = "aud"
+	JWTClaimSubject    JWTClaim = "sub"
+)
 
 // MCP-specific extensions for JWT authentication.
 type JWTMCPConfig struct {
@@ -2503,6 +2546,14 @@ type MCPAuthentication struct {
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
 
+	// Additional JWT claim presence requirements. Defaults to requiring `exp`.
+	// Issuer validation always requires `iss`; a non-empty audiences list also
+	// requires `aud`, regardless of these options. An empty `requiredClaims`
+	// list removes only the additional presence requirements. Expiration is
+	// still checked whenever `exp` is present.
+	// +optional
+	Validation *JWTValidationOptions `json:"validation,omitempty"`
+
 	// Client ID to use for short-circuiting Dynamic Client Registration.
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
 	// +optional
@@ -3339,12 +3390,28 @@ type HostnameRewrite struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Timeouts struct {
-	// Timeout for an individual request from the gateway to a backend. This covers the time from when
-	// the request first starts being sent from the gateway to when the full response has been received from the backend.
+	// Maximum time allowed from the start of downstream request processing until response headers
+	// are received. The response body is not included; use `responseIdle` to bound gaps between body frames.
 	//
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="request must be at least 1ms"
 	// +optional
 	Request *Duration `json:"request,omitempty"`
+
+	// Maximum time the response body may go without producing data. The window restarts on every
+	// body frame, so this bounds the gap between frames rather than the total time a response may
+	// take. It is what terminates a backend that stops producing data mid-stream without capping
+	// how long a legitimately long response may run.
+	//
+	// This complements Request rather than overlapping it: Request stops applying once the response
+	// headers arrive, so it places no bound on how long the response body may take, and it cannot
+	// distinguish a stalled stream from a slow one.
+	//
+	// This does not apply to responses that switch protocols, so upgraded WebSocket connections and
+	// CONNECT tunnels are never terminated by it.
+	//
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="responseIdle must be at least 1ms"
+	// +optional
+	ResponseIdle *Duration `json:"responseIdle,omitempty"`
 }
 
 // Artificial latency injection for fault-injection testing.
@@ -3543,11 +3610,25 @@ type Tracing struct {
 	RandomSampling *CELExpression `json:"randomSampling,omitempty"`
 	// Expression that determines the amount of client
 	// sampling. Client sampling determines whether to initiate a new trace
-	// span if the incoming request does have a trace already. This should
+	// span if the incoming request does have a trace already. This only
+	// applies when that trace is sampled (`-01`); use `parentNotSampled` for
+	// requests whose trace is not. This should
 	// evaluate to a float between `0.0` and `1.0`, or a boolean (`true` or
 	// `false`). If unspecified, client sampling is `100%` enabled.
 	// +optional
 	ClientSampling *CELExpression `json:"clientSampling,omitempty"`
+	// Expression that determines whether to trace a request that arrives with
+	// a `traceparent` whose sampled flag is unset (`-00`), meaning the client
+	// asked for it not to be traced. When this is `true` the request is traced
+	// anyway, and `-01` is sent upstream so downstream services trace it too.
+	// This should evaluate to a float between `0.0` and `1.0`, or a boolean
+	// (`true` or `false`). If unspecified, the client's choice is honored and
+	// the request is not traced.
+	//
+	// Only one of `randomSampling`, `clientSampling` and `parentNotSampled`
+	// applies to any given request; the incoming `traceparent` decides which.
+	// +optional
+	ParentNotSampled *CELExpression `json:"parentNotSampled,omitempty"`
 
 	// Expression that determines whether a sampled span is exported.
 	// This uses keep semantics: spans are exported only when the expression

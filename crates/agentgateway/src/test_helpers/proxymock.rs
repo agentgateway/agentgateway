@@ -769,6 +769,7 @@ impl TestBind {
 				prefix_mode: Default::default(),
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				sse_keep_alive: None,
 				dns_rebinding_protection,
 			},
 		);
@@ -888,6 +889,7 @@ impl TestBind {
 				prefix_mode,
 				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				sse_keep_alive: None,
 				dns_rebinding_protection: false,
 			},
 		);
@@ -974,6 +976,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Route(RouteName {
 					name: "route".into(),
 					namespace: "".into(),
@@ -1000,6 +1003,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
 					gateway_name: "default".into(),
 					gateway_namespace: "default".into(),
@@ -1025,6 +1029,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Backend(BackendTarget::Service {
 					hostname: strng::literal!("my-svc.default.svc.cluster.local"),
 					namespace: strng::literal!("default"),
@@ -1073,6 +1078,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key: strng::format!("pol/{}", self.policies),
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Backend(BackendTarget::Backend {
 					name: addr.to_string().into(),
 					namespace: Default::default(),
@@ -1104,6 +1110,7 @@ impl TestBind {
 		self.with_policy(TargetedPolicy {
 			key: strng::literal!("pol/frontend-connect"),
 			name: None,
+			creation_timestamp: 0,
 			inheritance: PolicyInheritance::default(),
 			target: PolicyTarget::Gateway(ListenerTarget {
 				gateway_name: strng::literal!("default"),
@@ -1436,6 +1443,7 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 	config: crate::Config,
 	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
 ) -> TestBind {
+	agent_core::telemetry::testing::setup_test_logging();
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
 	let histogram_mode = config.histograms;

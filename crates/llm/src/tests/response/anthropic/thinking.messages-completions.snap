@@ -44,7 +44,8 @@ info:
         "message": {
           "content": "I don't have access to real-time weather data",
           "role": "assistant",
-          "reasoning_content": "The user is asking me about the current weather in San Francisco"
+          "reasoning_content": "The user is asking me about the current weather in San Francisco",
+          "reasoning_signature": "Es8DCkYI"
         },
         "index": 0,
         "finish_reason": "stop"

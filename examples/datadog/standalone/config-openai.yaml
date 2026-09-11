@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=../../schema/local.json
+config:
+  tracing:
+    otlpEndpoint: http://collector:4318/v1/traces
+    randomSampling: true
+    fields:
+      add:
+        env: '"datadog-dev"'
+      # Prompt/response bodies are intentionally omitted.
+llm:
+  port: 3000
+  models:
+    - name: openai-live
+      provider: openAI
+      params:
+        model: $OPENAI_MODEL
+        apiKey: $OPENAI_API_KEY

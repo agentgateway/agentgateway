@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,14 @@ import (
 	testruntime "github.com/agentgateway/agentgateway/controller/test/e2e/testutils/runtime"
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
+)
+
+const (
+	// CoreChartPathEnv overrides the local core chart used by managed test installations.
+	CoreChartPathEnv = "AGW_E2E_CORE_CHART_PATH"
+	// CoreChartExtraHelmArgsEnv contains a JSON array of additional Helm arguments
+	// for managed test installations using an overridden core chart.
+	CoreChartExtraHelmArgsEnv = "AGW_E2E_CORE_CHART_EXTRA_HELM_ARGS"
 )
 
 // CreateSharedTestInstallation constructs an installation for package-level
@@ -194,9 +203,17 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	}
 
 	// Use absolute chart paths so tests work regardless of current working directory.
-	coreChartPath := filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway")
+	coreChartPath := os.Getenv(CoreChartPathEnv)
+	if coreChartPath == "" {
+		coreChartPath = filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway")
+	}
 
-	extraArgs := i.ExtraHelmArgs
+	extraArgs := slices.Clone(i.ExtraHelmArgs)
+	configuredArgs, err := configuredCoreChartExtraHelmArgs()
+	if err != nil {
+		t.Fatalf("parse %s: %v", CoreChartExtraHelmArgsEnv, err)
+	}
+	extraArgs = append(extraArgs, configuredArgs...)
 	// If VERSION is set, override the chart's AppVersion so locally-built images are used
 	// instead of trying to pull the chart's default appVersion from the remote registry.
 	if tag, ok := testutils.VersionValue(); ok {
@@ -204,7 +221,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	}
 
 	// and then install the main chart
-	err := i.Helm.WithReceiver(os.Stdout).Upgrade(
+	err = i.Helm.WithReceiver(os.Stdout).Upgrade(
 		ctx,
 		helmutils.InstallOpts{
 			Namespace:       i.InstallNamespace,
@@ -219,6 +236,19 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 		})
 	istioassert.NoError(t, err)
 	assertions.EventuallyGatewayInstallSucceeded(t, ctx, i.ClusterContext, i.InstallNamespace)
+}
+
+func configuredCoreChartExtraHelmArgs() ([]string, error) {
+	rawArgs := os.Getenv(CoreChartExtraHelmArgsEnv)
+	if rawArgs == "" {
+		return nil, nil
+	}
+
+	var args []string
+	if err := json.Unmarshal([]byte(rawArgs), &args); err != nil {
+		return nil, err
+	}
+	return args, nil
 }
 
 func (i *TestInstallation) Uninstall(ctx context.Context, t *testing.T) {

@@ -77,7 +77,7 @@ vSR supports multiple cache backends, including a default in-memory store.
 Redis is used here as a production-oriented backend because it allows vSR
 replicas to share cache entries and persist them across process restarts. Redis
 also backs other agentgateway-related services, such as [global rate
-limiting](https://agentgateway.dev/docs/kubernetes/main/security/rate-limit-global/).
+limiting](https://agentgateway.dev/docs/kubernetes/main/documentation/security/rate-limit-global/).
 The example enables Redis persistence on a local persistent volume.
 
 See: `k8s/semantic-cache`

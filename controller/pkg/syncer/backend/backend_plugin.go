@@ -231,18 +231,27 @@ func TranslateAgwBackend(
 ) (*agentgateway.AgentgatewayBackendStatus, []agwir.AgwResource) {
 	var results []agwir.AgwResource
 	backends, err := BuildAgwBackend(ctx, backend)
+	condition := metav1.Condition{
+		Type:               "Accepted",
+		Status:             metav1.ConditionTrue,
+		Reason:             "Accepted",
+		Message:            "Backend successfully accepted",
+		ObservedGeneration: backend.Generation,
+		LastTransitionTime: metav1.Now(),
+	}
 	if err != nil {
 		logger.Error("failed to translate backend", "backend", backend.Name, "namespace", backend.Namespace, "err", err)
-		return &agentgateway.AgentgatewayBackendStatus{
-			Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, metav1.Condition{
-				Type:               "Accepted",
-				Status:             metav1.ConditionFalse,
-				Reason:             "TranslationError",
-				Message:            fmt.Sprintf("failed to translate backend: %v", err),
-				ObservedGeneration: backend.Generation,
-				LastTransitionTime: metav1.Now(),
-			}),
-		}, results
+		condition.Message = fmt.Sprintf("failed to translate backend: %v", err)
+		condition.Reason = "PartiallyValid"
+		// Policy translation can return usable output alongside diagnostics. Preserve
+		// that output, including policies that enforce failure in the data plane.
+		if len(backends) == 0 {
+			condition.Status = metav1.ConditionFalse
+			condition.Reason = "TranslationError"
+			return &agentgateway.AgentgatewayBackendStatus{
+				Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, condition),
+			}, results
+		}
 	}
 
 	gtws := references.LookupGatewaysForBackend(ctx.Krt, utils.TypedNamespacedName{
@@ -263,14 +272,7 @@ func TranslateAgwBackend(
 	}
 
 	return &agentgateway.AgentgatewayBackendStatus{
-		Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, metav1.Condition{
-			Type:               "Accepted",
-			Status:             metav1.ConditionTrue,
-			Reason:             "Accepted",
-			Message:            "Backend successfully accepted",
-			ObservedGeneration: backend.Generation,
-			LastTransitionTime: metav1.Now(),
-		}),
+		Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, condition),
 	}, results
 }
 

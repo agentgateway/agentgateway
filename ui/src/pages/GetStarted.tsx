@@ -2,17 +2,14 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { Bot, Network, Server } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { Field, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
-import {
-	enableTrafficConfig,
-	ensureLlmFrontendDefaults,
-	startupLlmConfig,
-	startupMcpConfig,
-	usesUiGateways
-} from '@/config';
+import { refreshBaseCosts } from '@/api/costsApi';
+import { gatewayOptions } from '@/components/GatewayBindingEditor';
+import { Dropdown, FieldGroup, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
+import { startupGatewayRefs } from '@/config';
 import { refreshBaseCostsAndConfigure } from '@/costs';
 import {
 	useEffectiveGatewayConfig,
+	useEnableSurface,
 	useMcpConfigData,
 	useTrafficConfigData,
 	useUpdateConfig
@@ -79,6 +76,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	const mcpData = useMcpConfigData();
 	const trafficData = useTrafficConfigData();
 	const update = useUpdateConfig();
+	const enableSurface = useEnableSurface();
 	const navigate = useNavigate();
 	const surface = surfaceConfig[props.surface];
 	const Icon = surface.icon;
@@ -100,8 +98,9 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 				? trafficData.error
 				: null);
 	const enabled = surface.enabled(effectiveConfig);
-	const useGateways = usesUiGateways(trafficData.data ?? config.data);
-	const [port, setPort] = useState(() => String(defaultSurfacePort(props.surface)));
+	const [gateway, setGateway] = useState('');
+	const options = gatewayOptions(trafficData.data ?? config.data);
+	const defaultGateways = startupGatewayRefs(trafficData.data ?? config.data);
 
 	useEffect(() => {
 		if (!loading && !configError && enabled) {
@@ -115,23 +114,18 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 			return;
 		}
 		try {
-			await update.mutateAsync(next => {
-				if (props.surface === 'llm') {
-					next.llm = next.llm ?? startupLlmConfig(next, parsePort(port, 4000));
-					ensureLlmFrontendDefaults(next);
-				} else if (props.surface === 'mcp') {
-					next.mcp =
-						next.mcp ?? startupMcpConfig(next, parsePort(port, defaultSurfacePort(props.surface)));
-				} else {
-					enableTrafficConfig(next, parsePort(port, defaultSurfacePort(props.surface)));
-				}
+			const { hybrid } = await enableSurface.mutateAsync({
+				surface: props.surface,
+				gateway: gateway || undefined
 			});
 			void navigate({ to: surface.destination });
 			if (props.surface === 'llm') {
-				void refreshBaseCostsAndConfigure(update).catch(() => undefined);
+				void (hybrid ? refreshBaseCosts() : refreshBaseCostsAndConfigure(update)).catch(
+					() => undefined
+				);
 			}
 		} catch {
-			// useUpdateConfig exposes the save error through update.isError.
+			// The enable mutation exposes the save error.
 		}
 	}
 
@@ -153,9 +147,9 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 					{configError.message}
 				</StatusBanner>
 			) : null}
-			{update.isError ? (
+			{enableSurface.isError || update.isError ? (
 				<StatusBanner state="bad" title="Save failed">
-					{update.error.message}
+					{enableSurface.error?.message ?? update.error?.message}
 				</StatusBanner>
 			) : null}
 
@@ -176,17 +170,26 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 					</div>
 				</div>
 
-				{!enabled && !useGateways && (props.surface === 'llm' || props.surface === 'mcp') ? (
+				{!enabled && (props.surface === 'llm' || props.surface === 'mcp') ? (
 					<details className="schema-details">
 						<summary>Advanced</summary>
-						<Field label="Port">
-							<input
-								value={port}
-								inputMode="numeric"
-								onChange={event => setPort(event.target.value)}
-								placeholder={String(defaultSurfacePort(props.surface))}
+						<FieldGroup label="Gateway">
+							<Dropdown
+								ariaLabel="Gateway"
+								value={gateway}
+								onChange={setGateway}
+								options={[
+									{
+										value: '',
+										label: `Automatic (${Array.isArray(defaultGateways) ? defaultGateways.join(', ') : defaultGateways})`,
+										description: options.length
+											? 'Use the configured gateway.'
+											: 'Create a default gateway.'
+									},
+									...options
+								]}
 							/>
-						</Field>
+						</FieldGroup>
 					</details>
 				) : null}
 
@@ -199,7 +202,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 						<button
 							className="button primary"
 							type="button"
-							disabled={loading || update.isPending}
+							disabled={loading || enableSurface.isPending || update.isPending}
 							onClick={() => void enable()}
 						>
 							Enable
@@ -212,15 +215,4 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 			</Panel>
 		</div>
 	);
-}
-
-function parsePort(value: string, fallback: number) {
-	const parsed = Number.parseInt(value, 10);
-	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function defaultSurfacePort(surface: SurfaceKind) {
-	if (surface === 'llm') return 4000;
-	if (surface === 'traffic') return 8080;
-	return 3000;
 }

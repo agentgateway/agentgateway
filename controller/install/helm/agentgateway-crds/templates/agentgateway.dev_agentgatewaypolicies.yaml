@@ -682,13 +682,23 @@ spec:
                                             caCertificateRefs:
                                               description: |-
                                                 CA certificate source to use to verify the server certificate. Omitted kind
-                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                                key is required. If unset, the system's trusted certificates are used.
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                                read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                                system's trusted certificates are used.
                                               items:
                                                 description: |-
                                                   LocalCACertificateRef references a same-namespace CA certificate source.
-                                                  An omitted kind defaults to ConfigMap.
+                                                  An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                                 properties:
+                                                  key:
+                                                    default: ca.crt
+                                                    description: |-
+                                                      Key within the referenced source holding the PEM-encoded CA bundle.
+                                                      Omitted defaults to `ca.crt`.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                    type: string
                                                   kind:
                                                     default: ConfigMap
                                                     description: Kind of the referenced
@@ -1149,13 +1159,23 @@ spec:
                                             caCertificateRefs:
                                               description: |-
                                                 CA certificate source to use to verify the server certificate. Omitted kind
-                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                                key is required. If unset, the system's trusted certificates are used.
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                                read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                                system's trusted certificates are used.
                                               items:
                                                 description: |-
                                                   LocalCACertificateRef references a same-namespace CA certificate source.
-                                                  An omitted kind defaults to ConfigMap.
+                                                  An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                                 properties:
+                                                  key:
+                                                    default: ca.crt
+                                                    description: |-
+                                                      Key within the referenced source holding the PEM-encoded CA bundle.
+                                                      Omitted defaults to `ca.crt`.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                    type: string
                                                   kind:
                                                     default: ConfigMap
                                                     description: Kind of the referenced
@@ -1639,13 +1659,23 @@ spec:
                                             caCertificateRefs:
                                               description: |-
                                                 CA certificate source to use to verify the server certificate. Omitted kind
-                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                                key is required. If unset, the system's trusted certificates are used.
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                                read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                                system's trusted certificates are used.
                                               items:
                                                 description: |-
                                                   LocalCACertificateRef references a same-namespace CA certificate source.
-                                                  An omitted kind defaults to ConfigMap.
+                                                  An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                                 properties:
+                                                  key:
+                                                    default: ca.crt
+                                                    description: |-
+                                                      Key within the referenced source holding the PEM-encoded CA bundle.
+                                                      Omitted defaults to `ca.crt`.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                    type: string
                                                   kind:
                                                     default: ConfigMap
                                                     description: Kind of the referenced
@@ -2503,13 +2533,23 @@ spec:
                                             caCertificateRefs:
                                               description: |-
                                                 CA certificate source to use to verify the server certificate. Omitted kind
-                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                                key is required. If unset, the system's trusted certificates are used.
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                                read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                                system's trusted certificates are used.
                                               items:
                                                 description: |-
                                                   LocalCACertificateRef references a same-namespace CA certificate source.
-                                                  An omitted kind defaults to ConfigMap.
+                                                  An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                                 properties:
+                                                  key:
+                                                    default: ca.crt
+                                                    description: |-
+                                                      Key within the referenced source holding the PEM-encoded CA bundle.
+                                                      Omitted defaults to `ca.crt`.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                    type: string
                                                   kind:
                                                     default: ConfigMap
                                                     description: Kind of the referenced
@@ -2970,13 +3010,23 @@ spec:
                                             caCertificateRefs:
                                               description: |-
                                                 CA certificate source to use to verify the server certificate. Omitted kind
-                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                                key is required. If unset, the system's trusted certificates are used.
+                                                and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                                read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                                system's trusted certificates are used.
                                               items:
                                                 description: |-
                                                   LocalCACertificateRef references a same-namespace CA certificate source.
-                                                  An omitted kind defaults to ConfigMap.
+                                                  An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                                 properties:
+                                                  key:
+                                                    default: ca.crt
+                                                    description: |-
+                                                      Key within the referenced source holding the PEM-encoded CA bundle.
+                                                      Omitted defaults to `ca.crt`.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                    type: string
                                                   kind:
                                                     default: ConfigMap
                                                     description: Kind of the referenced
@@ -5805,6 +5855,35 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
                             description: Metadata to use for MCP resources.
                             type: object
+                          validation:
+                            description: |-
+                              Additional JWT claim presence requirements. Defaults to requiring `exp`.
+                              Issuer validation always requires `iss`; a non-empty audiences list also
+                              requires `aud`, regardless of these options. An empty `requiredClaims`
+                              list removes only the additional presence requirements. Expiration is
+                              still checked whenever `exp` is present.
+                            properties:
+                              requiredClaims:
+                                description: |-
+                                  Additional claims that must be present in the token payload.
+                                  Recognized values: `exp`, `nbf`, `aud`, `sub`.
+                                  Defaults to `["exp"]` when omitted. An empty list adds no requirements
+                                  beyond `iss`, which is always required, and `aud`, which is required
+                                  when a non-empty audiences list is configured. Expiration is still
+                                  checked whenever `exp` is present.
+                                items:
+                                  description: JWTClaim is a JWT claim whose presence
+                                    can be required during validation.
+                                  enum:
+                                  - aud
+                                  - exp
+                                  - nbf
+                                  - sub
+                                  type: string
+                                maxItems: 4
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            type: object
                         required:
                         - jwks
                         type: object
@@ -6143,13 +6222,23 @@ spec:
                       caCertificateRefs:
                         description: |-
                           CA certificate source to use to verify the server certificate. Omitted kind
-                          and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                          key is required. If unset, the system's trusted certificates are used.
+                          and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                          read from the `ca.crt` key unless `key` names a different one. If unset, the
+                          system's trusted certificates are used.
                         items:
                           description: |-
                             LocalCACertificateRef references a same-namespace CA certificate source.
-                            An omitted kind defaults to ConfigMap.
+                            An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                           properties:
+                            key:
+                              default: ca.crt
+                              description: |-
+                                Key within the referenced source holding the PEM-encoded CA bundle.
+                                Omitted defaults to `ca.crt`.
+                              maxLength: 253
+                              minLength: 1
+                              pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                              type: string
                             kind:
                               default: ConfigMap
                               description: Kind of the referenced CA certificate source.
@@ -7352,7 +7441,9 @@ spec:
                         description: |-
                           Expression that determines the amount of client
                           sampling. Client sampling determines whether to initiate a new trace
-                          span if the incoming request does have a trace already. This should
+                          span if the incoming request does have a trace already. This only
+                          applies when that trace is sampled (`-01`); use `parentNotSampled` for
+                          requests whose trace is not. This should
                           evaluate to a float between `0.0` and `1.0`, or a boolean (`true` or
                           `false`). If unspecified, client sampling is `100%` enabled.
                         maxLength: 16384
@@ -7363,6 +7454,21 @@ spec:
                           Expression that determines whether a sampled span is exported.
                           This uses keep semantics: spans are exported only when the expression
                           evaluates to `true`. If unspecified, all sampled spans are exported.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
+                      parentNotSampled:
+                        description: |-
+                          Expression that determines whether to trace a request that arrives with
+                          a `traceparent` whose sampled flag is unset (`-00`), meaning the client
+                          asked for it not to be traced. When this is `true` the request is traced
+                          anyway, and `-01` is sent upstream so downstream services trace it too.
+                          This should evaluate to a float between `0.0` and `1.0`, or a boolean
+                          (`true` or `false`). If unspecified, the client's choice is honored and
+                          the request is not traced.
+
+                          Only one of `randomSampling`, `clientSampling` and `parentNotSampled`
+                          applies to any given request; the incoming `traceparent` decides which.
                         maxLength: 16384
                         minLength: 1
                         type: string
@@ -9832,6 +9938,35 @@ spec:
                                   must be set
                                 rule: (has(self.remote)?1:0)+(has(self.inline)?1:0)
                                   == 1
+                            validation:
+                              description: |-
+                                Additional JWT claim presence requirements. Defaults to requiring `exp`.
+                                Issuer validation always requires `iss`; a non-empty audiences list also
+                                requires `aud`, regardless of these options. An empty `requiredClaims`
+                                list removes only the additional presence requirements. Expiration is
+                                still checked whenever `exp` is present.
+                              properties:
+                                requiredClaims:
+                                  description: |-
+                                    Additional claims that must be present in the token payload.
+                                    Recognized values: `exp`, `nbf`, `aud`, `sub`.
+                                    Defaults to `["exp"]` when omitted. An empty list adds no requirements
+                                    beyond `iss`, which is always required, and `aud`, which is required
+                                    when a non-empty audiences list is configured. Expiration is still
+                                    checked whenever `exp` is present.
+                                  items:
+                                    description: JWTClaim is a JWT claim whose presence
+                                      can be required during validation.
+                                    enum:
+                                    - aud
+                                    - exp
+                                    - nbf
+                                    - sub
+                                    type: string
+                                  maxItems: 4
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                              type: object
                           required:
                           - issuer
                           - jwks
@@ -10430,18 +10565,39 @@ spec:
                     properties:
                       request:
                         description: |-
-                          Timeout for an individual request from the gateway to a backend. This covers the time from when
-                          the request first starts being sent from the gateway to when the full response has been received from the backend.
+                          Maximum time allowed from the start of downstream request processing until response headers
+                          are received. The response body is not included; use `responseIdle` to bound gaps between body frames.
                         maxLength: 32
                         pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
                         - message: request must be at least 1ms
                           rule: duration(self) >= duration('1ms')
+                      responseIdle:
+                        description: |-
+                          Maximum time the response body may go without producing data. The window restarts on every
+                          body frame, so this bounds the gap between frames rather than the total time a response may
+                          take. It is what terminates a backend that stops producing data mid-stream without capping
+                          how long a legitimately long response may run.
+
+                          This complements Request rather than overlapping it: Request stops applying once the response
+                          headers arrive, so it places no bound on how long the response body may take, and it cannot
+                          distinguish a stalled stream from a slow one.
+
+                          This does not apply to responses that switch protocols, so upgraded WebSocket connections and
+                          CONNECT tunnels are never terminated by it.
+                        maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                        type: string
+                        x-kubernetes-validations:
+                        - message: responseIdle must be at least 1ms
+                          rule: duration(self) >= duration('1ms')
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [request] must be set
-                      rule: '[has(self.request)].filter(x,x==true).size() >= 1'
+                    - message: at least one of the fields in [request responseIdle]
+                        must be set
+                      rule: '[has(self.request),has(self.responseIdle)].filter(x,x==true).size()
+                        >= 1'
                   transformation:
                     description: |-
                       Mutates and transforms requests and responses

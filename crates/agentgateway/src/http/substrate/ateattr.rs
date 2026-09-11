@@ -6,15 +6,20 @@
 
 use std::fmt::{Display, Formatter};
 
+/// The atespace-scoped addressable name, mirroring `k8s.pod.name`. Upstream has deliberately no
+/// `ate.actor.id`: it is ambiguous once an actor has both a name and a uid.
+pub(crate) const ATE_ACTOR_NAME: &str = "ate.actor.name";
+pub(crate) const ATE_ACTOR_UID: &str = "ate.actor.uid";
 pub(crate) const ATE_ATESPACE: &str = "ate.atespace";
 pub(crate) const ATE_ROUTER_RESUME: &str = "ate.router.resume";
+pub(crate) const ATE_ROUTER_ROUTE_DURATION: &str = "ate.router.route.duration";
 
 /// Whether this request experienced a cold actor activation.
 ///
 /// Ordered weakest to strongest so `max` keeps the strongest disposition a request observed across
 /// stale-assignment retries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub(crate) enum ResumeDisposition {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub enum ResumeDisposition {
 	#[default]
 	None,
 	Joined,
@@ -45,6 +50,28 @@ impl Display for ResumeDisposition {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RouteOutcome {
+	#[default]
+	Ok,
+	ResumeError,
+}
+
+impl RouteOutcome {
+	pub(crate) const fn as_str(self) -> &'static str {
+		match self {
+			Self::Ok => "ok",
+			Self::ResumeError => "resume_error",
+		}
+	}
+}
+
+impl Display for RouteOutcome {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		f.write_str(self.as_str())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::ResumeDisposition;
@@ -56,6 +83,12 @@ mod tests {
 		assert_eq!(ResumeDisposition::Joined.as_str(), "joined");
 		assert_eq!(super::ATE_ROUTER_RESUME, "ate.router.resume");
 		assert_eq!(super::ATE_ATESPACE, "ate.atespace");
+		assert_eq!(super::ATE_ACTOR_NAME, "ate.actor.name");
+		assert_eq!(super::ATE_ACTOR_UID, "ate.actor.uid");
+		assert_eq!(
+			super::ATE_ROUTER_ROUTE_DURATION,
+			"ate.router.route.duration"
+		);
 	}
 
 	#[test]

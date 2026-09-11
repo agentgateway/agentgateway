@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use protos::ateapi::control_server::{Control, ControlServer};
-use protos::ateapi::{Actor, GetActorRequest, ResumeActorRequest, ResumeActorResponse};
+use protos::ateapi::{
+	Actor, EgressPolicy, GetActorEgressPolicyRequest, GetActorRequest, ResumeActorRequest,
+	ResumeActorResponse,
+};
 use tonic::{Request, Response, Status};
 
 #[async_trait]
@@ -16,6 +19,15 @@ pub trait Handler {
 		_request: &ResumeActorRequest,
 	) -> Result<ResumeActorResponse, Status> {
 		Err(Status::unimplemented("ResumeActor is not implemented"))
+	}
+
+	async fn get_actor_egress_policy(
+		&mut self,
+		_request: &GetActorEgressPolicyRequest,
+	) -> Result<EgressPolicy, Status> {
+		Err(Status::unimplemented(
+			"GetActorEgressPolicy is not implemented",
+		))
 	}
 }
 
@@ -68,6 +80,16 @@ where
 		let mut handler = (self.handler)();
 		Ok(Response::new(
 			handler.resume_actor(request.get_ref()).await?,
+		))
+	}
+
+	async fn get_actor_egress_policy(
+		&self,
+		request: Request<GetActorEgressPolicyRequest>,
+	) -> Result<Response<EgressPolicy>, Status> {
+		let mut handler = (self.handler)();
+		Ok(Response::new(
+			handler.get_actor_egress_policy(request.get_ref()).await?,
 		))
 	}
 }

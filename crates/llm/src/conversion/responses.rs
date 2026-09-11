@@ -26,6 +26,7 @@ pub fn passthrough_stream(
 	log_content: crate::LogContentFields,
 ) -> Body {
 	let mut saw_token = false;
+	let mut last_token_at: Option<Instant> = None;
 	let mut completion = log_content.completion.then(String::new);
 	let mut tool_calls = log_content.tool_calls.then(BTreeMap::new);
 	parse::sse::json_passthrough::<StreamResponse>(b, buffer_limit, move |event| {
@@ -73,11 +74,16 @@ pub fn passthrough_stream(
 				});
 			},
 			types::responses::typed::ResponseStreamEvent::ResponseOutputTextDelta(ref delta) => {
+				let now = Instant::now();
 				if !saw_token {
 					saw_token = true;
+					last_token_at = Some(now);
 					log.update(|r| {
-						r.response.first_token = Some(Instant::now());
+						r.response.first_token = Some(now);
 					});
+				} else if let Some(prev) = last_token_at.replace(now) {
+					let gap = now.duration_since(prev);
+					log.update(|r| r.response.inter_chunk_latencies.record(gap));
 				}
 				if let Some(c) = completion.as_mut() {
 					c.push_str(&delta.delta);
@@ -676,24 +682,17 @@ pub mod from_messages {
 				let mut text_values = Vec::new();
 				let has_cache_control = cache_control.is_some();
 				for part in parts {
-					match part {
+					let (text, citations, cache_control) = match part {
 						messages::ToolResultContentPart::Text {
 							text,
 							citations,
 							cache_control,
-						} => {
-							reject_option(
-								&citations,
-								"messages tool_result citations cannot be represented by responses",
-							)?;
-							let mut value = json!({
-								"type": "input_text",
-								"text": &text,
-							});
-							add_prompt_cache_breakpoint(&mut value, cache_control);
-							text_parts.push(text);
-							text_values.push(value);
-						},
+						} => (text, citations, cache_control),
+						messages::ToolResultContentPart::ToolReference {
+							tool_name,
+							cache_control,
+						} => (tool_name, None, cache_control),
+						messages::ToolResultContentPart::Unknown => continue,
 						messages::ToolResultContentPart::Image { .. }
 						| messages::ToolResultContentPart::Document { .. }
 						| messages::ToolResultContentPart::SearchResult { .. } => {
@@ -701,7 +700,18 @@ pub mod from_messages {
 								"messages non-text tool_result content cannot be represented by responses",
 							);
 						},
-					}
+					};
+					reject_option(
+						&citations,
+						"messages tool_result citations cannot be represented by responses",
+					)?;
+					let mut value = json!({
+						"type": "input_text",
+						"text": &text,
+					});
+					add_prompt_cache_breakpoint(&mut value, cache_control);
+					text_parts.push(text);
+					text_values.push(value);
 				}
 				if let Some(cache_control) = cache_control {
 					if let Some(last) = text_values.last_mut() {

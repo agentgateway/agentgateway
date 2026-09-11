@@ -150,7 +150,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: a8a21268a2cbaefa819117a8b657dbab610aea9fddd3b2bd645115ba44922dc6
+        checksum/config: 8e07586cd2989abccf598c2095a30480f054b0c428d194b2aee2139263d130f7
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
         prometheus.io/scrape: "true"

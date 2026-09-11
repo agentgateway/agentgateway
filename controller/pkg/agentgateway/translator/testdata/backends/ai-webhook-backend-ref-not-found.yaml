@@ -23,7 +23,31 @@ spec:
               port: 456
 ---
 # Output
-output: []
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - anthropic:
+              model: claude-4-5-sonnet
+            name: backend
+      inlinePolicies:
+      - ai:
+          promptGuard:
+            request:
+            - webhook:
+                action: REJECT_AUDIT_ACTION_REJECT
+            response:
+            - webhook:
+                action: REJECT_AUDIT_ACTION_REJECT
+      key: default/anthropic-backend
+      name:
+        name: anthropic-backend
+        namespace: default
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayBackend
@@ -37,6 +61,6 @@ status:
       message: |-
         failed to translate backend: failed to build webhook: unable to find the Service default/invalid-request-ref
         failed to build webhook: unable to find the Service default/invalid-response-ref
-      reason: TranslationError
-      status: "False"
+      reason: PartiallyValid
+      status: "True"
       type: Accepted

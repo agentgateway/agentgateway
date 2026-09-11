@@ -196,7 +196,7 @@ func CreateAgwRewriteFilter(filter *gwv1.HTTPURLRewriteFilter) *api.TrafficPolic
 		case gwv1.PrefixMatchHTTPPathModifier:
 			ff.Path = &api.UrlRewrite_Prefix{Prefix: strings.TrimSuffix(*filter.Path.ReplacePrefixMatch, "/")}
 		case gwv1.FullPathHTTPPathModifier:
-			ff.Path = &api.UrlRewrite_Full{Full: strings.TrimSuffix(*filter.Path.ReplaceFullPath, "/")}
+			ff.Path = &api.UrlRewrite_Full{Full: *filter.Path.ReplaceFullPath}
 		}
 	}
 	return &api.TrafficPolicySpec{
@@ -357,7 +357,7 @@ func CreateAgwRedirectFilter(filter *gwv1.HTTPRequestRedirectFilter) *api.Reques
 		case gwv1.PrefixMatchHTTPPathModifier:
 			ff.Path = &api.RequestRedirect_Prefix{Prefix: strings.TrimSuffix(*filter.Path.ReplacePrefixMatch, "/")}
 		case gwv1.FullPathHTTPPathModifier:
-			ff.Path = &api.RequestRedirect_Full{Full: strings.TrimSuffix(*filter.Path.ReplaceFullPath, "/")}
+			ff.Path = &api.RequestRedirect_Full{Full: *filter.Path.ReplaceFullPath}
 		}
 	}
 	return ff
