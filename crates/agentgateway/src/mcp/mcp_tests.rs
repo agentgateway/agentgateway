@@ -6104,7 +6104,10 @@ fn test_merge_initialize_uses_server_name_override_when_multiplexing() {
 
 	// Name is overridden; version and instructions preamble keep their defaults.
 	assert_eq!(info.server_info.name, "custom-gateway");
-	assert_eq!(info.server_info.version, BuildInfo::new().version.to_string());
+	assert_eq!(
+		info.server_info.version,
+		BuildInfo::new().version.to_string()
+	);
 	let instructions = info.instructions.expect("instructions should be present");
 	assert_eq!(
 		instructions,
@@ -6166,7 +6169,9 @@ fn test_merge_initialize_uses_full_override_when_multiplexing() {
 
 #[test]
 fn test_merge_discover_uses_full_override_when_multiplexing() {
-	use rmcp::model::{DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult};
+	use rmcp::model::{
+		DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
 
 	let relay = Relay::new(
 		McpBackendGroup {
@@ -6188,14 +6193,15 @@ fn test_merge_discover_uses_full_override_when_multiplexing() {
 	let results: Vec<(Strng, ServerResult)> = vec![
 		(
 			"alpha".into(),
-			ServerResult::DiscoverResult(
-				DiscoverResult::new(
+			ServerResult::DiscoverResult({
+				let mut dr = DiscoverResult::new(
 					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
 					ServerCapabilities::default(),
 				)
-				.with_server_info(Implementation::new("alpha-server", "1.0"))
-				.with_instructions("Alpha guidance."),
-			),
+				.with_server_info(Implementation::new("alpha-server", "1.0"));
+				dr.instructions = Some("Alpha guidance.".to_string());
+				dr
+			}),
 		),
 		(
 			"beta".into(),
@@ -6215,9 +6221,14 @@ fn test_merge_discover_uses_full_override_when_multiplexing() {
 		other => panic!("expected DiscoverResult, got: {:?}", other),
 	};
 
-	assert_eq!(discover.server_info.name, "custom-gateway");
-	assert_eq!(discover.server_info.version, "9.9.9");
-	let instructions = discover.instructions.expect("instructions should be present");
+	let server_info = discover
+		.server_info()
+		.expect("server_info should be present");
+	assert_eq!(server_info.name, "custom-gateway");
+	assert_eq!(server_info.version, "9.9.9");
+	let instructions = discover
+		.instructions
+		.expect("instructions should be present");
 	assert!(instructions.starts_with("Custom gateway preamble."));
 	assert!(instructions.contains("[alpha]\nAlpha guidance."));
 	assert!(
