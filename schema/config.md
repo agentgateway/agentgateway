@@ -6017,6 +6017,9 @@
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`binds[].listeners[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
+|`binds[].listeners[].routes[].backends[].mcp.serverName`|string|Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to `agentgateway` when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.serverVersion`|string|Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to the build version when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions when<br>multiplexing multiple targets. Defaults to a generic gateway description when unset.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`binds[].listeners[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -25187,6 +25190,9 @@
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
+|`backends[].mcp.serverName`|string|Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to `agentgateway` when unset.|
+|`backends[].mcp.serverVersion`|string|Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to the build version when unset.|
+|`backends[].mcp.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions when<br>multiplexing multiple targets. Defaults to a generic gateway description when unset.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -41231,6 +41237,9 @@
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`routeGroups[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
+|`routeGroups[].routes[].backends[].mcp.serverName`|string|Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to `agentgateway` when unset.|
+|`routeGroups[].routes[].backends[].mcp.serverVersion`|string|Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to the build version when unset.|
+|`routeGroups[].routes[].backends[].mcp.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions when<br>multiplexing multiple targets. Defaults to a generic gateway description when unset.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routeGroups[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -59926,6 +59935,9 @@
 |`routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
+|`routes[].backends[].mcp.serverName`|string|Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to `agentgateway` when unset.|
+|`routes[].backends[].mcp.serverVersion`|string|Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to the build version when unset.|
+|`routes[].backends[].mcp.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions when<br>multiplexing multiple targets. Defaults to a generic gateway description when unset.|
 |`routes[].backends[].ai`|object||
 |`routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -77832,6 +77844,9 @@
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
+|`mcp.serverName`|string|Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to `agentgateway` when unset.|
+|`mcp.serverVersion`|string|Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`<br>when multiplexing multiple targets. Defaults to the build version when unset.|
+|`mcp.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions when<br>multiplexing multiple targets. Defaults to a generic gateway description when unset.|
 |`mcp.policies`|object|Policies applied to MCP requests.|
 |`mcp.policies.requestHeaderModifier`|object|Modify request headers before forwarding.|
 |`mcp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
