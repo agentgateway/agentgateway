@@ -156,6 +156,46 @@ pub struct AwsAssumeRole {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<AwsSessionTag>"))]
 	pub tags: AwsSessionTags,
+	/// Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,
+	/// matching `[\w+=,.@:/-]`.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		deserialize_with = "de_external_id"
+	)]
+	pub external_id: Option<String>,
+}
+
+// STS ExternalId limits: https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+const MIN_EXTERNAL_ID_LEN: usize = 2;
+const MAX_EXTERNAL_ID_LEN: usize = 1224;
+
+/// The characters STS accepts in an ExternalId.
+static EXTERNAL_ID_CHARSET: LazyLock<Regex> =
+	LazyLock::new(|| Regex::new(r"^[\w+=,.@:/-]*$").expect("static regex compiles"));
+
+pub fn validate_external_id(id: &str) -> anyhow::Result<()> {
+	let len = id.chars().count();
+	if !(MIN_EXTERNAL_ID_LEN..=MAX_EXTERNAL_ID_LEN).contains(&len) {
+		anyhow::bail!(
+			"external id must be {MIN_EXTERNAL_ID_LEN}-{MAX_EXTERNAL_ID_LEN} characters, got {len}"
+		);
+	}
+	if !EXTERNAL_ID_CHARSET.is_match(id) {
+		anyhow::bail!("external id contains characters STS does not accept");
+	}
+	Ok(())
+}
+
+fn de_external_id<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let id: Option<String> = Option::deserialize(deserializer)?;
+	if let Some(id) = &id {
+		validate_external_id(id).map_err(serde::de::Error::custom)?;
+	}
+	Ok(id)
 }
 
 /// An AWS STS session tag passed to AssumeRole for cost attribution.
@@ -782,6 +822,7 @@ struct AssumeRoleCacheKey {
 	role_arn: String,
 	resolved_sts_region: String,
 	session_name: Option<String>,
+	external_id: Option<String>,
 	/// Sorted (key, value) pairs so the cache key is stable regardless of tag order.
 	tags: Arc<[(String, String)]>,
 }
@@ -819,6 +860,7 @@ async fn load_assumed_credentials(
 		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
 		session_name,
+		external_id: assume_role.external_id.clone(),
 		tags,
 	};
 
@@ -831,6 +873,10 @@ async fn load_assumed_credentials(
 
 			if let Some(session_name) = &key.session_name {
 				builder = builder.session_name(session_name.clone());
+			}
+
+			if let Some(external_id) = &key.external_id {
+				builder = builder.external_id(external_id.clone());
 			}
 
 			if !key.tags.is_empty() {
@@ -920,8 +966,29 @@ mod cache_key_tests {
 				.session_name
 				.as_ref()
 				.and_then(|name| name.static_name().map(String::from)),
+			external_id: assume_role.external_id.clone(),
 			tags: assume_role.tags.static_tags(),
 		}
+	}
+
+	#[test]
+	fn different_external_ids_produce_different_keys() {
+		let base = AwsAssumeRole {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			session_name: None,
+			tags: tags(&[]),
+			external_id: Some("tenant-a".to_string()),
+		};
+		let other = AwsAssumeRole {
+			external_id: Some("tenant-b".to_string()),
+			..base.clone()
+		};
+		let unset = AwsAssumeRole {
+			external_id: None,
+			..base.clone()
+		};
+		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
+		assert_ne!(key_for(&base, "us-east-1"), key_for(&unset, "us-east-1"));
 	}
 
 	#[test]
@@ -930,6 +997,7 @@ mod cache_key_tests {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 			session_name: Some(AwsSessionName::Static("team-a".to_string())),
 			tags: tags(&[]),
+			external_id: None,
 		};
 		let other = AwsAssumeRole {
 			session_name: Some(AwsSessionName::Static("team-b".to_string())),
@@ -944,6 +1012,7 @@ mod cache_key_tests {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 			session_name: Some(AwsSessionName::Static("static-name".to_string())),
 			tags: tags(&[]),
+			external_id: None,
 		};
 		// Static config, nothing resolved: the configured name is used.
 		assert_eq!(
@@ -970,6 +1039,7 @@ mod cache_key_tests {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 			resolved_sts_region: "us-east-1".to_string(),
 			session_name: Some("team-a-invoicer".to_string()),
+			external_id: None,
 			tags: tags(&[]).static_tags(),
 		};
 		let resolved_key = AssumeRoleCacheKey {
@@ -985,9 +1055,11 @@ mod cache_key_tests {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 			session_name: None,
 			tags: tags(&[("Team", "acme-payments")]),
+			external_id: None,
 		};
 		let other = AwsAssumeRole {
 			tags: tags(&[("Team", "acme-billing")]),
+			external_id: None,
 			..base.clone()
 		};
 		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
@@ -1001,6 +1073,7 @@ mod cache_key_tests {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 			resolved_sts_region: "us-east-1".to_string(),
 			session_name: None,
+			external_id: None,
 			tags: tags(&[("Team", "acme")]).static_tags(),
 		};
 		let resolved_key = AssumeRoleCacheKey {
@@ -1153,6 +1226,7 @@ mod resolve_tags_tests {
 				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 				session_name: None,
 				tags: session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]),
+				external_id: None,
 			}),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
@@ -1186,6 +1260,7 @@ mod resolve_tags_tests {
 					expression: Some(Arc::new(expression)),
 				}])
 				.expect("permissive expression should pass config validation"),
+				external_id: None,
 			}),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
@@ -1312,6 +1387,7 @@ mod resolve_session_name_tests {
 				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 				session_name: Some(dynamic(r#"request.headers["x-team"]"#)),
 				tags: Default::default(),
+				external_id: None,
 			}),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
@@ -1349,6 +1425,7 @@ mod assume_role_cache_tests {
 			role_arn: format!("arn:aws:iam::123456789012:role/{role}"),
 			resolved_sts_region: "us-east-1".to_string(),
 			session_name: None,
+			external_id: None,
 			tags: tags
 				.iter()
 				.map(|(k, v)| (k.to_string(), v.to_string()))

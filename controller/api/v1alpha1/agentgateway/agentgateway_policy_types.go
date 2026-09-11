@@ -2196,6 +2196,12 @@ type AwsAssumeRole struct {
 	// +listMapKey=key
 	// +kubebuilder:validation:MaxItems=50
 	Tags []AwsSessionTag `json:"tags,omitempty"`
+
+	// ExternalID is set when the role's trust policy requires sts:ExternalId.
+	//
+	// +optional
+	// +kubebuilder:validation:Pattern="^[\\w+=,.@:/-]{2,1224}$"
+	ExternalID *string `json:"externalId,omitempty"`
 }
 
 // AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
