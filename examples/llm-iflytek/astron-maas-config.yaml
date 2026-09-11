@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+llm:
+  port: 3000
+  models:
+  - name: xsparkx2
+    provider: openAI
+    params:
+      model: xsparkx2
+      apiKey: $ASTRON_API_KEY
+      baseUrl: https://maas-token-api.cn-huabei-1.xf-yun.com/v2
