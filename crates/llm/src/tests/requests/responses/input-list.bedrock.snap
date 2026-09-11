@@ -44,6 +44,11 @@ info:
         "role": "assistant",
         "content": [
           {
+            "reasoningContent": {
+              "redactedContent": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo"
+            }
+          },
+          {
             "text": "Hello!"
           }
         ]
@@ -53,7 +58,24 @@ info:
         "content": [
           {
             "text": "How are you?"
-          },
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "reasoningContent": {
+              "reasoningText": {
+                "text": "Let me think through this."
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
           {
             "text": "Continue."
           },

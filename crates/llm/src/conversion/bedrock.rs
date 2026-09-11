@@ -661,10 +661,9 @@ pub mod from_completions {
 		cache_points_used: &mut usize,
 	) -> Vec<bedrock::ContentBlock> {
 		let mut content = Vec::new();
-		// Replay a previously-emitted thinking block first. Anthropic (via Bedrock Converse) requires
-		// the reasoningContent block to precede the text/toolUse blocks of the same assistant turn,
-		// and to carry the original cryptographic signature so Bedrock can validate it. Only replay
-		// when a non-empty signature is present — Bedrock rejects an unsigned thinking block.
+		// This Completions path replays signed thinking before text/toolUse blocks.
+		// Anthropic requires the original signature; other Bedrock models can accept
+		// unsigned reasoning, but this path currently omits it.
 		if let Some(signature) = msg.reasoning_signature.as_deref().filter(|s| !s.is_empty()) {
 			content.push(bedrock::ContentBlock::ReasoningContent(
 				bedrock::ReasoningContentBlock::Structured {
@@ -1266,7 +1265,7 @@ pub mod from_completions {
 						log.update(|r| r.response.inter_chunk_latencies.record(gap));
 					}
 
-					let delta = d.delta.map(|delta| {
+					let delta = d.delta.and_then(|delta| {
 						let mut dr = completions::StreamResponseDelta::default();
 						match delta {
 							bedrock::ContentBlockDelta::ReasoningContent(
@@ -1276,9 +1275,7 @@ pub mod from_completions {
 							},
 							bedrock::ContentBlockDelta::ReasoningContent(
 								bedrock::ReasoningContentBlockDelta::RedactedContent(_),
-							) => {
-								dr.reasoning_content = Some("[REDACTED]".to_string());
-							},
+							) => return None,
 							bedrock::ContentBlockDelta::ReasoningContent(
 								bedrock::ReasoningContentBlockDelta::Signature(sig),
 							) => {
@@ -1321,7 +1318,7 @@ pub mod from_completions {
 								}
 							},
 						};
-						dr
+						Some(dr)
 					});
 
 					if let Some(delta) = delta {
@@ -1773,13 +1770,18 @@ pub mod from_messages {
 						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Structured {
 							reasoning_text: bedrock::ReasoningText {
 								text: thinking,
-								signature: Some(signature),
+								signature: Some(signature).filter(|s| !s.is_empty()),
 							},
 						}),
 						false,
 					),
 					messages::ContentBlock::WebSearchToolResult { .. } => continue,
-					messages::ContentBlock::RedactedThinking { .. } => continue,
+					messages::ContentBlock::RedactedThinking { data } => (
+						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Redacted {
+							redacted_content: data,
+						}),
+						false,
+					),
 					messages::ContentBlock::Document(_) => continue,
 					messages::ContentBlock::SearchResult(_) => continue,
 					messages::ContentBlock::ServerToolUse { .. } => continue,
@@ -2711,6 +2713,39 @@ pub mod from_responses {
 							_ => None,
 						})
 						.collect::<Vec<_>>();
+					if !content.is_empty() {
+						helpers::push_or_merge_message(
+							&mut messages,
+							bedrock::Message {
+								role: bedrock::Role::Assistant,
+								content,
+							},
+						);
+					}
+				},
+				InputItem::Item(Item::Reasoning(reasoning)) => {
+					let content = if let Some(redacted_content) = reasoning.encrypted_content {
+						vec![bedrock::ContentBlock::ReasoningContent(
+							bedrock::ReasoningContentBlock::Redacted { redacted_content },
+						)]
+					} else {
+						reasoning
+							.content
+							.unwrap_or_default()
+							.into_iter()
+							.map(|part| {
+								let responses::ReasoningItemContent::ReasoningText(text) = part;
+								bedrock::ContentBlock::ReasoningContent(
+									bedrock::ReasoningContentBlock::Structured {
+										reasoning_text: bedrock::ReasoningText {
+											text: text.text,
+											signature: None,
+										},
+									},
+								)
+							})
+							.collect()
+					};
 					if !content.is_empty() {
 						helpers::push_or_merge_message(
 							&mut messages,
@@ -3827,6 +3862,7 @@ impl ConverseResponseAdapter {
 		let mut content = None;
 		let mut reasoning_content = None;
 		let mut reasoning_signature = None;
+		let mut reasoning_blocks = 0;
 		for block in &self.message.content {
 			match block {
 				bedrock::ContentBlock::Text(text) => {
@@ -3844,9 +3880,14 @@ impl ConverseResponseAdapter {
 							reasoning_text.text.clone(),
 							reasoning_text.signature.clone(),
 						),
+						// Completions has no field for encrypted reasoning.
+						bedrock::ReasoningContentBlock::Redacted { .. } => continue,
 						bedrock::ReasoningContentBlock::Simple { text } => (text.clone(), None),
 					};
-					reasoning_content = Some(text);
+					reasoning_blocks += 1;
+					reasoning_content
+						.get_or_insert_with(String::new)
+						.push_str(&text);
 					if let Some(sig) = signature
 						&& !sig.is_empty()
 					{
@@ -3874,6 +3915,11 @@ impl ConverseResponseAdapter {
 					continue;
 				},
 			}
+		}
+
+		// A single signature cannot authenticate multiple concatenated reasoning blocks.
+		if reasoning_blocks > 1 {
+			reasoning_signature = None;
 		}
 
 		let message = completions::ResponseMessage {
@@ -3967,17 +4013,26 @@ impl ConverseResponseAdapter {
 					));
 				},
 				bedrock::ContentBlock::ReasoningContent(reasoning) => {
-					let text = match reasoning {
+					let (text, encrypted_content) = match reasoning {
 						bedrock::ReasoningContentBlock::Structured { reasoning_text } => {
-							reasoning_text.text.clone()
+							(Some(reasoning_text.text.clone()), None)
 						},
-						bedrock::ReasoningContentBlock::Simple { text } => text.clone(),
+						bedrock::ReasoningContentBlock::Redacted { redacted_content } => {
+							(None, Some(redacted_content.clone()))
+						},
+						bedrock::ReasoningContentBlock::Simple { text } => (Some(text.clone()), None),
 					};
-					text_parts.push(responsest::OutputMessageContent::OutputText(
-						responsest::OutputTextContent {
-							annotations: vec![],
-							logprobs: None,
-							text,
+					outputs.push(responsest::OutputItem::Reasoning(
+						responsest::ReasoningItem {
+							id: Some(format!("rs_{:016x}", rand::rng().random::<u64>())),
+							summary: vec![],
+							content: text.map(|text| {
+								vec![responsest::ReasoningItemContent::ReasoningText(
+									responsest::ReasoningTextContent { text },
+								)]
+							}),
+							encrypted_content,
+							status: Some(output_status),
 						},
 					));
 				},
@@ -4096,6 +4151,13 @@ impl ConverseResponseAdapter {
 							reasoning_text.text.clone(),
 							reasoning_text.signature.clone().unwrap_or_default(),
 						),
+						// Encrypted reasoning maps to Anthropic's native redacted_thinking
+						// block, preserving the opaque payload for turn replay.
+						bedrock::ReasoningContentBlock::Redacted { redacted_content } => {
+							return Some(messagest::ContentBlock::RedactedThinking {
+								data: redacted_content.clone(),
+							});
+						},
 						bedrock::ReasoningContentBlock::Simple { text } => (text.clone(), String::new()),
 					};
 					Some(messagest::ContentBlock::Thinking {

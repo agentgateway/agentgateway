@@ -58,6 +58,11 @@ pub enum ReasoningContentBlock {
 		#[serde(rename = "reasoningText")]
 		reasoning_text: ReasoningText,
 	},
+	// Encrypted reasoning: { "redactedContent": "<base64>" }.
+	Redacted {
+		#[serde(rename = "redactedContent")]
+		redacted_content: String,
+	},
 	// Legacy/simple format: { "text": "..." }
 	Simple {
 		text: String,

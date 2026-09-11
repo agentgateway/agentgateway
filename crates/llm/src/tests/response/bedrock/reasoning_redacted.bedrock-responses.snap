@@ -22,5 +22,65 @@ info:
     latencyMs: 2083
 ---
 {
-  "error": "failed to parse response: data did not match any variant of untagged enum ReasoningContentBlock at line 18 column 8"
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "reasoning",
+        "id": "[id]",
+        "summary": [],
+        "content": [
+          {
+            "type": "reasoning_text",
+            "text": "Two plus two is four."
+          }
+        ],
+        "status": "completed"
+      },
+      {
+        "type": "reasoning",
+        "id": "[id]",
+        "summary": [],
+        "encrypted_content": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo",
+        "status": "completed"
+      },
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": "The answer is 4."
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "completed"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 46,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 64
+    },
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 18,
+    "output_tokens": 46,
+    "total_tokens": 64,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model"
+  }
 }
