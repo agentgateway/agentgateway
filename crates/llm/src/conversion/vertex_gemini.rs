@@ -1730,9 +1730,13 @@ pub mod to_completions {
 	pub(super) struct DecodedParts<'a> {
 		pub(super) content: String,
 		pub(super) reasoning: String,
-		/// `thoughtSignature` from a reasoning-only turn. Gemini 3 attaches it to the thought
-		/// part rather than a functionCall, and the Messages `thinking` block must echo it back.
-		pub(super) reasoning_signature: Option<&'a str>,
+		/// Thought text split at each `thoughtSignature`.
+		///
+		/// Gemini 3 signs individual thought parts and a signature attests only the text it
+		/// arrives with, so a response carrying several signed parts cannot be collapsed into one
+		/// `thinking` block: the surviving signature would not cover the concatenated text and the
+		/// next turn 400s when the client echoes it back.
+		pub(super) reasoning_segments: Vec<(String, Option<&'a str>)>,
 		pub(super) calls: Vec<DecodedCall<'a>>,
 	}
 
@@ -1754,8 +1758,15 @@ pub mod to_completions {
 			match part {
 				vg::Part::Text(t) if t.thought == Some(true) => {
 					out.reasoning.push_str(&t.text);
-					if let Some(sig) = t.thought_signature.as_deref() {
-						out.reasoning_signature = Some(sig);
+					// Extend the open segment, or start one if the previous is already signed.
+					match out.reasoning_segments.last_mut() {
+						Some((text, None)) => text.push_str(&t.text),
+						_ => out.reasoning_segments.push((t.text.clone(), None)),
+					}
+					if let Some(sig) = t.thought_signature.as_deref()
+						&& let Some(last) = out.reasoning_segments.last_mut()
+					{
+						last.1 = Some(sig);
 					}
 				},
 				vg::Part::Text(t) => out.content.push_str(&t.text),
@@ -2303,10 +2314,13 @@ pub mod to_messages {
 			let mut blocks: Vec<messages::ContentBlock> = Vec::new();
 
 			// Block emission order: Thinking → Text → ToolUse
-			if !decoded.reasoning.is_empty() {
+			for (thinking, signature) in decoded.reasoning_segments {
+				if thinking.is_empty() {
+					continue;
+				}
 				blocks.push(messages::ContentBlock::Thinking {
-					thinking: decoded.reasoning,
-					signature: decoded.reasoning_signature.unwrap_or("").to_string(),
+					thinking,
+					signature: signature.unwrap_or("").to_string(),
 				});
 			}
 			if !decoded.content.is_empty() {
@@ -2641,6 +2655,10 @@ pub mod to_messages {
 									}
 									.into_sse_tuple(),
 								);
+								// Anthropic expects one signature per thinking block, at its end. A
+								// later signed thought part opens a new block rather than adding a
+								// second signature to this one.
+								self.close_open_block(&mut out);
 							}
 						},
 						vg::Part::Text(t) => {
