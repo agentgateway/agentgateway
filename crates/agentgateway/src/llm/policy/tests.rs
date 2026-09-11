@@ -297,44 +297,196 @@ fn model_armor_blocked_records_guardrail_info() {
 	);
 }
 
+/// The OpenAI category names, as the moderations API reports them.
+const OPENAI_CATEGORIES: [&str; 13] = [
+	"hate",
+	"hate/threatening",
+	"harassment",
+	"harassment/threatening",
+	"illicit",
+	"illicit/violent",
+	"self-harm",
+	"self-harm/intent",
+	"self-harm/instructions",
+	"sexual",
+	"sexual/minors",
+	"violence",
+	"violence/graphic",
+];
+
+/// An OpenAI moderations response body, as bytes, with `true` for the named categories.
+fn openai_moderation_body(flagged: bool, true_categories: &[&str]) -> Vec<u8> {
+	let obj = |v: &dyn Fn(&str) -> serde_json::Value| -> serde_json::Value {
+		OPENAI_CATEGORIES
+			.iter()
+			.map(|c| (c.to_string(), v(c)))
+			.collect()
+	};
+	serde_json::to_vec(&serde_json::json!({
+		"id": "modr-1",
+		"model": "omni-moderation-latest",
+		"results": [{
+			"flagged": flagged,
+			"categories": obj(&|c| serde_json::json!(true_categories.contains(&c))),
+			"category_scores": obj(&|_| serde_json::json!(0.5)),
+			"category_applied_input_types": obj(&|_| serde_json::json!(["text"])),
+		}]
+	}))
+	.unwrap()
+}
+
+fn openai_verdicts(body: &[u8]) -> Vec<moderation::ModerationVerdict> {
+	use crate::llm::policy::moderation::ModerationProvider;
+	moderation::openai::OpenAI.parse(body).unwrap()
+}
+
 #[test]
 fn moderation_flagged_records_guardrail_info() {
-	let cats = [
-		"hate",
-		"hate/threatening",
-		"harassment",
-		"harassment/threatening",
-		"illicit",
-		"illicit/violent",
-		"self-harm",
-		"self-harm/intent",
-		"self-harm/instructions",
-		"sexual",
-		"sexual/minors",
-		"violence",
-		"violence/graphic",
-	];
-	let obj = |v: fn(&str) -> serde_json::Value| -> serde_json::Value {
-		cats.iter().map(|c| (c.to_string(), v(c))).collect()
-	};
-	let resp: async_openai::types::moderations::CreateModerationResponse =
-		serde_json::from_value(serde_json::json!({
-			"id": "modr-1",
-			"model": "omni-moderation-latest",
-			"results": [{
-				"flagged": true,
-				"categories": obj(|c| serde_json::json!(c == "violence")),
-				"category_scores": obj(|_| serde_json::json!(0.5)),
-				"category_applied_input_types": obj(|_| serde_json::json!(["text"])),
-			}]
-		}))
-		.unwrap();
+	let verdicts = openai_verdicts(&openai_moderation_body(true, &["violence"]));
 
-	let (outcome, detail) = Policy::moderation_outcome(resp, &RequestRejection::default(), false);
+	let (outcome, detail) = Policy::moderation_outcome(verdicts, &RequestRejection::default(), false);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 	assert_eq!(
 		detail.unwrap().assessments[0]["flaggedCategories"],
 		serde_json::json!(["violence"])
+	);
+}
+
+#[test]
+fn moderation_not_flagged_records_nothing() {
+	let verdicts = openai_verdicts(&openai_moderation_body(false, &[]));
+
+	let (outcome, detail) = Policy::moderation_outcome(verdicts, &RequestRejection::default(), false);
+	assert!(matches!(outcome, GuardrailOutcome::None));
+	assert!(detail.is_none());
+}
+
+#[test]
+fn moderation_audit_action_audits_instead_of_rejecting() {
+	let verdicts = openai_verdicts(&openai_moderation_body(true, &["violence"]));
+
+	let (outcome, detail) = Policy::moderation_outcome(verdicts, &RequestRejection::default(), true);
+	assert!(matches!(outcome, GuardrailOutcome::Audit));
+	assert_eq!(
+		detail.unwrap().assessments[0]["flaggedCategories"],
+		serde_json::json!(["violence"])
+	);
+}
+
+/// `flagged` without any category we can name still rejects. This is what happens when
+/// OpenAI adds a category: the response type is a closed struct, so the unknown key is
+/// dropped at deserialization and only `flagged` still carries the decision. Scanning the
+/// categories alone would let the request through — a guard must degrade closed.
+#[test]
+fn moderation_rejects_on_provider_flag_with_no_known_category() {
+	let verdicts = openai_verdicts(&openai_moderation_body(true, &[]));
+
+	let (outcome, detail) = Policy::moderation_outcome(verdicts, &RequestRejection::default(), false);
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	assert_eq!(
+		detail.unwrap().assessments[0]["flaggedCategories"],
+		serde_json::json!([])
+	);
+}
+
+/// A provider that reports no overall decision of its own — Mistral, and OpenAI-compatible
+/// classifiers in general — is judged on its categories alone.
+#[test]
+fn moderation_without_a_provider_flag_is_judged_on_categories() {
+	let flagged = moderation::ModerationVerdict {
+		provider_flagged: None,
+		categories: [(strng::literal!("violence"), true)].into_iter().collect(),
+		scores: Default::default(),
+	};
+	let clean = moderation::ModerationVerdict {
+		provider_flagged: None,
+		categories: [(strng::literal!("violence"), false)].into_iter().collect(),
+		scores: Default::default(),
+	};
+
+	assert!(moderation::is_flagged(&flagged));
+	assert!(!moderation::is_flagged(&clean));
+}
+
+/// Several flagged categories are reported in alphabetical order. Before the provider was
+/// extracted they came out in the order OpenAI declares them, because the workspace enables
+/// serde_json's `preserve_order`; the verdict is a `BTreeMap`, so the order is now
+/// alphabetical and, more usefully, the same for every provider.
+#[test]
+fn moderation_flagged_categories_are_alphabetical() {
+	let verdicts = openai_verdicts(&openai_moderation_body(
+		true,
+		&["violence", "harassment", "sexual"],
+	));
+
+	let (_, detail) = Policy::moderation_outcome(verdicts, &RequestRejection::default(), false);
+	assert_eq!(
+		detail.unwrap().assessments[0]["flaggedCategories"],
+		serde_json::json!(["harassment", "sexual", "violence"])
+	);
+}
+
+#[test]
+fn moderation_keeps_category_scores_in_the_verdict() {
+	let verdicts = openai_verdicts(&openai_moderation_body(true, &["violence"]));
+
+	assert_eq!(verdicts[0].scores.get("violence"), Some(&0.5));
+	assert_eq!(verdicts[0].scores.len(), OPENAI_CATEGORIES.len());
+}
+
+#[test]
+fn moderation_unreadable_body_is_an_error() {
+	use crate::llm::policy::moderation::ModerationProvider;
+	assert!(moderation::openai::OpenAI.parse(b"not json").is_err());
+}
+
+/// The request the OpenAI provider builds must stay byte-for-byte what the guard sent
+/// before the provider was extracted: same path, same body, roles dropped.
+#[test]
+fn openai_provider_builds_the_unchanged_request() {
+	use crate::llm::SimpleChatCompletionMessage;
+	use crate::llm::policy::moderation::ModerationProvider;
+
+	let messages = vec![
+		SimpleChatCompletionMessage {
+			role: strng::literal!("system"),
+			content: strng::literal!("be nice"),
+		},
+		SimpleChatCompletionMessage {
+			role: strng::literal!("user"),
+			content: strng::literal!("hello"),
+		},
+	];
+
+	let (path, body) = moderation::openai::OpenAI
+		.build_request("omni-moderation-latest", &messages)
+		.unwrap();
+
+	assert_eq!(path.as_str(), "/v1/moderations");
+	let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		body,
+		serde_json::json!({
+			"input": ["be nice", "hello"],
+			"model": "omni-moderation-latest",
+		})
+	);
+}
+
+#[test]
+fn openai_provider_keeps_its_metrics_resource_name() {
+	use crate::llm::policy::moderation::ModerationProvider;
+	assert_eq!(
+		moderation::openai::OpenAI.resource_name().as_str(),
+		"_openai-moderation"
+	);
+	assert_eq!(
+		moderation::openai::OpenAI.default_model().as_str(),
+		"omni-moderation-latest"
+	);
+	assert_eq!(
+		moderation::openai::OpenAI.default_host().as_str(),
+		"api.openai.com"
 	);
 }
 

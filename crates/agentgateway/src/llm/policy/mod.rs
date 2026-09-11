@@ -1037,43 +1037,29 @@ impl Policy {
 		moderation: &Moderation,
 		rejection: &RequestRejection,
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
-		let resp = moderation::send_request(req, claims, client, moderation).await?;
+		let provider = moderation::provider_for(moderation);
+		let verdicts = moderation::send_request(req, claims, client, moderation, provider).await?;
 		Ok(Self::moderation_outcome(
-			resp,
+			verdicts,
 			rejection,
 			moderation.action == RejectAuditAction::Audit,
 		))
 	}
 
 	fn moderation_outcome(
-		resp: async_openai::types::moderations::CreateModerationResponse,
+		verdicts: Vec<moderation::ModerationVerdict>,
 		rejection: &RequestRejection,
 		audit: bool,
 	) -> (GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>) {
-		if !resp.results.iter().any(|r| r.flagged) {
+		if !verdicts.iter().any(moderation::is_flagged) {
 			return (GuardrailOutcome::None, None);
 		}
-		// One entry per flagged result listing the flagged category names; input text
+		// One entry per flagged verdict listing the flagged category names; input text
 		// is never included.
-		let assessments = resp
-			.results
+		let assessments = verdicts
 			.iter()
-			.filter(|r| r.flagged)
-			.map(|r| {
-				let flagged: Vec<String> = serde_json::to_value(&r.categories)
-					.ok()
-					.and_then(|v| match v {
-						serde_json::Value::Object(m) => Some(
-							m.into_iter()
-								.filter(|(_, v)| v.as_bool() == Some(true))
-								.map(|(k, _)| k)
-								.collect(),
-						),
-						_ => None,
-					})
-					.unwrap_or_default();
-				serde_json::json!({"flaggedCategories": flagged})
-			})
+			.filter(|v| moderation::is_flagged(v))
+			.map(|v| serde_json::json!({"flaggedCategories": v.flagged_categories()}))
 			.collect();
 		(
 			reject_or_audit(audit, rejection),
