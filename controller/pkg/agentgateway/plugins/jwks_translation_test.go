@@ -207,7 +207,7 @@ func TestTranslateMCPAuthenticationSpecTranslatesEmptyRequiredClaims(t *testing.
 	authn := &agentgateway.MCPAuthentication{
 		Issuer: "issuer.example",
 		JWKS: &agentgateway.RemoteJWKS{
-			JwksPath:   longStringPtr("/keys"),
+			JwksPath: longStringPtr("/keys"),
 			BackendRef: &gwv1.BackendObjectReference{
 				Name: "jwks-backend",
 			},
@@ -254,7 +254,7 @@ func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorEmitsEmptyKeySetAnd
 		Audiences: []string{"aud-a"},
 		Mode:      agentgateway.JWTAuthenticationModePermissive,
 		JWKS: &agentgateway.RemoteJWKS{
-			JwksPath:   longStringPtr("/keys"),
+			JwksPath: longStringPtr("/keys"),
 			BackendRef: &gwv1.BackendObjectReference{
 				Name: "jwks-backend",
 			},
