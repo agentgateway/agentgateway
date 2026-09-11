@@ -1,0 +1,49 @@
+backends:
+- name: searxng
+  mcp:
+    targets:
+    - name: search
+      mcp:
+        host: searxng-mcp.internal
+        port: 8080
+        path: /mcp
+
+llm:
+  models:
+  - name: qwen3
+    provider: openai
+    params:
+      baseUrl: http://vllm.internal:8000/v1
+    serverTools:
+      maxIterations: 4
+      keepaliveInterval: 10s
+      failureMode: failOpen
+      unmapped: reject
+      clientExecuted: []
+      results: strip
+      tools:
+      - type: web_search_*
+        mcp:
+          backend: searxng
+          target: search
+          tool: search
+          arguments:
+            allowed_domains: serverTool.declaration.allowed_domains
+            max_results: "5"
+      - type: web_fetch_20250910
+        description: Fetch a web page
+        inputSchema:
+          type: object
+          properties:
+            url:
+              type: string
+          required: [url]
+        mcp:
+          backend: searxng
+          tool: fetch
+      mcpServers:
+      - label: search
+        url: https://mcp.example.com/mcp
+        backend: searxng
+        target: search
+        skipApproval: true

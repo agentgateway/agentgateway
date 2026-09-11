@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::time::Duration;
+
 use ::http::HeaderMap;
 use bytes::Bytes;
 use http_body_util::BodyExt as _;
@@ -5,7 +8,7 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::cel::GuardDetail;
+use crate::cel::{Expression, GuardDetail};
 use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
 use crate::http::{HeaderOrPseudo, Response, StatusCode};
@@ -15,7 +18,7 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{GuardrailLog, RequestLog};
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
 use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
-use crate::*;
+use crate::{serde_dur, *};
 
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
@@ -198,6 +201,9 @@ pub struct Policy {
 		schemars(with = "std::collections::HashMap<String, crate::llm::RouteType>")
 	)]
 	pub routes: SortedRoutes,
+	/// Server tools declared by the client that the gateway fulfils through MCP.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server_tools: Option<Arc<ServerToolsConfig>>,
 }
 
 fn webhook_header_expressions(g: &PromptGuard) -> impl Iterator<Item = &cel::Expression> {
@@ -2669,4 +2675,198 @@ fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] i
 		GuardrailPhase::Request,
 	);
 	assert!(matches!(result, Some(RegexResult::Reject)));
+}
+
+/// Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an
+/// MCP tool and continuing the turn. This applies to Anthropic Messages, OpenAI Responses and
+/// OpenAI Chat Completions requests, and only to what the client declared as server-executed:
+/// Anthropic server tools, Responses built-in tools and `mcp` servers, and the Chat Completions
+/// `web_search_options` field. Client tools are never touched.
+#[apply(schema!)]
+#[serde(default)]
+pub struct ServerToolsConfig {
+	/// Server tools to fulfil, matched by the tool `type` the client declares, for example
+	/// `web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`
+	/// (Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub tools: Vec<ServerToolMapping>,
+	/// Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to
+	/// configured MCP backends. The backend's tools are exposed to the model by name.
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub mcp_servers: Vec<ServerToolMcpServer>,
+	/// Maximum number of follow-up model calls for one client request. The client's `max_uses` is
+	/// honoured as a lower cap. At the cap, and when the model repeats an identical call, the
+	/// gateway answers the pending calls with an error result, withdraws its tools, and makes one
+	/// more model call so the turn ends with an answer.
+	pub max_iterations: u32,
+	/// Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
+	pub max_result_bytes: usize,
+	/// Interval between keepalive `ping` events while a streaming turn is held back.
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub keepalive_interval: Duration,
+	/// What happens when a tool call fails.
+	pub failure_mode: ServerToolFailureMode,
+	/// What happens to a declared server tool that no mapping covers. By default it is left to the
+	/// provider, which usually drops it; `reject` answers the request with a 400 that names the
+	/// tool type instead.
+	pub unmapped: UnmappedServerTools,
+	/// How executed calls appear in the response the client gets. `native` (default) adds the wire
+	/// format's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a
+	/// web search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other
+	/// Messages calls, `web_search_call` and `mcp_call` items on Responses. `strip` removes every
+	/// trace of the gateway's calls and returns the text alone.
+	pub results: ServerToolResults,
+	/// Tool types that share the server tool shape but are executed by the client, so a mapping
+	/// that matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined
+	/// client tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the
+	/// Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`
+	/// tools. Set it to an empty list to let every mapping apply, or add entries to guard more.
+	pub client_executed: Vec<String>,
+}
+
+pub fn default_client_executed() -> Vec<String> {
+	agent_llm::server_tools::DEFAULT_CLIENT_EXECUTED_TOOL_TYPES
+		.iter()
+		.map(|t| t.to_string())
+		.collect()
+}
+
+impl Default for ServerToolsConfig {
+	/// No tools, and the default limits.
+	fn default() -> Self {
+		Self {
+			tools: Vec::new(),
+			mcp_servers: Vec::new(),
+			max_iterations: 3,
+			max_result_bytes: 64 * 1024,
+			keepalive_interval: Duration::from_secs(15),
+			failure_mode: ServerToolFailureMode::default(),
+			unmapped: UnmappedServerTools::default(),
+			results: ServerToolResults::default(),
+			client_executed: default_client_executed(),
+		}
+	}
+}
+
+impl ServerToolsConfig {
+	pub fn matchers(&self) -> Vec<agent_llm::server_tools::TypeMatch> {
+		self
+			.tools
+			.iter()
+			.map(|t| agent_llm::server_tools::TypeMatch::parse(&t.tool_type))
+			.collect()
+	}
+
+	/// The types a mapping must never take over, as matchers.
+	pub fn client_executed_matchers(&self) -> Vec<agent_llm::server_tools::TypeMatch> {
+		self
+			.client_executed
+			.iter()
+			.map(|t| agent_llm::server_tools::TypeMatch::parse(t))
+			.collect()
+	}
+}
+
+/// Maps one server tool type to the MCP tool that fulfils it.
+#[apply(schema!)]
+pub struct ServerToolMapping {
+	/// The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any
+	/// type with that prefix.
+	#[serde(rename = "type")]
+	pub tool_type: String,
+	/// The MCP tool that fulfils the server tool.
+	pub mcp: ServerToolMcpTarget,
+	/// Description shown to the model. Defaults to the MCP tool's description.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub description: Option<String>,
+	/// JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub input_schema: Option<serde_json::Value>,
+}
+
+/// An MCP tool on a configured MCP backend.
+#[apply(schema!)]
+pub struct ServerToolMcpTarget {
+	/// Name of the MCP backend to call.
+	pub backend: Strng,
+	/// Target within the backend. Required when the backend has more than one target.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub target: Option<Strng>,
+	/// Name of the tool on the MCP backend.
+	pub tool: Strng,
+	/// Arguments added to every call, as CEL over `serverTool.input` (the model's arguments),
+	/// `serverTool.declaration` (the client's tool entry as declared, with fields such as
+	/// `allowed_domains`, `user_location` or `max_uses`), `serverTool.name` and `serverTool.type`.
+	/// A value that fails to evaluate or is null is left out. This is how a declared option
+	/// reaches the MCP tool.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub arguments: Option<BTreeMap<String, Arc<Expression>>>,
+}
+
+/// Maps a remote MCP server a Responses client declares to a configured MCP backend.
+#[apply(schema!)]
+pub struct ServerToolMcpServer {
+	/// Matches the client's `server_label`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub label: Option<Strng>,
+	/// Matches the client's `server_url`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub url: Option<Strng>,
+	/// Name of the MCP backend to call.
+	pub backend: Strng,
+	/// Target within the backend. Required when the backend has more than one target.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub target: Option<Strng>,
+	/// Run tools even when the client asks for approval before each call, which is the Responses
+	/// API default. Off by default, in which case such requests are rejected with a 400, since
+	/// the gateway cannot pause a turn for approval.
+	#[serde(default)]
+	pub skip_approval: bool,
+	/// Arguments added to every call of this server's tools, as CEL over `serverTool.input`,
+	/// `serverTool.declaration` (the client's `mcp` descriptor), `serverTool.name` and
+	/// `serverTool.type`. A value that fails to evaluate or is null is left out.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub arguments: Option<BTreeMap<String, Arc<Expression>>>,
+}
+
+impl ServerToolMcpServer {
+	/// Whether this entry is the one the client's descriptor refers to.
+	pub fn matches(&self, server_label: &str, server_url: Option<&str>) -> bool {
+		self.label.as_deref().is_some_and(|l| l == server_label)
+			|| (self.url.is_some() && self.url.as_deref() == server_url)
+	}
+}
+
+/// How executed server tool calls appear in the response.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ServerToolResults {
+	/// Add the wire format's own items for the calls ahead of the answer.
+	#[default]
+	Native,
+	/// Return the answer alone.
+	Strip,
+}
+
+/// What happens to a declared server tool that no mapping covers.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum UnmappedServerTools {
+	/// Leave it to the provider. Providers without the tool drop it.
+	#[default]
+	Drop,
+	/// Reject the request with a 400 that names the tool type.
+	Reject,
+}
+
+/// What happens when a server tool call fails.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ServerToolFailureMode {
+	/// End the turn with an error.
+	#[default]
+	FailClosed,
+	/// Report the failure to the model as an error tool result and let it continue.
+	FailOpen,
 }

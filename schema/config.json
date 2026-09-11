@@ -5009,6 +5009,17 @@
           "additionalProperties": {
             "$ref": "#/$defs/RouteType"
           }
+        },
+        "serverTools": {
+          "description": "Server tools declared by the client that the gateway fulfils through MCP.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerToolsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -5799,6 +5810,239 @@
           "description": "Cohere /v2/rerank (document reranking)",
           "type": "string",
           "const": "rerank"
+        }
+      ]
+    },
+    "ServerToolsConfig": {
+      "description": "Fulfil server tools that the client declared, such as a coding agent's `web_search`, by calling an\nMCP tool and continuing the turn. This applies to Anthropic Messages, OpenAI Responses and\nOpenAI Chat Completions requests, and only to what the client declared as server-executed:\nAnthropic server tools, Responses built-in tools and `mcp` servers, and the Chat Completions\n`web_search_options` field. Client tools are never touched.",
+      "type": "object",
+      "properties": {
+        "tools": {
+          "description": "Server tools to fulfil, matched by the tool `type` the client declares, for example\n`web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter`\n(Responses), or `web_search_options` (Chat Completions, exposed to the model as `web_search`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerToolMapping"
+          }
+        },
+        "mcpServers": {
+          "description": "Remote MCP servers a Responses client may declare as `{\"type\": \"mcp\"}` tools, mapped to\nconfigured MCP backends. The backend's tools are exposed to the model by name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServerToolMcpServer"
+          }
+        },
+        "maxIterations": {
+          "description": "Maximum number of follow-up model calls for one client request. The client's `max_uses` is\nhonoured as a lower cap. At the cap, and when the model repeats an identical call, the\ngateway answers the pending calls with an error result, withdraws its tools, and makes one\nmore model call so the turn ends with an answer.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 3
+        },
+        "maxResultBytes": {
+          "description": "Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 65536
+        },
+        "keepaliveInterval": {
+          "description": "Interval between keepalive `ping` events while a streaming turn is held back.",
+          "type": "string",
+          "default": "15s"
+        },
+        "failureMode": {
+          "description": "What happens when a tool call fails.",
+          "$ref": "#/$defs/ServerToolFailureMode",
+          "default": "failClosed"
+        },
+        "unmapped": {
+          "description": "What happens to a declared server tool that no mapping covers. By default it is left to the\nprovider, which usually drops it; `reject` answers the request with a 400 that names the\ntool type instead.",
+          "$ref": "#/$defs/UnmappedServerTools",
+          "default": "drop"
+        },
+        "results": {
+          "description": "How executed calls appear in the response the client gets. `native` (default) adds the wire\nformat's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a\nweb search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other\nMessages calls, `web_search_call` and `mcp_call` items on Responses. `strip` removes every\ntrace of the gateway's calls and returns the text alone.",
+          "$ref": "#/$defs/ServerToolResults",
+          "default": "native"
+        },
+        "clientExecuted": {
+          "description": "Tool types that share the server tool shape but are executed by the client, so a mapping\nthat matches them is ignored. A trailing `*` matches a prefix. Defaults to the vendor-defined\nclient tools: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`, and the\nResponses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and `computer`\ntools. Set it to an empty list to let every mapping apply, or add entries to guard more.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "bash_*",
+            "text_editor_*",
+            "computer_*",
+            "memory_*",
+            "local_shell",
+            "shell",
+            "apply_patch",
+            "computer_use_preview",
+            "computer"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ServerToolMapping": {
+      "description": "Maps one server tool type to the MCP tool that fulfils it.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any\ntype with that prefix.",
+          "type": "string"
+        },
+        "mcp": {
+          "description": "The MCP tool that fulfils the server tool.",
+          "$ref": "#/$defs/ServerToolMcpTarget"
+        },
+        "description": {
+          "description": "Description shown to the model. Defaults to the MCP tool's description.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputSchema": {
+          "description": "JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "mcp"
+      ]
+    },
+    "ServerToolMcpTarget": {
+      "description": "An MCP tool on a configured MCP backend.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "Name of the MCP backend to call.",
+          "type": "string"
+        },
+        "target": {
+          "description": "Target within the backend. Required when the backend has more than one target.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "description": "Name of the tool on the MCP backend.",
+          "type": "string"
+        },
+        "arguments": {
+          "description": "Arguments added to every call, as CEL over `serverTool.input` (the model's arguments),\n`serverTool.declaration` (the client's tool entry as declared, with fields such as\n`allowed_domains`, `user_location` or `max_uses`), `serverTool.name` and `serverTool.type`.\nA value that fails to evaluate or is null is left out. This is how a declared option\nreaches the MCP tool.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "tool"
+      ]
+    },
+    "ServerToolMcpServer": {
+      "description": "Maps a remote MCP server a Responses client declares to a configured MCP backend.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "description": "Matches the client's `server_label`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "Matches the client's `server_url`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "backend": {
+          "description": "Name of the MCP backend to call.",
+          "type": "string"
+        },
+        "target": {
+          "description": "Target within the backend. Required when the backend has more than one target.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skipApproval": {
+          "description": "Run tools even when the client asks for approval before each call, which is the Responses\nAPI default. Off by default, in which case such requests are rejected with a 400, since\nthe gateway cannot pause a turn for approval.",
+          "type": "boolean",
+          "default": false
+        },
+        "arguments": {
+          "description": "Arguments added to every call of this server's tools, as CEL over `serverTool.input`,\n`serverTool.declaration` (the client's `mcp` descriptor), `serverTool.name` and\n`serverTool.type`. A value that fails to evaluate or is null is left out.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "backend"
+      ]
+    },
+    "ServerToolFailureMode": {
+      "description": "What happens when a server tool call fails.",
+      "oneOf": [
+        {
+          "description": "End the turn with an error.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Report the failure to the model as an error tool result and let it continue.",
+          "type": "string",
+          "const": "failOpen"
+        }
+      ]
+    },
+    "UnmappedServerTools": {
+      "description": "What happens to a declared server tool that no mapping covers.",
+      "oneOf": [
+        {
+          "description": "Leave it to the provider. Providers without the tool drop it.",
+          "type": "string",
+          "const": "drop"
+        },
+        {
+          "description": "Reject the request with a 400 that names the tool type.",
+          "type": "string",
+          "const": "reject"
+        }
+      ]
+    },
+    "ServerToolResults": {
+      "description": "How executed server tool calls appear in the response.",
+      "oneOf": [
+        {
+          "description": "Add the wire format's own items for the calls ahead of the answer.",
+          "type": "string",
+          "const": "native"
+        },
+        {
+          "description": "Return the answer alone.",
+          "type": "string",
+          "const": "strip"
         }
       ]
     },
@@ -11982,6 +12226,17 @@
               "type": "null"
             }
           ]
+        },
+        "serverTools": {
+          "description": "Server tools declared by clients that are fulfilled through MCP.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerToolsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -12176,6 +12431,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serverTools": {
+          "description": "serverTools fulfils server tools declared by the client (for example a coding agent's `web_search`)\nthrough an MCP tool, for providers that cannot execute them.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerToolsConfig"
             },
             {
               "type": "null"

@@ -1,0 +1,156 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for llm_server_tools: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/4000
+    address: "[::]:4000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      llm:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: llm
+        listenerName: llm
+        protocol: HTTP
+listener_routes:
+  - - llm
+    - - backends:
+          - backend: "/llm:router"
+            weight: 1
+        key: "llm:request"
+        matches:
+          - path:
+              pathPrefix: /
+        name: "llm:request"
+        namespace: internal
+listener_tcp_routes:
+  - - llm
+    - []
+policies: []
+backends:
+  - backend:
+      host:
+        name: mcp//searxng/0
+        namespace: ""
+        target: "searxng-mcp.internal:8080"
+  - backend:
+      mcp:
+        name: searxng
+        namespace: ""
+        target:
+          targets:
+            - mcp:
+                backend:
+                  backend: /mcp//searxng/0
+                path: /mcp
+              name: search
+          stateful: true
+          prefixMode: conditional
+          failureMode: failClosed
+          sessionIdleTtl: 30m0s
+  - backend:
+      ai:
+        name: "llm:model:qwen3:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                qwen3:
+                  endpoint:
+                    name: qwen3
+                    provider:
+                      openAI: {}
+                    hostOverride: "vllm.internal:8000"
+                    pathOverride: ~
+                    pathPrefix: /v1
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - ai:
+          serverTools:
+            tools:
+              - type: web_search_*
+                mcp:
+                  backend: /searxng
+                  target: search
+                  tool: search
+                  arguments:
+                    allowed_domains: serverTool.declaration.allowed_domains
+                    max_results: "5"
+              - type: web_fetch_20250910
+                mcp:
+                  backend: /searxng
+                  tool: fetch
+                description: Fetch a web page
+                inputSchema:
+                  properties:
+                    url:
+                      type: string
+                  required:
+                    - url
+                  type: object
+            mcpServers:
+              - label: search
+                url: "https://mcp.example.com/mcp"
+                backend: /searxng
+                target: search
+                skipApproval: true
+            maxIterations: 4
+            maxResultBytes: 65536
+            keepaliveInterval: 10s
+            failureMode: failOpen
+            unmapped: reject
+            results: strip
+            clientExecuted: []
+  - backend:
+      llmRouter:
+        name: "llm:router"
+        namespace: ""
+        target:
+          models:
+            - name: qwen3
+              created: 0
+              visibility: public
+              headerMatches: []
+              backend:
+                backend: "/llm:model:qwen3:0"
+                weight: 1
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":countTokens": geminiCountTokens
+                    ":generateContent": generateContent
+                    ":rawPredict": messages
+                    ":streamGenerateContent": generateContent
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+          virtualModels: []
+route_groups: []
+workloads: []
+services: []

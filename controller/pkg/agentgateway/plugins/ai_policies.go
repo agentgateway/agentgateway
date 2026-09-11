@@ -352,3 +352,79 @@ func translateAuxiliaryBackendPolicies(ctx PolicyCtx, namespace string, policies
 	}
 	return TranslateInlineBackendPolicy(ctx, namespace, pol)
 }
+
+func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.ServerTools) (*api.BackendPolicySpec_Ai_ServerTools, error) {
+	var errs []error
+	out := &api.BackendPolicySpec_Ai_ServerTools{}
+	for _, tool := range st.Tools {
+		be, err := BuildBackendRef(ctx, tool.MCP.BackendRef, namespace)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("serverTools tool %q: %v", tool.Type, err))
+			continue
+		}
+		t := &api.BackendPolicySpec_Ai_ServerTools_Tool{
+			Type:        tool.Type,
+			Backend:     be,
+			Target:      tool.MCP.Target,
+			Tool:        tool.MCP.Tool,
+			Description: tool.Description,
+			Arguments:   serverToolArguments(tool.MCP.Arguments, "tool "+tool.Type, &errs),
+		}
+		if tool.InputSchema != nil {
+			schema := string(tool.InputSchema.Raw)
+			t.InputSchema = &schema
+		}
+		out.Tools = append(out.Tools, t)
+	}
+	for _, server := range st.MCPServers {
+		be, err := BuildBackendRef(ctx, server.BackendRef, namespace)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("serverTools mcpServer %q: %v", ptr.OrEmpty(server.Label), err))
+			continue
+		}
+		out.McpServers = append(out.McpServers, &api.BackendPolicySpec_Ai_ServerTools_McpServer{
+			Label:        server.Label,
+			Url:          server.URL,
+			Backend:      be,
+			Target:       server.Target,
+			SkipApproval: ptr.OrEmpty(server.SkipApproval),
+			Arguments:    serverToolArguments(server.Arguments, "mcpServer "+ptr.OrEmpty(server.Label), &errs),
+		})
+	}
+	if st.MaxIterations != nil {
+		out.MaxIterations = new(uint32(*st.MaxIterations)) //nolint:gosec // G115: MaxIterations is validated by kubebuilder to be >= 1
+	}
+	if st.MaxResultBytes != nil {
+		out.MaxResultBytes = new(uint32(*st.MaxResultBytes)) //nolint:gosec // G115: MaxResultBytes is validated by kubebuilder to be >= 1024
+	}
+	out.KeepaliveInterval = durationToProto(st.KeepaliveInterval)
+	if st.FailureMode == agentgateway.FailOpen {
+		out.FailureMode = api.BackendPolicySpec_Ai_ServerTools_FAIL_OPEN
+	}
+	if st.Unmapped == agentgateway.UnmappedServerToolsReject {
+		out.Unmapped = api.BackendPolicySpec_Ai_ServerTools_REJECT
+	}
+	if st.ClientExecuted != nil {
+		out.ClientExecuted = &api.BackendPolicySpec_Ai_ServerTools_TypeList{Types: *st.ClientExecuted}
+	}
+	if st.Results == agentgateway.ServerToolResultsStrip {
+		out.Results = api.BackendPolicySpec_Ai_ServerTools_STRIP
+	}
+	return out, errors.Join(errs...)
+}
+
+// serverToolArguments validates argument templates and returns them keyed by argument name.
+func serverToolArguments(arguments map[string]agentgateway.CELExpression, what string, errs *[]error) map[string]string {
+	if len(arguments) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(arguments))
+	for name, expr := range arguments {
+		if !isCEL(expr) {
+			*errs = append(*errs, fmt.Errorf("serverTools %s: argument %q is not a valid CEL expression: %s", what, name, expr))
+			continue
+		}
+		out[name] = string(expr)
+	}
+	return out
+}

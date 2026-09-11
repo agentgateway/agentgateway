@@ -11,6 +11,7 @@ define_schema_aliases!();
 pub mod anthropic;
 pub mod azure;
 pub mod bedrock;
+pub mod completions_tools;
 pub mod conversion;
 pub mod copilot;
 pub mod custom;
@@ -18,6 +19,8 @@ pub mod gemini;
 pub mod model_catalog;
 pub mod openai;
 pub mod parse;
+pub mod responses_tools;
+pub mod server_tools;
 pub mod tokenizer;
 pub mod types;
 pub mod vertex;
@@ -569,6 +572,10 @@ pub enum AIError {
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]
 	JoinError(#[from] tokio::task::JoinError),
+	#[error("server tool: {0}")]
+	ServerTool(Strng),
+	#[error("server tool request: {0}")]
+	ServerToolRequest(Strng),
 }
 
 #[apply(schema!)]

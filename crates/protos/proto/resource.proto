@@ -1516,6 +1516,84 @@ message BackendPolicySpec {
     map<string, string> model_aliases = 5;
     PromptCaching prompt_caching = 6;
 
+    // ServerTools fulfils server tools the client declared (for example a coding agent's web_search)
+    // by calling an MCP tool and continuing the turn, for providers that cannot execute them.
+    // Applies to Anthropic Messages requests only.
+    message ServerTools {
+      enum FailureMode {
+        // End the turn with an error when a tool call fails.
+        FAIL_CLOSED = 0;
+        // Report the failure to the model as an error tool result and let it continue.
+        FAIL_OPEN = 1;
+      }
+      enum UnmappedMode {
+        // Leave a declared server tool without a mapping to the provider.
+        DROP = 0;
+        // Reject the request with a 400 that names the tool type.
+        REJECT = 1;
+      }
+      message Tool {
+        // The server tool type to fulfil, such as "web_search_20250305" (Messages), "web_search"
+        // (Responses) or "web_search_options" (Chat Completions). A trailing '*' matches a prefix.
+        string type = 1;
+        // The MCP backend to call. Only Backend references are supported.
+        BackendReference backend = 2;
+        // Target within the backend; required when the backend has more than one target.
+        optional string target = 3;
+        // Name of the tool on the MCP backend.
+        string tool = 4;
+        // Description shown to the model. Defaults to the MCP tool's description.
+        optional string description = 5;
+        // JSON schema of the tool input shown to the model, as a JSON document. Defaults to the MCP tool's schema.
+        optional string input_schema = 6;
+        // Arguments added to every call, as CEL over serverTool.input, serverTool.declaration,
+        // serverTool.name and serverTool.type.
+        map<string, string> arguments = 7;
+      }
+      message McpServer {
+        // Matches the client's server_label.
+        optional string label = 1;
+        // Matches the client's server_url.
+        optional string url = 2;
+        // The MCP backend to call. Only Backend references are supported.
+        BackendReference backend = 3;
+        // Target within the backend; required when the backend has more than one target.
+        optional string target = 4;
+        // Run tools even when the client asks for approval before each call.
+        bool skip_approval = 5;
+        // Arguments added to every call of this server's tools, as CEL over serverTool.*.
+        map<string, string> arguments = 6;
+      }
+      enum ResultsMode {
+        // Add the wire format's own items for executed calls ahead of the answer.
+        NATIVE = 0;
+        // Return the answer alone.
+        STRIP = 1;
+      }
+      repeated Tool tools = 1;
+      // Maximum number of follow-up model calls for one client request. Defaults to 3.
+      optional uint32 max_iterations = 2;
+      // Maximum size of one tool result fed back to the model, in bytes. Defaults to 64 KiB.
+      optional uint32 max_result_bytes = 3;
+      // Interval between keepalive ping events while a streaming turn is held back. Defaults to 15s.
+      google.protobuf.Duration keepalive_interval = 4;
+      FailureMode failure_mode = 5;
+      // Remote MCP servers a Responses client may declare as "mcp" tools, mapped to MCP backends.
+      repeated McpServer mcp_servers = 6;
+      // What happens to a declared server tool that no mapping covers.
+      UnmappedMode unmapped = 7;
+      message TypeList {
+        repeated string types = 1;
+      }
+      // Tool types a mapping must never take over because the client executes them. A trailing
+      // '*' matches a prefix. When unset, the vendor-defined client tools are guarded; an empty
+      // list guards nothing.
+      TypeList client_executed = 8;
+      // How executed calls appear in the response.
+      ResultsMode results = 9;
+    }
+    ServerTools server_tools = 10;
+
     // RouteType specifies how incoming requests should be processed
     // based on the URL path.
     enum RouteType {

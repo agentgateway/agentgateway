@@ -1156,6 +1156,12 @@ fn convert_backend_ai_policy(
 			.collect(),
 		wildcard_patterns: Arc::new(Vec::new()), // Will be populated by compile_model_alias_patterns()
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
+		server_tools: ai
+			.server_tools
+			.as_ref()
+			.map(|st| convert_server_tools(st, diagnostics))
+			.transpose()?
+			.map(Arc::new),
 		routes: ai
 			.routes
 			.iter()
@@ -4045,6 +4051,131 @@ fn convert_prompt_caching(
 	}
 }
 
+fn convert_server_tool_arguments(
+	arguments: &std::collections::HashMap<String, String>,
+	diagnostics: &mut Diagnostics,
+) -> Option<std::collections::BTreeMap<String, Arc<crate::cel::Expression>>> {
+	if arguments.is_empty() {
+		return None;
+	}
+	Some(
+		arguments
+			.iter()
+			.map(|(k, v)| {
+				(
+					k.clone(),
+					permissive_cel_expression_arc(diagnostics, "serverTools.arguments", v),
+				)
+			})
+			.collect(),
+	)
+}
+
+/// The MCP backend a server tool mapping names. Only Backend references are supported.
+fn server_tool_backend(
+	reference: Option<&proto::agent::BackendReference>,
+	what: &str,
+) -> Result<Strng, ProtoError> {
+	match reference.and_then(|b| b.kind.as_ref()) {
+		Some(proto::agent::backend_reference::Kind::Backend(key)) => Ok(strng::new(key)),
+		_ => Err(ProtoError::Generic(format!(
+			"serverTools.{what}.backend must reference a Backend"
+		))),
+	}
+}
+
+fn convert_server_tools(
+	st: &proto::agent::backend_policy_spec::ai::ServerTools,
+	diagnostics: &mut Diagnostics,
+) -> Result<llm::policy::ServerToolsConfig, ProtoError> {
+	use proto::agent::backend_policy_spec::ai::server_tools;
+	let tools = st
+		.tools
+		.iter()
+		.map(|t| {
+			let backend = server_tool_backend(t.backend.as_ref(), &format!("tools[{}]", t.r#type))?;
+			let input_schema = t
+				.input_schema
+				.as_deref()
+				.map(serde_json::from_str::<serde_json::Value>)
+				.transpose()
+				.map_err(|e| {
+					ProtoError::Generic(format!(
+						"serverTools.tools[{}].inputSchema is not valid JSON: {e}",
+						t.r#type
+					))
+				})?;
+			Ok(llm::policy::ServerToolMapping {
+				tool_type: t.r#type.clone(),
+				mcp: llm::policy::ServerToolMcpTarget {
+					backend,
+					target: t.target.as_deref().map(strng::new),
+					tool: strng::new(&t.tool),
+					arguments: convert_server_tool_arguments(&t.arguments, diagnostics),
+				},
+				description: t.description.clone(),
+				input_schema,
+			})
+		})
+		.collect::<Result<Vec<_>, ProtoError>>()?;
+	let mcp_servers = st
+		.mcp_servers
+		.iter()
+		.map(|m| {
+			let backend = server_tool_backend(
+				m.backend.as_ref(),
+				&format!(
+					"mcpServers[{}]",
+					m.label.as_deref().or(m.url.as_deref()).unwrap_or("")
+				),
+			)?;
+			Ok(llm::policy::ServerToolMcpServer {
+				label: m.label.as_deref().map(strng::new),
+				url: m.url.as_deref().map(strng::new),
+				backend,
+				target: m.target.as_deref().map(strng::new),
+				skip_approval: m.skip_approval,
+				arguments: convert_server_tool_arguments(&m.arguments, diagnostics),
+			})
+		})
+		.collect::<Result<Vec<_>, ProtoError>>()?;
+	let defaults = llm::policy::ServerToolsConfig::default();
+	Ok(llm::policy::ServerToolsConfig {
+		tools,
+		mcp_servers,
+		max_iterations: st.max_iterations.unwrap_or(defaults.max_iterations),
+		max_result_bytes: st
+			.max_result_bytes
+			.map(|b| b as usize)
+			.unwrap_or(defaults.max_result_bytes),
+		keepalive_interval: st
+			.keepalive_interval
+			.map(TryInto::try_into)
+			.transpose()?
+			.unwrap_or(defaults.keepalive_interval),
+		failure_mode: if st.failure_mode == server_tools::FailureMode::FailOpen as i32 {
+			llm::policy::ServerToolFailureMode::FailOpen
+		} else {
+			llm::policy::ServerToolFailureMode::FailClosed
+		},
+		unmapped: if st.unmapped == server_tools::UnmappedMode::Reject as i32 {
+			llm::policy::UnmappedServerTools::Reject
+		} else {
+			llm::policy::UnmappedServerTools::Drop
+		},
+		results: if st.results == server_tools::ResultsMode::Strip as i32 {
+			llm::policy::ServerToolResults::Strip
+		} else {
+			llm::policy::ServerToolResults::Native
+		},
+		client_executed: st
+			.client_executed
+			.as_ref()
+			.map(|list| list.types.clone())
+			.unwrap_or(defaults.client_executed),
+	})
+}
+
 fn convert_reject_audit(action: i32) -> llm::policy::RejectAuditAction {
 	if action == RejectAuditAction::Audit as i32 {
 		llm::policy::RejectAuditAction::Audit
@@ -4962,6 +5093,7 @@ mod tests {
 				prompts: None,
 				model_aliases: Default::default(),
 				prompt_caching: None,
+				server_tools: None,
 				routes: vec![
 					(
 						"/v1/chat/completions".to_string(),

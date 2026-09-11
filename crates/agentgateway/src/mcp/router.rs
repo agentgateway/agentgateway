@@ -77,44 +77,13 @@ impl App {
 		mut req: MustSnapshot<'_>,
 		mut log: &mut RequestLog,
 	) -> Result<Response, ProxyError> {
-		let backends = {
-			let binds = self.state.read_binds();
-			let nt = backend
-				.targets
-				.iter()
-				.map(|t| {
-					let be = t
-						.spec
-						.backend()
-						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
-						.transpose()?;
-					let inline_pols = be.as_ref().map(|pol| pol.inline_policies.as_slice());
-					let sub_backend_target = BackendTargetRef::Backend {
-						name: backend_group_name.name.as_ref(),
-						namespace: backend_group_name.namespace.as_ref(),
-						section: Some(t.name.as_ref()),
-					};
-					let target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
-					let backend_policies = backend_policies.clone().merge(target_policies);
-					tracing::trace!("merged policies {:?}", backend_policies);
-					Ok::<_, ProxyError>(Arc::new(McpTarget {
-						name: t.name.clone(),
-						spec: t.spec.clone(),
-						backend: be.map(|b| b.backend),
-						backend_policies,
-					}))
-				})
-				.collect::<Result<Vec<_>, _>>()?;
-
-			McpBackendGroup {
-				targets: nt,
-				stateful: backend.stateful,
-				prefix_mode: backend.prefix_mode,
-				failure_mode: backend.failure_mode,
-				session_idle_ttl: backend.session_idle_ttl,
-				sse_keep_alive: backend.sse_keep_alive,
-			}
-		};
+		let backends = McpBackendGroup::resolve(
+			&self.state,
+			&pi,
+			&backend_group_name,
+			&backend,
+			&backend_policies,
+		)?;
 		let sessions = self.session.clone();
 		sessions.ensure_idle_running();
 		let client = PolicyClient::new(pi.clone());
@@ -252,6 +221,62 @@ impl Default for McpBackendGroup {
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
 			sse_keep_alive: None,
 		}
+	}
+}
+
+impl McpBackendGroup {
+	/// Resolve every target of `backend`, with the target's own policies merged over
+	/// `backend_policies`. The targets' backends are resolved before the store is read for the
+	/// policies, so no store lock is held while another is taken.
+	pub(crate) fn resolve(
+		stores: &Stores,
+		pi: &ProxyInputs,
+		name: &ResourceName,
+		backend: &McpBackend,
+		backend_policies: &BackendPolicies,
+	) -> Result<Self, ProxyError> {
+		let resolved = backend
+			.targets
+			.iter()
+			.map(|t| {
+				t.spec
+					.backend()
+					.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, pi))
+					.transpose()
+			})
+			.collect::<Result<Vec<_>, _>>()?;
+		let binds = stores.read_binds();
+		let targets = backend
+			.targets
+			.iter()
+			.zip(resolved)
+			.map(|(t, be)| {
+				let target_policies = binds.sub_backend_policies(
+					BackendTargetRef::Backend {
+						name: name.name.as_ref(),
+						namespace: name.namespace.as_ref(),
+						section: Some(t.name.as_ref()),
+					},
+					be.as_ref().map(|pol| pol.inline_policies.as_slice()),
+				);
+				let backend_policies = backend_policies.clone().merge(target_policies);
+				tracing::trace!("merged policies {:?}", backend_policies);
+				Arc::new(McpTarget {
+					name: t.name.clone(),
+					spec: t.spec.clone(),
+					backend: be.map(|b| b.backend),
+					backend_policies,
+				})
+			})
+			.collect();
+		Ok(McpBackendGroup {
+			targets,
+			stateful: backend.stateful,
+			prefix_mode: backend.prefix_mode,
+			failure_mode: backend.failure_mode,
+			session_idle_ttl: backend.session_idle_ttl,
+			sse_keep_alive: backend.sse_keep_alive,
+		})
 	}
 }
 
