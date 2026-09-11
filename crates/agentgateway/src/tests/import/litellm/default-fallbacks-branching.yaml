@@ -1,0 +1,19 @@
+model_list:
+- model_name: primary
+  litellm_params:
+    model: openai/gpt-4o
+- model_name: backup
+  litellm_params:
+    model: anthropic/claude-haiku-4
+- model_name: spare
+  litellm_params:
+    model: anthropic/claude-sonnet-4
+- model_name: deep
+  litellm_params:
+    model: openai/gpt-4o-mini
+router_settings:
+  fallbacks:
+  - primary: [backup, spare]
+  - backup: [deep]
+  max_fallbacks: 2
+  default_fallbacks: [backup]

@@ -1,0 +1,8 @@
+model_list:
+- model_name: solo
+  litellm_params:
+    model: openai/gpt-4o
+router_settings:
+  default_fallbacks: [solo]
+litellm_settings:
+  default_fallbacks: [ignored-model]
