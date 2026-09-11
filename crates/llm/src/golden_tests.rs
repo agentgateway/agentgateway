@@ -190,6 +190,8 @@ mod requests {
 		("responses_agent_subset", &[RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
+		("namespace-tools", &[BEDROCK, GEMINI]),
+		("namespace-tools-long", &[BEDROCK]),
 		("basic", &[BEDROCK, GEMINI]),
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
@@ -959,6 +961,108 @@ mod responses {
 		),
 	];
 
+	#[tokio::test]
+	async fn namespace_tools_round_trip() {
+		let request: types::responses::Request = serde_json::from_str(include_str!(
+			"tests/requests/responses/namespace-tools.json"
+		))
+		.unwrap();
+		let provider = bedrock::Provider {
+			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
+		let bedrock =
+			conversion::bedrock::from_responses::translate(&request, &provider, None, None, None)
+				.unwrap();
+		let translated =
+			conversion::openai_compat::from_responses::translate_request(&request).unwrap();
+		test_response(
+			BEDROCK_TO_RESPONSES,
+			"response/bedrock/namespace-tools.json",
+			|bytes| {
+				conversion::bedrock::from_responses::translate_response(
+					&bytes,
+					"input-model",
+					Some(&bedrock.tool_name_map),
+					Some(&bedrock.namespaces),
+				)
+			},
+		);
+		test_response(
+			COMPLETIONS_TO_RESPONSES,
+			"response/completions/namespace-tools.json",
+			|bytes| {
+				conversion::openai_compat::to_responses::translate_response(
+					&bytes,
+					"input-model",
+					Some(&translated.namespaces),
+				)
+			},
+		);
+		test_streaming(
+			BEDROCK_TO_RESPONSES,
+			"response/bedrock/namespace-tools-stream.bin",
+			|response, reporter| {
+				response.map(|body| {
+					conversion::bedrock::from_responses::translate_stream(
+						body,
+						1024 * 1024,
+						reporter,
+						"input-model",
+						LogContentFields {
+							completion: true,
+							tool_calls: true,
+						},
+						Some(bedrock.tool_name_map),
+						Some(Arc::new(bedrock.namespaces)),
+					)
+				})
+			},
+		)
+		.await;
+		test_streaming(
+			COMPLETIONS_TO_RESPONSES,
+			"response/completions/namespace-tools-stream.json",
+			|response, reporter| {
+				response.map(|body| {
+					conversion::openai_compat::to_responses::translate_stream(
+						body,
+						1024 * 1024,
+						reporter,
+						LogContentFields {
+							completion: true,
+							tool_calls: true,
+						},
+						Some(Arc::new(translated.namespaces)),
+					)
+				})
+			},
+		)
+		.await;
+		// Exercise namespace restoration after Bedrock truncates/sanitizes a history-only name.
+		let request = serde_json::from_str(include_str!(
+			"tests/requests/responses/namespace-tools-long.json"
+		))
+		.unwrap();
+		let translated =
+			conversion::bedrock::from_responses::translate(&request, &provider, None, None, None)
+				.unwrap();
+		test_response(
+			BEDROCK_TO_RESPONSES,
+			"response/bedrock/namespace-tools-long.json",
+			|bytes| {
+				conversion::bedrock::from_responses::translate_response(
+					&bytes,
+					"input-model",
+					Some(&translated.tool_name_map),
+					Some(&translated.namespaces),
+				)
+			},
+		);
+	}
+
 	#[test]
 	fn buffered_chat() {
 		for (name, providers) in BEDROCK_RESPONSES {
@@ -972,7 +1076,7 @@ mod responses {
 						conversion::bedrock::from_completions::translate_response(&i, "input-model", None)
 					}),
 					BEDROCK_TO_RESPONSES => test_response(provider, &path, |i| {
-						conversion::bedrock::from_responses::translate_response(&i, "input-model", None)
+						conversion::bedrock::from_responses::translate_response(&i, "input-model", None, None)
 					}),
 					other => panic!("unsupported provider in BEDROCK_RESPONSES: {other}"),
 				}
@@ -1015,7 +1119,7 @@ mod responses {
 						conversion::completions::from_messages::translate_response(&i)
 					}),
 					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
-						conversion::openai_compat::to_responses::translate_response(&i, "input-model")
+						conversion::openai_compat::to_responses::translate_response(&i, "input-model", None)
 					}),
 					COMPLETIONS_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(
@@ -1244,8 +1348,8 @@ mod responses {
 								BUFFER_LIMIT,
 								reporter,
 								"input-model",
-								&message_id,
 								LOG_CONTENT,
+								None,
 								None,
 							)
 						}),
@@ -1299,6 +1403,7 @@ mod responses {
 							BUFFER_LIMIT,
 							reporter,
 							LOG_CONTENT,
+							None,
 						)
 					}),
 					COMPLETIONS_TO_DETECT => types::detect::passthrough_stream(reporter, response),

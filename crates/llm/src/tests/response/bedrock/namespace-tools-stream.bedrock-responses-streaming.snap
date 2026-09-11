@@ -1,0 +1,92 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock/namespace-tools-stream.bin
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":1,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","namespace":"mcp__node_repl","name":"js","id":"","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":4,"item_id":"","output_index":1,"delta":"{\"code\":\"1 + 1\"}"}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"js","sequence_number":5,"item_id":"","output_index":1,"arguments":"{\"code\":\"1 + 1\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":6,"output_index":1,"item":{"type":"function_call","arguments":"{\"code\":\"1 + 1\"}","call_id":"call_xxx","namespace":"mcp__node_repl","name":"js","id":"","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":7,"output_index":2,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","namespace":"other_kernel","name":"js","id":"","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":8,"item_id":"","output_index":2,"delta":"{\"code\":\"1 + 1\"}"}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"js","sequence_number":9,"item_id":"","output_index":2,"arguments":"{\"code\":\"1 + 1\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":10,"output_index":2,"item":{"type":"function_call","arguments":"{\"code\":\"1 + 1\"}","call_id":"call_xxx","namespace":"other_kernel","name":"js","id":"","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":11,"output_index":3,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"finish","id":"","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":12,"item_id":"","output_index":3,"delta":"{}"}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"finish","sequence_number":13,"item_id":"","output_index":3,"arguments":"{}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":14,"output_index":3,"item":{"type":"function_call","arguments":"{}","call_id":"call_xxx","name":"finish","id":"","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":15,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":16,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[{"type":"function_call","arguments":"{\"code\":\"1 + 1\"}","call_id":"call_xxx","namespace":"mcp__node_repl","name":"js","id":"","status":"completed"},{"type":"function_call","arguments":"{\"code\":\"1 + 1\"}","call_id":"call_xxx","namespace":"other_kernel","name":"js","id":"","status":"completed"},{"type":"function_call","arguments":"{}","call_id":"call_xxx","name":"finish","id":"","status":"completed"}],"status":"completed","usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":10,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
+
+
+
+{
+  "input_tokens": 10,
+  "output_tokens": 10,
+  "total_tokens": 20,
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_1",
+          "name": "mcp__node_repl__js",
+          "arguments": {
+            "code": "1 + 1"
+          }
+        },
+        {
+          "type": "tool_call",
+          "id": "call_2",
+          "name": "other_kernel__js",
+          "arguments": {
+            "code": "1 + 1"
+          }
+        },
+        {
+          "type": "tool_call",
+          "id": "call_3",
+          "name": "finish",
+          "arguments": {}
+        }
+      ],
+      "finish_reason": "completed"
+    }
+  ]
+}

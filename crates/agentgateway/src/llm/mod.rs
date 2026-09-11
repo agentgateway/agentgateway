@@ -295,6 +295,7 @@ struct ChatRequestContext<'a> {
 struct ChatResponseContext<'a> {
 	model: &'a str,
 	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
+	namespaces: Option<&'a conversion::namespace_tools::NamespaceToolMap>,
 }
 
 /// Log handles and content-capture flags threaded through response processing.
@@ -312,6 +313,7 @@ struct ChatStreamContext {
 	model: String,
 	log_content: LogContentFields,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
+	namespaces: Option<Arc<conversion::namespace_tools::NamespaceToolMap>>,
 }
 
 /// Ordered chat conversion table.
@@ -353,8 +355,9 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 fn render_openai_completions(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
-) -> Result<Vec<u8>, AIError> {
-	match req {
+) -> Result<RenderedChatRequest, AIError> {
+	let mut provider_state = None;
+	let body = match req {
 		types::ChatRequest::Completions(mut req) => {
 			apply_openai_moderation(&mut req.moderation, ctx)?;
 			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
@@ -365,15 +368,26 @@ fn render_openai_completions(
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 		types::ChatRequest::Responses(req) => {
-			let mut translated = conversion::openai_compat::from_responses::translate_request(&req)?;
-			apply_openai_moderation(&mut translated.moderation, ctx)?;
-			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
+			let translated = conversion::openai_compat::from_responses::translate_request(&req)?;
+			let mut request = translated.request;
+			let namespaces = translated.namespaces;
+			if !namespaces.is_empty() {
+				provider_state = Some(ProviderState::OpenAICompletions {
+					namespaces: Arc::new(namespaces),
+				});
+			}
+			apply_openai_moderation(&mut request.moderation, ctx)?;
+			serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
 		},
 		// Missing: Gemini --> Completions (cross-provider translation is out of scope)
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to completions"
 		))),
-	}
+	}?;
+	Ok(RenderedChatRequest {
+		body,
+		provider_state,
+	})
 }
 
 fn render_openai_responses(
@@ -475,11 +489,12 @@ fn render_bedrock_converse(
 			"gemini to bedrock converse"
 		))),
 	}?;
-	let provider_state = if bedrock.tool_name_map.is_empty() {
+	let provider_state = if bedrock.tool_name_map.is_empty() && bedrock.namespaces.is_empty() {
 		None
 	} else {
 		Some(ProviderState::Bedrock {
 			tool_names: Arc::new(bedrock.tool_name_map),
+			namespaces: Arc::new(bedrock.namespaces),
 		})
 	};
 	Ok(RenderedChatRequest {
@@ -512,25 +527,28 @@ impl ChatTranslation {
 		req: types::ChatRequest,
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
-		let body = match self.output {
+		match self.output {
 			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
-			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
-			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+			ChatFormat::BedrockConverse => render_bedrock_converse(req, ctx),
+			ChatFormat::OpenAIResponses => Ok(RenderedChatRequest {
+				body: render_openai_responses(req, ctx)?,
+				provider_state: None,
+			}),
+			ChatFormat::AnthropicMessages => {
+				let mut body = render_anthropic_messages(req, ctx.catalog)?;
+				if matches!(ctx.provider, AIProvider::Vertex(_)) {
+					body = vertex::prepare_anthropic_message_body(body)?;
+				}
+				Ok(RenderedChatRequest {
+					body,
+					provider_state: None,
+				})
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
-			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
-			ChatFormat::VertexGemini => {
-				return Ok(RenderedChatRequest {
-					body: render_vertex_gemini(req, ctx)?,
-					provider_state: Some(ProviderState::VertexGemini),
-				});
-			},
-		}?;
-		Ok(RenderedChatRequest {
-			body,
-			provider_state: None,
-		})
+			ChatFormat::VertexGemini => Ok(RenderedChatRequest {
+				body: render_vertex_gemini(req, ctx)?,
+				provider_state: Some(ProviderState::VertexGemini),
+			}),
+		}
 	}
 
 	fn render_response(
@@ -544,9 +562,11 @@ impl ChatTranslation {
 					AIProvider::parse_response::<types::completions::Response>(bytes)
 				},
 				InputFormat::Messages => conversion::completions::from_messages::translate_response(bytes),
-				InputFormat::Responses => {
-					conversion::openai_compat::to_responses::translate_response(bytes, ctx.model)
-				},
+				InputFormat::Responses => conversion::openai_compat::to_responses::translate_response(
+					bytes,
+					ctx.model,
+					ctx.namespaces,
+				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -588,6 +608,7 @@ impl ChatTranslation {
 					bytes,
 					ctx.model,
 					ctx.tool_name_map,
+					ctx.namespaces,
 				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
@@ -629,6 +650,7 @@ impl ChatTranslation {
 						ctx.buffer_limit,
 						ctx.logger,
 						ctx.log_content,
+						ctx.namespaces,
 					)
 				}),
 				_ => resp,
@@ -701,7 +723,6 @@ impl ChatTranslation {
 					})
 				},
 				InputFormat::Responses => {
-					let msg = conversion::bedrock::message_id(&resp);
 					let tool_name_map = ctx.tool_name_map.clone();
 					resp.map(move |b| {
 						conversion::bedrock::from_responses::translate_stream(
@@ -709,9 +730,9 @@ impl ChatTranslation {
 							ctx.buffer_limit,
 							ctx.logger,
 							&ctx.model,
-							&msg,
 							ctx.log_content,
 							tool_name_map,
+							ctx.namespaces,
 						)
 					})
 				},
@@ -2661,6 +2682,7 @@ impl AIProvider {
 			&ChatResponseContext {
 				model: &req.request_model,
 				tool_name_map: bedrock_tool_name_map(req),
+				namespaces: namespace_tool_map(req).map(Arc::as_ref),
 			},
 		)
 	}
@@ -2684,6 +2706,7 @@ impl AIProvider {
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
+		let namespaces = namespace_tool_map(&req).cloned();
 		let chat_translation = if input_format.is_chat() {
 			Some(self.chat_translation(
 				input_format,
@@ -2776,6 +2799,7 @@ impl AIProvider {
 					model: model.to_string(),
 					log_content,
 					tool_name_map: bedrock_tool_name_map,
+					namespaces,
 				},
 			)
 		} else {
@@ -3023,7 +3047,18 @@ fn strip_alt_query(req: &mut Request) {
 
 fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {
 	match &req.provider_state {
-		Some(ProviderState::Bedrock { tool_names }) => Some(tool_names.as_ref()),
+		Some(ProviderState::Bedrock { tool_names, .. }) => Some(tool_names.as_ref()),
+		_ => None,
+	}
+}
+
+fn namespace_tool_map(
+	req: &LLMRequest,
+) -> Option<&Arc<conversion::namespace_tools::NamespaceToolMap>> {
+	match &req.provider_state {
+		Some(
+			ProviderState::Bedrock { namespaces, .. } | ProviderState::OpenAICompletions { namespaces },
+		) => Some(namespaces),
 		_ => None,
 	}
 }

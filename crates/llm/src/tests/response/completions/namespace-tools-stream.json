@@ -1,0 +1,16 @@
+data: {"id":"chatcmpl-namespaces","object":"chat.completion.chunk","created":123,"model":"input-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"mcp__node_repl__js","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-namespaces","object":"chat.completion.chunk","created":123,"model":"input-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"code\":\"1 + 1\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-namespaces","object":"chat.completion.chunk","created":123,"model":"input-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_2","type":"function","function":{"name":"other_kernel__js","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-namespaces","object":"chat.completion.chunk","created":123,"model":"input-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"code\":\"1 + 1\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-namespaces","object":"chat.completion.chunk","created":123,"model":"input-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":2,"id":"call_3","type":"function","function":{"name":"finish","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-namespaces","object":"chat.completion.chunk","created":123,"model":"input-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":2,"function":{"arguments":"{}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-namespaces","object":"chat.completion.chunk","created":123,"model":"input-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+

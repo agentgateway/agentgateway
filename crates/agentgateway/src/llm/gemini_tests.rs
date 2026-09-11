@@ -912,6 +912,7 @@ fn non_streaming_response_is_forwarded_and_usage_extracted() {
 			&crate::llm::ChatResponseContext {
 				model: "gemini-2.5-flash",
 				tool_name_map: None,
+				namespaces: None,
 			},
 		)
 		.expect("response should parse");
@@ -945,6 +946,7 @@ async fn streaming_response_is_forwarded_byte_for_byte() {
 				model: "gemini-2.5-flash".to_string(),
 				log_content: Default::default(),
 				tool_name_map: None,
+				namespaces: None,
 			},
 		)
 		.into_body()

@@ -22,6 +22,7 @@ pub const BEDROCK_TOOL_NAME_MAX_LEN: usize = 64;
 pub struct BedrockRequest {
 	pub body: Vec<u8>,
 	pub tool_name_map: BedrockToolNameMap,
+	pub namespaces: super::namespace_tools::NamespaceToolMap,
 }
 
 fn reasoning_fields(
@@ -835,6 +836,7 @@ pub mod from_completions {
 		Ok(super::BedrockRequest {
 			body,
 			tool_name_map,
+			namespaces: Default::default(),
 		})
 	}
 
@@ -1517,6 +1519,7 @@ pub mod from_messages {
 		Ok(super::BedrockRequest {
 			body,
 			tool_name_map,
+			namespaces: Default::default(),
 		})
 	}
 
@@ -2422,8 +2425,10 @@ pub mod from_responses {
 		prompt_caching: Option<&crate::PromptCachingConfig>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let typed =
+		let mut typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
+		let namespaces =
+			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		let explicit_thinking_budget = extract_responses_thinking_budget_tokens(req);
 		let model_id = typed.model.clone().unwrap_or_default();
 		let (xlated, tool_name_map) = translate_internal(
@@ -2439,6 +2444,7 @@ pub mod from_responses {
 		Ok(super::BedrockRequest {
 			body,
 			tool_name_map,
+			namespaces,
 		})
 	}
 
@@ -3120,11 +3126,15 @@ pub mod from_responses {
 		bytes: &Bytes,
 		model: &str,
 		tool_name_map: Option<&super::BedrockToolNameMap>,
+		namespaces: Option<&crate::conversion::namespace_tools::NamespaceToolMap>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
-		let typed = adapter.to_responses_typed(tool_name_map);
+		let mut typed = adapter.to_responses_typed(tool_name_map);
+		if let Some(namespaces) = namespaces {
+			namespaces.restore_response(&mut typed);
+		}
 		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
 		Ok(Box::new(passthrough))
@@ -3152,9 +3162,9 @@ pub mod from_responses {
 		buffer_limit: usize,
 		log: StreamingUsageGuard,
 		model: &str,
-		_message_id: &str,
 		log_content: crate::LogContentFields,
 		tool_name_map: Option<super::BedrockToolNameMap>,
+		namespaces: Option<std::sync::Arc<crate::conversion::namespace_tools::NamespaceToolMap>>,
 	) -> Body {
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
@@ -3215,7 +3225,7 @@ pub mod from_responses {
 				},
 			};
 
-			match event {
+			let mut events = match event {
 				bedrock::ConverseStreamOutput::MessageStart(_start) => {
 					let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
 
@@ -3563,7 +3573,13 @@ pub mod from_responses {
 					out.push(("event", done_event));
 					out
 				},
+			};
+			if let Some(namespaces) = &namespaces {
+				for (_, event) in &mut events {
+					namespaces.restore_event(event);
+				}
 			}
+			events
 		})
 	}
 }

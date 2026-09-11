@@ -8,18 +8,26 @@ pub mod from_responses {
 
 	use crate::{AIError, json, types};
 
-	/// Translate an OpenAI Responses request into an OpenAI-compatible chat completions request.
-	pub fn translate(req: &types::responses::Request) -> Result<Vec<u8>, AIError> {
-		let xlated = translate_request(req)?;
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	pub struct TranslatedRequest {
+		pub request: completions::Request,
+		pub namespaces: crate::conversion::namespace_tools::NamespaceToolMap,
 	}
 
-	pub fn translate_request(
-		req: &types::responses::Request,
-	) -> Result<types::completions::typed::Request, AIError> {
-		let typed =
+	/// Translate an OpenAI Responses request into an OpenAI-compatible chat completions request.
+	pub fn translate(req: &types::responses::Request) -> Result<Vec<u8>, AIError> {
+		let translated = translate_request(req)?;
+		serde_json::to_vec(&translated.request).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(req: &types::responses::Request) -> Result<TranslatedRequest, AIError> {
+		let mut typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
-		Ok(translate_internal(typed))
+		let namespaces =
+			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
+		Ok(TranslatedRequest {
+			request: translate_internal(typed),
+			namespaces,
+		})
 	}
 
 	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
@@ -482,10 +490,17 @@ pub mod to_responses {
 	type LoggedToolCalls = HashMap<u32, LoggedToolCall>;
 
 	/// Translate an OpenAI-compatible chat completions response into an OpenAI Responses response.
-	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+	pub fn translate_response(
+		bytes: &Bytes,
+		model: &str,
+		namespaces: Option<&crate::conversion::namespace_tools::NamespaceToolMap>,
+	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let typed = translate_response_internal(resp, model);
+		let mut typed = translate_response_internal(resp, model);
+		if let Some(namespaces) = namespaces {
+			namespaces.restore_response(&mut typed);
+		}
 		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
 		Ok(Box::new(passthrough))
@@ -608,6 +623,7 @@ pub mod to_responses {
 		buffer_limit: usize,
 		log: StreamingUsageGuard,
 		log_content: crate::LogContentFields,
+		namespaces: Option<std::sync::Arc<crate::conversion::namespace_tools::NamespaceToolMap>>,
 	) -> Body {
 		use responses::{
 			AssistantRole, FunctionToolCall, OutputContent, OutputItem, OutputMessage, OutputStatus,
@@ -645,6 +661,7 @@ pub mod to_responses {
 				match evt {
 					SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 					SseJsonEvent::Done => {
+						// Fall through to namespace restoration for the terminal events too.
 						if !flushed {
 							flushed = true;
 							let response_builder = response_builder.get_or_insert_with(|| {
@@ -665,7 +682,6 @@ pub mod to_responses {
 								&mut logged_tool_calls,
 							);
 						}
-						return events;
 					},
 					SseJsonEvent::Data(Err(e)) => {
 						tracing::warn!(
@@ -897,6 +913,11 @@ pub mod to_responses {
 					},
 				}
 
+				if let Some(namespaces) = &namespaces {
+					for (_, event) in &mut events {
+						namespaces.restore_event(event);
+					}
+				}
 				events
 			},
 		)

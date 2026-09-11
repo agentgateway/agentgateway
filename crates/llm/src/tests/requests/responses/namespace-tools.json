@@ -1,0 +1,98 @@
+{
+  "model": "gpt-4o",
+  "max_output_tokens": 1024,
+  "input": [
+    {
+      "role": "user",
+      "content": "Run JavaScript in both kernels."
+    },
+    {
+      "type": "function_call",
+      "call_id": "call_1",
+      "namespace": "mcp__node_repl",
+      "name": "js",
+      "arguments": "{\"code\":\"1 + 1\"}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_1",
+      "output": "2"
+    },
+    {
+      "type": "function_call",
+      "call_id": "call_2",
+      "namespace": "other_kernel",
+      "name": "js",
+      "arguments": "{\"code\":\"2 + 2\"}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_2",
+      "output": "4"
+    }
+  ],
+  "tools": [
+    {
+      "type": "namespace",
+      "name": "mcp__node_repl",
+      "description": "Run JavaScript in the persistent Node kernel.",
+      "tools": [
+        {
+          "type": "function",
+          "name": "js",
+          "description": "Run JavaScript.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "strict": false
+        }
+      ]
+    },
+    {
+      "type": "namespace",
+      "name": "other_kernel",
+      "description": "Run JavaScript in another kernel.",
+      "tools": [
+        {
+          "type": "function",
+          "name": "js",
+          "description": "Run JavaScript.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "strict": false
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "finish",
+      "description": "Finish the task.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "strict": true
+    }
+  ],
+  "tool_choice": "auto"
+}
