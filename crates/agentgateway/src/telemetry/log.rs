@@ -1374,10 +1374,16 @@ fn gen_ai_operation_failed(request: &RequestLog) -> bool {
 }
 
 fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
-	if input_format == InputFormat::Embeddings {
-		"embeddings"
-	} else {
-		"chat"
+	match input_format {
+		InputFormat::Completions | InputFormat::Messages | InputFormat::Responses => "chat",
+		InputFormat::Gemini => "generate_content",
+		InputFormat::Embeddings => "embeddings",
+		// These operations have no standard GenAI operation name. Keep the custom values bounded.
+		InputFormat::Realtime => "realtime",
+		InputFormat::Rerank => "rerank",
+		InputFormat::CountTokens | InputFormat::GeminiCountTokens => "count_tokens",
+		// Detection has not identified the operation; do not assume it is chat.
+		InputFormat::Detect => "unknown",
 	}
 }
 
@@ -3178,41 +3184,49 @@ mod tests {
 			(InputFormat::Completions, "chat"),
 			(InputFormat::Messages, "chat"),
 			(InputFormat::Responses, "chat"),
-			(InputFormat::Gemini, "chat"),
+			(InputFormat::Gemini, "generate_content"),
 			(InputFormat::Embeddings, "embeddings"),
+			(InputFormat::Realtime, "realtime"),
+			(InputFormat::Rerank, "rerank"),
+			(InputFormat::CountTokens, "count_tokens"),
+			(InputFormat::GeminiCountTokens, "count_tokens"),
+			(InputFormat::Detect, "unknown"),
 		] {
-			for has_response in [false, true] {
-				let (mut log, registry) = test_request_log_with_registry();
-				let mut request = metric_test_llm_request();
-				request.input_format = format;
-				log.llm_request = Some(request.clone());
-				if has_response {
-					log.llm_response.store(Some(llm::LLMInfo::new(
-						request,
-						llm::LLMResponse {
-							input_tokens: Some(10),
-							..Default::default()
-						},
-					)));
-					log.status = Some(http::StatusCode::OK);
-				} else {
-					log.error = Some("connection failed".to_string());
-				}
-				drop(DropOnLog::from(log));
-				let encoded = encoded_metrics(&registry);
-				let counts: Vec<_> = encoded
-					.lines()
-					.filter(|line| {
-						line.starts_with("gen_ai_server_request_duration_count")
-							|| line.starts_with("gen_ai_client_token_usage_count")
-					})
-					.collect();
-				assert_eq!(counts.len(), if has_response { 2 } else { 1 });
-				for count in counts {
-					assert!(
-						count.contains(&format!("gen_ai_operation_name=\"{operation}\"")),
-						"{count}"
-					);
+			for streaming in [false, true] {
+				for has_response in [false, true] {
+					let (mut log, registry) = test_request_log_with_registry();
+					let mut request = metric_test_llm_request();
+					request.input_format = format;
+					request.streaming = streaming;
+					log.llm_request = Some(request.clone());
+					if has_response {
+						log.llm_response.store(Some(llm::LLMInfo::new(
+							request,
+							llm::LLMResponse {
+								input_tokens: Some(10),
+								..Default::default()
+							},
+						)));
+						log.status = Some(http::StatusCode::OK);
+					} else {
+						log.error = Some("connection failed".to_string());
+					}
+					drop(DropOnLog::from(log));
+					let encoded = encoded_metrics(&registry);
+					let counts: Vec<_> = encoded
+						.lines()
+						.filter(|line| {
+							line.starts_with("gen_ai_server_request_duration_count")
+								|| line.starts_with("gen_ai_client_token_usage_count")
+						})
+						.collect();
+					assert_eq!(counts.len(), if has_response { 2 } else { 1 });
+					for count in counts {
+						assert!(
+							count.contains(&format!("gen_ai_operation_name=\"{operation}\"")),
+							"{count}"
+						);
+					}
 				}
 			}
 		}
