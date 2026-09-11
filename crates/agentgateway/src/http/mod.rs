@@ -23,6 +23,7 @@ pub mod csrf;
 pub mod envoy_proto_common;
 pub mod ext_authz;
 pub mod ext_proc;
+pub(crate) mod introspection;
 pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;

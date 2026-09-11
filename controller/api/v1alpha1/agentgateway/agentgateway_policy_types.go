@@ -1234,6 +1234,58 @@ type JWTAuthentication struct {
 	MCP *JWTMCPConfig `json:"mcp,omitempty"`
 }
 
+// TokenIntrospection configures RFC 7662 Token Introspection for opaque access tokens.
+// When the bearer token cannot be parsed as a JWT, the gateway POSTs it to the
+// configured introspection endpoint and uses the returned claims for authorization.
+// +kubebuilder:validation:XValidation:rule="has(self.url) || has(self.backendRef)",message="introspection requires either url or backendRef"
+type TokenIntrospection struct {
+	// Introspection endpoint URL per RFC 7662.
+	// If omitted, the URL is derived from the first provider's issuer via OIDC discovery
+	// (the `introspection_endpoint` field in the discovery document).
+	// +optional
+	URL *LongString `json:"url,omitempty"`
+
+	// Reference to a backend for the introspection request.
+	// Supported types: `Service` and `Backend`.
+	// Mutually exclusive with `url`.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// OAuth 2.0 client ID used to authenticate the introspection request
+	// per RFC 7662 Section 2.1.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	ClientID string `json:"clientId"`
+
+	// Reference to a Kubernetes Secret holding the OAuth client secret.
+	// The secret is sent as the password in HTTP Basic authentication to the
+	// introspection endpoint. If omitted, the client_id is sent as a public
+	// client (no secret).
+	// +optional
+	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
+
+	// How long a successful introspection result is cached before re-validating.
+	// Must be at least 5s.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5s')",message="cacheDuration must be at least 5s."
+	// +kubebuilder:default="30s"
+	CacheDuration *Duration `json:"cacheDuration,omitempty"`
+
+	// Timeout for the introspection HTTP request.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="timeout must be at least 1s."
+	// +kubebuilder:default="5s"
+	Timeout *Duration `json:"timeout,omitempty"`
+
+	// Controls behavior when the introspection endpoint is unreachable.
+	// `FailClosed` (default) rejects the request with 503.
+	// `FailOpen` allows the request through (use with caution).
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+}
+
+// +kubebuilder:validation:ExactlyOneOf=jwks;introspection
 type JWTProvider struct {
 	// IdP that issued the JWT. This corresponds to the
 	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
@@ -1247,10 +1299,16 @@ type JWTProvider struct {
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Audiences []string `json:"audiences,omitempty"`
-	// JSON Web Key Set used to validate the signature of the
-	// JWT.
-	// +required
-	JWKS JWKS `json:"jwks"`
+	// JSON Web Key Set used to validate the signature of the JWT.
+	// Mutually exclusive with `introspection` — a provider uses either
+	// local JWKS verification or remote introspection, not both.
+	// +optional
+	JWKS *JWKS `json:"jwks,omitempty"`
+	// RFC 7662 Token Introspection for opaque access tokens.
+	// Mutually exclusive with `jwks` — a provider uses either
+	// local JWKS verification or remote introspection, not both.
+	// +optional
+	Introspection *TokenIntrospection `json:"introspection,omitempty"`
 	// Additional JWT claim presence requirements. Defaults to requiring `exp`.
 	// Issuer validation always requires `iss`; a non-empty audiences list also
 	// requires `aud`, regardless of these options. An empty `requiredClaims`
@@ -2513,6 +2571,7 @@ type MCPGuardrailsRemote struct {
 	DisallowedRequestHeaders []HeaderName `json:"disallowedRequestHeaders,omitempty"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=jwks;introspection
 type MCPAuthentication struct {
 	// Metadata to use for MCP resources.
 	// +optional
@@ -2536,10 +2595,11 @@ type MCPAuthentication struct {
 	// +optional
 	Audiences []string `json:"audiences,omitempty"`
 
-	// Remote JSON Web Key used to validate the signature of
-	// the JWT.
-	// +required
-	JWKS RemoteJWKS `json:"jwks"`
+	// Remote JSON Web Key used to validate the signature of the JWT.
+	// Mutually exclusive with `introspection` — use either local JWKS
+	// verification or remote introspection, not both.
+	// +optional
+	JWKS *RemoteJWKS `json:"jwks,omitempty"`
 
 	// Validation mode for JWT authentication.
 	// +kubebuilder:default=Strict
@@ -2566,6 +2626,13 @@ type MCPAuthentication struct {
 	// override via `clientSecretRef.key`.
 	// +optional
 	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
+
+	// RFC 7662 Token Introspection for opaque access tokens.
+	// Mutually exclusive with `jwks` — use either local JWKS verification
+	// or remote introspection, not both.
+	// the configured endpoint instead of being rejected.
+	// +optional
+	Introspection *TokenIntrospection `json:"introspection,omitempty"`
 }
 
 // +k8s:enum
