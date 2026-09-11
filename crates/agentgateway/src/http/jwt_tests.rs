@@ -378,20 +378,6 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
 	jsonwebtoken::encode(&header, &payload, &key).unwrap()
 }
 
-fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
-	build_unsigned_token_with_payload(kid, json!({ "iss": iss, "aud": aud, "exp": exp }))
-}
-
-fn build_unsigned_token_with_payload(kid: &str, payload: serde_json::Value) -> String {
-	use base64::Engine as _;
-	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-	let header = json!({ "alg": "ES256", "kid": kid });
-	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
-	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
-	let s = URL_SAFE_NO_PAD.encode(b"sig");
-	format!("{h}.{p}.{s}")
-}
-
 #[test]
 pub fn test_configured_issuer_and_audiences_require_claims() {
 	use std::time::{SystemTime, UNIX_EPOCH};

@@ -732,11 +732,11 @@ impl Jwt {
 		};
 
 		// Check cache first
-		if let Some(cache) = &provider.introspection_cache {
-			if let Some(cached) = cache.get(token).await {
-				tracing::debug!("introspection cache hit");
-				return Ok(cached);
-			}
+		if let Some(cache) = &provider.introspection_cache
+			&& let Some(cached) = cache.get(token).await
+		{
+			tracing::debug!("introspection cache hit");
+			return Ok(cached);
 		}
 
 		// Call introspection

@@ -765,7 +765,7 @@ func translateTokenIntrospection(ctx PolicyCtx, intro *agentgateway.TokenIntrosp
 	}
 
 	if intro.URL != nil {
-		p.Url = string(*intro.URL)
+		p.Url = *intro.URL
 	}
 
 	// Resolve client secret from Secret reference
