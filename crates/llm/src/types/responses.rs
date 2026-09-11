@@ -809,6 +809,7 @@ impl ResponseType for Response {
 				.usage
 				.as_ref()
 				.map(|u| u.total_tokens.unwrap_or(u.input_tokens + u.output_tokens)),
+			pages: None,
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
 				u.output_tokens_details
 					.as_ref()

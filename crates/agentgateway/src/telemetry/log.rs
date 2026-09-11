@@ -1582,6 +1582,7 @@ impl Drop for DropOnLog {
 						("agw.ai.usage.cost.reasoning", b.reasoning.to_string()),
 						("agw.ai.usage.cost.input_audio", b.input_audio.to_string()),
 						("agw.ai.usage.cost.output_audio", b.output_audio.to_string()),
+						("agw.ai.usage.cost.units", b.units.to_string()),
 					]
 				})
 			} else {
@@ -2112,6 +2113,7 @@ impl Drop for DropOnLog {
 							("agw.ai.usage.cost.reasoning", cost.reasoning),
 							("agw.ai.usage.cost.inputAudio", cost.input_audio),
 							("agw.ai.usage.cost.outputAudio", cost.output_audio),
+							("agw.ai.usage.cost.units", cost.units),
 						];
 						db_kv.reserve(cost_raws.len());
 						for (k, v) in &cost_raws {

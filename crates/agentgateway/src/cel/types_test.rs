@@ -300,6 +300,7 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		reasoning: dec("0"),
 		input_audio: dec("0"),
 		output_audio: dec("0"),
+		units: dec("0"),
 	});
 	let executor = Executor::new_request(&req);
 

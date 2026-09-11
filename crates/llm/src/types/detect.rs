@@ -501,6 +501,11 @@ mod lookups {
 		// Gemini generateContent via Cloud Code
 		&["response", "usageMetadata", "totalTokenCount"],
 	];
+	// Mistral Document AI (OCR) reports the number of processed pages instead of tokens;
+	pub const PAGES: [&[&str]; 2] = [
+		&["usage_info", "pages_processed"],
+		&["usage", "pages_processed"],
+	];
 	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
 	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];
 	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] =
@@ -586,6 +591,7 @@ impl ResponseType for Response {
 			output_text_tokens: self.lookup(lookups::OUTPUT_TEXT_TOKENS, |v| v.as_u64()),
 			output_audio_tokens: self.lookup(lookups::OUTPUT_AUDIO_TOKENS, |v| v.as_u64()),
 			total_tokens: total_tokens.or_else(|| Some(input_tokens? + output_tokens?)),
+			pages: self.lookup(lookups::PAGES, |v| v.as_u64()),
 			reasoning_tokens: self.lookup(lookups::REASONING, |v| v.as_u64()),
 			cache_creation_input_tokens: self
 				.lookup(lookups::CACHE_CREATION_INPUT_TOKENS, |v| v.as_u64()),
@@ -704,6 +710,12 @@ pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamRespo
 		lookups::USAGE_TOTAL_TOKENS,
 		|v| v.as_u64(),
 		|l, v| l.response.total_tokens = Some(v),
+	);
+	let _pages = f.set_if(
+		log,
+		lookups::PAGES,
+		|v| v.as_u64(),
+		|l, v| l.response.pages = Some(v),
 	);
 	let _reasoning_tokens = f.set_if(
 		log,

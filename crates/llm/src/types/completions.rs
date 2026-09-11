@@ -188,6 +188,7 @@ impl ResponseType for Response {
 			}),
 
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
+			pages: None,
 			count_tokens: None,
 
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
