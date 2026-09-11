@@ -100,10 +100,6 @@ pub fn passthrough_stream(
 	})
 }
 
-const THINKING_BUDGET_LOW: i32 = 1024;
-const THINKING_BUDGET_MEDIUM: i32 = 2048;
-const THINKING_BUDGET_HIGH: i32 = 4096;
-
 fn apply_rest_extras(
 	rest: &serde_json::Value,
 ) -> (
@@ -1610,17 +1606,6 @@ pub mod from_messages {
 		}
 	}
 
-	/// Gemini counts thought tokens against `maxOutputTokens`, so a budget above the cap leaves
-	/// no room for the answer and the response comes back empty with `MAX_TOKENS`. Keep any
-	/// explicit budget within the cap. `-1` (dynamic) is not a size and is passed through.
-	fn clamp_thinking_budget(budget: i32, max_tokens: usize) -> i32 {
-		if budget < 0 {
-			return budget;
-		}
-		let cap = i32::try_from(max_tokens).unwrap_or(i32::MAX);
-		budget.min(cap)
-	}
-
 	fn build_thinking_config(
 		req: &types::messages::typed::Request,
 		model: &str,
@@ -1629,7 +1614,7 @@ pub mod from_messages {
 
 		// output_config.effort takes precedence when present.
 		if let Some(effort) = req.output_config.as_ref().and_then(|oc| oc.effort) {
-			return Some(effort_to_thinking_config(effort, model, req.max_tokens));
+			return effort_to_thinking_config(effort, model, req.max_tokens);
 		}
 
 		match req.thinking.as_ref()? {
@@ -1650,9 +1635,13 @@ pub mod from_messages {
 			},
 			mt::ThinkingInput::Enabled { budget_tokens } => {
 				if uses_thinking_levels(model) {
-					let level = if *budget_tokens <= THINKING_BUDGET_LOW as u64 {
+					let level = if *budget_tokens
+						<= crate::types::thinking_budget_for_anthropic_effort(mt::ThinkingEffort::Low)
+					{
 						"low"
-					} else if *budget_tokens <= THINKING_BUDGET_MEDIUM as u64 {
+					} else if *budget_tokens
+						<= crate::types::thinking_budget_for_anthropic_effort(mt::ThinkingEffort::Medium)
+					{
 						"medium"
 					} else {
 						"high"
@@ -1664,12 +1653,16 @@ pub mod from_messages {
 						rest: Default::default(),
 					})
 				} else {
+					// Gemini counts thought tokens against maxOutputTokens, so a budget at the cap
+					// leaves nothing for the answer. Reuse the Anthropic-side bound, which keeps
+					// a token spare and refuses a max_tokens too small to think within at all.
+					let budget = crate::conversion::messages::cap_thinking_budget_to_max_tokens(
+						*budget_tokens,
+						req.max_tokens,
+					)?;
 					Some(vg::ThinkingConfig {
 						thinking_level: None,
-						thinking_budget: Some(clamp_thinking_budget(
-							i32::try_from(*budget_tokens).unwrap_or(i32::MAX),
-							req.max_tokens,
-						)),
+						thinking_budget: Some(i32::try_from(budget).unwrap_or(i32::MAX)),
 						include_thoughts: Some(true),
 						rest: Default::default(),
 					})
@@ -1682,7 +1675,7 @@ pub mod from_messages {
 		effort: types::messages::typed::ThinkingEffort,
 		model: &str,
 		max_tokens: usize,
-	) -> vg::ThinkingConfig {
+	) -> Option<vg::ThinkingConfig> {
 		use types::messages::typed::ThinkingEffort;
 		if uses_thinking_levels(model) {
 			let level = match effort {
@@ -1690,25 +1683,25 @@ pub mod from_messages {
 				ThinkingEffort::Medium => "medium",
 				ThinkingEffort::High | ThinkingEffort::Xhigh | ThinkingEffort::Max => "high",
 			};
-			vg::ThinkingConfig {
+			return Some(vg::ThinkingConfig {
 				thinking_level: Some(level.to_string()),
 				thinking_budget: None,
 				include_thoughts: Some(true),
 				rest: Default::default(),
-			}
-		} else {
-			let budget = match effort {
-				ThinkingEffort::Low => THINKING_BUDGET_LOW,
-				ThinkingEffort::Medium => THINKING_BUDGET_MEDIUM,
-				ThinkingEffort::High | ThinkingEffort::Xhigh | ThinkingEffort::Max => THINKING_BUDGET_HIGH,
-			};
-			vg::ThinkingConfig {
-				thinking_level: None,
-				thinking_budget: Some(clamp_thinking_budget(budget, max_tokens)),
-				include_thoughts: Some(true),
-				rest: Default::default(),
-			}
+			});
 		}
+		// Same budget table every other Messages backend uses, so xhigh/max are not flattened
+		// into high, and the same max_tokens bound as an explicit budget.
+		let budget = crate::conversion::messages::cap_thinking_budget_to_max_tokens(
+			crate::types::thinking_budget_for_anthropic_effort(effort),
+			max_tokens,
+		)?;
+		Some(vg::ThinkingConfig {
+			thinking_level: None,
+			thinking_budget: Some(i32::try_from(budget).unwrap_or(i32::MAX)),
+			include_thoughts: Some(true),
+			rest: Default::default(),
+		})
 	}
 }
 

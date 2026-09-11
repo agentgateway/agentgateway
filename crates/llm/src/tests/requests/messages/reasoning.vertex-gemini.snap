@@ -31,11 +31,7 @@ info:
       }
     ],
     "generationConfig": {
-      "maxOutputTokens": 1024,
-      "thinkingConfig": {
-        "thinkingBudget": 1024,
-        "includeThoughts": true
-      }
+      "maxOutputTokens": 1024
     }
   },
   "parsed": {

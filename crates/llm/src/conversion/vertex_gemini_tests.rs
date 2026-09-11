@@ -2422,3 +2422,53 @@ fn msg_empty_text_block_is_dropped() {
 	assert_eq!(parts.len(), 1, "empty text must not be emitted, got: {g}");
 	assert_eq!(parts[0]["text"], "real");
 }
+
+#[test]
+fn msg_thinking_budget_leaves_room_for_the_answer() {
+	// Gemini counts thought tokens against maxOutputTokens, so budget == maxOutputTokens leaves
+	// nothing for the answer and comes back empty with MAX_TOKENS.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 4096,
+		"thinking": { "type": "enabled", "budget_tokens": 4096 },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}));
+	let budget = g["generationConfig"]["thinkingConfig"]["thinkingBudget"]
+		.as_i64()
+		.expect("budget present");
+	assert!(
+		budget < 4096,
+		"budget must stay under maxOutputTokens, got: {g}"
+	);
+
+	// Too small to think within at all: omit thinkingConfig rather than send an unusable budget.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"thinking": { "type": "enabled", "budget_tokens": 4096 },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}));
+	assert!(
+		g["generationConfig"]["thinkingConfig"].is_null(),
+		"got: {g}"
+	);
+}
+
+#[test]
+fn msg_effort_uses_the_shared_budget_table() {
+	// xhigh/max used to collapse into high's 4096, so the same request got a 4x smaller budget
+	// depending only on whether the client spoke Messages or Completions.
+	let budget_for = |effort: &str| {
+		to_gemini_msg(json!({
+			"model": "gemini-2.5-pro",
+			"max_tokens": 32000,
+			"output_config": { "effort": effort },
+			"messages": [{ "role": "user", "content": "hi" }]
+		}))["generationConfig"]["thinkingConfig"]["thinkingBudget"]
+			.as_i64()
+			.expect("budget present")
+	};
+	assert_eq!(budget_for("high"), 4096);
+	assert_eq!(budget_for("xhigh"), 8192);
+	assert_eq!(budget_for("max"), 16384);
+}
