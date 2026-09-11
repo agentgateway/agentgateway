@@ -348,7 +348,9 @@ async fn apply_to_request_streams_pull_frame_by_frame() {
 		.await
 		.expect("within-limit body streams through");
 
-	for &chunk in chunks {
+	// Inspection coalesces the bounded prefix plus one byte of lookahead,
+	// then forwards the overflow and unread frames without buffering the rest.
+	for chunk in [b"hello".as_slice(), b" wo", b"rld!"] {
 		assert_eq!(
 			read_request_body_next_frame(&mut req).await,
 			Bytes::from_static(chunk)

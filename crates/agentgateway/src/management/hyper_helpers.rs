@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_core::drain::DrainWatcher;
+use agent_http::{Body, Response};
 use futures_util::{StreamExt, TryFutureExt};
 use hyper::Request;
 use hyper::server::conn::http1;
@@ -21,7 +22,6 @@ use tokio::net::TcpListener;
 use tokio::net::UnixListener;
 use tracing::info;
 
-use crate::http::{Body, Response};
 use crate::transport::stream::Socket;
 use crate::types::frontend;
 
@@ -174,7 +174,7 @@ impl<S> Server<S> {
 	where
 		S: Send + Sync + 'static,
 		F: Fn(Arc<S>, Request<hyper::body::Incoming>) -> R + Send + Sync + 'static,
-		R: Future<Output = Result<crate::http::Response, anyhow::Error>> + Send + 'static,
+		R: Future<Output = Result<agent_http::Response, anyhow::Error>> + Send + 'static,
 	{
 		if self.binds.is_empty() {
 			info!(component = self.name, "listener disabled");
@@ -225,7 +225,7 @@ impl<S> Server<S> {
 										Ok::<_, Infallible>(
 											::http::Response::builder()
 												.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-												.body(crate::http::Body::new(err.to_string()))
+												.body(agent_http::Body::from(err.to_string()))
 												.expect("builder with known status code should not fail"),
 										)
 									})

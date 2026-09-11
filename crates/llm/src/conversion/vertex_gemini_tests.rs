@@ -1527,7 +1527,7 @@ mod passthrough {
 		);
 		let captured = captured_info();
 		let out = passthrough_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 			LogContentFields {
@@ -1575,7 +1575,7 @@ mod passthrough {
 		);
 		let captured = captured_info();
 		let out = passthrough_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 			LogContentFields::default(),
@@ -1596,18 +1596,15 @@ mod passthrough {
 		);
 	}
 
-	fn body_from_frames(frames: &[&str]) -> axum_core::body::Body {
+	fn body_from_frames(frames: &[&str]) -> agent_http::Body {
 		let frames: Vec<Result<bytes::Bytes, std::convert::Infallible>> = frames
 			.iter()
 			.map(|f| Ok(bytes::Bytes::copy_from_slice(f.as_bytes())))
 			.collect();
-		axum_core::body::Body::from_stream(futures_util::stream::iter(frames))
+		agent_http::Body::from_stream(futures_util::stream::iter(frames))
 	}
 
-	async fn run_passthrough(
-		body: axum_core::body::Body,
-		captured: &Arc<Mutex<LLMInfo>>,
-	) -> bytes::Bytes {
+	async fn run_passthrough(body: agent_http::Body, captured: &Arc<Mutex<LLMInfo>>) -> bytes::Bytes {
 		passthrough_stream(
 			body,
 			1024 * 1024,
@@ -1658,7 +1655,7 @@ mod passthrough {
 			"\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n",
 		);
 		let captured = captured_info();
-		let out = run_passthrough(axum_core::body::Body::from(input), &captured).await;
+		let out = run_passthrough(agent_http::Body::from(input), &captured).await;
 
 		assert_eq!(out.as_ref(), input.as_bytes());
 		let info = captured.lock().unwrap();
@@ -1678,7 +1675,7 @@ mod passthrough {
 		for input in [non_sse, truncated] {
 			let captured = captured_info();
 			let err = passthrough_stream(
-				axum_core::body::Body::from(input),
+				agent_http::Body::from(input),
 				1024 * 1024,
 				StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 				LogContentFields::default(),

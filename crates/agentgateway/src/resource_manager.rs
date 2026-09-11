@@ -16,7 +16,6 @@ use tokio::time::{Instant, sleep_until};
 use tracing::{trace, warn};
 
 use crate::client::Client;
-use crate::http::Body;
 
 const JWKS_TTL: Duration = Duration::from_mins(15);
 const OPENAPI_TTL: Duration = Duration::from_hours(24);
@@ -730,7 +729,7 @@ async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result
 				.simple_call(
 					::http::Request::builder()
 						.uri(url)
-						.body(Body::empty())
+						.body(crate::http::Body::empty())
 						.expect("builder should succeed"),
 				)
 				.await

@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 
+use agent_http::Body;
 use http::header::{Entry, OccupiedEntry};
 use http::request::Parts;
 use http::{Extensions, Request as HttpRequest, Version};
@@ -10,7 +11,7 @@ use serde_json;
 use url::Url;
 
 use crate::http::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
-use crate::http::{Body, Method, Response};
+use crate::http::{Method, Response};
 
 /// A request which can be executed with `Client::execute()`.
 pub struct Request {
@@ -332,7 +333,7 @@ impl RequestBuilder {
 
 	pub async fn send<C>(
 		self,
-		client: hyper_util::client::legacy::Client<C, crate::http::Body>,
+		client: hyper_util::client::legacy::Client<C, Body>,
 	) -> Result<Response, crate::http::Error>
 	where
 		C: Connect + Clone + Send + Sync + 'static,
@@ -343,7 +344,7 @@ impl RequestBuilder {
 				.request(req)
 				.await
 				.map_err(crate::http::Error::new)?
-				.map(crate::http::Body::new),
+				.map(Body::new),
 		)
 	}
 }

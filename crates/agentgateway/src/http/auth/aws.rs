@@ -579,7 +579,19 @@ pub(super) async fn sign_request(
 		_ => None,
 	};
 	let lim = crate::http::buffer_limit(req);
-	let orig_body = std::mem::take(req.body_mut());
+	let body = match req
+		.body_mut()
+		.inspect(lim)
+		.await
+		.map_err(BackendAuthError::local)?
+	{
+		http::BodyInspection::Complete(body) => body,
+		http::BodyInspection::Partial(_) => {
+			return Err(BackendAuthError::local(anyhow::anyhow!(
+				"request body exceeds buffer limit of {lim} bytes"
+			)));
+		},
+	};
 	// Get the region based on auth mode
 	let region = match aws_auth {
 		AwsAuth::ExplicitConfig {
@@ -636,9 +648,6 @@ pub(super) async fn sign_request(
 		.map_err(BackendAuthError::local)?
 		.into();
 
-	let body = http::read_body_with_limit(orig_body, lim)
-		.await
-		.map_err(BackendAuthError::local)?;
 	let signable_request = aws_sigv4::http_request::SignableRequest::new(
 		req.method().as_str(),
 		req.uri().to_string().replace("http://", "https://"),
@@ -660,13 +669,6 @@ pub(super) async fn sign_request(
 		.map_err(BackendAuthError::local)?
 		.into_parts();
 	signature.apply_to_request_http1x(req);
-
-	req.headers_mut().insert(
-		http::header::CONTENT_LENGTH,
-		http::HeaderValue::from_str(&format!("{}", body.as_ref().len()))
-			.map_err(BackendAuthError::local)?,
-	);
-	*req.body_mut() = http::Body::from(body);
 
 	trace!("signed AWS request");
 	Ok(())

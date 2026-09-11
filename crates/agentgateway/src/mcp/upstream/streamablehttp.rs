@@ -3,6 +3,7 @@ use ::http::header::{ACCEPT, CONTENT_TYPE};
 use anyhow::anyhow;
 use futures::StreamExt;
 use headers::HeaderMapExt;
+use http_body_util::BodyExt as _;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };

@@ -13,6 +13,7 @@ use agent_core::version::BuildInfo;
 use anyhow::anyhow;
 use futures_util::StreamExt;
 use headers::HeaderMapExt;
+use http_body_util::BodyExt as _;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
 	Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId,
@@ -59,7 +60,7 @@ impl Session {
 	/// send a message to upstream server(s)
 	pub async fn send(
 		&mut self,
-		parts: Parts,
+		ctx: IncomingRequestContext,
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, ProxyError> {
 		let req_id = match &message {
@@ -67,7 +68,7 @@ impl Session {
 			_ => None,
 		};
 		let res = self
-			.send_internal(parts, message)
+			.send_internal(ctx, message)
 			.assert_size::<{ 6 * 1024 }>()
 			.await;
 		Self::handle_error(req_id, res, false).await
@@ -81,7 +82,7 @@ impl Session {
 	/// handshake.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
-		parts: Parts,
+		ctx: IncomingRequestContext,
 		message: ClientJsonRpcMessage,
 		initialize_upstream: bool,
 	) -> Result<Response, ProxyError> {
@@ -93,9 +94,11 @@ impl Session {
 			ClientJsonRpcMessage::Request(r) if matches!(r.request, ClientRequest::InitializeRequest(_)));
 		if initialize_upstream && !is_init {
 			let mut client_info = get_client_info();
-			if let Some(protocol_version) =
-				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone(), true)?
-			{
+			if let Some(protocol_version) = crate::mcp::streamablehttp::protocol_version_header(
+				ctx.request.headers(),
+				req_id.clone(),
+				true,
+			)? {
 				client_info.protocol_version = protocol_version;
 			}
 			let init_request = rmcp::model::InitializeRequest::new(client_info);
@@ -119,7 +122,7 @@ impl Session {
 						Err(err) => return Self::handle_error(req_id.clone(), Err(err), false).await,
 					};
 					let res = self
-						.send_init_single(parts.clone(), init_request, service_name)
+						.send_init_single(ctx.clone(), init_request, service_name)
 						.await;
 					if let Some(sessions) = self.relay.get_sessions() {
 						let s = http::sessionpersistence::SessionState::MCP(
@@ -134,7 +137,7 @@ impl Session {
 					let _ = Self::handle_error(
 						None,
 						self
-							.send_initialized_notification_single(parts.clone(), service_name)
+							.send_initialized_notification_single(ctx.clone(), service_name)
 							.await,
 						false,
 					)
@@ -144,7 +147,7 @@ impl Session {
 					// We should fan out the initialize request to all MCP servers
 					let _ = self
 						.send(
-							parts.clone(),
+							ctx.clone(),
 							ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
 						)
 						.await?;
@@ -155,16 +158,16 @@ impl Session {
 						}
 						.into(),
 					);
-					let _ = self.send(parts.clone(), notification).await?;
+					let _ = self.send(ctx.clone(), notification).await?;
 				},
 			}
 		}
 		// Now we can send the message like normal (if it's tools/call, it'll go to the initialized target)
 		if initialize_upstream {
-			return self.send(parts, message).await;
+			return self.send(ctx, message).await;
 		}
 		let res = self
-			.send_internal(parts, message)
+			.send_internal(ctx, message)
 			.assert_size::<{ 6 * 1024 }>()
 			.await;
 		match res {
@@ -288,7 +291,7 @@ impl Session {
 			.relay
 			.maybe_run_guardrails_call_request(backend, method, params, ctx)
 			.await?;
-		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		let cel = rbac::CelExecWrapper::from(ctx.clone());
 		if self.relay.policies.validate(&res, method, &cel) {
 			Ok(())
 		} else {
@@ -308,7 +311,7 @@ impl Session {
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
-		let (log, _cel) = mcp::handler::setup_request_log(parts);
+		let (log, _cel) = mcp::handler::setup_request_log(&ctx);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
@@ -365,7 +368,7 @@ impl Session {
 	/// get_stream establishes a stream for server-sent messages
 	pub async fn get_stream(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
-		let (log, _cel) = mcp::handler::setup_request_log(parts);
+		let (log, _cel) = mcp::handler::setup_request_log(&ctx);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
@@ -414,13 +417,12 @@ impl Session {
 
 	async fn send_init_single(
 		&self,
-		parts: Parts,
+		ctx: IncomingRequestContext,
 		mut init_request: InitializeRequest,
 		service_name: &str,
 	) -> Result<Response, UpstreamError> {
 		let method: Strng = init_request.method.as_str().into();
-		let ctx = IncomingRequestContext::new(&parts);
-		let (log, _) = mcp::handler::setup_request_log(parts);
+		let (log, _) = mcp::handler::setup_request_log(&ctx);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			l.method_name = Some(method.clone());
@@ -441,7 +443,7 @@ impl Session {
 
 	async fn send_initialized_notification_single(
 		&self,
-		parts: Parts,
+		ctx: IncomingRequestContext,
 		service_name: &str,
 	) -> Result<Response, UpstreamError> {
 		let initialized = rmcp::model::InitializedNotification {
@@ -449,8 +451,7 @@ impl Session {
 			extensions: Default::default(),
 		};
 		let method: Strng = initialized.method.as_str().into();
-		let ctx = IncomingRequestContext::new(&parts);
-		let (log, _) = mcp::handler::setup_request_log(parts);
+		let (log, _) = mcp::handler::setup_request_log(&ctx);
 		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			l.method_name = Some(method.clone());
@@ -465,7 +466,7 @@ impl Session {
 
 	async fn send_internal(
 		&mut self,
-		parts: Parts,
+		mut ctx: IncomingRequestContext,
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, UpstreamError> {
 		// Sending a message entails fanning out the message to each upstream, and then aggregating the responses.
@@ -478,8 +479,7 @@ impl Session {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method: Strng = r.request.method().into();
-				let mut ctx = IncomingRequestContext::new(&parts);
-				let (log, cel) = mcp::handler::setup_request_log(parts);
+				let (log, cel) = mcp::handler::setup_request_log(&ctx);
 				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.clone());
@@ -754,8 +754,7 @@ impl Session {
 					ClientNotification::CustomNotification(r) => r.method.as_str(),
 					_ => "unknown",
 				};
-				let ctx = IncomingRequestContext::new(&parts);
-				let (log, _cel) = mcp::handler::setup_request_log(parts);
+				let (log, _cel) = mcp::handler::setup_request_log(&ctx);
 				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.into());
@@ -767,8 +766,7 @@ impl Session {
 			},
 
 			ClientJsonRpcMessage::Response(_) | ClientJsonRpcMessage::Error(_) => {
-				let ctx = IncomingRequestContext::new(&parts);
-				let (log, _cel) = mcp::handler::setup_request_log(parts);
+				let (log, _cel) = mcp::handler::setup_request_log(&ctx);
 				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.session_id = session_id;

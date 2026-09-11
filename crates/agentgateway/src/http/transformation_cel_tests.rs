@@ -67,9 +67,6 @@ async fn test_transformation_form_urlencoded_body_merge() {
 		.header("content-length", "0")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	req
-		.extensions_mut()
-		.insert(crate::cel::BufferedBody::complete(bytes::Bytes::new()));
 
 	let c = super::LocalTransformationConfig {
 		request: Some(super::LocalTransform {
@@ -114,13 +111,9 @@ request.body
 		.header("content-length", "0")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	req
-		.extensions_mut()
-		.insert(crate::cel::BufferedBody::complete(
-			bytes::Bytes::from_static(
-				b"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc",
-			),
-		));
+	req.body_mut().replace_bytes(bytes::Bytes::from_static(
+		b"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc",
+	));
 
 	xfm.apply_request(&mut req);
 
@@ -171,11 +164,6 @@ json(response.body).with(body,
 			r#"{"verification_uri":"https://login.microsoft.com/device","verification_uri_complete":"https://login.microsoft.com/device?user_code=ABCDEFGH","user_code":"ABCDEFGH"}"#,
 		))
 		.unwrap();
-	resp.extensions_mut().insert(crate::cel::BufferedBody::complete(
-		bytes::Bytes::from_static(
-			br#"{"verification_uri":"https://login.microsoft.com/device","verification_uri_complete":"https://login.microsoft.com/device?user_code=ABCDEFGH","user_code":"ABCDEFGH"}"#,
-		),
-	));
 
 	let snap = cel::snapshot_request(&mut req, true);
 	xfm.apply_response(&mut resp, Some(&snap));

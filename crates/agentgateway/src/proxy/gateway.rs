@@ -1046,7 +1046,7 @@ impl Gateway {
 						.assert_size::<{ 18 * 1024 }>(),
 					)
 					.await?;
-					Ok(response.map(|body| crate::http::DropBody::new(body, request_permit)))
+					Ok(response.map(|body| body.with_drop_guard(request_permit)))
 				})
 			}),
 		);

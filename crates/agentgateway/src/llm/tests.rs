@@ -8,6 +8,61 @@ use serde_json::{Value, json};
 use super::*;
 use crate::http::x_headers::TRACEPARENT;
 
+#[tokio::test]
+async fn retry_replays_input_and_records_each_rendered_llm_attempt() {
+	use crate::http::retry::ReplayBody;
+	let original = Bytes::from_static(
+		br#"{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hello"}]}"#,
+	);
+	let mut body = Body::from(original.clone());
+	body.record(4096);
+	let (content, state) = body.into_replay_parts();
+	let replay = ReplayBody::try_new(content, 4096).unwrap();
+	let retry = replay.clone();
+	let provider = custom_provider(custom::ProviderFormat::GenerateContent);
+	let mut recordings = Vec::new();
+	for replay in [replay, retry] {
+		let body = state.wrap(http::RawBody::new(replay));
+		assert_eq!(body.known_bytes(), Some(&original));
+		let recording = body.recorded().unwrap().clone();
+		let req = ::http::Request::builder()
+			.uri("/v1/chat/completions")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(body)
+			.unwrap();
+		let RequestResult::Success { request, .. } = provider
+			.process_completions_request(
+				&openai_test_backend_info(),
+				None,
+				req,
+				false,
+				&mut None,
+				None,
+			)
+			.await
+			.unwrap()
+		else {
+			panic!("expected forwarded request")
+		};
+		// Parsing input is not forwarding: only the translated payload is recorded.
+		assert!(recording.bytes().is_empty());
+		let sent = request.into_body().collect().await.unwrap().to_bytes();
+		assert_ne!(sent, original);
+		assert!(
+			serde_json::from_slice::<Value>(&sent)
+				.unwrap()
+				.get("contents")
+				.is_some()
+		);
+		assert!(recording.is_complete());
+		assert_eq!(recording.bytes(), sent);
+		recordings.push((recording, sent));
+	}
+	for (recording, sent) in recordings {
+		assert_eq!(recording.bytes(), sent);
+	}
+}
+
 fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 	LLMRequest {
 		input_tokens,
@@ -1364,6 +1419,7 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 	};
 	let body = br#"{"totalTokens":31,"promptTokensDetails":[{"modality":"TEXT","tokenCount":31}]}"#;
 	let buffered = BufferedResponse {
+		managed_body: Body::empty(),
 		parts: ::http::Response::new(()).into_parts().0,
 		bytes: bytes::Bytes::from_static(body),
 	};
@@ -1403,6 +1459,7 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 	let mut parts = ::http::Response::new(()).into_parts().0;
 	parts.status = ::http::StatusCode::BAD_REQUEST;
 	let buffered = BufferedResponse {
+		managed_body: Body::empty(),
 		parts,
 		bytes: body.clone(),
 	};
@@ -3549,7 +3606,7 @@ async fn read_body_decodes_gzip_request_before_json_parse() {
 		.body(Body::from(gz.to_vec()))
 		.unwrap();
 
-	let (parts, parsed) = provider
+	let (parts, _body, parsed) = provider
 		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
 		.await
 		.expect("gzip request body should decode and parse as JSON");
@@ -3579,7 +3636,7 @@ async fn read_body_still_parses_plaintext_request() {
 		))
 		.unwrap();
 
-	let (_parts, parsed) = provider
+	let (_parts, _body, parsed) = provider
 		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
 		.await
 		.expect("plaintext request body should parse as JSON");

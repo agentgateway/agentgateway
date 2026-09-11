@@ -1,7 +1,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
-use axum_core::body::Body as AxumBody;
+use agent_http::{Body, RawBody as AxumBody};
 use bytes::{Bytes, BytesMut};
 use http_body::Body as HttpBody;
 use pin_project_lite::pin_project;
@@ -18,18 +18,22 @@ pin_project! {
 	}
 }
 
-pub fn parser<D, F>(body: AxumBody, decoder: D, handler: F) -> AxumBody
+pub fn parser<D, F>(body: Body, decoder: D, handler: F) -> Body
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
 	F: FnMut(D::Item) + Send + 'static,
 {
-	AxumBody::new(PassthroughBody {
-		body,
-		decoder,
-		handler,
-		decode_buffer: BytesMut::new(),
-		finished: false,
+	// Safe: parsing consumes a separate copy of the data; original frames,
+	// including trailers, are forwarded unchanged and in order.
+	body.dangerous_wrap_stream_preserving_content(|body| {
+		AxumBody::new(PassthroughBody {
+			body,
+			decoder,
+			handler,
+			decode_buffer: BytesMut::new(),
+			finished: false,
+		})
 	})
 }
 
@@ -128,19 +132,22 @@ pin_project! {
 // full_passthrough_parser is a complete passthrough, used in cases where we are not even sure SSE is returned
 // We optimistically handle SSE events, but never modify the body.
 // As a side effect, this means we may call the handler function after we send an SSE chunk through!
-pub fn full_passthrough_parser<D, F>(body: AxumBody, decoder: D, handler: F) -> AxumBody
+pub fn full_passthrough_parser<D, F>(body: Body, decoder: D, handler: F) -> Body
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
 	F: FnMut(D::Item) + Send + 'static,
 {
-	AxumBody::new(FullPassthroughBody {
-		body,
-		decoder,
-		handler,
-		decode_buffer: BytesMut::new(),
-		finished: false,
-		error: false,
+	// Safe: the decoder only reads copied bytes and invokes observational callbacks.
+	body.dangerous_wrap_stream_preserving_content(|body| {
+		AxumBody::new(FullPassthroughBody {
+			body,
+			decoder,
+			handler,
+			decode_buffer: BytesMut::new(),
+			finished: false,
+			error: false,
+		})
 	})
 }
 

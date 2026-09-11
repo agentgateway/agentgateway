@@ -2,6 +2,7 @@ use std::convert::Infallible;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use agent_http::BufList;
 use bytes::{Buf, Bytes};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::BodyExt;
@@ -10,7 +11,6 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::{BodySendMode, Error};
-use crate::http::buflist::BufList;
 use crate::http::{self, bufferbody};
 
 pub(super) enum BufferedBodyPhase {
@@ -343,15 +343,16 @@ pub(super) fn attach_request_body_channel(
 	req: http::Request,
 	rx_chunk: &mut Option<Receiver<Result<Frame<Bytes>, Infallible>>>,
 ) -> (http::Request, http::Body) {
-	let (parts, body) = req.into_parts();
+	let (parts, mut managed_body) = req.into_parts();
+	// Only input content goes to ext-proc. Recording and lifecycle observers
+	// belong to the processed output, including full-duplex and buffered modes.
+	let body = managed_body.take_content();
 	let rx_chunk = rx_chunk
 		.take()
 		.expect("request body channel should only be attached once");
 	let upstream_body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
-	(
-		http::Request::from_parts(parts, http::Body::new(upstream_body)),
-		body,
-	)
+	managed_body.replace_content(agent_http::RawBody::new(upstream_body).into());
+	(http::Request::from_parts(parts, managed_body), body)
 }
 
 #[cfg(debug_assertions)]

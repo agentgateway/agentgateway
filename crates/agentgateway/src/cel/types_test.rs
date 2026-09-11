@@ -5,6 +5,50 @@ use serde_json::json;
 use super::*;
 use crate::http::Body;
 
+#[tokio::test]
+async fn policy_snapshots_ignore_recording_but_logs_use_completed_output() {
+	use http_body_util::BodyExt;
+	let mut req = ::http::Request::new(Body::from_stream(futures_util::stream::iter([Ok::<
+		_,
+		std::io::Error,
+	>(
+		Bytes::from_static(b"hello"),
+	)])));
+	let _ = req.body_mut().inspect(2).await.unwrap();
+	req.body_mut().record(100);
+	let snapshot = snapshot_request(&mut req, false);
+	while req.body_mut().frame().await.is_some() {}
+	let policy = Executor::new_request_snapshot(Some(&snapshot));
+	assert!(policy.request.as_ref().unwrap().body.bytes().is_none());
+	assert_eq!(
+		policy
+			.request
+			.as_ref()
+			.unwrap()
+			.body_prefix
+			.0
+			.prefix_bytes()
+			.unwrap(),
+		"he"
+	);
+	let logger = Executor::new_logger(Some(&snapshot), None, None, None, None, None, None);
+	assert_eq!(
+		logger.request.as_ref().unwrap().body.bytes().unwrap(),
+		"hello"
+	);
+	assert_eq!(
+		logger
+			.request
+			.as_ref()
+			.unwrap()
+			.body_prefix
+			.0
+			.prefix_bytes()
+			.unwrap(),
+		"hello"
+	);
+}
+
 /// Helper to build a test request with various fields populated
 fn build_test_request() -> crate::http::Request {
 	let mut req = ::http::Request::builder()

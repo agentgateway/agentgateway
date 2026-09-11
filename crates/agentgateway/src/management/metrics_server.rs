@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use agent_core::drain::DrainWatcher;
+use agent_http::Response;
 use anyhow::{Context, Result};
 use headers::Header;
 use headers_accept::Accept;
@@ -16,7 +17,6 @@ use prometheus_client::registry::Registry;
 
 use super::hyper_helpers;
 use crate::Address;
-use crate::http::Response;
 
 pub struct Server {
 	s: hyper_helpers::Server<Registry>,

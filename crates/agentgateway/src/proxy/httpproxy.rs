@@ -47,7 +47,7 @@ use crate::store::{
 };
 use crate::telemetry::log;
 use crate::telemetry::log::{
-	AsyncLog, DropOnLog, LogBody, RequestLog, SpanWriteOnDrop, SpanWriter, TraceSampler,
+	AsyncLog, DropOnLog, RequestLog, SpanWriteOnDrop, SpanWriter, TraceSampler,
 };
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
 use crate::telemetry::trc::TraceParent;
@@ -792,7 +792,7 @@ impl HTTPProxy {
 			if is_upstream_response && let Some(idle_timeout) = response_idle_timeout {
 				resp = http::timeout::apply_response_idle_timeout(resp, idle_timeout);
 			}
-			resp.map(move |b| http::Body::new(LogBody::new(b, log)))
+			resp.map(move |body| body.with_observer(log))
 		}
 	}
 
@@ -1140,23 +1140,29 @@ impl HTTPProxy {
 			.timeout
 			.as_ref()
 			.and_then(|t| t.request_timeout);
-		let body = if attempts > 1 {
-			// If we are going to attempt a retry we will need to track the incoming bytes for replay
-			let body = http::retry::ReplayBody::try_new(body, MAX_BUFFERED_BYTES);
-			if body.is_err() {
-				debug!("initial body is too large to retry, disabling retries")
-			}
-			body
-		} else {
-			Err(body)
-		};
+		let mut replay_state = None;
+		let body =
+			if attempts > 1 && http_body::Body::size_hint(&body).lower() <= MAX_BUFFERED_BYTES as u64 {
+				// If we are going to attempt a retry we will need to track the incoming bytes for replay
+				let (content, state) = body.into_replay_parts();
+				replay_state = Some(state);
+				Ok(
+					http::retry::ReplayBody::try_new(content, MAX_BUFFERED_BYTES)
+						.expect("body size was checked before separating replay state"),
+				)
+			} else {
+				if attempts > 1 {
+					debug!("initial body is too large to retry, disabling retries");
+				}
+				Err(body)
+			};
 		let mut substrate_state = None;
 		let mut next = match body {
 			Ok(retry) => Some(retry),
 			Err(body) => {
 				trace!("no retries");
 				// no retries at all, just send the request as normal
-				let req = Request::from_parts(head, http::Body::new(body));
+				let req = Request::from_parts(head, body);
 				let response = self
 					.attempt_upstream(
 						log,
@@ -1207,7 +1213,11 @@ impl HTTPProxy {
 					HeaderValue::try_from(format!("{n}")).expect("number is always a valid header value"),
 				);
 			}
-			let req = Request::from_parts(head, http::Body::new(this));
+			let body = replay_state
+				.as_ref()
+				.expect("retry state is initialized")
+				.wrap(http::RawBody::new(this));
+			let req = Request::from_parts(head, body);
 			let mut res = self
 				.attempt_upstream(
 					log,

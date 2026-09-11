@@ -113,10 +113,19 @@ dependencies = [
 name = "agent-http"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "axum",
  "axum-core",
  "bytes",
+ "futures-core",
+ "futures-util",
  "http 1.5.0",
+ "http-body 1.1.0",
+ "http-body-util",
+ "parking_lot",
+ "pin-project-lite",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

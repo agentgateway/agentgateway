@@ -36,11 +36,11 @@ fn join_tool_call_id(base: String, signature: Option<&str>) -> String {
 /// `usageMetadata` to chunks with the full totals on the final event, so updating on every
 /// chunk leaves the last event's counts in the log even on early client disconnect.
 pub fn passthrough_stream(
-	b: axum_core::body::Body,
+	b: agent_http::Body,
 	buffer_limit: usize,
 	log: crate::StreamingUsageGuard,
 	log_content: crate::LogContentFields,
-) -> axum_core::body::Body {
+) -> agent_http::Body {
 	use std::time::Instant;
 	let mut saw_token = false;
 	crate::parse::sse::json_passthrough::<vg::GenerateContentResponse>(b, buffer_limit, move |f| {
@@ -1102,7 +1102,7 @@ pub mod to_completions {
 	use std::collections::HashMap;
 	use std::time::Instant;
 
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use serde_json::Value;
 
 	use super::*;

@@ -59,22 +59,18 @@ pub async fn from_body_with_limit<T: DeserializeOwned>(
 	body: http::Body,
 	limit: usize,
 ) -> Result<T, http::Error> {
-	let bytes = http::read_body_with_limit(body, limit).await?;
+	let bytes = body.into_bytes(limit).await?;
 	// Try to parse the response body as JSON
 	let t = serde_json::from_slice::<T>(bytes.as_ref()).map_err(http::Error::new)?;
 	Ok(t)
 }
 
 pub async fn inspect_body<T: DeserializeOwned>(req: &mut http::Request) -> anyhow::Result<T> {
-	let buffer = http::buffer_limit(req);
-	let body = req.body_mut();
-	let orig = std::mem::replace(body, http::Body::empty());
-	let bytes = http::read_body_with_limit(orig, buffer).await?;
-	// Try to parse the response body as JSON
-	let t = serde_json::from_slice::<T>(bytes.as_ref());
-	// Regardless of an error or not, we should reset the body back
-	*body = http::Body::from(bytes);
-	t.map_err(Into::into)
+	let bytes = match http::inspect_body(req).await? {
+		http::BodyInspection::Complete(bytes) => bytes,
+		http::BodyInspection::Partial(_) => anyhow::bail!("body exceeded buffer limit"),
+	};
+	serde_json::from_slice::<T>(&bytes).map_err(Into::into)
 }
 
 pub fn to_body<T: Serialize>(j: T) -> anyhow::Result<http::Body> {

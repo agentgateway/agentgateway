@@ -9,7 +9,7 @@ use rand::seq::IndexedRandom;
 use serde_json::Value;
 
 use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{self, Request, Response};
+use crate::http::{self, Request, RequestBodyExt, Response};
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
@@ -579,7 +579,7 @@ fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Route
 			"request_body_rewrite_failed",
 		))
 	})?;
-	http::replace_body_bytes(req, body.into());
+	req.replace_body_bytes(body.into());
 	Ok(())
 }
 
@@ -693,8 +693,8 @@ pub(crate) async fn rewrite_multipart_request_model(
 	let Some(body) = rewrite_multipart_body_model(&body, &boundary, target).await? else {
 		return Ok(());
 	};
+	req.replace_body_bytes(body);
 	req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
-	http::replace_body_bytes(req, body);
 	Ok(())
 }
 
@@ -829,66 +829,53 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	let limit = http::buffer_limit(req);
 	let content_encoding = req.headers().typed_get::<ContentEncoding>();
 	if content_encoding.is_some() {
-		let body = if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-			http::Body::from(
-				body
-					.bytes()
-					.cloned()
-					.ok_or_else(|| Box::new(request_body_too_large_response()))?,
-			)
-		} else {
-			std::mem::take(req.body_mut())
-		};
-		let (encoding, body) =
-			http::compression::to_bytes_with_decompression(body, content_encoding.as_ref(), limit)
-				.await
-				.map_err(|err| match err {
-					http::compression::Error::LimitExceeded => Box::new(request_body_too_large_response()),
-					err => {
-						tracing::debug!(%err, "failed to decode LLM request body");
-						Box::new(llm_error_response(
-							::http::StatusCode::BAD_REQUEST,
-							"Failed to decode LLM request body",
-							"request_body_decode_failed",
-						))
-					},
-				})?;
-		*req.body_mut() = http::Body::from(body.clone());
+		let mut encoding = None;
+		let mut decoded_bytes = Bytes::new();
+		req
+			.body_mut()
+			.try_modify(|body| async {
+				let (decoded_encoding, bytes) =
+					http::compression::to_bytes_with_decompression(body, content_encoding.as_ref(), limit)
+						.await?;
+				encoding = decoded_encoding;
+				decoded_bytes = bytes.clone();
+				Ok::<_, http::compression::Error>(bytes.into())
+			})
+			.await
+			.map_err(|err| match err {
+				http::compression::Error::LimitExceeded => Box::new(request_body_too_large_response()),
+				err => {
+					tracing::debug!(%err, "failed to decode LLM request body");
+					Box::new(llm_error_response(
+						::http::StatusCode::BAD_REQUEST,
+						"Failed to decode LLM request body",
+						"request_body_decode_failed",
+					))
+				},
+			})?;
 		if encoding.is_some() {
 			req.headers_mut().remove(::http::header::CONTENT_ENCODING);
 			req.headers_mut().remove(::http::header::CONTENT_LENGTH);
 			req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
 		}
-		req
-			.extensions_mut()
-			.insert(cel::BufferedBody::complete(body.clone()));
-		return Ok(body);
+		return Ok(decoded_bytes);
 	}
-	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-		return body
-			.bytes()
-			.cloned()
-			.ok_or_else(|| Box::new(request_body_too_large_response()));
-	}
-	let inspection = http::inspect_body_with_limit(req.body_mut(), limit)
-		.await
-		.map_err(|err| {
-			tracing::debug!(%err, "failed to read LLM request body");
-			Box::new(llm_error_response(
-				::http::StatusCode::BAD_REQUEST,
-				"Failed to read LLM request body",
-				"request_body_read_failed",
-			))
-		})?;
+	// A prior partial inspection may have used a smaller limit. Inspection
+	// reuses known bytes and reads further only when this limit requires it.
+	let inspection = req.body_mut().inspect(limit).await.map_err(|err| {
+		tracing::debug!(%err, "failed to read LLM request body");
+		Box::new(llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Failed to read LLM request body",
+			"request_body_read_failed",
+		))
+	})?;
 	let body = match inspection {
 		http::BodyInspection::Complete(body) => body,
 		http::BodyInspection::Partial(_) => {
 			return Err(Box::new(request_body_too_large_response()));
 		},
 	};
-	req
-		.extensions_mut()
-		.insert(cel::BufferedBody::complete(body.clone()));
 	Ok(body)
 }
 
@@ -1392,9 +1379,8 @@ mod tests {
 			.header(::http::header::TRANSFER_ENCODING, "chunked")
 			.body(http::Body::from(body.clone()))
 			.expect("valid request");
-		req
-			.extensions_mut()
-			.insert(cel::BufferedBody::complete(body));
+		req.body_mut().record(1024);
+		let recorded = req.body().recorded().unwrap().clone();
 
 		rewrite_multipart_request_model(&mut req, "a-much-longer-model")
 			.await
@@ -1406,11 +1392,12 @@ mod tests {
 				.headers()
 				.contains_key(::http::header::TRANSFER_ENCODING)
 		);
+		assert_ne!(req.body().known_bytes(), Some(&body));
+		assert!(recorded.bytes().is_empty());
 		let buffered = req
-			.extensions()
-			.get::<cel::BufferedBody>()
-			.and_then(cel::BufferedBody::bytes)
-			.expect("rewritten request body remains buffered")
+			.body()
+			.known_bytes()
+			.expect("rewritten body is buffered")
 			.clone();
 		let rewritten = http::read_body_with_limit(req.into_body(), 1024)
 			.await
@@ -1447,7 +1434,7 @@ mod tests {
 		let request_body = br#"{"model":"real-model","messages":[{"role":"user","content":"this part is over the limit"}]}"#;
 		let mut req = ::http::Request::builder()
 			.uri("http://example.com/v1/chat/completions")
-			.body(http::Body::from(request_body.as_slice()))
+			.body(http::Body::from(request_body.to_vec()))
 			.unwrap();
 		req.extensions_mut().insert(BufferLimit(24));
 
@@ -1507,7 +1494,7 @@ mod tests {
 		] {
 			let mut req = ::http::Request::builder()
 				.uri(uri)
-				.body(http::Body::from(body.as_slice()))
+				.body(http::Body::from(body.to_vec()))
 				.unwrap();
 
 			let requested = requested_model(&mut req)

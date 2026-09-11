@@ -236,13 +236,9 @@ mod body_modes {
 		assert_eq!(res.status(), 200);
 		let body = read_body(res.into_body()).await;
 		assert_eq!(body.body.as_ref(), b"rewritten-request");
-		let replacement_len = b"rewritten-request".len().to_string();
 		assert_eq!(
-			body
-				.headers
-				.get("content-length")
-				.and_then(|v| v.to_str().ok()),
-			Some(replacement_len.as_str())
+			body.headers.get("content-length").unwrap(),
+			&b"rewritten-request".len().to_string()
 		);
 	}
 
@@ -513,7 +509,7 @@ mod body_modes {
 
 	#[tokio::test]
 	async fn buffered_response_body_noop_preserves_original_body() {
-		let mock = body_mock(b"backend-response").await;
+		let mock = body_mock_with_content_length(b"backend-response").await;
 		let processing_options = json!({
 			"requestBodyMode": "none",
 			"responseBodyMode": "buffered",
@@ -571,13 +567,9 @@ mod body_modes {
 
 		let res = send_request(io, Method::GET, "http://lo").await;
 		assert_eq!(res.status(), 200);
-		let replacement_len = b"rewritten-response".len().to_string();
 		assert_eq!(
-			res
-				.headers()
-				.get(http::header::CONTENT_LENGTH)
-				.and_then(|v| v.to_str().ok()),
-			Some(replacement_len.as_str())
+			res.headers().get(http::header::CONTENT_LENGTH).unwrap(),
+			&b"rewritten-response".len().to_string()
 		);
 		let body = read_body_raw(res.into_body()).await;
 		assert_eq!(body.as_ref(), b"rewritten-response");
@@ -5098,6 +5090,89 @@ mod body_streaming_and_trailers {
 	use super::*;
 
 	#[tokio::test]
+	async fn buffered_noop_preserves_content_length_and_records_over_http1() {
+		for bytes in ["original", ""] {
+			let processor = ExtProcMock::new(|| {
+				ModeAwareBodyExtProc::new(BufferedBodyMode::Noop, BufferedBodyMode::Noop)
+			})
+			.spawn()
+			.await;
+			let mut ext_proc = build_ext_proc_request_for_test(
+				processor.address,
+				ext_proc::ProcessingOptions {
+					request_body_mode: ext_proc::BodySendMode::Buffered,
+					response_body_mode: ext_proc::BodySendMode::Buffered,
+					request_header_mode: ext_proc::HeaderSendMode::Send,
+					response_header_mode: ext_proc::HeaderSendMode::Send,
+					request_trailer_mode: ext_proc::TrailerSendMode::Skip,
+					response_trailer_mode: ext_proc::TrailerSendMode::Skip,
+					..Default::default()
+				},
+			);
+			let mut req = crate::proxy::request_builder::RequestBuilder::new(Method::POST, "http://lo")
+				.body(Body::from(bytes))
+				.build()
+				.unwrap();
+			req
+				.headers_mut()
+				.insert(http::header::CONTENT_LENGTH, bytes.len().into());
+			req.body_mut().record(1024);
+			let request_recording = req.body().recorded().unwrap().clone();
+			let _ = ext_proc.mutate_request(&mut req).await.unwrap();
+			let mut resp = http::Response::new(Body::from(bytes));
+			resp
+				.headers_mut()
+				.insert(http::header::CONTENT_LENGTH, bytes.len().into());
+			resp.body_mut().record(1024);
+			let response_recording = resp.body().recorded().unwrap().clone();
+			let _ = ext_proc.mutate_response(&mut resp, None).await.unwrap();
+
+			// Exercise real Content-Length framing, where Hyper may stop without
+			// polling EOF. Recording must retain the bytes without requiring completion.
+			let (client_io, server_io) = tokio::io::duplex(65536);
+			let response = Arc::new(Mutex::new(Some(resp)));
+			let server = tokio::spawn(async move {
+				hyper::server::conn::http1::Builder::new()
+					.serve_connection(
+						hyper_util::rt::TokioIo::new(server_io),
+						hyper::service::service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+							let resp = response.lock().unwrap().take().unwrap();
+							async move {
+								assert_eq!(
+									req.headers()[http::header::CONTENT_LENGTH],
+									bytes.len().to_string()
+								);
+								assert_eq!(req.into_body().collect().await.unwrap().to_bytes(), bytes);
+								Ok::<_, Infallible>(resp)
+							}
+						}),
+					)
+					.await
+					.unwrap();
+			});
+			let (mut client, connection) =
+				hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(client_io))
+					.await
+					.unwrap();
+			let connection = tokio::spawn(connection);
+			let received = client.send_request(req).await.unwrap();
+			assert_eq!(
+				received.headers()[http::header::CONTENT_LENGTH],
+				bytes.len().to_string()
+			);
+			assert_eq!(
+				received.into_body().collect().await.unwrap().to_bytes(),
+				bytes
+			);
+			drop(client);
+			connection.await.unwrap().unwrap();
+			server.await.unwrap();
+			assert_eq!(request_recording.bytes(), bytes);
+			assert_eq!(response_recording.bytes(), bytes);
+		}
+	}
+
+	#[tokio::test]
 	async fn handle_body_stream_skips_trailers_when_send_trailers_is_false() {
 		let mut trailers = ::http::HeaderMap::new();
 		trailers.insert("x-test-trailer", "value".parse().unwrap());
@@ -5320,9 +5395,22 @@ mod body_streaming_and_trailers {
 			.body(Body::new(http_body_util::StreamBody::new(frames)))
 			.build()
 			.unwrap();
+		let _ = req.body_mut().inspect(1024).await.unwrap();
+		req.body_mut().record(1024);
+		let recorded = req.body().recorded().unwrap().clone();
 		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
 
+		assert!(
+			req.body().recorded().is_some(),
+			"ext-proc must retain the recorder"
+		);
+		assert!(
+			recorded.bytes().is_empty(),
+			"processing input is not forwarding output"
+		);
 		let collected = req.into_body().collect().await.unwrap();
+		assert!(recorded.is_complete());
+		assert_eq!(recorded.bytes(), Bytes::from_static(b"request body"));
 		assert_eq!(collected.trailers(), Some(&trailers));
 		assert_eq!(collected.to_bytes().as_ref(), b"request body");
 	}
@@ -5354,11 +5442,24 @@ mod body_streaming_and_trailers {
 			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers.clone())),
 		]);
 		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
+		let _ = resp.body_mut().inspect(1024).await.unwrap();
+		resp.body_mut().record(1024);
+		let recorded = resp.body().recorded().unwrap().clone();
 		let _ = ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
 			.unwrap();
+		assert!(
+			resp.body().recorded().is_some(),
+			"ext-proc must retain the recorder"
+		);
+		assert!(
+			recorded.bytes().is_empty(),
+			"processing input is not forwarding output"
+		);
 		let collected = resp.into_body().collect().await.unwrap();
+		assert!(recorded.is_complete());
+		assert_eq!(recorded.bytes(), Bytes::from_static(b"upstream-response"));
 		assert_eq!(collected.trailers(), Some(&trailers));
 		assert_eq!(collected.to_bytes().as_ref(), b"upstream-response");
 
@@ -5468,6 +5569,9 @@ mod body_streaming_and_trailers {
 			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(trailers.clone())),
 		]);
 		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
+		let _ = resp.body_mut().inspect(1024).await.unwrap();
+		resp.body_mut().record(1024);
+		let recorded = resp.body().recorded().unwrap().clone();
 		let _ = ext_proc_request
 			.mutate_response(&mut resp, None)
 			.await
@@ -5479,7 +5583,17 @@ mod body_streaming_and_trailers {
 			)
 		}));
 
+		assert!(
+			resp.body().recorded().is_some(),
+			"ext-proc must retain the recorder"
+		);
+		assert!(
+			recorded.bytes().is_empty(),
+			"processing input is not forwarding output"
+		);
 		let collected = resp.into_body().collect().await.unwrap();
+		assert!(recorded.is_complete());
+		assert_eq!(recorded.bytes(), Bytes::from_static(b"upstream-response"));
 		assert_eq!(collected.trailers(), Some(&trailers));
 		assert_eq!(collected.to_bytes().as_ref(), b"upstream-response");
 	}

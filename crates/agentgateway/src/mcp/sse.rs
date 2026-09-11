@@ -9,7 +9,7 @@ use futures_util::StreamExt;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::http::{DropBody, Request, Response, filters};
+use crate::http::{Request, Response, filters};
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session;
 use crate::mcp::session::SessionManager;
@@ -58,9 +58,14 @@ impl LegacySSEService {
 		};
 		let limit = http::buffer_limit(&request);
 		let (part, body) = request.into_parts();
-		let message = json::from_body_with_limit::<ClientJsonRpcMessage>(body, limit)
+		let bytes = body
+			.into_bytes(limit)
 			.await
 			.map_err(mcp::Error::Deserialize)?;
+		let message = serde_json::from_slice::<ClientJsonRpcMessage>(&bytes)
+			.map_err(|err| mcp::Error::Deserialize(http::Error::new(err)))?;
+		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);
+		*ctx.request.body_mut() = Some(bytes);
 
 		let Some(mut session) = self.session_manager.get_session(&session_id, inputs) else {
 			return mcp::Error::UnknownSession.into();
@@ -71,7 +76,7 @@ impl LegacySSEService {
 		// Here, we wait until the InitializeRequest is sent, and then establish the GET stream once it is.
 		let is_init = matches!(&message, ClientJsonRpcMessage::Request(r) if matches!(&r.request, &ClientRequest::InitializeRequest(_)));
 		let init_parts = if is_init { Some(part.clone()) } else { None };
-		let resp = session.send(part, message).await?;
+		let resp = session.send(ctx, message).await?;
 		if is_init {
 			trace!("received initialize request, establishing get stream");
 			let get_stream = session.get_stream(init_parts.unwrap()).await?;
@@ -134,11 +139,12 @@ impl LegacySSEService {
 				.into_response(),
 			None => Sse::new(stream).into_response(),
 		};
-		Ok(sse.map(|b| {
-			DropBody::new(
-				b,
-				session::dropper(self.session_manager.clone(), session, parts),
-			)
+		Ok(sse.map(|body| {
+			crate::http::Body::new(body).with_drop_guard(session::dropper(
+				self.session_manager.clone(),
+				session,
+				parts,
+			))
 		}))
 	}
 }

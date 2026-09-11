@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use agent_core::strng::{self, Strng};
-use axum_core::body::Body;
+use agent_http::Body;
 use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
@@ -83,7 +83,7 @@ pub mod from_completions {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 
 	use crate::conversion::completions::parse_data_url;

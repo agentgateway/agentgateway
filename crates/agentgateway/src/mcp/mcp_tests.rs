@@ -868,7 +868,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 
 	session
 		.stateless_send_and_initialize(
-			parts.clone(),
+			super::upstream::IncomingRequestContext::new(&parts),
 			ClientJsonRpcMessage::request(
 				rmcp::model::CallToolRequest::new(
 					rmcp::model::CallToolRequestParams::new("a_echo").with_arguments(
@@ -5696,7 +5696,7 @@ fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 }
 
 fn empty_cel() -> crate::mcp::rbac::CelExecWrapper {
-	crate::mcp::rbac::CelExecWrapper::new(::http::Request::new(()))
+	crate::mcp::upstream::IncomingRequestContext::empty().into()
 }
 
 fn persisted_session(

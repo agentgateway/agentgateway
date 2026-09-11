@@ -220,7 +220,7 @@ pin_project! {
 	// An `http_body::Body` wrapper that implements windowed guardrail evaluation.
 	pub struct GuardedSseBody {
 		#[pin]
-		inner: crate::http::Body,
+		inner: agent_http::RawBody,
 		evaluators: Vec<Box<dyn StreamingEvaluator>>,
 		eval_threshold: usize,
 		buffer_limit: usize,
@@ -247,11 +247,11 @@ impl GuardedSseBody {
 	// We do actually return Self; just wrapped in an http_body::Body. The annotation silences a false positive from clippy about that.
 	#[allow(clippy::new_ret_no_self)]
 	pub fn new(
-		inner: crate::http::Body,
+		inner: agent_http::RawBody,
 		evaluators: Vec<Box<dyn StreamingEvaluator>>,
 		buffer_limit: usize,
 		logger: Option<crate::llm::AmendOnDrop>,
-	) -> crate::http::Body {
+	) -> agent_http::RawBody {
 		Self::with_threshold(
 			inner,
 			evaluators,
@@ -263,13 +263,13 @@ impl GuardedSseBody {
 
 	/// Like [`GuardedSseBody::new`] but with an explicit evaluation threshold.
 	pub fn with_threshold(
-		inner: crate::http::Body,
+		inner: agent_http::RawBody,
 		evaluators: Vec<Box<dyn StreamingEvaluator>>,
 		buffer_limit: usize,
 		logger: Option<crate::llm::AmendOnDrop>,
 		eval_threshold: usize,
-	) -> crate::http::Body {
-		crate::http::Body::new(Self {
+	) -> agent_http::RawBody {
+		agent_http::RawBody::new(Self {
 			inner,
 			evaluators,
 			eval_threshold,
@@ -581,12 +581,12 @@ mod tests {
 		))
 	}
 
-	fn make_body(chunks: Vec<Bytes>) -> crate::http::Body {
+	fn make_body(chunks: Vec<Bytes>) -> agent_http::RawBody {
 		use std::convert::Infallible;
 
 		use futures_util::stream;
 		let stream = stream::iter(chunks.into_iter().map(Ok::<Bytes, Infallible>));
-		crate::http::Body::from_stream(stream)
+		agent_http::RawBody::from_stream(stream)
 	}
 
 	fn contains(haystack: &[u8], needle: &[u8]) -> bool {

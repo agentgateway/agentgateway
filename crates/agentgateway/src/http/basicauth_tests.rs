@@ -24,7 +24,7 @@ async fn test_valid_credentials() {
 			"Authorization",
 			"Basic dGVzdHVzZXI6dGVzdDEyMw==", // testuser:test123 base64 encoded
 		)
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let result = auth.verify(&mut req).await;
@@ -47,7 +47,7 @@ async fn test_invalid_credentials_strict_mode() {
 			"Authorization",
 			"Basic dGVzdHVzZXI6d3JvbmdwYXNz", // testuser:wrongpass base64 encoded
 		)
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let result = auth.verify(&mut req).await;
@@ -66,7 +66,7 @@ async fn test_missing_credentials_strict_mode() {
 	// Create a mock request without credentials
 	let mut req = ::http::Request::builder()
 		.uri("http://example.com")
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let result = auth.verify(&mut req).await;
@@ -85,7 +85,7 @@ async fn test_missing_credentials_optional_mode() {
 	// Create a mock request without credentials
 	let mut req = ::http::Request::builder()
 		.uri("http://example.com")
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let result = auth.verify(&mut req).await;
@@ -106,7 +106,7 @@ async fn test_query_parameter_credentials() {
 
 	let mut req = ::http::Request::builder()
 		.uri("http://example.com?auth=dGVzdHVzZXI6dGVzdDEyMw==&keep=yes")
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let _ = crate::test_helpers::test_policy(&auth, &mut req)
@@ -137,7 +137,7 @@ async fn test_proxy_authorization_missing_returns_407() {
 	let mut req = ::http::Request::builder()
 		.method(::http::Method::CONNECT)
 		.uri("example.com:443")
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let err = auth.verify(&mut req).await.expect_err("should reject");
@@ -175,7 +175,7 @@ async fn test_proxy_authorization_invalid_returns_407() {
 		.uri("example.com:443")
 		// testuser:wrongpass
 		.header("Proxy-Authorization", "Basic dGVzdHVzZXI6d3JvbmdwYXNz")
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let err = auth.verify(&mut req).await.expect_err("should reject");
@@ -207,7 +207,7 @@ async fn test_proxy_authorization_valid_credentials() {
 		.uri("example.com:443")
 		// testuser:test123
 		.header("Proxy-Authorization", "Basic dGVzdHVzZXI6dGVzdDEyMw==")
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let _ = crate::test_helpers::test_policy(&auth, &mut req)
@@ -235,7 +235,7 @@ async fn test_ordinary_request_still_returns_401() {
 
 	let mut req = ::http::Request::builder()
 		.uri("http://example.com")
-		.body(axum::body::Body::empty())
+		.body(crate::http::Body::empty())
 		.unwrap();
 
 	let err = auth.verify(&mut req).await.expect_err("should reject");

@@ -1,11 +1,4 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll, ready};
 use std::time::Duration;
-
-use http_body::{Body, SizeHint};
-use pin_project_lite::pin_project;
-use tokio::time::{Instant, Sleep, sleep_until};
 
 use crate::*;
 
@@ -54,107 +47,13 @@ pub struct Policy {
 	pub response_idle_timeout: Option<Duration>,
 }
 
-/// Wraps `response`'s body so that it is terminated once it stays idle for `timeout`.
+/// Apply the response idle timeout without replacing managed body state.
 pub fn apply_response_idle_timeout(
-	response: crate::http::Response,
+	mut response: crate::http::Response,
 	timeout: Duration,
 ) -> crate::http::Response {
-	response.map(|b| crate::http::Body::new(TimeoutBody::new(timeout, b)))
-}
-
-pin_project! {
-	/// Terminates a body that goes idle for longer than the configured timeout.
-	///
-	/// The window is armed on the first poll and pushed out again whenever a frame arrives, so it
-	/// always measures the gap since the last frame rather than the age of the body.
-	pub struct TimeoutBody<B> {
-		timeout: Duration,
-		#[pin]
-		sleep: Option<Sleep>,
-		#[pin]
-		body: B,
-		done: bool,
-	}
-}
-
-impl<B> TimeoutBody<B> {
-	/// Creates a new [`TimeoutBody`].
-	pub fn new(timeout: Duration, body: B) -> Self {
-		TimeoutBody {
-			timeout,
-			sleep: None,
-			body,
-			done: false,
-		}
-	}
-}
-
-impl<B> Body for TimeoutBody<B>
-where
-	B: Body,
-	B::Error: Into<axum_core::BoxError>,
-{
-	type Data = B::Data;
-	type Error = Box<dyn std::error::Error + Send + Sync>;
-
-	fn poll_frame(
-		self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-		let mut this = self.project();
-		if *this.done {
-			return Poll::Ready(None);
-		}
-
-		// Start the idle window if it is not already running.
-		let mut sleep_pinned = if let Some(some) = this.sleep.as_mut().as_pin_mut() {
-			some
-		} else {
-			let deadline = Instant::now() + *this.timeout;
-			this.sleep.set(Some(sleep_until(deadline)));
-			this.sleep.as_mut().as_pin_mut().unwrap()
-		};
-
-		// Error if the body has been idle for the whole window.
-		if sleep_pinned.as_mut().poll(cx).is_ready() {
-			*this.done = true;
-			return Poll::Ready(Some(Err(Box::new(TimeoutError(())))));
-		}
-
-		let frame = ready!(this.body.poll_frame(cx));
-		if matches!(frame, Some(Ok(_))) {
-			// A frame arrived, so the stream is not idle. Push the deadline out rather than dropping
-			// the timer and building a new one on the next poll: for token-by-token SSE that would
-			// deregister and reregister a timer entry once per token.
-			sleep_pinned.reset(Instant::now() + *this.timeout);
-		} else {
-			*this.done = true;
-		}
-
-		Poll::Ready(frame.transpose().map_err(Into::into).transpose())
-	}
-
-	fn is_end_stream(&self) -> bool {
-		// Once the window has expired `poll_frame` only ever reports the end of the stream, so
-		// reporting the inner body's answer here would contradict it.
-		self.done || self.body.is_end_stream()
-	}
-
-	fn size_hint(&self) -> SizeHint {
-		self.body.size_hint()
-	}
-}
-
-/// Error for [`TimeoutBody`].
-#[derive(Debug)]
-pub struct TimeoutError(());
-
-impl std::error::Error for TimeoutError {}
-
-impl std::fmt::Display for TimeoutError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "response idle timeout")
-	}
+	response.body_mut().set_idle_timeout(timeout);
+	response
 }
 
 #[cfg(test)]

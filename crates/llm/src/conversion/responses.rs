@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use agent_core::strng::{self, Strng};
-use axum_core::body::Body;
+use agent_http::Body;
 use serde::Deserialize;
 
 use crate::types::detect;
@@ -146,7 +146,7 @@ pub mod from_messages {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 	use rand::RngExt;
 	use serde_json::{Map, Value, json};

@@ -241,56 +241,28 @@ impl ContextBuilder {
 	}
 	pub async fn maybe_buffer_request_body(&self, req: &mut crate::http::Request) {
 		if self.before_log_has(Attributes::RequestBody) {
-			if req.extensions().get::<BufferedBody>().is_some() {
-				return;
-			}
-			let Ok(body) = crate::http::inspect_body(req).await else {
-				return;
-			};
-			req.extensions_mut().insert(BufferedBody::from(body));
+			req.body_mut().require_inspection();
+			let _ = crate::http::inspect_body(req).await;
 		} else if self.log_only_has(Attributes::RequestBody) {
-			if req.extensions().get::<BufferedBody>().is_some() {
+			if req.body().known_bytes().is_some() {
+				// Already fully buffered, no need to record
 				return;
 			}
-			if req
-				.extensions()
-				.get::<crate::http::RecordedBodyHandle>()
-				.is_some()
-			{
-				return;
-			}
-			let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
 			let limit = crate::http::buffer_limit(req);
-			let (body, handle) = crate::http::RecordedBody::new_with_limit(body, limit);
-			*req.body_mut() = crate::http::Body::new(body);
-			req.extensions_mut().insert(handle);
+			req.body_mut().record(limit);
 		}
 	}
 	pub async fn maybe_buffer_response_body(&self, resp: &mut crate::http::Response) {
 		if self.before_log_has(Attributes::ResponseBody) {
-			if resp.extensions().get::<BufferedBody>().is_some() {
-				return;
-			}
-			let Ok(body) = crate::http::inspect_response_body(resp).await else {
-				return;
-			};
-			resp.extensions_mut().insert(BufferedBody::from(body));
+			resp.body_mut().require_inspection();
+			let _ = crate::http::inspect_response_body(resp).await;
 		} else if self.log_only_has(Attributes::ResponseBody) {
-			if resp.extensions().get::<BufferedBody>().is_some() {
+			if resp.body().known_bytes().is_some() {
+				// Already fully buffered, no need to record
 				return;
 			}
-			if resp
-				.extensions()
-				.get::<crate::http::RecordedBodyHandle>()
-				.is_some()
-			{
-				return;
-			}
-			let body = std::mem::replace(resp.body_mut(), crate::http::Body::empty());
 			let limit = crate::http::response_buffer_limit(resp);
-			let (body, handle) = crate::http::RecordedBody::new_with_limit(body, limit);
-			*resp.body_mut() = crate::http::Body::new(body);
-			resp.extensions_mut().insert(handle);
+			resp.body_mut().record(limit);
 		}
 	}
 

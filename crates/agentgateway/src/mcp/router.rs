@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_core::prelude::{AssertSize, Strng};
-use axum::response::Response;
 
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;

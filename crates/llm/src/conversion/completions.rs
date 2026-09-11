@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use agent_core::strng;
-use axum_core::body::Body;
+use agent_http::Body;
 use bytes::Bytes;
 use http::Response;
 use itertools::Itertools;
@@ -86,7 +86,7 @@ pub mod from_messages {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 	use itertools::Itertools;
 	use messages::{ToolResultContent, ToolResultContentPart};

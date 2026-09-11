@@ -34,44 +34,37 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
-	method: ::http::Method,
-	uri: ::http::Uri,
-	headers: http::HeaderMap,
-	ext: ::http::Extensions,
+	/// Incoming HTTP body exposed as CEL request.body and request.bodyPrefix after
+	/// parsing. Kept separate from the MCP message, which may be rewritten for upstreams.
+	/// None means this context was created from headers alone (e.g. session cleanup).
+	pub(super) request: ::http::Request<Option<bytes::Bytes>>,
 	authority: Option<::http::uri::Authority>,
 }
 
 impl IncomingRequestContext {
 	#[cfg(test)]
 	pub fn empty() -> Self {
-		Self {
-			method: ::http::Method::GET,
-			uri: ::http::Uri::from_static("/"),
-			headers: http::HeaderMap::new(),
-			ext: ::http::Extensions::new(),
-			authority: None,
-		}
+		Self::new(&::http::Request::new(()).into_parts().0)
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		Self {
-			method: parts.method.clone(),
-			uri: parts.uri.clone(),
-			headers: parts.headers.clone(),
-			ext: parts.extensions.clone(),
+			request: ::http::Request::from_parts(parts.clone(), None),
 			authority: parts.uri.authority().cloned(),
 		}
 	}
 	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
-		&mut self.headers
+		self.request.headers_mut()
 	}
 	pub fn extensions(&self) -> &::http::Extensions {
-		&self.ext
+		self.request.extensions()
 	}
 	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
-		&mut self.ext
+		self.request.extensions_mut()
 	}
 	pub fn apply(&self, req: &mut http::Request) -> anyhow::Result<()> {
-		req.extensions_mut().extend(self.ext.clone());
+		req
+			.extensions_mut()
+			.extend(self.request.extensions().clone());
 		let explicit_auto_hostname = req
 			.extensions()
 			.get::<crate::http::filters::AutoHostname>()
@@ -87,7 +80,7 @@ impl IncomingRequestContext {
 				auto.target = Some(authority);
 			}
 		}
-		for (k, v) in &self.headers {
+		for (k, v) in self.request.headers() {
 			// Remove headers we do not want to propagate to the backend
 			if k == http::header::CONTENT_ENCODING
 				|| k == http::header::CONTENT_LENGTH
@@ -111,7 +104,12 @@ impl IncomingRequestContext {
 	// The only trace carrier for stdio upstreams, which have no request headers.
 	fn stamp_trace_context(&self, meta: &mut rmcp::model::MetaObject) {
 		for key in ["traceparent", "tracestate", "baggage"] {
-			let Some(value) = self.headers.get(key).and_then(|v| v.to_str().ok()) else {
+			let Some(value) = self
+				.request
+				.headers()
+				.get(key)
+				.and_then(|v| v.to_str().ok())
+			else {
 				continue;
 			};
 			meta.0.insert(
@@ -147,14 +145,9 @@ impl IncomingRequestContext {
 		self.extensions_mut().insert(span.span_writer());
 		Some(span)
 	}
-	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
-	pub fn as_request(&self) -> crate::http::Request {
-		let mut req = ::http::Request::new(crate::http::Body::empty());
-		*req.method_mut() = self.method.clone();
-		*req.uri_mut() = self.uri.clone();
-		*req.headers_mut() = self.headers.clone();
-		*req.extensions_mut() = self.ext.clone();
-		req
+	/// Borrow the detached HTTP policy inputs, including the original body snapshot.
+	pub fn executor(&self) -> crate::cel::Executor<'_> {
+		crate::cel::Executor::new_buffered_request(&self.request)
 	}
 }
 

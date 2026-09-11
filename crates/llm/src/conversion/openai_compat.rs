@@ -468,7 +468,7 @@ pub mod to_responses {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 	use rand::RngExt;
 	use types::completions::typed as completions;

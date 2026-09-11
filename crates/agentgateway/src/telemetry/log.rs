@@ -1,9 +1,7 @@
 use std::borrow::Cow;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, ready};
 use std::time::{Duration, Instant, SystemTime};
 
 use agent_core::metrics::CustomField;
@@ -13,10 +11,10 @@ use agent_core::telemetry::{
 	quoted,
 };
 use agent_core::{Timestamp, strng};
-use bytes::Buf;
+use bytes::{Buf, Bytes};
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::FzHashSet;
-use http_body::{Body, Frame, SizeHint};
+use http_body::Frame;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
@@ -1413,7 +1411,7 @@ impl Drop for DropOnLog {
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so
-			// trailer-only grpc-status values are learned later by LogBody. Copy the final
+			// Trailer-only grpc-status values are learned later by the body observer. Copy the final
 			// value back into the snapshot before evaluating access-log CEL fields.
 			if let Some(grpc_status) = log.grpc_status.load()
 				&& let Some(resp) = log.response_snapshot.as_mut()
@@ -2175,73 +2173,26 @@ impl Drop for DropOnLog {
 	}
 }
 
-pin_project_lite::pin_project! {
-		/// A data stream created from a [`Body`].
-		#[derive(Debug)]
-		pub struct LogBody<B> {
-				#[pin]
-				body: B,
-				log: DropOnLog,
-		}
-}
-
-impl<B> LogBody<B> {
-	/// Create a new `LogBody`
-	pub fn new(body: B, log: DropOnLog) -> Self {
-		Self { body, log }
-	}
-}
-
-impl<B: Body + Debug> Body for LogBody<B>
-where
-	B::Data: Debug,
-	B::Error: Display,
-{
-	type Data = B::Data;
-	type Error = B::Error;
-
-	fn poll_frame(
-		self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		let this = self.project();
-		let result = ready!(this.body.poll_frame(cx));
-		match result {
-			Some(Ok(frame)) => {
-				if let Some(trailer) = frame.trailers_ref()
-					&& let Some(grpc) = this.log.as_mut().map(|log| log.grpc_status.clone())
-				{
-					crate::proxy::httpproxy::maybe_set_grpc_status(&grpc, trailer);
-				}
-				if let Some(log) = this.log.as_mut()
-					&& let Some(data) = frame.data_ref()
-				{
-					// Count the bytes in this data frame
-					log.response_bytes = log.response_bytes.saturating_add(data.remaining() as u64);
-				}
-				Poll::Ready(Some(Ok(frame)))
-			},
-			Some(Err(e)) => {
-				// The head is long gone by the time the body fails, so nothing else records this:
-				// without it a stream torn down mid-flight is logged as whatever status we already
-				// sent, indistinguishable from one the client read to completion.
-				if let Some(log) = this.log.as_mut()
-					&& log.error.is_none()
-				{
-					log.error = Some(format!("response body failed: {e}"));
-				}
-				Poll::Ready(Some(Err(e)))
-			},
-			None => Poll::Ready(None),
+impl agent_http::BodyObserver for DropOnLog {
+	fn on_error(&mut self, error: &crate::http::Error) {
+		// Response headers have already been sent; retain the body failure in the log.
+		if let Some(log) = self.as_mut()
+			&& log.error.is_none()
+		{
+			log.error = Some(format!("response body failed: {error}"));
 		}
 	}
-
-	fn is_end_stream(&self) -> bool {
-		self.body.is_end_stream()
-	}
-
-	fn size_hint(&self) -> SizeHint {
-		self.body.size_hint()
+	fn on_frame(&mut self, frame: &Frame<Bytes>) {
+		if let Some(trailer) = frame.trailers_ref()
+			&& let Some(grpc) = self.as_mut().map(|log| log.grpc_status.clone())
+		{
+			crate::proxy::httpproxy::maybe_set_grpc_status(&grpc, trailer);
+		}
+		if let Some(log) = self.as_mut()
+			&& let Some(data) = frame.data_ref()
+		{
+			log.response_bytes = log.response_bytes.saturating_add(data.remaining() as u64);
+		}
 	}
 }
 

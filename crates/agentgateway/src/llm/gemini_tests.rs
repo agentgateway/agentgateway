@@ -967,6 +967,7 @@ async fn count_tokens_errors_pass_through_unchanged() {
 	let mut parts = ::http::Response::new(()).into_parts().0;
 	parts.status = ::http::StatusCode::NOT_FOUND;
 	let buffered = BufferedResponse {
+		managed_body: Body::empty(),
 		parts,
 		bytes: body.clone(),
 	};

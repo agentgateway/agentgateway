@@ -5,7 +5,6 @@ pub mod timeout;
 pub mod budget;
 pub mod buffer;
 pub mod bufferbody;
-mod buflist;
 pub mod cors;
 pub mod delay;
 pub mod jwt;
@@ -26,8 +25,6 @@ pub mod ext_proc;
 pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;
-mod peekbody;
-mod recordbody;
 pub mod remoteratelimit;
 pub mod sessionaffinity;
 pub mod sessionpersistence;
@@ -36,10 +33,10 @@ pub mod tests_common;
 pub mod transformation_cel;
 
 pub use agent_http::{
-	Body, BufferLimit, Error, Request, Response, buffer_limit, read_body_with_limit,
+	Body, BodyContent, BodyInspection, BufferLimit, Error, RawBody, RecordedBody, RecordedBodyHandle,
+	Request, RequestBodyExt, Response, ResponseBodyExt, buffer_limit, read_body_with_limit,
 	response_buffer_limit, x_headers,
 };
-pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
 pub(crate) fn mark_sensitive_headers(req: &mut Request, configured: &[HeaderName]) {
 	for (name, value) in req.headers_mut() {
@@ -146,19 +143,11 @@ impl<'a> From<&'a mut Response> for RequestOrResponse<'a> {
 	}
 }
 
-pub fn replace_body<'a>(message: impl Into<RequestOrResponse<'a>>, body: Body) {
-	message.into().replace_body(body);
-}
-
-pub fn replace_body_bytes<'a>(message: impl Into<RequestOrResponse<'a>>, body: Bytes) {
-	message.into().replace_body_bytes(body);
-}
-
 impl RequestOrResponse<'_> {
-	fn extensions(&mut self) -> &mut ::http::Extensions {
+	pub fn replace_body_bytes(&mut self, bytes: Bytes) {
 		match self {
-			RequestOrResponse::Request(r) => r.extensions_mut(),
-			RequestOrResponse::Response(r) => r.extensions_mut(),
+			Self::Request(req) => req.replace_body_bytes(bytes),
+			Self::Response(resp) => resp.replace_body_bytes(bytes),
 		}
 	}
 
@@ -172,43 +161,6 @@ impl RequestOrResponse<'_> {
 		match self {
 			RequestOrResponse::Request(r) => r.body_mut(),
 			RequestOrResponse::Response(r) => r.body_mut(),
-		}
-	}
-
-	// Keep RecordedBodyHandle across replacements. It may describe the previous body stream, but
-	// retaining a stale logging-only value is preferable to silently dropping the configured field.
-	pub fn replace_body(&mut self, body: Body) {
-		*self.body() = body;
-		self.headers().remove(header::CONTENT_LENGTH);
-		self.invalidate_body_cache();
-	}
-
-	fn invalidate_body_cache(&mut self) {
-		self.extensions().remove::<crate::cel::BufferedBody>();
-	}
-
-	pub fn replace_body_bytes(&mut self, body: Bytes) {
-		*self.body() = Body::from(body.clone());
-		self.headers().remove(header::CONTENT_LENGTH);
-		self.refresh_body_cache(body);
-	}
-
-	fn refresh_body_cache(&mut self, body: Bytes) {
-		let body_was_buffered = self
-			.extensions()
-			.get::<crate::cel::BufferedBody>()
-			.is_some();
-		if body_was_buffered {
-			let limit = match self {
-				RequestOrResponse::Request(req) => buffer_limit(req),
-				RequestOrResponse::Response(resp) => response_buffer_limit(resp),
-			};
-			let buffered = if body.len() > limit {
-				crate::cel::BufferedBody::exceeded_limit(body.slice(..limit))
-			} else {
-				crate::cel::BufferedBody::complete(body)
-			};
-			self.extensions().insert(buffered);
 		}
 	}
 
@@ -305,19 +257,15 @@ impl RequestOrResponse<'_> {
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
-use std::pin::Pin;
 use std::str::FromStr;
-use std::task::{Context, Poll};
 
 pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
-use axum_core::BoxError;
 use bytes::Bytes;
 use cel::Value;
 use http::uri::PathAndQuery;
-use http_body::{Frame, SizeHint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::{Url, form_urlencoded};
@@ -541,7 +489,10 @@ pub(crate) fn request_header_matches(
 }
 
 /// Extract the value for a pseudo header from the request
-pub fn get_pseudo_header_value(pseudo: &HeaderOrPseudo, req: &Request) -> Option<String> {
+pub fn get_pseudo_header_value<B>(
+	pseudo: &HeaderOrPseudo,
+	req: &::http::Request<B>,
+) -> Option<String> {
 	match pseudo {
 		HeaderOrPseudo::Method => Some(req.method().to_string()),
 		HeaderOrPseudo::Scheme => req.uri().scheme().map(|s| s.to_string()),
@@ -562,7 +513,7 @@ pub fn get_pseudo_header_value(pseudo: &HeaderOrPseudo, req: &Request) -> Option
 }
 
 /// Return all present request pseudo headers without introducing defaults
-pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)> {
+pub fn get_request_pseudo_headers<B>(req: &::http::Request<B>) -> Vec<(HeaderOrPseudo, String)> {
 	let mut out = Vec::with_capacity(4);
 	if let Some(v) = get_pseudo_header_value(&HeaderOrPseudo::Method, req) {
 		out.push((HeaderOrPseudo::Method, v));
@@ -817,37 +768,14 @@ pub async fn read_response_body(
 	read_body_with_limit(b, lim).await.map(|b| (h, b))
 }
 
-/// Result of inspecting a body without consuming it from the caller's perspective.
-#[derive(Debug)]
-#[must_use]
-pub enum BodyInspection {
-	/// The complete body fit within the configured limit.
-	Complete(Bytes),
-	/// The body exceeded the limit. Contains the first `limit` bytes.
-	Partial(Bytes),
-}
-
 pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 	let lim = buffer_limit(req);
-	inspect_body_with_limit(req.body_mut(), lim).await
+	req.body_mut().inspect(lim).await
 }
 
 pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
-	inspect_body_with_limit(resp.body_mut(), lim).await
-}
-
-pub async fn inspect_body_with_limit(
-	body: &mut Body,
-	limit: usize,
-) -> anyhow::Result<BodyInspection> {
-	let mut bytes = peekbody::inspect_body(body, limit.saturating_add(1)).await?;
-	if bytes.len() > limit {
-		bytes.truncate(limit);
-		Ok(BodyInspection::Partial(bytes))
-	} else {
-		Ok(BodyInspection::Complete(bytes))
-	}
+	resp.body_mut().inspect(lim).await
 }
 
 #[derive(Debug, Default)]
@@ -902,50 +830,6 @@ pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut Header
 			let Some(k) = k else { continue };
 			dest.insert(k, v);
 		}
-	}
-}
-
-pin_project_lite::pin_project! {
-	/// DropBody is simply a Body wrapper that holds onto another item such that it is dropped when the body
-	/// is complete.
-	#[derive(Debug)]
-	pub struct DropBody<B, D> {
-		#[pin]
-		body: B,
-		dropper: D,
-	}
-}
-
-impl<B, D> DropBody<B, D>
-where
-	D: Send + 'static,
-	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Error: Into<BoxError>,
-{
-	#[allow(clippy::new_ret_no_self)]
-	pub fn new(body: B, dropper: D) -> Body {
-		Body::new(Self { body, dropper })
-	}
-}
-
-impl<B: http_body::Body + Unpin, D> http_body::Body for DropBody<B, D> {
-	type Data = B::Data;
-	type Error = B::Error;
-
-	fn poll_frame(
-		self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		let this = self.project();
-		this.body.poll_frame(cx)
-	}
-
-	fn is_end_stream(&self) -> bool {
-		self.body.is_end_stream()
-	}
-
-	fn size_hint(&self) -> SizeHint {
-		self.body.size_hint()
 	}
 }
 
@@ -1081,24 +965,17 @@ mod tests {
 		assert_eq!(body, "body");
 	}
 
-	#[test]
-	fn replace_body_bytes_preserves_buffer_limit() {
+	#[tokio::test]
+	async fn replace_body_bytes_preserves_buffer_limit() {
 		let mut req = ::http::Request::new(Body::empty());
 		req.extensions_mut().insert(BufferLimit::new(4));
 		req
-			.extensions_mut()
-			.insert(crate::cel::BufferedBody::complete(Bytes::new()));
-
-		replace_body_bytes(&mut req, Bytes::from_static(b"too large"));
-
-		assert!(
-			req
-				.extensions()
-				.get::<crate::cel::BufferedBody>()
-				.unwrap()
-				.bytes()
-				.is_none()
-		);
+			.body_mut()
+			.replace_bytes(Bytes::from_static(b"too large"));
+		assert!(matches!(
+			inspect_body(&mut req).await.unwrap(),
+			BodyInspection::Partial(_)
+		));
 	}
 
 	#[test]

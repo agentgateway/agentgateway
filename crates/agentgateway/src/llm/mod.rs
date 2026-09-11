@@ -854,6 +854,9 @@ enum PreparedRequest {
 struct BufferedResponse {
 	parts: ::http::response::Parts,
 	bytes: Bytes,
+	// Original body owner with its content extracted into `bytes` (and decoded).
+	// Retains body metadata while we translate the response which we install the content back into.
+	managed_body: Body,
 }
 
 // The upstream chose this representation encoding. Keep it out of the headers while the decoded
@@ -872,8 +875,10 @@ pub(crate) fn encode_deferred_response(resp: &mut Response) {
 		return;
 	};
 	let body = std::mem::replace(resp.body_mut(), Body::empty());
-	*resp.body_mut() = http::compression::encode_body_stream(body, encoding)
-		.expect("deferred response encoding was validated while decoding the upstream response");
+	*resp.body_mut() = body.transform_stream(|body| {
+		http::compression::encode_body_stream(body, encoding)
+			.expect("deferred response encoding was validated while decoding the upstream response")
+	});
 	resp
 		.headers_mut()
 		.insert(header::CONTENT_ENCODING, HeaderValue::from_static(encoding));
@@ -1565,7 +1570,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, mut req) = self
+		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::completions::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1595,6 +1600,7 @@ impl AIProvider {
 				InputFormat::Completions,
 				req,
 				parts,
+				managed_body,
 				tokenize,
 				log,
 				catalog,
@@ -1612,7 +1618,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, mut req) = self
+		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1624,6 +1630,7 @@ impl AIProvider {
 				InputFormat::Messages,
 				req,
 				parts,
+				managed_body,
 				tokenize,
 				log,
 				catalog,
@@ -1652,7 +1659,7 @@ impl AIProvider {
 				"streamGenerateContent requires alt=sse; the JSON-array streaming variant is not supported",
 			)));
 		}
-		let (parts, mut req) = self
+		let (parts, managed_body, mut req) = self
 			.read_gemini_body_and_default_model::<types::gemini::Request>(policies, req, log)
 			.await?;
 		req.streaming = streaming;
@@ -1665,6 +1672,7 @@ impl AIProvider {
 				InputFormat::Gemini,
 				req,
 				parts,
+				managed_body,
 				tokenize,
 				log,
 				catalog,
@@ -1681,7 +1689,7 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, mut req) = self
+		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::embeddings::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1693,6 +1701,7 @@ impl AIProvider {
 				InputFormat::Embeddings,
 				req,
 				parts,
+				managed_body,
 				tokenize,
 				log,
 				|provider, req, _, _| provider.render_embeddings_request(req),
@@ -1708,7 +1717,7 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, mut req) = self
+		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::rerank::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1720,6 +1729,7 @@ impl AIProvider {
 				InputFormat::Rerank,
 				req,
 				parts,
+				managed_body,
 				tokenize,
 				log,
 				|provider, req, _, _| provider.render_rerank_request(req),
@@ -1736,7 +1746,7 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
-		let (mut parts, mut req) = self
+		let (mut parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::responses::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1754,6 +1764,7 @@ impl AIProvider {
 				InputFormat::Responses,
 				req,
 				parts,
+				managed_body,
 				tokenize,
 				log,
 				catalog,
@@ -1769,7 +1780,7 @@ impl AIProvider {
 		policies: Option<&Policy>,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, mut req) = self
+		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::count_tokens::Request>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1805,6 +1816,7 @@ impl AIProvider {
 				InputFormat::CountTokens,
 				req,
 				parts,
+				managed_body,
 				false,
 				log,
 				|provider, req, parts, request_model| {
@@ -1824,7 +1836,7 @@ impl AIProvider {
 		// Like generateContent, the model comes from the URI, not the body — except that Vertex
 		// countTokens does accept a body-level one, which stands in when the URI has none (an
 		// `endpoints/{id}:countTokens` path, say).
-		let (parts, mut req) = self
+		let (parts, managed_body, mut req) = self
 			.read_gemini_body_and_default_model::<types::gemini::CountTokensRequest>(policies, req, log)
 			.await?;
 		self.apply_model_alias(policies, &mut req);
@@ -1836,6 +1848,7 @@ impl AIProvider {
 				InputFormat::GeminiCountTokens,
 				req,
 				parts,
+				managed_body,
 				false,
 				log,
 				|provider, req, _, request_model| {
@@ -1861,8 +1874,8 @@ impl AIProvider {
 			.typed_get::<headers::ContentType>()
 			.map(|v| v == headers::ContentType::json())
 			.unwrap_or_default();
-		let (parts, body) = hreq.into_parts();
-		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
+		let (parts, mut managed_body) = hreq.into_parts();
+		let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
 			return Err(AIError::RequestTooLarge);
 		};
 
@@ -1886,6 +1899,7 @@ impl AIProvider {
 				InputFormat::Detect,
 				req,
 				parts,
+				managed_body,
 				false,
 				log,
 				|_, req, _, _| match req {
@@ -2062,6 +2076,7 @@ impl AIProvider {
 		original_format: InputFormat,
 		mut req: T,
 		mut parts: Parts,
+		mut managed_body: Body,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
@@ -2119,7 +2134,9 @@ impl AIProvider {
 			None => rendered.body,
 		};
 		parts.headers.remove(header::CONTENT_LENGTH);
-		let req = Request::from_parts(parts, Body::from(body));
+		managed_body.replace_bytes(body.into());
+		parts.headers.remove(header::TRANSFER_ENCODING);
+		let req = Request::from_parts(parts, managed_body);
 		Ok(RequestResult::Success {
 			request: req,
 			llm_request: llm_info,
@@ -2135,6 +2152,7 @@ impl AIProvider {
 		original_format: InputFormat,
 		mut req: T,
 		mut parts: Parts,
+		mut managed_body: Body,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 		render: F,
@@ -2198,7 +2216,9 @@ impl AIProvider {
 			_ => body,
 		};
 		parts.headers.remove(header::CONTENT_LENGTH);
-		let req = Request::from_parts(parts, Body::from(body));
+		managed_body.replace_bytes(body.into());
+		parts.headers.remove(header::TRANSFER_ENCODING);
+		let req = Request::from_parts(parts, managed_body);
 		Ok(RequestResult::Success {
 			request: req,
 			llm_request: llm_info,
@@ -2283,7 +2303,11 @@ impl AIProvider {
 			guardrails: guardrail_log,
 			content: log_content,
 		} = logging;
-		let BufferedResponse { mut parts, bytes } = buffered;
+		let BufferedResponse {
+			mut parts,
+			bytes,
+			mut managed_body,
+		} = buffered;
 
 		let (llm_resp, body) = if !parts.status.is_success() {
 			let body = self.process_error(
@@ -2316,7 +2340,10 @@ impl AIProvider {
 				warn!("failed to apply response prompt guard: {e}");
 				AIError::PromptWebhookError
 			})? {
-				return Ok(dr);
+				return Ok(dr.map(|replacement| {
+					managed_body.replace_content(replacement.into_boxed().into());
+					managed_body
+				}));
 			}
 
 			let llm_resp = resp.to_llm_response(log_content);
@@ -2332,7 +2359,8 @@ impl AIProvider {
 				llm_info.clone(),
 				model_catalog,
 			));
-		let resp = Response::from_parts(parts, Body::from(body));
+		managed_body.replace_bytes(body);
+		let resp = Response::from_parts(parts, managed_body);
 
 		if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
 			let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
@@ -2347,12 +2375,15 @@ impl AIProvider {
 	async fn buffer_response(resp: Response) -> Result<BufferedResponse, AIError> {
 		let buffer_limit = http::response_buffer_limit(&resp);
 		let (mut parts, body) = resp.into_parts();
-		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer_limit);
+		let mut managed_body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer_limit);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
-		let (encoding, bytes) =
-			http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer_limit)
-				.await
-				.map_err(|e| map_response_compression_error(e, &parts.headers))?;
+		let (encoding, bytes) = http::compression::to_bytes_with_decompression(
+			managed_body.take_content(),
+			ce.as_ref(),
+			buffer_limit,
+		)
+		.await
+		.map_err(|e| map_response_compression_error(e, &parts.headers))?;
 
 		// From here until the final proxy response boundary, the body is plaintext and may be
 		// translated or replaced. Remove all headers that describe the upstream wire representation
@@ -2364,12 +2395,17 @@ impl AIProvider {
 			parts.extensions.insert(DeferredResponseEncoding(encoding));
 		}
 
-		Ok(BufferedResponse { parts, bytes })
+		Ok(BufferedResponse {
+			parts,
+			bytes,
+			managed_body,
+		})
 	}
 
 	fn finalize_response(
 		mut parts: ::http::response::Parts,
-		body: Body,
+		bytes: Bytes,
+		mut managed_body: Body,
 		req: LLMRequest,
 		llm_resp: LLMResponse,
 		model_catalog: Option<&catalog::ModelCatalog>,
@@ -2383,7 +2419,8 @@ impl AIProvider {
 				model_catalog,
 			));
 		log.store(Some(llm_info));
-		Response::from_parts(parts, body)
+		managed_body.replace_bytes(bytes);
+		Response::from_parts(parts, managed_body)
 	}
 
 	fn process_count_tokens_response(
@@ -2394,7 +2431,9 @@ impl AIProvider {
 		log: &AsyncLog<llm::LLMInfo>,
 	) -> Result<Response, AIError> {
 		let BufferedResponse {
-			mut parts, bytes, ..
+			mut parts,
+			bytes,
+			managed_body,
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
@@ -2406,7 +2445,8 @@ impl AIProvider {
 			)?;
 			return Ok(Self::finalize_response(
 				parts,
-				body.into(),
+				body,
+				managed_body,
 				req,
 				LLMResponse::default(),
 				model_catalog,
@@ -2436,7 +2476,8 @@ impl AIProvider {
 
 		Ok(Self::finalize_response(
 			parts,
-			bytes.into(),
+			bytes,
+			managed_body,
 			req,
 			LLMResponse {
 				count_tokens: Some(count),
@@ -2455,7 +2496,9 @@ impl AIProvider {
 		log: &AsyncLog<llm::LLMInfo>,
 	) -> Result<Response, AIError> {
 		let BufferedResponse {
-			mut parts, bytes, ..
+			mut parts,
+			bytes,
+			managed_body,
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
@@ -2467,7 +2510,8 @@ impl AIProvider {
 			)?;
 			return Ok(Self::finalize_response(
 				parts,
-				body.into(),
+				body,
+				managed_body,
 				req,
 				LLMResponse::default(),
 				model_catalog,
@@ -2477,7 +2521,8 @@ impl AIProvider {
 		let (bytes, count) = types::gemini::CountTokensResponse::translate_response(bytes)?;
 		Ok(Self::finalize_response(
 			parts,
-			bytes.into(),
+			bytes,
+			managed_body,
 			req,
 			LLMResponse {
 				count_tokens: Some(count),
@@ -2496,7 +2541,9 @@ impl AIProvider {
 		log: &AsyncLog<llm::LLMInfo>,
 	) -> Result<Response, AIError> {
 		let BufferedResponse {
-			mut parts, bytes, ..
+			mut parts,
+			bytes,
+			managed_body,
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
@@ -2508,7 +2555,8 @@ impl AIProvider {
 			)?;
 			return Ok(Self::finalize_response(
 				parts,
-				body.into(),
+				body,
+				managed_body,
 				req,
 				LLMResponse::default(),
 				model_catalog,
@@ -2518,7 +2566,8 @@ impl AIProvider {
 		let (llm_resp, bytes) = self.process_embeddings_response(&req, &parts.headers, bytes)?;
 		Ok(Self::finalize_response(
 			parts,
-			bytes.into(),
+			bytes,
+			managed_body,
 			req,
 			llm_resp,
 			model_catalog,
@@ -2534,7 +2583,9 @@ impl AIProvider {
 		log: &AsyncLog<llm::LLMInfo>,
 	) -> Result<Response, AIError> {
 		let BufferedResponse {
-			mut parts, bytes, ..
+			mut parts,
+			bytes,
+			managed_body,
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
@@ -2546,7 +2597,8 @@ impl AIProvider {
 			)?;
 			return Ok(Self::finalize_response(
 				parts,
-				body.into(),
+				body,
+				managed_body,
 				req,
 				LLMResponse::default(),
 				model_catalog,
@@ -2556,7 +2608,8 @@ impl AIProvider {
 		let (llm_resp, bytes) = self.process_rerank_response(bytes)?;
 		Ok(Self::finalize_response(
 			parts,
-			bytes.into(),
+			bytes,
+			managed_body,
 			req,
 			llm_resp,
 			model_catalog,
@@ -2799,7 +2852,10 @@ impl AIProvider {
 
 		if !evaluators.is_empty() {
 			// `logger` is owned by the translated body; pass None to avoid double-logging.
-			return Ok(translated.map(|b| GuardedSseBody::new(b, evaluators, buffer, None)));
+			return Ok(
+				translated
+					.map(|b| b.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None))),
+			);
 		}
 		Ok(translated)
 	}
@@ -2809,7 +2865,7 @@ impl AIProvider {
 		policies: Option<&Policy>,
 		hreq: Request,
 		log: &mut Option<&mut RequestLog>,
-	) -> Result<(Parts, T), AIError> {
+	) -> Result<(Parts, Body, T), AIError> {
 		self
 			.read_body_resolving_model(policies, hreq, log, false)
 			.await
@@ -2826,7 +2882,7 @@ impl AIProvider {
 		policies: Option<&Policy>,
 		hreq: Request,
 		log: &mut Option<&mut RequestLog>,
-	) -> Result<(Parts, T), AIError> {
+	) -> Result<(Parts, Body, T), AIError> {
 		self
 			.read_body_resolving_model(policies, hreq, log, true)
 			.await
@@ -2838,9 +2894,9 @@ impl AIProvider {
 		hreq: Request,
 		log: &mut Option<&mut RequestLog>,
 		path_model_wins: bool,
-	) -> Result<(Parts, T), AIError> {
+	) -> Result<(Parts, Body, T), AIError> {
 		let buffer = http::buffer_limit(&hreq);
-		let (mut parts, body) = hreq.into_parts();
+		let (mut parts, mut managed_body) = hreq.into_parts();
 		// Decode Content-Encoding (gzip/deflate/br/zstd) before parsing the body as
 		// JSON. Clients such as the Claude Code harness gzip-compress request bodies
 		// above a size threshold; without decoding, the reader would hand the
@@ -2848,12 +2904,17 @@ impl AIProvider {
 		// "LLM request body must be valid JSON" 400, even for tiny payloads. This
 		// mirrors the response path, which already decompresses via the same helper.
 		let ce = parts.headers.typed_get::<ContentEncoding>();
-		let (encoding, bytes) =
-			match http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer).await {
-				Ok(v) => v,
-				Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
-				Err(e) => return Err(map_request_compression_error(e, &parts.headers)),
-			};
+		let (encoding, bytes) = match http::compression::to_bytes_with_decompression(
+			managed_body.take_content(),
+			ce.as_ref(),
+			buffer,
+		)
+		.await
+		{
+			Ok(v) => v,
+			Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
+			Err(e) => return Err(map_request_compression_error(e, &parts.headers)),
+		};
 		// Strip encoding headers now that the body is plaintext so downstream
 		// translation/marshalling and upstream forwarding see a consistent body.
 		if encoding.is_some() {
@@ -2870,7 +2931,7 @@ impl AIProvider {
 			if model.as_deref().is_none() {
 				return Err(AIError::MissingField("model not specified".into()));
 			}
-			return Ok((parts, req));
+			return Ok((parts, managed_body, req));
 		}
 
 		let mut request: serde_json::Value =
@@ -2884,7 +2945,7 @@ impl AIProvider {
 		self.finalize_request_model(&mut request)?;
 		let req: T = serde_json::from_value(request).map_err(AIError::RequestParsing)?;
 
-		Ok((parts, req))
+		Ok((parts, managed_body, req))
 	}
 
 	fn set_provider_request_model(

@@ -320,13 +320,15 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 		return Err(ProxyResponse::Error(err));
 	}
 	let limit = crate::http::buffer_limit(req);
-	let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
-	let id = match crate::http::read_body_with_limit(body, limit).await {
-		Ok(bytes) => serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&bytes)
-			.ok()
-			.as_ref()
-			.and_then(streamablehttp::request_id),
-		Err(_) => None,
+	// Keep the body available for the caller's subsequent error snapshot.
+	let id = match req.body_mut().inspect(limit).await {
+		Ok(crate::http::BodyInspection::Complete(bytes)) => {
+			serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&bytes)
+				.ok()
+				.as_ref()
+				.and_then(streamablehttp::request_id)
+		},
+		Ok(crate::http::BodyInspection::Partial(_)) | Err(_) => None,
 	};
 	let Some(request_id) = id else {
 		return Err(ProxyResponse::Error(err));

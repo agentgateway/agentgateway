@@ -747,17 +747,13 @@ pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamRespo
 
 pub fn passthrough_stream(
 	mut log: StreamingUsageGuard,
-	resp: http::Response<axum_core::body::Body>,
-) -> http::Response<axum_core::body::Body> {
+	resp: agent_http::Response,
+) -> agent_http::Response {
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
-			Some(Ok(f)) => {
-				amend_from_stream_response(&mut log, &f);
-			},
-			Some(Err(e)) => {
-				debug!("failed to parse streaming response: {e}");
-			},
+			Some(Ok(f)) => amend_from_stream_response(&mut log, &f),
+			Some(Err(e)) => debug!("failed to parse streaming response: {e}"),
 			None => {},
 		})
 	})
@@ -765,8 +761,8 @@ pub fn passthrough_stream(
 
 pub fn passthrough_aws_stream(
 	mut log: StreamingUsageGuard,
-	resp: http::Response<axum_core::body::Body>,
-) -> http::Response<axum_core::body::Body> {
+	resp: agent_http::Response,
+) -> agent_http::Response {
 	use base64::Engine;
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {

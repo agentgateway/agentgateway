@@ -186,7 +186,7 @@ mod stop_sequence_reporting_streaming {
 }
 
 mod thinking_round_trip {
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 	use http_body_util::BodyExt;
 	use serde_json::{Value, json};

@@ -2,7 +2,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
 use ::http::HeaderMap;
-use axum_core::body::Body as AxumBody;
+use agent_http::{Body, RawBody as AxumBody};
 use bytes::{Bytes, BytesMut};
 use http_body::Body as HttpBody;
 use pin_project_lite::pin_project;
@@ -79,7 +79,7 @@ where
 	Ok(http_body::Frame::data(preceding_output.freeze()))
 }
 
-pub fn parser<D, E, F, I, T>(body: AxumBody, decoder: D, encoder: E, handler: F) -> AxumBody
+pub fn parser<D, E, F, I, T>(body: Body, decoder: D, encoder: E, handler: F) -> Body
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
@@ -89,16 +89,18 @@ where
 	E::Error: Send + Into<axum_core::BoxError> + 'static,
 	T: Send + 'static,
 {
-	AxumBody::new(TransformedBody {
-		body,
-		decoder,
-		handler,
-		decode_buffer: BytesMut::new(),
-		buffered_trailers: None,
-		encoder,
-		finished: false,
-		pending_error: None,
-		_phantom: std::marker::PhantomData,
+	body.transform_stream(|body| {
+		AxumBody::new(TransformedBody {
+			body,
+			decoder,
+			handler,
+			decode_buffer: BytesMut::new(),
+			buffered_trailers: None,
+			encoder,
+			finished: false,
+			pending_error: None,
+			_phantom: std::marker::PhantomData,
+		})
 	})
 }
 

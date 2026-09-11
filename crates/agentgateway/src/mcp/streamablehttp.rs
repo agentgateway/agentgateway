@@ -12,7 +12,7 @@ use rmcp::transport::common::http_header::{
 	JSON_MIME_TYPE,
 };
 
-use crate::http::{DropBody, Request, Response};
+use crate::http::{Request, Response};
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
 use crate::mcp::{REMOVED_METHODS_2026_07_28, is_modern_version};
@@ -142,16 +142,17 @@ impl StreamableHttpService {
 				};
 			},
 		};
-		// Raw body is only needed for the `unknown_method_error` recovery above; release it now
-		// so the buffer is not pinned across the upstream round-trip below.
-		drop(bytes);
 		let request_id = request_id(&message);
 		let protocol = validate_request_protocol(&part.headers, &message, request_id.clone())?;
 		validate_standard_headers(&part.headers, &message, &protocol)?;
 		part.extensions.insert(protocol.clone());
+		// Keep the original HTTP bytes for detached authorization and guardrail CEL.
+		// They must not be reconstructed from the subsequently rewritten MCP message.
+		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);
+		*ctx.request.body_mut() = Some(bytes);
 
 		if !self.config.stateful_mode {
-			return self.serve_stateless(inputs, part, message, protocol).await;
+			return self.serve_stateless(inputs, ctx, message, protocol).await;
 		}
 
 		let session_id = part
@@ -170,11 +171,11 @@ impl StreamableHttpService {
 				return mcp::Error::UnknownSession.into();
 			};
 
-			return Box::pin(session.send(part, message)).await;
+			return Box::pin(session.send(ctx, message)).await;
 		}
 
 		if !protocol.uses_sessions() {
-			return self.serve_stateless(inputs, part, message, protocol).await;
+			return self.serve_stateless(inputs, ctx, message, protocol).await;
 		}
 
 		// No session header... we need to create one, if it is an initialize.
@@ -192,7 +193,7 @@ impl StreamableHttpService {
 		let backend_id = inputs.backend_id.clone();
 		let relay = inputs.build_new_connections()?;
 		let mut session = self.session_manager.create_session(relay);
-		let mut resp = Box::pin(session.send(part, message)).await?;
+		let mut resp = Box::pin(session.send(ctx, message)).await?;
 
 		let Ok(sid) = session.id.parse() else {
 			return mcp::Error::InvalidSessionIdHeader.into();
@@ -207,7 +208,7 @@ impl StreamableHttpService {
 	async fn serve_stateless(
 		&self,
 		inputs: RelayInputs,
-		part: ::http::request::Parts,
+		part: crate::mcp::upstream::IncomingRequestContext,
 		message: ClientJsonRpcMessage,
 		protocol: RequestProtocol,
 	) -> Result<Response, ProxyError> {
@@ -223,7 +224,7 @@ impl StreamableHttpService {
 			return Box::pin(session.stateless_send_and_initialize(part, message, initialize_upstream))
 				.await;
 		}
-		let cleanup_part = part.clone();
+		let cleanup_part = part.request.clone().into_parts().0;
 		let response =
 			Box::pin(session.stateless_send_and_initialize(part, message, initialize_upstream)).await;
 
@@ -235,7 +236,7 @@ impl StreamableHttpService {
 			// Clean up upstream resources (e.g., stdio processes)
 			let _ = session.delete_session(cleanup_part).await;
 		});
-		response.map(|r| r.map(|b| DropBody::new(b, tx)))
+		response.map(|r| r.map(|body| body.with_drop_guard(tx)))
 	}
 
 	pub async fn handle_get(
