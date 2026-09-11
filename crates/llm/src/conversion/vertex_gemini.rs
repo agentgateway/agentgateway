@@ -1338,10 +1338,16 @@ pub mod from_messages {
 		for m in messages {
 			match m.role {
 				Role::User => {
+					// Gemini 3 rejects a functionResponse that has sibling parts, so tool results
+					// are collected separately and pushed as their own user entry. An Anthropic
+					// client may put a tool_result and a text block in one message.
+					let mut fn_responses: Vec<vg::Part> = Vec::new();
 					let mut parts: Vec<vg::Part> = Vec::new();
 					for block in &m.content {
 						match block {
-							ContentBlock::Text(t) => parts.push(text_part(&t.text)),
+							// Vertex rejects an empty text parameter; the assistant arm guards the
+							// same way.
+							ContentBlock::Text(t) if !t.text.is_empty() => parts.push(text_part(&t.text)),
 							ContentBlock::Image(img) => {
 								if let Some(url) = anthropic_source_to_url(&img.source) {
 									parts.push(
@@ -1377,7 +1383,7 @@ pub mod from_messages {
 								}
 								// Carry base_id as a transient correlation key; stripped by
 								// reorder_function_responses after reordering.
-								parts.push(vg::Part::FunctionResponse(vg::FunctionResponsePart {
+								fn_responses.push(vg::Part::FunctionResponse(vg::FunctionResponsePart {
 									function_response: vg::FunctionResponse {
 										name,
 										id: Some(base_id),
@@ -1390,6 +1396,10 @@ pub mod from_messages {
 							_ => {},
 						}
 					}
+					// Tool results answer the preceding model turn, so they lead. `push_content`
+					// is a no-op on an empty vec and starts a fresh entry when the
+					// function-response-ness differs, which keeps the two from merging.
+					push_content(&mut contents, "user", fn_responses);
 					push_content(&mut contents, "user", parts);
 				},
 				Role::Assistant => {
@@ -1449,6 +1459,13 @@ pub mod from_messages {
 		Ok(contents)
 	}
 
+	/// Flatten a tool result to the text Gemini's `functionResponse.response` can carry.
+	///
+	/// `vg::FunctionResponse` is `{name, id, response}` with no `parts`, so an image or document
+	/// has nowhere to go. Reject rather than drop, matching `conversion::responses`: silently
+	/// discarding the content would let the model answer as if it had seen a screenshot it never
+	/// received. `UnsupportedConversion` is load-bearing here, since `classify_ai_request` maps it
+	/// to 400.
 	fn tool_result_text(
 		content: &types::messages::typed::ToolResultContent,
 	) -> Result<String, AIError> {
@@ -1460,8 +1477,8 @@ pub mod from_messages {
 					.iter()
 					.any(|p| !matches!(p, ToolResultContentPart::Text { .. }))
 				{
-					return Err(AIError::BadRequest(strng::new(
-						"tool_result with image or document content is not supported on this provider",
+					return Err(AIError::UnsupportedConversion(strng::literal!(
+						"messages non-text tool_result content cannot be represented by gemini"
 					)));
 				}
 				Ok(

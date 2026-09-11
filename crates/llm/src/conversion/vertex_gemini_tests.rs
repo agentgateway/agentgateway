@@ -2328,3 +2328,97 @@ async fn translate_stream_input_tokens_forwarded_to_client() {
 	assert_eq!(delta["usage"]["output_tokens"], 5);
 	assert_eq!(delta["usage"]["cache_read_input_tokens"], 20);
 }
+
+// ---------- Regression: Messages -> Gemini request shape ----------
+
+#[test]
+fn msg_tool_result_and_text_split_into_separate_contents() {
+	// Gemini 3 rejects a functionResponse that has sibling parts, and Anthropic clients routinely
+	// put a tool_result and a follow-up text block in the SAME user message. Collecting both into
+	// one entry produced a hard 400 on gemini-3; the completions path cannot hit this because
+	// OpenAI tool results arrive as their own `tool` message.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "user", "content": "Weather in Berlin?" },
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1", "name": "get_weather",
+					"input": { "location": "Berlin" } }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1", "content": "{\"temp\":9}" },
+				{ "type": "text", "text": "and in Paris?" }
+			]}
+		],
+		"tools": [{
+			"name": "get_weather",
+			"input_schema": { "type": "object", "properties": { "location": { "type": "string" } } }
+		}]
+	}));
+
+	let fn_entry = &g["contents"][2];
+	assert_eq!(fn_entry["parts"].as_array().unwrap().len(), 1, "got: {g}");
+	assert!(
+		fn_entry["parts"][0]["functionResponse"].is_object(),
+		"tool result must be alone in its entry, got: {g}"
+	);
+	assert_eq!(
+		g["contents"][3]["parts"][0]["text"], "and in Paris?",
+		"trailing text must become its own user entry, got: {g}"
+	);
+}
+
+#[test]
+fn msg_tool_result_with_image_is_rejected() {
+	// Gemini's functionResponse has no `parts`, so an image in a tool_result cannot be carried.
+	// Reject rather than drop it, matching conversion::responses: answering as if the model had
+	// seen a screenshot it never received is worse than a clear failure.
+	let err = from_messages::translate(
+		&msg_req(json!({
+			"model": "gemini-2.5-pro",
+			"max_tokens": 1024,
+			"messages": [
+				{ "role": "user", "content": "Screenshot?" },
+				{ "role": "assistant", "content": [
+					{ "type": "tool_use", "id": "toolu_1", "name": "grab", "input": {} }
+				]},
+				{ "role": "user", "content": [
+					{ "type": "tool_result", "tool_use_id": "toolu_1", "content": [
+						{ "type": "text", "text": "captured" },
+						{ "type": "image", "source": { "type": "base64", "media_type": "image/png",
+							"data": "iVBORw0KGgo=" } }
+					]}
+				]}
+			],
+			"tools": [{ "name": "grab", "input_schema": { "type": "object" } }]
+		})),
+		None,
+	);
+	let err = err.expect_err("image tool_result must be rejected");
+	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
+	assert!(
+		matches!(err, crate::AIError::UnsupportedConversion(_)),
+		"bad client input must be a request error, got {err:?}"
+	);
+}
+
+#[test]
+fn msg_empty_text_block_is_dropped() {
+	// Vertex rejects an empty text parameter. Anthropic clients send `{"type":"text","text":""}`
+	// as a placeholder; the assistant arm already guarded this, the user arm did not.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "user", "content": [
+				{ "type": "text", "text": "" },
+				{ "type": "text", "text": "real" }
+			]}
+		]
+	}));
+
+	let parts = g["contents"][0]["parts"].as_array().unwrap();
+	assert_eq!(parts.len(), 1, "empty text must not be emitted, got: {g}");
+	assert_eq!(parts[0]["text"], "real");
+}
