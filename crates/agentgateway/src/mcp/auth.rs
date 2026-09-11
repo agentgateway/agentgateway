@@ -1,10 +1,15 @@
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum_core::response::IntoResponse;
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use bytes::Bytes;
+use hmac::{Hmac, Mac};
 use http::Method;
 use http::uri::PathAndQuery;
 use secrecy::ExposeSecret;
+use sha2::Sha256;
+use sha2::digest::KeyInit;
 use tracing::{debug, warn};
 
 use crate::http::jwt::Claims;
@@ -119,6 +124,23 @@ pub(crate) async fn handle_mcp_request(
 					.await
 					.map_err(|e| {
 						warn!("entra token error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
+			))
+		},
+		// Broker-callback relay: Entra redirects to the gateway's single registered callback URL,
+		// which verifies the signed state and forwards the code to the MCP client's own redirect.
+		path
+			if matches!(auth.provider, Some(McpIDP::Entra {}))
+				&& auth.broker_callback
+				&& path.starts_with("/.well-known/oauth-authorization-server/")
+				&& path.ends_with("/callback") =>
+		{
+			Ok(Some(
+				entra_callback(req, auth)
+					.map_err(|e| {
+						warn!("entra callback error: {}", e);
 						StatusCode::INTERNAL_SERVER_ERROR
 					})
 					.into_response(),
@@ -581,6 +603,11 @@ pub(super) fn entra_authorize(
 	auth: &McpAuthentication,
 ) -> Result<Response, ProxyError> {
 	let endpoints = entra_endpoints(&auth.issuer).map_err(ProxyError::ProcessingString)?;
+	if auth.broker_callback {
+		return entra_broker_authorize(req, auth, &endpoints.authorization_endpoint);
+	}
+	// Pass-through: strip `resource`, forward everything else (including the client's own
+	// redirect_uri and state) to Entra.
 	let mut location: Uri = match req.uri().query() {
 		Some(query) => format!("{}?{}", endpoints.authorization_endpoint, query),
 		None => endpoints.authorization_endpoint,
@@ -597,6 +624,47 @@ pub(super) fn entra_authorize(
 		Response::builder()
 			.status(StatusCode::FOUND)
 			.header(::http::header::LOCATION, location.to_string())
+			.body(axum::body::Body::empty())?,
+	)
+}
+
+/// Broker-mode `/authorize`: swap the client's `redirect_uri` and `state` for the gateway's single
+/// registered callback URL and a signed, stateless state token, then 302 to Entra. Entra therefore
+/// only ever sees one Web-platform redirect (removing per-client URI registration and keeping the
+/// flow browser-classified), while the state token carries the client's own redirect + state so the
+/// callback leg can relay the code back. The RFC 8707 `resource` parameter is stripped as usual.
+fn entra_broker_authorize(
+	req: &Request,
+	auth: &McpAuthentication,
+	authorization_endpoint: &str,
+) -> Result<Response, ProxyError> {
+	let (signing_key, client_id) = broker_secrets(auth)?;
+	let callback_url = entra_broker_callback_url(req);
+	let query = req.uri().query().unwrap_or("");
+	// Verify the client's redirect target before signing it into the state, so a forged or
+	// broadened redirect can never survive to the callback leg.
+	let client_redirect = query_param(query, "redirect_uri").unwrap_or_default();
+	if !broker_safe_redirect(&client_redirect) {
+		return bad_request("invalid_redirect_uri");
+	}
+	let client_state = query_param(query, "state");
+	let state = encode_broker_state(
+		signing_key.expose_secret().as_bytes(),
+		&client_redirect,
+		client_state.as_deref(),
+		&auth.issuer,
+		client_id,
+		&callback_url,
+		broker_now_secs(),
+	);
+	let location = format!(
+		"{authorization_endpoint}?{}",
+		broker_authorize_query(query, &callback_url, &state)
+	);
+	Ok(
+		Response::builder()
+			.status(StatusCode::FOUND)
+			.header(::http::header::LOCATION, location)
 			.body(axum::body::Body::empty())?,
 	)
 }
@@ -642,6 +710,21 @@ pub(super) async fn entra_token(
 	// any other client_id.
 	let client_id_matches = auth.client_id.is_some() && parsed.client_id == auth.client_id;
 	let mut form = parsed.form;
+	// In broker mode the authorization code was issued against the gateway's callback URL, so the
+	// token exchange must present the same `redirect_uri`; also default the refresh scope to the
+	// app's resource so refreshed tokens keep the right audience (avoids AADSTS90009).
+	if auth.broker_callback {
+		let client_id = auth.client_id.as_deref().ok_or_else(|| {
+			ProxyError::ProcessingString("brokerCallback requires clientId".to_string())
+		})?;
+		let callback_url = entra_broker_callback_url(req);
+		form = broker_rewrite_token_form(
+			&form,
+			parsed.grant_type.as_deref(),
+			&callback_url,
+			client_id,
+		);
+	}
 	if authorization.is_none()
 		&& !parsed.has_client_secret
 		&& client_id_matches
@@ -709,6 +792,309 @@ fn parse_entra_token_form(input: &[u8]) -> EntraTokenForm {
 		grant_type,
 		client_id,
 	}
+}
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// How long (in seconds) a broker-callback state token stays valid. It only needs to survive the
+/// redirect relay. The state token carries no authority of its own — it just routes the callback —
+/// and the single-use authorization-code exchange (with PKCE) remains the real replay boundary, so
+/// this TTL merely narrows the relay window.
+const BROKER_STATE_TTL_SECS: u64 = 600;
+
+/// The client's own OAuth redirect target and `state`, recovered from a verified broker-callback
+/// state token so the callback leg can relay Entra's code back to the client.
+#[derive(Debug, PartialEq, Eq)]
+struct BrokerState {
+	redirect_uri: String,
+	client_state: Option<String>,
+}
+
+/// The signing key and client id required for broker mode. `LocalMcpAuthentication::translate`
+/// validates both are present when `brokerCallback` is enabled; this guards the invariant at the
+/// request path (broker mode is not reachable via the control plane, which cannot set them).
+fn broker_secrets(auth: &McpAuthentication) -> Result<(&secrecy::SecretString, &str), ProxyError> {
+	let signing_key = auth.signing_key.as_ref().ok_or_else(|| {
+		ProxyError::ProcessingString("brokerCallback requires signingKey".to_string())
+	})?;
+	let client_id = auth
+		.client_id
+		.as_deref()
+		.ok_or_else(|| ProxyError::ProcessingString("brokerCallback requires clientId".to_string()))?;
+	Ok((signing_key, client_id))
+}
+
+/// The single callback URL the gateway registers with Entra for broker mode:
+/// `<served-AS-metadata-path>/callback`. Derived from the request by replacing the trailing
+/// `/authorize` | `/token` | `/callback` path segment, so it is identical across the authorize and
+/// callback legs — the code Entra issues against it on the authorize leg must verify on the token
+/// leg.
+fn entra_broker_callback_url(req: &Request) -> String {
+	let uri = request_uri_for_oauth_metadata(req);
+	let path = uri.path();
+	let base = path.rsplit_once('/').map(|(base, _)| base).unwrap_or("");
+	let callback_path = format!("{base}/callback");
+	uri_with_path(uri, &callback_path)
+}
+
+fn broker_now_secs() -> u64 {
+	std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map(|d| d.as_secs())
+		.unwrap_or_default()
+}
+
+fn query_param(query: &str, name: &str) -> Option<String> {
+	url::form_urlencoded::parse(query.as_bytes())
+		.find(|(k, _)| k.as_ref() == name)
+		.map(|(_, v)| v.into_owned())
+}
+
+fn bad_request(error: &str) -> Result<Response, ProxyError> {
+	Ok(
+		Response::builder()
+			.status(StatusCode::BAD_REQUEST)
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(axum::body::Body::from(
+				serde_json::to_vec(&serde_json::json!({ "error": error })).unwrap_or_default(),
+			))?,
+	)
+}
+
+/// Guard against open redirects: only relay Entra's authorization code to a loopback `http(s)`
+/// address or a non-`http` custom scheme — the redirect targets real MCP clients declare. This
+/// blocks a forged or broadened state from turning the callback into an exfiltration hop to an
+/// arbitrary external URL.
+fn broker_safe_redirect(uri: &str) -> bool {
+	let Ok(parsed) = url::Url::parse(uri) else {
+		return false;
+	};
+	match parsed.scheme() {
+		"http" | "https" => match parsed.host() {
+			Some(url::Host::Domain(domain)) => domain.eq_ignore_ascii_case("localhost"),
+			Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+			Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+			None => false,
+		},
+		// Custom app schemes MCP clients register (cursor://, vscode://, ...). Reject the
+		// pseudo-schemes a browser could execute or use to reach the local machine when it follows
+		// the relay's 302 (XSS / local-file / SSRF vectors); none of these are real MCP redirects.
+		// `url` lower-cases the scheme, so these comparisons are case-insensitive.
+		scheme => !DANGEROUS_REDIRECT_SCHEMES.contains(&scheme),
+	}
+}
+
+/// Schemes that must never be used as a broker relay target: a browser following the callback's
+/// 302 `Location` could execute them or reach the local machine.
+const DANGEROUS_REDIRECT_SCHEMES: [&str; 7] = [
+	"javascript",
+	"data",
+	"vbscript",
+	"file",
+	"blob",
+	"about",
+	"filesystem",
+];
+
+/// Rewrite the client's `/authorize` query for Entra in broker mode: drop `resource` (rejected by
+/// Entra) plus the client's `redirect_uri`/`state`, and substitute the broker callback URL and the
+/// signed state token. Every other parameter (client_id, scope, code_challenge, nonce, ...) is
+/// preserved verbatim.
+fn broker_authorize_query(query: &str, broker_redirect: &str, broker_state: &str) -> String {
+	let mut ser = url::form_urlencoded::Serializer::new(String::new());
+	for (k, v) in url::form_urlencoded::parse(query.as_bytes()) {
+		match k.as_ref() {
+			"resource" | "redirect_uri" | "state" => {},
+			_ => {
+				ser.append_pair(&k, &v);
+			},
+		}
+	}
+	ser.append_pair("redirect_uri", broker_redirect);
+	ser.append_pair("state", broker_state);
+	ser.finish()
+}
+
+/// Build the 302 back to the MCP client on the callback leg: forward Entra's parameters (the
+/// authorization `code`, or an `error`) and swap the broker state back to the client's own `state`.
+fn broker_callback_location(
+	redirect_uri: &str,
+	entra_query: &str,
+	client_state: Option<&str>,
+) -> String {
+	let mut ser = url::form_urlencoded::Serializer::new(String::new());
+	for (k, v) in url::form_urlencoded::parse(entra_query.as_bytes()) {
+		if k.as_ref() != "state" {
+			ser.append_pair(&k, &v);
+		}
+	}
+	if let Some(client_state) = client_state {
+		ser.append_pair("state", client_state);
+	}
+	let query = ser.finish();
+	// The query must go before any fragment: `base#frag` becomes `base?query#frag`, never
+	// `base#frag?query` (which would fold the query into the fragment and drop the code).
+	let (base, fragment) = match redirect_uri.split_once('#') {
+		Some((base, fragment)) => (base, Some(fragment)),
+		None => (redirect_uri, None),
+	};
+	let separator = if base.contains('?') { '&' } else { '?' };
+	match fragment {
+		Some(fragment) => format!("{base}{separator}{query}#{fragment}"),
+		None => format!("{base}{separator}{query}"),
+	}
+}
+
+/// Rewrite the `/token` form in broker mode: pin the authorization-code `redirect_uri` to the
+/// broker callback (Entra issued the code against it), and default the refresh scope to the app's
+/// resource so refreshed tokens keep the right audience (avoids `AADSTS90009`). The `resource`
+/// parameter has already been stripped by [`parse_entra_token_form`].
+fn broker_rewrite_token_form(
+	form: &str,
+	grant_type: Option<&str>,
+	callback_url: &str,
+	client_id: &str,
+) -> String {
+	let is_authorization_code = grant_type == Some("authorization_code");
+	let is_refresh_token = grant_type == Some("refresh_token");
+	let mut has_scope = false;
+	let mut ser = url::form_urlencoded::Serializer::new(String::new());
+	for (k, v) in url::form_urlencoded::parse(form.as_bytes()) {
+		match k.as_ref() {
+			// Replaced below with the broker callback for the code exchange.
+			"redirect_uri" if is_authorization_code => {},
+			"scope" => {
+				has_scope = true;
+				ser.append_pair(&k, &v);
+			},
+			_ => {
+				ser.append_pair(&k, &v);
+			},
+		}
+	}
+	if is_authorization_code {
+		ser.append_pair("redirect_uri", callback_url);
+	}
+	if is_refresh_token && !has_scope {
+		ser.append_pair(
+			"scope",
+			&format!("api://{client_id}/mcp_access offline_access"),
+		);
+	}
+	ser.finish()
+}
+
+/// Pack the client's `redirect_uri` and `state` into a signed, self-contained token that the
+/// gateway hands to Entra as the `state` on the authorize leg. The payload is bound to the exact
+/// provider config that minted it (issuer, client id, callback URL) and stamped with an issued-at
+/// for TTL, then HMAC-SHA256 signed. It is stateless: any gateway replica holding the same signing
+/// key can verify a token another replica issued, with no shared store. Format:
+/// `<b64url(payload)>.<b64url(signature)>`.
+fn encode_broker_state(
+	key: &[u8],
+	redirect_uri: &str,
+	client_state: Option<&str>,
+	issuer: &str,
+	client_id: &str,
+	callback_url: &str,
+	now_secs: u64,
+) -> String {
+	let payload = serde_json::json!({
+		"r": redirect_uri,
+		"s": client_state,
+		"t": now_secs,
+		"iss": issuer,
+		"cid": client_id,
+		"cb": callback_url,
+	});
+	let payload_b64 =
+		URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("state payload is serializable"));
+	let mut mac =
+		<HmacSha256 as KeyInit>::new_from_slice(key).expect("HMAC accepts keys of any length");
+	mac.update(payload_b64.as_bytes());
+	let signature_b64 = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+	format!("{payload_b64}.{signature_b64}")
+}
+
+/// Verify and unpack a broker-callback state token. Returns `None` on a bad signature, expiry, a
+/// payload bound to a different provider config, an unsafe relay target, or any malformation — the
+/// caller treats every such case as an invalid callback.
+fn decode_broker_state(
+	key: &[u8],
+	token: &str,
+	issuer: &str,
+	client_id: &str,
+	callback_url: &str,
+	now_secs: u64,
+) -> Option<BrokerState> {
+	let (payload_b64, signature_b64) = token.split_once('.')?;
+	let signature = URL_SAFE_NO_PAD.decode(signature_b64).ok()?;
+	// Constant-time verification via the MAC's own comparator.
+	let mut mac = <HmacSha256 as KeyInit>::new_from_slice(key).ok()?;
+	mac.update(payload_b64.as_bytes());
+	mac.verify_slice(&signature).ok()?;
+
+	let payload: serde_json::Value =
+		serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload_b64).ok()?).ok()?;
+	// Expiry.
+	let issued_at = payload.get("t")?.as_u64()?;
+	if now_secs.saturating_sub(issued_at) > BROKER_STATE_TTL_SECS {
+		return None;
+	}
+	// Config binding: a token only routes callbacks for the exact config that signed it, so a
+	// stale token can't be honored across config changes or a different provider sharing the key.
+	if payload.get("iss")?.as_str()? != issuer
+		|| payload.get("cid")?.as_str()? != client_id
+		|| payload.get("cb")?.as_str()? != callback_url
+	{
+		return None;
+	}
+	let redirect_uri = payload.get("r")?.as_str()?.to_string();
+	// Re-check the relay target on the way out, so even a validly signed token can't point
+	// off-loopback.
+	if !broker_safe_redirect(&redirect_uri) {
+		return None;
+	}
+	let client_state = payload
+		.get("s")
+		.and_then(|v| v.as_str())
+		.map(ToString::to_string);
+	Some(BrokerState {
+		redirect_uri,
+		client_state,
+	})
+}
+
+/// Broker-callback relay endpoint. Entra redirects here — the gateway's single registered Web
+/// redirect URI — after the user signs in. The gateway verifies the signed state token and 302s the
+/// browser to the MCP client's own redirect URI with Entra's authorization code and the client's
+/// original `state` restored.
+fn entra_callback(req: &Request, auth: &McpAuthentication) -> Result<Response, ProxyError> {
+	let (signing_key, client_id) = broker_secrets(auth)?;
+	let callback_url = entra_broker_callback_url(req);
+	let query = req.uri().query().unwrap_or("");
+	let state = query_param(query, "state").unwrap_or_default();
+	let Some(decoded) = decode_broker_state(
+		signing_key.expose_secret().as_bytes(),
+		&state,
+		&auth.issuer,
+		client_id,
+		&callback_url,
+		broker_now_secs(),
+	) else {
+		return bad_request("unknown_or_expired_state");
+	};
+	let location = broker_callback_location(
+		&decoded.redirect_uri,
+		query,
+		decoded.client_state.as_deref(),
+	);
+	Ok(
+		Response::builder()
+			.status(StatusCode::FOUND)
+			.header(::http::header::LOCATION, location)
+			.body(axum::body::Body::empty())?,
+	)
 }
 
 const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
@@ -978,6 +1364,8 @@ mod tests {
 				mode: crate::types::agent::McpAuthenticationMode::Strict,
 				client_id: None,
 				client_secret: None,
+				broker_callback: false,
+				signing_key: None,
 			},
 		);
 
@@ -1013,6 +1401,8 @@ mod tests {
 			mode: crate::types::agent::McpAuthenticationMode::Strict,
 			client_id: None,
 			client_secret: None,
+			broker_callback: false,
+			signing_key: None,
 		}
 	}
 
@@ -1157,6 +1547,8 @@ mod tests {
 			mode: crate::types::agent::McpAuthenticationMode::Strict,
 			client_id: Some("client-id-guid".to_string()),
 			client_secret: None,
+			broker_callback: false,
+			signing_key: None,
 		}
 	}
 
@@ -1273,5 +1665,412 @@ mod tests {
 			"urn:ietf:params:oauth:grant-type:jwt-bearer"
 		)));
 		assert!(!entra_grant_may_use_client_secret(None));
+	}
+
+	// ---- broker-callback mode -------------------------------------------------------------
+
+	const BK_KEY: &[u8] = b"broker-signing-key";
+	const BK_ISSUER: &str =
+		"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0";
+	const BK_CID: &str = "client-id-guid";
+	const BK_CB: &str =
+		"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback";
+
+	fn entra_broker_auth() -> McpAuthentication {
+		let mut auth = entra_auth();
+		auth.broker_callback = true;
+		auth.signing_key = Some("broker-signing-key".to_string().into());
+		auth
+	}
+
+	fn form_map(query: &str) -> std::collections::HashMap<String, String> {
+		url::form_urlencoded::parse(query.as_bytes())
+			.into_owned()
+			.collect()
+	}
+
+	#[test]
+	fn broker_safe_redirect_allows_loopback_and_custom_schemes() {
+		for uri in [
+			"http://localhost:8765/callback",
+			"http://127.0.0.1:57428/callback/tok",
+			"https://localhost/cb",
+			"http://[::1]:9000/cb",
+			"cursor://anysphere.cursor-mcp/oauth/callback",
+			"vscode://ms-something/cb",
+		] {
+			assert!(broker_safe_redirect(uri), "{uri} should be allowed");
+		}
+	}
+
+	#[test]
+	fn broker_safe_redirect_blocks_external_and_garbage() {
+		for uri in [
+			"https://evil.example.com/steal",
+			"http://example.com/cb",
+			"http://169.254.169.254/latest/meta-data",
+			"",
+			"not a url",
+			"///",
+		] {
+			assert!(!broker_safe_redirect(uri), "{uri} should be blocked");
+		}
+	}
+
+	#[test]
+	fn broker_safe_redirect_blocks_dangerous_schemes() {
+		// A browser following the relay's 302 could execute or resolve these; none are real MCP
+		// client redirects. Includes mixed case, which `url` normalizes to lower case.
+		for uri in [
+			"javascript:alert(document.cookie)",
+			"JavaScript:alert(1)",
+			"data:text/html,<script>alert(1)</script>",
+			"vbscript:msgbox(1)",
+			"file:///etc/passwd",
+			"blob:https://evil.example.com/uuid",
+			"about:blank",
+			"filesystem:https://evil.example.com/temporary/x",
+		] {
+			assert!(!broker_safe_redirect(uri), "{uri} should be blocked");
+		}
+	}
+
+	#[test]
+	fn broker_authorize_query_swaps_redirect_and_state_keeps_rest() {
+		let query = "response_type=code&client_id=cid&redirect_uri=cursor%3A%2F%2Fcb&state=client-xyz&scope=api%3A%2F%2Fcid%2Fmcp_access+offline_access&code_challenge=abc&code_challenge_method=S256&resource=https%3A%2F%2Fgw%2Fmcp";
+		let out = broker_authorize_query(query, "https://gw/callback", "broker-state-1");
+		let parsed = form_map(&out);
+		assert_eq!(parsed["redirect_uri"], "https://gw/callback");
+		assert_eq!(parsed["state"], "broker-state-1");
+		assert!(!parsed.contains_key("resource"));
+		// Everything else is preserved verbatim.
+		assert_eq!(parsed["client_id"], "cid");
+		assert_eq!(parsed["code_challenge"], "abc");
+		assert_eq!(parsed["code_challenge_method"], "S256");
+		assert_eq!(parsed["scope"], "api://cid/mcp_access offline_access");
+	}
+
+	#[test]
+	fn broker_callback_location_forwards_code_and_restores_client_state() {
+		let loc = broker_callback_location(
+			"cursor://cb",
+			"code=AUTH123&state=broker-1",
+			Some("client-xyz"),
+		);
+		assert!(
+			loc.starts_with("cursor://cb?"),
+			"unexpected location: {loc}"
+		);
+		let parsed = form_map(loc.split_once('?').unwrap().1);
+		assert_eq!(parsed["code"], "AUTH123");
+		assert_eq!(parsed["state"], "client-xyz");
+	}
+
+	#[test]
+	fn broker_callback_location_forwards_errors() {
+		let loc = broker_callback_location(
+			"http://127.0.0.1:9000/cb",
+			"error=access_denied&error_description=nope&state=broker-1",
+			Some("cs"),
+		);
+		let parsed = form_map(loc.split_once('?').unwrap().1);
+		assert_eq!(parsed["error"], "access_denied");
+		assert_eq!(parsed["state"], "cs");
+	}
+
+	#[test]
+	fn broker_callback_location_omits_state_when_client_had_none() {
+		let loc = broker_callback_location("http://127.0.0.1:9000/cb", "code=X&state=broker-1", None);
+		let parsed = form_map(loc.split_once('?').unwrap().1);
+		assert_eq!(parsed["code"], "X");
+		assert!(!parsed.contains_key("state"));
+	}
+
+	#[test]
+	fn broker_callback_location_places_query_before_fragment() {
+		// A redirect URI with a fragment must become `base?query#frag`, not `base#frag?query`
+		// (which would fold the code into the fragment).
+		let loc = broker_callback_location(
+			"cursor://cb#/oauth",
+			"code=AUTH123&state=broker-1",
+			Some("client-xyz"),
+		);
+		let (before_fragment, fragment) = loc.split_once('#').expect("fragment preserved");
+		assert_eq!(fragment, "/oauth");
+		assert!(
+			before_fragment.starts_with("cursor://cb?"),
+			"unexpected location: {loc}"
+		);
+		let parsed = form_map(before_fragment.split_once('?').unwrap().1);
+		assert_eq!(parsed["code"], "AUTH123");
+		assert_eq!(parsed["state"], "client-xyz");
+	}
+
+	#[test]
+	fn broker_token_form_pins_authcode_redirect() {
+		let form = "grant_type=authorization_code&code=AUTHCODE&redirect_uri=cursor%3A%2F%2Fcb&code_verifier=verifier";
+		let out = broker_rewrite_token_form(
+			form,
+			Some("authorization_code"),
+			"https://gw/callback",
+			"cid",
+		);
+		let parsed = form_map(&out);
+		assert_eq!(parsed["redirect_uri"], "https://gw/callback");
+		assert_eq!(parsed["code"], "AUTHCODE");
+		assert_eq!(parsed["code_verifier"], "verifier");
+	}
+
+	#[test]
+	fn broker_token_form_defaults_and_keeps_refresh_scope() {
+		let defaulted = broker_rewrite_token_form(
+			"grant_type=refresh_token&refresh_token=RT",
+			Some("refresh_token"),
+			"https://gw/callback",
+			"cid",
+		);
+		assert_eq!(
+			form_map(&defaulted)["scope"],
+			"api://cid/mcp_access offline_access"
+		);
+		let explicit = broker_rewrite_token_form(
+			"grant_type=refresh_token&refresh_token=RT&scope=custom",
+			Some("refresh_token"),
+			"https://gw/callback",
+			"cid",
+		);
+		assert_eq!(form_map(&explicit)["scope"], "custom");
+	}
+
+	#[test]
+	fn broker_state_round_trips_and_is_stateless() {
+		let token = encode_broker_state(
+			BK_KEY,
+			"cursor://cb",
+			Some("cs1"),
+			BK_ISSUER,
+			BK_CID,
+			BK_CB,
+			1000,
+		);
+		let decoded =
+			decode_broker_state(BK_KEY, &token, BK_ISSUER, BK_CID, BK_CB, 1005).expect("decodes");
+		assert_eq!(decoded.redirect_uri, "cursor://cb");
+		assert_eq!(decoded.client_state.as_deref(), Some("cs1"));
+		// Stateless: the same token verifies repeatedly (any replica, any retry) — no single-use store.
+		assert!(decode_broker_state(BK_KEY, &token, BK_ISSUER, BK_CID, BK_CB, 1005).is_some());
+	}
+
+	#[test]
+	fn broker_state_expires_after_ttl() {
+		let token = encode_broker_state(BK_KEY, "cursor://cb", None, BK_ISSUER, BK_CID, BK_CB, 1000);
+		assert!(
+			decode_broker_state(
+				BK_KEY,
+				&token,
+				BK_ISSUER,
+				BK_CID,
+				BK_CB,
+				1000 + BROKER_STATE_TTL_SECS
+			)
+			.is_some()
+		);
+		assert!(
+			decode_broker_state(
+				BK_KEY,
+				&token,
+				BK_ISSUER,
+				BK_CID,
+				BK_CB,
+				1000 + BROKER_STATE_TTL_SECS + 1
+			)
+			.is_none()
+		);
+	}
+
+	#[test]
+	fn broker_state_rejects_tampering() {
+		let token = encode_broker_state(
+			BK_KEY,
+			"cursor://cb",
+			Some("cs1"),
+			BK_ISSUER,
+			BK_CID,
+			BK_CB,
+			1000,
+		);
+		let signature = token.split_once('.').unwrap().1;
+		// Attacker re-points the redirect to their own loopback and keeps the original signature.
+		let forged_payload = URL_SAFE_NO_PAD.encode(
+			serde_json::to_vec(&serde_json::json!({
+				"r": "http://127.0.0.1:1/pwn",
+				"s": "cs1",
+				"t": 1000,
+				"iss": BK_ISSUER,
+				"cid": BK_CID,
+				"cb": BK_CB,
+			}))
+			.unwrap(),
+		);
+		assert!(
+			decode_broker_state(
+				BK_KEY,
+				&format!("{forged_payload}.{signature}"),
+				BK_ISSUER,
+				BK_CID,
+				BK_CB,
+				1000
+			)
+			.is_none()
+		);
+	}
+
+	#[test]
+	fn broker_state_rejects_off_loopback_target() {
+		// Even a validly signed token whose target is off-loopback is refused on decode.
+		let token = encode_broker_state(
+			BK_KEY,
+			"https://evil.example.com/x",
+			Some("cs1"),
+			BK_ISSUER,
+			BK_CID,
+			BK_CB,
+			1000,
+		);
+		assert!(decode_broker_state(BK_KEY, &token, BK_ISSUER, BK_CID, BK_CB, 1000).is_none());
+	}
+
+	#[test]
+	fn broker_state_rejects_malformed() {
+		for junk in ["", "nodot", "a.b.c", "!!!.###"] {
+			assert!(
+				decode_broker_state(BK_KEY, junk, BK_ISSUER, BK_CID, BK_CB, 1000).is_none(),
+				"{junk} should not decode"
+			);
+		}
+	}
+
+	#[test]
+	fn broker_state_binds_to_provider_config() {
+		let token = encode_broker_state(
+			BK_KEY,
+			"http://127.0.0.1:1/cb",
+			Some("cs"),
+			BK_ISSUER,
+			BK_CID,
+			BK_CB,
+			1000,
+		);
+		// The exact config that signed it decodes.
+		assert!(decode_broker_state(BK_KEY, &token, BK_ISSUER, BK_CID, BK_CB, 1000).is_some());
+		// A different signing key, issuer, client id, or callback URL is rejected.
+		assert!(decode_broker_state(b"other-key", &token, BK_ISSUER, BK_CID, BK_CB, 1000).is_none());
+		assert!(
+			decode_broker_state(
+				BK_KEY,
+				&token,
+				"https://sts.windows.net/other/",
+				BK_CID,
+				BK_CB,
+				1000
+			)
+			.is_none()
+		);
+		assert!(decode_broker_state(BK_KEY, &token, BK_ISSUER, "other-client", BK_CB, 1000).is_none());
+		assert!(
+			decode_broker_state(
+				BK_KEY,
+				&token,
+				BK_ISSUER,
+				BK_CID,
+				"https://evil/callback",
+				1000
+			)
+			.is_none()
+		);
+	}
+
+	#[test]
+	fn entra_broker_authorize_rejects_unsafe_client_redirect() {
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=client-id-guid&redirect_uri=https%3A%2F%2Fevil.example.com%2Fx&state=s")
+			.body(Body::empty())
+			.expect("request should build");
+		let resp = entra_authorize(&req, &entra_broker_auth()).expect("should respond");
+		assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+	}
+
+	#[test]
+	fn entra_broker_callback_rejects_bad_state() {
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback?code=X&state=garbage")
+			.body(Body::empty())
+			.expect("request should build");
+		let resp = entra_callback(&req, &entra_broker_auth()).expect("should respond");
+		assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+	}
+
+	#[test]
+	fn entra_broker_authorize_then_callback_round_trip() {
+		let auth = entra_broker_auth();
+		// Authorize leg: the client sends its own loopback redirect + state and an RFC 8707 resource.
+		let authz_req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=client-id-guid&redirect_uri=http%3A%2F%2F127.0.0.1%3A5000%2Fcb&state=client-state&code_challenge=ccc&code_challenge_method=S256&resource=https%3A%2F%2Fgw%2Fmcp")
+			.body(Body::empty())
+			.expect("request should build");
+		let resp = entra_authorize(&authz_req, &auth).expect("authorize should redirect");
+		assert_eq!(resp.status(), StatusCode::FOUND);
+		let location = resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location string")
+			.to_string();
+		assert!(
+			location.starts_with(
+				"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/authorize?"
+			),
+			"unexpected location: {location}"
+		);
+		assert!(
+			!location.contains("resource="),
+			"resource not stripped: {location}"
+		);
+		assert!(
+			!location.contains("state=client-state"),
+			"client state leaked: {location}"
+		);
+		let entra_query = location.split_once('?').unwrap().1;
+		let broker_state = query_param(entra_query, "state").expect("broker state present");
+		// Entra only ever sees the single gateway callback, never the client's redirect.
+		assert_eq!(
+			query_param(entra_query, "redirect_uri").as_deref(),
+			Some(BK_CB)
+		);
+
+		// Callback leg: Entra redirects to the gateway callback with the code and the broker state.
+		let cb_req = ::http::Request::builder()
+			.uri(format!(
+				"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback?code=AUTHCODE&state={broker_state}"
+			))
+			.body(Body::empty())
+			.expect("request should build");
+		let cb_resp = entra_callback(&cb_req, &auth).expect("callback should redirect");
+		assert_eq!(cb_resp.status(), StatusCode::FOUND);
+		let cb_location = cb_resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location string");
+		// Relayed back to the client's own redirect, with the code and the client's original state.
+		assert!(
+			cb_location.starts_with("http://127.0.0.1:5000/cb?"),
+			"unexpected: {cb_location}"
+		);
+		let cb_params = form_map(cb_location.split_once('?').unwrap().1);
+		assert_eq!(cb_params["code"], "AUTHCODE");
+		assert_eq!(cb_params["state"], "client-state");
 	}
 }
