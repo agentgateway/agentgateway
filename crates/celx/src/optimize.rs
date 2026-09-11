@@ -2,11 +2,21 @@ use std::sync::Arc;
 
 use cel::common::ast::{CallExpr, Expr, SelectExpr};
 use cel::objects::{OpaqueValue, StringValue};
-use cel::{Context, ExecutionError, FunctionContext, IdedExpr, ResolveResult, Value};
+use cel::{Context, ExecutionError, FunctionContext, FunctionMeta, IdedExpr, ResolveResult, Value};
 use serde::Serialize;
 
 pub fn insert_all(ctx: &mut Context) {
-	ctx.add_function("precompiled_matches", PrecompileRegex::precompiled_matches)
+	// Only ever called via the rewrite in DefaultOptimizer below, so user
+	// expressions (which are checked pre-optimization) never contain it.
+	ctx.add_function_with_meta(
+		"precompiled_matches",
+		FunctionMeta::method(2),
+		PrecompileRegex::precompiled_matches,
+	)
+}
+
+pub fn declare_opaque_methods(ctx: &mut Context) {
+	ctx.declare_opaque_methods(PrecompileRegex::METHOD_NAMES.iter().copied());
 }
 
 pub struct DefaultOptimizer;

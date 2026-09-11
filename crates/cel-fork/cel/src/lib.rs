@@ -14,7 +14,7 @@ pub mod parser;
 
 pub use common::ast::IdedExpr;
 use common::ast::SelectExpr;
-pub use context::Context;
+pub use context::{Context, FunctionMeta, ReceiverStyle};
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
 use parser::{CallSignature, Expression, ExpressionReferences, Parser};
@@ -30,6 +30,7 @@ pub use ser::{Duration, Timestamp};
 mod ser;
 pub use ser::{SerializationError, to_value};
 
+pub mod check;
 mod json;
 mod optimize;
 #[cfg(test)]
@@ -223,12 +224,16 @@ impl Program {
 			.map(|expression| Program { expression })
 	}
 
-	fn optimized(self) -> Program {
+	/// Applies the built-in optimizer. Combined with
+	/// [`Program::compile_unoptimized`], this lets a caller run
+	/// [`Program::check`] between parsing and optimization.
+	pub fn optimized(self) -> Program {
 		Program {
 			expression: crate::optimize::Optimize::new().optimize(self.expression),
 		}
 	}
-	fn optimized_with<T: Optimizer + 'static>(self, t: T) -> Program {
+	/// Applies a custom optimizer; see [`Program::optimized`].
+	pub fn optimized_with<T: Optimizer + 'static>(self, t: T) -> Program {
 		Program {
 			expression: crate::optimize::Optimize::new_with_optimizer(t).optimize(self.expression),
 		}
@@ -278,6 +283,29 @@ impl Program {
 	/// ```
 	pub fn call_signatures(&self) -> Vec<CallSignature<'_>> {
 		self.expression.call_signatures()
+	}
+
+	/// Statically checks every call site against the metadata the context
+	/// declared at registration, reporting calls that cannot succeed (or
+	/// almost certainly misbehave) without executing anything. See the
+	/// [`check`](crate::check) module for what is and is not covered.
+	///
+	/// Optimizers rewrite calls, so diagnostics from an optimized program can
+	/// name functions and arities the author never wrote. Check the program
+	/// from [`Program::compile_unoptimized`], then optimize afterwards via
+	/// [`Program::optimized`] / [`Program::optimized_with`].
+	///
+	/// # Example
+	/// ```rust
+	/// # use cel::{Context, Program};
+	/// let program = Program::compile_unoptimized("siz(foo) > 0").unwrap();
+	/// let diagnostics = program.check(&Context::default());
+	///
+	/// assert_eq!(diagnostics.len(), 1);
+	/// assert_eq!(diagnostics[0].to_string(), "unknown function 'siz'");
+	/// ```
+	pub fn check(&self, ctx: &Context) -> Vec<check::Diagnostic> {
+		self.expression.check(ctx)
 	}
 
 	/// Returns the contained expression
