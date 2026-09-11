@@ -10207,6 +10207,16 @@ spec:
                                         format: int32
                                         minimum: 0
                                         type: integer
+                                      key:
+                                        description: |-
+                                          CEL expression selecting the bucket the request counts against, for example `jwt.sub` for a
+                                          per-user limit or `jwt.team` for a per-team limit. Each distinct value gets its own bucket with
+                                          the limit above. Requests without a value, or whose expression cannot be evaluated, share one
+                                          bucket. When unset, all requests share one bucket. Each proxy instance keeps a bounded number
+                                          of buckets per rule and drops the least used ones.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
                                       requests:
                                         description: |-
                                           Number of HTTP requests per unit of time that
@@ -10438,6 +10448,16 @@ spec:
                               format: int32
                               minimum: 0
                               type: integer
+                            key:
+                              description: |-
+                                CEL expression selecting the bucket the request counts against, for example `jwt.sub` for a
+                                per-user limit or `jwt.team` for a per-team limit. Each distinct value gets its own bucket with
+                                the limit above. Requests without a value, or whose expression cannot be evaluated, share one
+                                bucket. When unset, all requests share one bucket. Each proxy instance keeps a bounded number
+                                of buckets per rule and drops the least used ones.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
                             requests:
                               description: |-
                                 Number of HTTP requests per unit of time that

@@ -2559,10 +2559,11 @@ fn traffic_policy_from_proto(
 			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
 		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
-			let convert = |max_tokens: u64,
-			               tokens_per_fill: u64,
-			               fill_interval: Option<prost_types::Duration>,
-			               limit_type: i32| {
+			let mut convert = |max_tokens: u64,
+			                   tokens_per_fill: u64,
+			                   fill_interval: Option<prost_types::Duration>,
+			                   limit_type: i32,
+			                   key: Option<&str>| {
 				let t = tps::local_rate_limit::Type::try_from(limit_type)?;
 				http::localratelimit::RateLimitSpec {
 					max_tokens,
@@ -2574,6 +2575,9 @@ fn traffic_policy_from_proto(
 						tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
 						tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
 					},
+					key: key
+						.filter(|k| !k.is_empty())
+						.map(|k| permissive_cel_expression_arc(diagnostics, "localRateLimit.key", k)),
 				}
 				.try_into()
 				.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))
@@ -2584,6 +2588,7 @@ fn traffic_policy_from_proto(
 					lrl.tokens_per_fill,
 					lrl.fill_interval,
 					lrl.r#type,
+					None,
 				)?]
 			} else {
 				lrl
@@ -2595,9 +2600,10 @@ fn traffic_policy_from_proto(
 							rule.tokens_per_fill,
 							rule.fill_interval,
 							rule.r#type,
+							rule.key.as_deref(),
 						)
 					})
-					.collect::<Result<_, _>>()?
+					.collect::<Result<Vec<_>, _>>()?
 			};
 			TrafficPolicy::LocalRateLimit(RequestPolicy::single(rules))
 		},
@@ -4573,6 +4579,7 @@ mod tests {
 								nanos: 0,
 							}),
 							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+							key: None,
 						},
 						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
 							max_tokens: 5,
@@ -4582,6 +4589,7 @@ mod tests {
 								nanos: 0,
 							}),
 							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Request as i32,
+							key: None,
 						},
 					],
 				},

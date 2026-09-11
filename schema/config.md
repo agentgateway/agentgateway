@@ -3234,10 +3234,12 @@
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`binds[].listeners[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -22404,10 +22406,12 @@
 |`policies[].policy.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`policies[].policy.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`policies[].policy.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`policies[].policy.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`policies[].policy.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`policies[].policy.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`policies[].policy.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -38448,10 +38452,12 @@
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`routeGroups[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routeGroups[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routeGroups[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`routeGroups[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -57143,10 +57149,12 @@
 |`routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -77228,6 +77236,7 @@
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`llm.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`llm.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`llm.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`llm.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`llm.policies.remoteRateLimit.service`|object|Service reference. Service must be defined in the top level services list.|
 |`llm.policies.remoteRateLimit.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -80913,10 +80922,12 @@
 |`mcp.policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`mcp.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`mcp.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
 |`mcp.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`mcp.policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|

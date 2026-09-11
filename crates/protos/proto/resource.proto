@@ -1007,6 +1007,9 @@ message TrafficPolicySpec {
       uint64 tokens_per_fill = 2;
       google.protobuf.Duration fill_interval = 3;
       Type type = 4;
+      // CEL expression selecting the bucket, for example `jwt.sub`. Each distinct value gets its
+      // own bucket with the limits above; when unset, all requests share one bucket.
+      optional string key = 5;
     }
     // The singular fields contain the first rule for compatibility with older data planes.
     uint64 max_tokens = 1;
