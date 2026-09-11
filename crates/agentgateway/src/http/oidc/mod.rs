@@ -230,6 +230,18 @@ impl OidcPolicy {
 			}
 		}
 
+		// Fetch Metadata is controlled by the browser. Known non-navigation modes identify requests
+		// that cannot complete a cross-origin OIDC redirect; return 401 so the caller can initiate a
+		// document navigation instead. Missing, navigation, and unknown modes retain the redirect.
+		if req.headers().get("sec-fetch-mode").is_some_and(|mode| {
+			matches!(
+				mode.to_str(),
+				Ok("cors" | "no-cors" | "same-origin" | "websocket")
+			)
+		}) {
+			return Err(Error::AuthenticationRequired);
+		}
+
 		// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.
 		callback::start_login(self, req)
 	}

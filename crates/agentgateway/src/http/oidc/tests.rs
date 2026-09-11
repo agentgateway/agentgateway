@@ -418,6 +418,28 @@ async fn apply_redirects_unauthenticated_requests_to_login() {
 }
 
 #[tokio::test]
+async fn apply_returns_unauthorized_for_fetch_requests() {
+	let policy = test_policy();
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	req
+		.headers_mut()
+		.insert("sec-fetch-mode", "cors".parse().unwrap());
+
+	let err = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect_err("fetch request should not redirect")
+		.downcast();
+	assert!(matches!(
+		&err,
+		ProxyError::OidcFailure(Error::AuthenticationRequired)
+	));
+	assert_eq!(
+		err.into_response_with_grpc(false).status(),
+		::http::StatusCode::UNAUTHORIZED
+	);
+}
+
+#[tokio::test]
 async fn apply_bypasses_cors_preflight_requests() {
 	let policy = test_policy();
 	let mut req = request(Method::OPTIONS, "https://app.example.com/private", None);

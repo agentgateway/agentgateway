@@ -42,8 +42,9 @@ struct PreparedOidcPolicy {
 /// Browser-based OIDC authentication policy.
 ///
 /// Explicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.
-/// Unauthenticated non-callback requests always redirect to the provider login flow. Routes that
-/// need non-redirect authentication behavior should use a different auth policy.
+/// Unauthenticated document navigations redirect to the provider login flow. Browser requests
+/// positively identified as non-navigation requests return 401 so the caller can initiate a
+/// document navigation.
 #[apply(schema_de!)]
 pub struct LocalOidcConfig {
 	/// Issuer used for discovery and ID token validation.
@@ -84,8 +85,7 @@ pub struct LocalOidcConfig {
 	pub client_secret: SecretString,
 
 	/// Absolute callback URI handled by the gateway.
-	/// This policy always redirects unauthenticated non-callback requests back through this login
-	/// flow.
+	/// Unauthenticated document navigations are redirected back through this login flow.
 	#[serde(rename = "redirectURI")]
 	pub redirect_uri: String,
 
