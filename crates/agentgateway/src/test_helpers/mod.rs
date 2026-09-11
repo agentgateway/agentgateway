@@ -1,4 +1,5 @@
 pub mod ateapimock;
+pub mod credprovidermock;
 pub mod extauthmock;
 pub mod extmcpmock;
 pub mod extprocmock;

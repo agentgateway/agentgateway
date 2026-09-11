@@ -1,8 +1,10 @@
-use agentgateway::test_helpers::ateapimock;
+use agentgateway::test_helpers::{ateapimock, credprovidermock};
 use agentgateway::transport::stream::TLSConnectionInfo;
 use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
-use protos::ateapi::{Actor, ActorState, ActorStatus, ResourceMetadata, ResumeActorResponse};
+use protos::ateapi::{
+	Actor, ActorState, ActorStatus, EgressPolicy, ResourceMetadata, ResumeActorResponse,
+};
 use tokio::sync::Notify;
 
 use crate::common::prelude::*;
@@ -44,6 +46,73 @@ struct EgressHandler {
 	uid: &'static str,
 	state: ActorState,
 	error: Option<tonic::Code>,
+}
+
+#[derive(Clone)]
+struct CredentialEgressHandler {
+	policy: EgressPolicy,
+}
+
+#[async_trait::async_trait]
+impl ateapimock::Handler for CredentialEgressHandler {
+	async fn get_actor(
+		&mut self,
+		request: &protos::ateapi::GetActorRequest,
+	) -> Result<Actor, tonic::Status> {
+		let actor = request.actor.as_ref().unwrap();
+		assert_eq!(
+			(actor.atespace.as_str(), actor.name.as_str()),
+			("demo", "my-actor")
+		);
+		Ok(Actor {
+			metadata: Some(ResourceMetadata {
+				uid: "uid-1".to_owned(),
+				..Default::default()
+			}),
+			status: Some(ActorStatus {
+				state: ActorState::Running as i32,
+				worker_assignment: None,
+			}),
+		})
+	}
+
+	async fn get_actor_egress_policy(
+		&mut self,
+		request: &protos::ateapi::GetActorEgressPolicyRequest,
+	) -> Result<EgressPolicy, tonic::Status> {
+		let actor = request.actor.as_ref().unwrap();
+		assert_eq!(
+			(actor.atespace.as_str(), actor.name.as_str()),
+			("demo", "my-actor")
+		);
+		Ok(self.policy.clone())
+	}
+}
+
+#[derive(Clone)]
+struct CredentialHandler {
+	calls: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl credprovidermock::Handler for CredentialHandler {
+	async fn request_secret(
+		&mut self,
+		request: &protos::credprovider::RequestSecretRequest,
+	) -> Result<protos::credprovider::RequestSecretResponse, tonic::Status> {
+		assert_eq!(
+			request.uri,
+			"substrate-secret://kubernetes.io/default/upstream-token"
+		);
+		assert_eq!(
+			request.context.as_ref().unwrap().actor_identity,
+			"spiffe://substrate-actor.local/atespace/demo/actor/my-actor"
+		);
+		self.calls.fetch_add(1, Ordering::Relaxed);
+		Ok(protos::credprovider::RequestSecretResponse {
+			secret: b"injected-token".to_vec(),
+		})
+	}
 }
 
 #[async_trait::async_trait]
@@ -1309,6 +1378,110 @@ async fn substrate_egress_connect_status(
 	} else {
 		panic!("unexpected CONNECT response: {response}")
 	}
+}
+
+#[tokio::test]
+async fn substrate_egress_injects_provider_credentials_into_the_upstream_request() {
+	let upstream = simple_mock().await;
+	let policy = EgressPolicy {
+		rules: vec![protos::ateapi::EgressRule {
+			hostnames: Some(protos::ateapi::HostnameRule {
+				patterns: vec!["allowed.example".to_owned()],
+				effects: Some(protos::ateapi::EgressRuleEffects {
+					inject_static_headers: vec![protos::ateapi::CredentialHeaderInjection {
+						header: "authorization".to_owned(),
+						prefix: "Bearer ".to_owned(),
+						credential_uri: "substrate-secret://kubernetes.io/default/upstream-token".to_owned(),
+					}],
+				}),
+			}),
+			..Default::default()
+		}],
+		..Default::default()
+	};
+	let api = ateapimock::AteApiMock::new(move || CredentialEgressHandler {
+		policy: policy.clone(),
+	})
+	.spawn()
+	.await;
+	let credential_calls = Arc::new(AtomicUsize::new(0));
+	let credential_provider = credprovidermock::CredentialProviderMock::new({
+		let credential_calls = credential_calls.clone();
+		move || CredentialHandler {
+			calls: credential_calls.clone(),
+		}
+	})
+	.spawn()
+	.await;
+
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.address = "127.0.0.1:15013".parse().unwrap();
+	let mut inner = simple_bind();
+	inner.address = "0.0.0.0:18080".parse().unwrap();
+	inner.mode = BindMode::Internal;
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*upstream.address())
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_route(basic_route(*upstream.address()))
+		.with_connect_mode_on_port(agentgateway::types::frontend::ConnectMode::Tunnel, 15013);
+	gateway
+		.attach_frontend_policy(json!({
+			"substrateEgressActorResolution": {
+				"host": api.address.to_string(),
+			}
+		}))
+		.await;
+	gateway
+		.attach_route_policy(json!({
+			"substrateEgress": {
+				"host": api.address.to_string(),
+				"credentialProviders": [{
+					"uriAuthority": "kubernetes.io",
+					"target": { "host": credential_provider.address.to_string() }
+				}]
+			}
+		}))
+		.await;
+
+	let mut io = gateway.serve_tunnel_with_tls_info(
+		strng::literal!("outer"),
+		Some(TLSConnectionInfo {
+			src_identity: Some(TlsInfo {
+				certificate: Some(actor_certificate("uid-1").into()),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+	);
+	io.write_all(b"CONNECT allowed.example:18080 HTTP/1.1\r\nHost: allowed.example:18080\r\n\r\n")
+		.await
+		.unwrap();
+	let mut connect_response = [0; 128];
+	let response_len = io.read(&mut connect_response).await.unwrap();
+	assert!(
+		String::from_utf8_lossy(&connect_response[..response_len]).starts_with("HTTP/1.1 200 OK\r\n")
+	);
+
+	io.write_all(b"GET / HTTP/1.1\r\nHost: allowed.example\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
+	let mut response = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut response))
+		.await
+		.expect("timed out waiting for tunneled response")
+		.unwrap();
+	assert!(String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"));
+
+	assert_eq!(credential_calls.load(Ordering::Relaxed), 1);
+	let upstream_requests = upstream.received_requests().await.unwrap();
+	assert_eq!(upstream_requests.len(), 1);
+	assert_eq!(
+		upstream_requests[0].headers.get("authorization").unwrap(),
+		"Bearer injected-token"
+	);
 }
 
 #[tokio::test]

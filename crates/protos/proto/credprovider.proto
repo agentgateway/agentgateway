@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package credprovider;
+
+// CredentialProvider resolves an external credential reference. The provider
+// owns authorization and secret storage; AgentGateway only brokers a request.
+service CredentialProvider {
+  rpc RequestSecret(RequestSecretRequest) returns (RequestSecretResponse) {}
+}
+
+message SecretRequestContext {
+  // The verified actor identity on whose behalf the credential is requested.
+  string actor_identity = 1;
+}
+
+message RequestSecretRequest {
+  string uri = 1;
+  SecretRequestContext context = 2;
+}
+
+message RequestSecretResponse {
+  bytes secret = 1;
+}
