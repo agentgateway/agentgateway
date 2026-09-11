@@ -1800,6 +1800,9 @@ impl LocalBackend {
 					session_idle_ttl: mcp_session_ttl,
 					sse_keep_alive: tgt.sse_keep_alive,
 					dns_rebinding_protection: tgt.dns_rebinding_protection,
+					server_name: tgt.server_name.clone(),
+					server_version: tgt.server_version.clone(),
+					instructions: tgt.instructions.clone(),
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -1881,6 +1884,18 @@ pub struct LocalMcpBackend {
 	/// Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub dns_rebinding_protection: bool,
+	/// Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`
+	/// when multiplexing multiple targets. Defaults to `agentgateway` when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server_name: Option<Strng>,
+	/// Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`
+	/// when multiplexing multiple targets. Defaults to the build version when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server_version: Option<Strng>,
+	/// Overrides the gateway preamble prepended to merged upstream instructions when
+	/// multiplexing multiple targets. Defaults to a generic gateway description when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub instructions: Option<Strng>,
 }
 
 #[apply(schema_de!)]

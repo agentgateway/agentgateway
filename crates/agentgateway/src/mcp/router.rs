@@ -113,6 +113,9 @@ impl App {
 				failure_mode: backend.failure_mode,
 				session_idle_ttl: backend.session_idle_ttl,
 				sse_keep_alive: backend.sse_keep_alive,
+				server_name: backend.server_name.clone(),
+				server_version: backend.server_version.clone(),
+				instructions: backend.instructions.clone(),
 			}
 		};
 		let sessions = self.session.clone();
@@ -240,6 +243,9 @@ pub struct McpBackendGroup {
 	pub failure_mode: FailureMode,
 	pub session_idle_ttl: Duration,
 	pub sse_keep_alive: Option<Duration>,
+	pub server_name: Option<Strng>,
+	pub server_version: Option<Strng>,
+	pub instructions: Option<Strng>,
 }
 
 impl Default for McpBackendGroup {
@@ -251,6 +257,9 @@ impl Default for McpBackendGroup {
 			failure_mode: crate::mcp::FailureMode::default(),
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
 			sse_keep_alive: None,
+			server_name: None,
+			server_version: None,
+			instructions: None,
 		}
 	}
 }

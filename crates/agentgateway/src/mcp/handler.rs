@@ -820,6 +820,9 @@ impl Relay {
 					resource_subscribe,
 					upstream_instructions,
 					upstreams.merged_extensions(&HashMap::new()),
+					upstreams.server_name_override(),
+					upstreams.server_version_override(),
+					upstreams.instructions_override(),
 				)
 				.into(),
 			)
@@ -873,6 +876,9 @@ impl Relay {
 				resource_subscribe,
 				upstream_instructions,
 				upstreams.merged_extensions(&upstream_extensions),
+				upstreams.server_name_override(),
+				upstreams.server_version_override(),
+				upstreams.instructions_override(),
 			);
 			discover.supported_versions = supported_versions;
 			Ok(discover.into())
@@ -1569,11 +1575,16 @@ impl Relay {
 		Ok(accepted_response())
 	}
 
+	pub(crate) const DEFAULT_GATEWAY_PREAMBLE: &str = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+
 	fn get_info(
 		pv: ProtocolVersion,
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
+		server_name_override: Option<Strng>,
+		server_version_override: Option<Strng>,
+		instructions_override: Option<Strng>,
 	) -> ServerInfo {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
@@ -1592,7 +1603,9 @@ impl Relay {
 			capabilities.extensions = extensions;
 			capabilities
 		};
-		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+		let gateway_preamble = instructions_override
+			.as_deref()
+			.unwrap_or(Self::DEFAULT_GATEWAY_PREAMBLE);
 		let instructions = if upstream_instructions.is_empty() {
 			Some(gateway_preamble.to_string())
 		} else {
@@ -1605,8 +1618,12 @@ impl Relay {
 		ServerInfo::new(capabilities)
 			.with_protocol_version(pv)
 			.with_server_info(Implementation::new(
-				"agentgateway",
-				BuildInfo::new().version.to_string(),
+				server_name_override
+					.map(|s| s.to_string())
+					.unwrap_or_else(|| "agentgateway".to_string()),
+				server_version_override
+					.map(|s| s.to_string())
+					.unwrap_or_else(|| BuildInfo::new().version.to_string()),
 			))
 			.with_instructions(instructions.unwrap_or_default())
 	}
@@ -1615,12 +1632,18 @@ impl Relay {
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
+		server_name_override: Option<Strng>,
+		server_version_override: Option<Strng>,
+		instructions_override: Option<Strng>,
 	) -> DiscoverResult {
 		let info = Self::get_info(
 			ProtocolVersion::default(),
 			resource_subscribe,
 			upstream_instructions,
 			extensions,
+			server_name_override,
+			server_version_override,
+			instructions_override,
 		);
 		let mut result =
 			DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
