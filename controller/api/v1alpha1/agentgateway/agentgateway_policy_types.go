@@ -328,6 +328,54 @@ type Health struct {
 	// Settings for evicting unhealthy backends.
 	// +optional
 	Eviction *BackendEviction `json:"eviction,omitempty"`
+
+	// Settings for probing the backend on a timer. A backend that fails unhealthyThreshold probes
+	// in a row is evicted and stays evicted while probes keep failing; it is restored after
+	// healthyThreshold successful probes. Only LLM provider backends are probed.
+	// +optional
+	Active *ActiveHealthCheck `json:"active,omitempty"`
+}
+
+// Settings for probing a backend on a timer.
+type ActiveHealthCheck struct {
+	// HTTP path to probe.
+	// +kubebuilder:default="/health"
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
+	// +kubebuilder:validation:XValidation:rule="self.startsWith('/')",message="path must start with /"
+	// +optional
+	Path *string `json:"path,omitempty"`
+
+	// Time between probes of one backend.
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="interval must be at least 1 second"
+	// +kubebuilder:default="10s"
+	// +optional
+	Interval *Duration `json:"interval,omitempty"`
+
+	// How long to wait for a probe response before counting it as a failure.
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="timeout must be at least 100 milliseconds"
+	// +kubebuilder:default="3s"
+	// +optional
+	Timeout *Duration `json:"timeout,omitempty"`
+
+	// Consecutive successful probes before an evicted backend is restored.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=1
+	// +optional
+	HealthyThreshold *int32 `json:"healthyThreshold,omitempty"`
+
+	// Consecutive failed probes before the backend is evicted.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=3
+	// +optional
+	UnhealthyThreshold *int32 `json:"unhealthyThreshold,omitempty"`
+
+	// HTTP status codes that count as healthy. When unset, any 2xx status is healthy.
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:items:Minimum=100
+	// +kubebuilder:validation:items:Maximum=599
+	// +optional
+	ExpectedStatuses []int32 `json:"expectedStatuses,omitempty"`
 }
 
 // Settings for evicting unhealthy backends.

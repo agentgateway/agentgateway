@@ -1,5 +1,6 @@
 pub mod filters;
 pub mod health;
+pub mod healthcheck;
 pub mod timeout;
 
 pub mod budget;

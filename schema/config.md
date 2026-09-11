@@ -6771,6 +6771,13 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.health.active`|object|Settings for probing the backend on a timer.|
+|`binds[].listeners[].routes[].backends[].ai.policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`binds[].listeners[].routes[].backends[].ai.policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`binds[].listeners[].routes[].backends[].ai.policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -10170,6 +10177,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -13532,6 +13546,13 @@
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`binds[].listeners[].routes[].backends[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`binds[].listeners[].routes[].backends[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`binds[].listeners[].routes[].backends[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`binds[].listeners[].routes[].backends[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`binds[].listeners[].routes[].backends[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`binds[].listeners[].routes[].backends[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`binds[].listeners[].routes[].backends[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -25941,6 +25962,13 @@
 |`backends[].ai.policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`backends[].ai.policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`backends[].ai.policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`backends[].ai.policies.health.active`|object|Settings for probing the backend on a timer.|
+|`backends[].ai.policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`backends[].ai.policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`backends[].ai.policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`backends[].ai.policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`backends[].ai.policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`backends[].ai.policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`backends[].ai.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`backends[].ai.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`backends[].ai.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -29340,6 +29368,13 @@
 |`backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`backends[].ai.groups[].providers[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`backends[].ai.groups[].providers[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`backends[].ai.groups[].providers[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`backends[].ai.groups[].providers[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`backends[].ai.groups[].providers[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`backends[].ai.groups[].providers[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`backends[].ai.groups[].providers[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`backends[].ai.groups[].providers[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -32700,6 +32735,13 @@
 |`backends[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`backends[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`backends[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`backends[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`backends[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`backends[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`backends[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`backends[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`backends[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`backends[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`backends[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`backends[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`backends[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -41985,6 +42027,13 @@
 |`routeGroups[].routes[].backends[].ai.policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`routeGroups[].routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`routeGroups[].routes[].backends[].ai.policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.health.active`|object|Settings for probing the backend on a timer.|
+|`routeGroups[].routes[].backends[].ai.policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`routeGroups[].routes[].backends[].ai.policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`routeGroups[].routes[].backends[].ai.policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`routeGroups[].routes[].backends[].ai.policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`routeGroups[].routes[].backends[].ai.policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`routeGroups[].routes[].backends[].ai.policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -45384,6 +45433,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -48746,6 +48802,13 @@
 |`routeGroups[].routes[].backends[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`routeGroups[].routes[].backends[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`routeGroups[].routes[].backends[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`routeGroups[].routes[].backends[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`routeGroups[].routes[].backends[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`routeGroups[].routes[].backends[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`routeGroups[].routes[].backends[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`routeGroups[].routes[].backends[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`routeGroups[].routes[].backends[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`routeGroups[].routes[].backends[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`routeGroups[].routes[].backends[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -60680,6 +60743,13 @@
 |`routes[].backends[].ai.policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`routes[].backends[].ai.policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`routes[].backends[].ai.policies.health.active`|object|Settings for probing the backend on a timer.|
+|`routes[].backends[].ai.policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`routes[].backends[].ai.policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`routes[].backends[].ai.policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`routes[].backends[].ai.policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`routes[].backends[].ai.policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`routes[].backends[].ai.policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`routes[].backends[].ai.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`routes[].backends[].ai.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].backends[].ai.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -64079,6 +64149,13 @@
 |`routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`routes[].backends[].ai.groups[].providers[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`routes[].backends[].ai.groups[].providers[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`routes[].backends[].ai.groups[].providers[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`routes[].backends[].ai.groups[].providers[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`routes[].backends[].ai.groups[].providers[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`routes[].backends[].ai.groups[].providers[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`routes[].backends[].ai.groups[].providers[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -67441,6 +67518,13 @@
 |`routes[].backends[].policies.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`routes[].backends[].policies.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`routes[].backends[].policies.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`routes[].backends[].policies.health.active`|object|Settings for probing the backend on a timer.|
+|`routes[].backends[].policies.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`routes[].backends[].policies.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`routes[].backends[].policies.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`routes[].backends[].policies.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`routes[].backends[].policies.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`routes[].backends[].policies.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`routes[].backends[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service after this backend is selected.|
 |`routes[].backends[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].backends[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -70856,6 +70940,13 @@
 |`llm.providers[].defaults.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`llm.providers[].defaults.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`llm.providers[].defaults.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`llm.providers[].defaults.health.active`|object|Settings for probing the backend on a timer.|
+|`llm.providers[].defaults.health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`llm.providers[].defaults.health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`llm.providers[].defaults.health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`llm.providers[].defaults.health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`llm.providers[].defaults.health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`llm.providers[].defaults.health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`llm.providers[].defaults.backendTunnel`|object|Tunneling configuration for connecting to the LLM provider.|
 |`llm.providers[].defaults.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`llm.providers[].defaults.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -71587,6 +71678,13 @@
 |`llm.models[].health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
 |`llm.models[].health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
 |`llm.models[].health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`llm.models[].health.active`|object|Settings for probing the backend on a timer.|
+|`llm.models[].health.active.path`|string|HTTP path to probe. Defaults to `/health`.|
+|`llm.models[].health.active.interval`|string|Time between probes of one backend. Defaults to `10s`.|
+|`llm.models[].health.active.timeout`|string|How long to wait for a probe response before counting it as a failure. Defaults to `3s`.|
+|`llm.models[].health.active.healthyThreshold`|integer|Consecutive successful probes before an evicted backend is restored. Defaults to 1.|
+|`llm.models[].health.active.unhealthyThreshold`|integer|Consecutive failed probes before the backend is evicted. Defaults to 3.|
+|`llm.models[].health.active.expectedStatuses`|[]integer|HTTP status codes that count as healthy. When empty, any 2xx status is healthy.|
 |`llm.models[].backendTunnel`|object|backendTunnel configures tunneling when connecting to the LLM provider.|
 |`llm.models[].backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`llm.models[].backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|

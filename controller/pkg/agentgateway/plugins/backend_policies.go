@@ -337,9 +337,29 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 		})
 	}
 
+	var activeProto *api.BackendPolicySpec_ActiveHealthCheck
+	if healthPolicy.Active != nil {
+		active := healthPolicy.Active
+		activeProto = &api.BackendPolicySpec_ActiveHealthCheck{
+			Path:     ptr.OrEmpty(active.Path),
+			Interval: durationToProto(active.Interval),
+			Timeout:  durationToProto(active.Timeout),
+		}
+		if active.HealthyThreshold != nil {
+			activeProto.HealthyThreshold = uint32(*active.HealthyThreshold)
+		}
+		if active.UnhealthyThreshold != nil {
+			activeProto.UnhealthyThreshold = uint32(*active.UnhealthyThreshold)
+		}
+		for _, status := range active.ExpectedStatuses {
+			activeProto.ExpectedStatuses = append(activeProto.ExpectedStatuses, uint32(status))
+		}
+	}
+
 	p := &api.BackendPolicySpec_Health{
 		UnhealthyCondition: unhealthyCondition,
 		Eviction:           evictionProto,
+		Active:             activeProto,
 	}
 	evictPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + healthPolicySuffix,

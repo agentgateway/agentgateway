@@ -2481,9 +2481,36 @@ fn convert_health(
 		consecutive_failures: ev.consecutive_failures,
 		health_threshold: ev.health_threshold,
 	});
+	// Unset proto fields read as empty or zero and take the defaults.
+	let active = h.active.as_ref().map(|a| {
+		let defaults = health::ActiveHealthCheck::default();
+		let duration = |d: Option<prost_types::Duration>, default: Duration| {
+			d.map(convert_duration)
+				.filter(|d| !d.is_zero())
+				.unwrap_or(default)
+		};
+		let count = |n: u32, default: u32| if n == 0 { default } else { n };
+		health::ActiveHealthCheck {
+			path: if a.path.is_empty() {
+				defaults.path
+			} else {
+				a.path.as_str().into()
+			},
+			interval: duration(a.interval, defaults.interval),
+			timeout: duration(a.timeout, defaults.timeout),
+			healthy_threshold: count(a.healthy_threshold, defaults.healthy_threshold),
+			unhealthy_threshold: count(a.unhealthy_threshold, defaults.unhealthy_threshold),
+			expected_statuses: a
+				.expected_statuses
+				.iter()
+				.filter_map(|s| u16::try_from(*s).ok())
+				.collect(),
+		}
+	});
 	health::Policy {
 		unhealthy_expression,
 		eviction,
+		active,
 	}
 }
 

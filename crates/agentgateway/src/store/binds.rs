@@ -1682,6 +1682,10 @@ impl Store {
 		self.backends.get(r).cloned()
 	}
 
+	pub fn backends(&self) -> impl Iterator<Item = &Arc<BackendWithPolicies>> {
+		self.backends.values()
+	}
+
 	#[instrument(
         level = Level::INFO,
         name="remove_bind",
