@@ -1553,7 +1553,11 @@ message BackendPolicySpec {
     // If empty or no route matches, the implementation defaults to COMPLETIONS behavior.
     map<string, RouteType> routes = 7;
   }
-  message A2a {}
+  message A2a {
+    // Custom path suffix for agent card requests (e.g., "/agent.json").
+    // Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.
+    string agent_card_path = 1;
+  }
   message InferenceRouting {
     enum FailureMode {
       UNKNOWN = 0;

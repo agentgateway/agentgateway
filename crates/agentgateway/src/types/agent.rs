@@ -2870,8 +2870,14 @@ impl BackendTrafficPolicy {
 	}
 }
 
+/// A2A policy configuration for agent-to-agent communication.
 #[apply(schema!)]
-pub struct A2aPolicy {}
+pub struct A2aPolicy {
+	/// Custom path suffix for agent card requests (e.g., "/agent.json").
+	/// Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.
+	#[serde(skip_serializing_if = "is_default")]
+	pub agent_card_path: Option<Strng>,
+}
 
 #[apply(schema!)]
 pub struct Authorization(pub Arc<RuleSet>);

@@ -15,42 +15,61 @@ fn test_build_agent_path() {
 		// Test stripping /.well-known/agent.json
 		(
 			"https://example.com/.well-known/agent.json",
+			"/.well-known/agent.json",
 			"https://example.com",
 		),
 		(
 			"https://example.com/api/.well-known/agent.json",
+			"/.well-known/agent.json",
 			"https://example.com/api",
 		),
 		(
 			"http://localhost:8080/service/.well-known/agent.json",
+			"/.well-known/agent.json",
 			"http://localhost:8080/service",
 		),
 		// Test stripping /.well-known/agent-card.json
 		(
 			"https://example.com/.well-known/agent-card.json",
+			"/.well-known/agent-card.json",
 			"https://example.com",
 		),
 		(
 			"https://example.com/api/.well-known/agent-card.json",
+			"/.well-known/agent-card.json",
 			"https://example.com/api",
 		),
 		(
 			"http://localhost:8080/service/.well-known/agent-card.json",
+			"/.well-known/agent-card.json",
 			"http://localhost:8080/service",
 		),
 		(
 			"https://example.com:443/.well-known/agent.json",
+			"/.well-known/agent.json",
 			"https://example.com:443",
 		),
 		(
 			"http://example.com:80/.well-known/agent-card.json",
+			"/.well-known/agent-card.json",
 			"http://example.com:80",
+		),
+		// Test stripping custom agent card paths (issue #3018)
+		(
+			"https://solutions.com/api/ai/config/agents/agent-orchestrator/agent.json",
+			"/agent.json",
+			"https://solutions.com/api/ai/config/agents/agent-orchestrator",
+		),
+		(
+			"https://elasticsearch.com/s/_ops/api/agent_builder/a2a/test_v1.json",
+			"/test_v1.json",
+			"https://elasticsearch.com/s/_ops/api/agent_builder/a2a",
 		),
 	];
 
-	for (input_url, expected_output) in test_cases {
+	for (input_url, suffix, expected_output) in test_cases {
 		let uri: Uri = input_url.parse().expect("Failed to parse URI");
-		let result = build_agent_path(uri);
+		let result = build_agent_path(uri, suffix);
 		assert_eq!(result, expected_output, "Failed for input: {input_url}");
 	}
 }
@@ -71,7 +90,10 @@ async fn test_classify_request_extracts_method_and_preserves_body() {
 		.body(http::Body::from(body.clone()))
 		.unwrap();
 
-	let ty = classify_request(&mut req).await;
+	let pol = A2aPolicy {
+		agent_card_path: None,
+	};
+	let ty = classify_request(&pol, &mut req).await;
 
 	match ty {
 		RequestType::Call(method) => assert_eq!(method.as_str(), "tasks/send"),
@@ -94,10 +116,13 @@ async fn test_classify_request_uses_original_url_for_agent_card() {
 		.extensions_mut()
 		.insert(crate::http::filters::OriginalUrl(original.clone()));
 
-	let ty = classify_request(&mut req).await;
+	let pol = A2aPolicy {
+		agent_card_path: None,
+	};
+	let ty = classify_request(&pol, &mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri, _, _) => assert_eq!(uri, original),
+		RequestType::AgentCard(uri, _, _, _) => assert_eq!(uri, original),
 		other => panic!("expected agent card request, got {other:?}"),
 	}
 }
@@ -116,10 +141,13 @@ async fn test_classify_request_uses_original_url_for_agent_card_with_subpath() {
 		.extensions_mut()
 		.insert(crate::http::filters::OriginalUrl(original.clone()));
 
-	let ty = classify_request(&mut req).await;
+	let pol = A2aPolicy {
+		agent_card_path: None,
+	};
+	let ty = classify_request(&pol, &mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri, _, _) => assert_eq!(uri, original),
+		RequestType::AgentCard(uri, _, _, _) => assert_eq!(uri, original),
 		other => panic!("expected agent card request, got {other:?}"),
 	}
 }
@@ -139,10 +167,13 @@ async fn test_classify_request_uses_x_forwarded_proto_for_agent_card() {
 		.extensions_mut()
 		.insert(crate::http::filters::OriginalUrl(original));
 
-	let ty = classify_request(&mut req).await;
+	let pol = A2aPolicy {
+		agent_card_path: None,
+	};
+	let ty = classify_request(&pol, &mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri, _, _) => {
+		RequestType::AgentCard(uri, _, _, _) => {
 			assert_eq!(
 				uri,
 				"https://example.com/api/.well-known/agent-card.json"
@@ -163,7 +194,10 @@ async fn test_classify_request_returns_unknown_method_on_invalid_json() {
 		.body(http::Body::from("{\"jsonrpc\":\"2.0\""))
 		.unwrap();
 
-	let ty = classify_request(&mut req).await;
+	let pol = A2aPolicy {
+		agent_card_path: None,
+	};
+	let ty = classify_request(&pol, &mut req).await;
 
 	match ty {
 		RequestType::Call(method) => assert_eq!(method.as_str(), "unknown"),
@@ -185,13 +219,16 @@ async fn test_apply_to_response_rewrites_agent_card_url() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -220,13 +257,16 @@ async fn test_apply_to_response_rewrites_v1_agent_card_single_interface() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -259,13 +299,16 @@ async fn test_apply_to_response_rewrites_v1_agent_card_multiple_interfaces() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -301,13 +344,16 @@ async fn test_apply_to_response_rewrites_v1_agent_card_root_path() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"https://example.com/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -340,13 +386,16 @@ async fn test_apply_to_response_skips_interface_without_url() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -373,13 +422,16 @@ async fn test_apply_to_response_errors_when_neither_url_field_present() {
 		.unwrap();
 
 	let result = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"https://example.com/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -412,7 +464,9 @@ async fn test_apply_to_response_records_success_call_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("tasks/send")),
 		&mut resp,
 	)
@@ -447,7 +501,9 @@ async fn test_apply_to_response_records_error_call_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("tasks/send")),
 		&mut resp,
 	)
@@ -477,7 +533,9 @@ async fn test_apply_to_response_records_unknown_size_json_call_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("tasks/send")),
 		&mut resp,
 	)
@@ -501,7 +559,9 @@ async fn test_apply_to_response_records_unknown_call_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("tasks/send")),
 		&mut resp,
 	)
@@ -524,7 +584,9 @@ async fn test_apply_to_response_skips_invalid_json_call_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("tasks/send")),
 		&mut resp,
 	)
@@ -549,7 +611,9 @@ async fn test_apply_to_response_skips_non_json_call_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("tasks/send")),
 		&mut resp,
 	)
@@ -575,7 +639,9 @@ async fn test_apply_to_response_skips_partial_call_telemetry() {
 	resp.extensions_mut().insert(BufferLimit::new(4));
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("tasks/send")),
 		&mut resp,
 	)
@@ -610,7 +676,9 @@ async fn test_apply_to_response_rewrites_url_with_path_rewrite() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			// Original (gateway) URL where the client requested the agent card.
 			"http://localhost:4001/a2a/tick/.well-known/agent-card.json"
@@ -620,6 +688,7 @@ async fn test_apply_to_response_rewrites_url_with_path_rewrite() {
 			// /a2a/tick -> /a2a/tock before sending to the backend.
 			"/a2a/tock/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -655,13 +724,16 @@ async fn test_apply_to_response_preserves_subpath_with_path_rewrite() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"http://localhost:4001/a2a/tick/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/a2a/tock/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -698,13 +770,16 @@ async fn test_apply_to_response_avoids_partial_path_segment_match() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"http://gateway/public/weather/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
 			"/internal/weather/.well-known/agent-card.json".to_string(),
 			None,
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -746,7 +821,9 @@ async fn test_apply_to_response_uses_prefix_rewrite_context() {
 		.unwrap();
 
 	apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::AgentCard(
 			"http://gateway.example/gw/svc/agent/.well-known/agent-card.json"
 				.parse()
@@ -756,6 +833,7 @@ async fn test_apply_to_response_uses_prefix_rewrite_context() {
 				path: Some(crate::types::agent::PathRedirect::Prefix("/".into())),
 				path_match: crate::types::agent::PathMatch::PathPrefix("/gw".into()),
 			}),
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -808,7 +886,9 @@ async fn test_apply_to_response_records_v1_nested_task_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("SendMessage")),
 		&mut resp,
 	)
@@ -823,6 +903,197 @@ async fn test_apply_to_response_records_v1_nested_task_telemetry() {
 		Some("completed")
 	);
 	assert_eq!(info.context_id.as_ref().map(|s| s.as_str()), Some("ctx"));
+}
+
+// Test cases for issue #3018: non-standard agent card paths
+// These tests verify the behavior when agent card is at non-standard paths
+
+#[tokio::test]
+async fn test_classify_request_non_standard_agent_card_path_with_custom_config() {
+	// Regression test for issue #3018: non-standard agents that host agent card
+	// at a custom path should be recognized when agent_card_path is configured.
+	//
+	// Example: https://solutions.com/api/ai/config/agents/agent-orchestrator/agent.json
+	let original: Uri = "https://example.com/api/ai/config/agents/agent-orchestrator/agent.json"
+		.parse()
+		.unwrap();
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://backend.internal/api/ai/config/agents/agent-orchestrator/agent.json")
+		.body(http::Body::empty())
+		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::filters::OriginalUrl(original.clone()));
+
+	// Configure custom agent card path
+	let pol = A2aPolicy {
+		agent_card_path: Some(agent_core::strng::Strng::from("/agent.json")),
+	};
+	let ty = classify_request(&pol, &mut req).await;
+
+	// With custom path configured, this should now return AgentCard
+	match ty {
+		RequestType::AgentCard(uri, _, _, suffix) => {
+			assert_eq!(uri, original);
+			assert_eq!(suffix, "/agent.json");
+		},
+		other => {
+			panic!("expected agent card request for non-standard path with custom config, got {other:?}")
+		},
+	}
+}
+
+#[tokio::test]
+async fn test_classify_request_non_standard_agent_card_path_elasticsearch_style() {
+	// Regression test for issue #3018: Elasticsearch-style non-standard agent card paths
+	//
+	// Example: https://elasticsearch.com/s/_ops/api/agent_builder/a2a/test_v1.json
+	let original: Uri = "https://example.com/s/_ops/api/agent_builder/a2a/test_v1.json"
+		.parse()
+		.unwrap();
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://backend.internal/s/_ops/api/agent_builder/a2a/test_v1.json")
+		.body(http::Body::empty())
+		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::filters::OriginalUrl(original.clone()));
+
+	// Configure custom agent card path for Elasticsearch-style
+	let pol = A2aPolicy {
+		agent_card_path: Some(agent_core::strng::Strng::from("/test_v1.json")),
+	};
+	let ty = classify_request(&pol, &mut req).await;
+
+	// With custom path configured, this should now return AgentCard
+	match ty {
+		RequestType::AgentCard(uri, _, _, suffix) => {
+			assert_eq!(uri, original);
+			assert_eq!(suffix, "/test_v1.json");
+		},
+		other => {
+			panic!("expected agent card request for custom JSON path with custom config, got {other:?}")
+		},
+	}
+}
+
+#[tokio::test]
+async fn test_classify_request_without_custom_config_still_works_for_standard_paths() {
+	// Verify that standard paths still work without custom configuration
+	let original: Uri = "https://example.com/.well-known/agent-card.json"
+		.parse()
+		.unwrap();
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("http://backend.internal/.well-known/agent-card.json")
+		.body(http::Body::empty())
+		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::filters::OriginalUrl(original.clone()));
+
+	// No custom path configured
+	let pol = A2aPolicy {
+		agent_card_path: None,
+	};
+	let ty = classify_request(&pol, &mut req).await;
+
+	match ty {
+		RequestType::AgentCard(uri, _, _, suffix) => {
+			assert_eq!(uri, original);
+			assert_eq!(suffix, "/.well-known/agent-card.json");
+		},
+		other => panic!("expected agent card request for standard path, got {other:?}"),
+	}
+}
+
+#[tokio::test]
+async fn test_apply_to_response_non_standard_agent_card_url_rewrite() {
+	// Regression test for issue #3018: URL rewrite should work for non-standard agent cards
+	// This test verifies that when a non-standard agent card is recognized,
+	// the URL rewriting works correctly.
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "Elasticsearch Agent",
+				"url": "https://elasticsearch.com/s/_ops/api/agent_builder/a2a/_test_v1",
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	// This simulates a non-standard agent card path being recognized with custom suffix
+	let result = apply_to_response(
+		Some(&A2aPolicy {
+			agent_card_path: Some(agent_core::strng::Strng::from("/_test_v1.json")),
+		}),
+		RequestType::AgentCard(
+			"https://gateway.example.com/a2a/_test_v1.json"
+				.parse()
+				.unwrap(),
+			"/s/_ops/api/agent_builder/a2a/_test_v1.json".to_string(),
+			None,
+			"/_test_v1.json".to_string(), // Custom suffix
+		),
+		&mut resp,
+	)
+	.await;
+
+	// If the agent card is recognized, URL rewriting should work
+	assert!(result.is_ok());
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	// The URL should be rewritten to the gateway path (with suffix stripped)
+	assert_eq!(json["url"], "https://gateway.example.com/a2a");
+}
+
+#[tokio::test]
+async fn test_apply_to_response_non_standard_agent_card_with_supported_interfaces() {
+	// Regression test for issue #3018: URL rewrite for non-standard agent cards
+	// with supportedInterfaces (A2A v1.0 format)
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "Solutions Agent",
+				"supportedInterfaces": [
+					// Interface URL shares common path with the agent card path
+					{ "protocolBinding": "JSONRPC", "url": "https://solutions.com/api/ai/config/agents/agent-orchestrator/a2a/" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	let result = apply_to_response(
+		Some(&A2aPolicy {
+			agent_card_path: Some(agent_core::strng::Strng::from("/agent.json")),
+		}),
+		RequestType::AgentCard(
+			"https://gateway.example.com/a2a/agents/agent-orchestrator/agent.json"
+				.parse()
+				.unwrap(),
+			"/api/ai/config/agents/agent-orchestrator/agent.json".to_string(),
+			None,
+			"/agent.json".to_string(), // Custom suffix
+		),
+		&mut resp,
+	)
+	.await;
+
+	assert!(result.is_ok());
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	// The interface URL should be rewritten to the gateway path
+	// The common prefix /api/ai/config/agents/agent-orchestrator is stripped,
+	// leaving /a2a/ which is appended to the gateway base
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"https://gateway.example.com/a2a/agents/agent-orchestrator/a2a/"
+	);
 }
 
 #[tokio::test]
@@ -846,7 +1117,9 @@ async fn test_apply_to_response_records_v1_nested_message_telemetry() {
 		.unwrap();
 
 	let info = apply_to_response(
-		Some(&A2aPolicy {}),
+		Some(&A2aPolicy {
+			agent_card_path: None,
+		}),
 		RequestType::Call(Strng::from("SendMessage")),
 		&mut resp,
 	)

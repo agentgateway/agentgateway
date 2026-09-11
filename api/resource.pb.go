@@ -13679,7 +13679,10 @@ func (x *BackendPolicySpec_Ai) GetRoutes() map[string]BackendPolicySpec_Ai_Route
 }
 
 type BackendPolicySpec_A2A struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Custom path suffix for agent card requests (e.g., "/agent.json").
+	// Supplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.
+	AgentCardPath string `protobuf:"bytes,1,opt,name=agent_card_path,json=agentCardPath,proto3" json:"agent_card_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -13712,6 +13715,13 @@ func (x *BackendPolicySpec_A2A) ProtoReflect() protoreflect.Message {
 // Deprecated: Use BackendPolicySpec_A2A.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_A2A) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{58, 1}
+}
+
+func (x *BackendPolicySpec_A2A) GetAgentCardPath() string {
+	if x != nil {
+		return x.AgentCardPath
+	}
+	return ""
 }
 
 type BackendPolicySpec_InferenceRouting struct {
@@ -18858,7 +18868,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xa4i\n" +
+	"\x04kind\"\xcci\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -19061,8 +19071,9 @@ const file_resource_proto_rawDesc = "" +
 	"\x06RERANK\x10\n" +
 	"\x12\x14\n" +
 	"\x10GENERATE_CONTENT\x10\v\x12\x17\n" +
-	"\x13GEMINI_COUNT_TOKENS\x10\f\x1a\x05\n" +
-	"\x03A2a\x1a\x92\x02\n" +
+	"\x13GEMINI_COUNT_TOKENS\x10\f\x1a-\n" +
+	"\x03A2a\x12&\n" +
+	"\x0fagent_card_path\x18\x01 \x01(\tR\ragentCardPath\x1a\x92\x02\n" +
 	"\x10InferenceRouting\x12T\n" +
 	"\x0fendpoint_picker\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0eendpointPicker\x12l\n" +
 	"\ffailure_mode\x18\x02 \x01(\x0e2I.agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureModeR\vfailureMode\":\n" +

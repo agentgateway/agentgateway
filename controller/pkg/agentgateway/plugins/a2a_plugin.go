@@ -18,6 +18,9 @@ import (
 const (
 	legacyA2aProtocol = "kgateway.dev/a2a"
 	a2aProtocol       = "agentgateway.dev/a2a"
+
+	// Service annotation for custom agent card path (e.g., "/agent.json").
+	a2aAgentCardPathAnnotation = "agentgateway.dev/a2a-agent-card-path"
 )
 
 // NewA2APlugin creates a new A2A policy plugin
@@ -57,6 +60,13 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 		if port.AppProtocol != nil && (*port.AppProtocol == a2aProtocol || *port.AppProtocol == legacyA2aProtocol) {
 			logger.Debug("found A2A service", "service", svc.Name, "namespace", svc.Namespace, "port", port.Port)
 			hostname := fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, clusterDomain)
+
+			// Read custom agent card path from annotation
+			var agentCardPath string
+			if svc.Annotations != nil {
+				agentCardPath = svc.Annotations[a2aAgentCardPathAnnotation]
+			}
+
 			policy := &api.Policy{
 				Key:               fmt.Sprintf("a2a/%s/%s/%d", svc.Namespace, svc.Name, port.Port),
 				CreationTimestamp: max(svc.CreationTimestamp.Unix(), 0),
@@ -70,7 +80,9 @@ func translatePoliciesForService(krtctx krt.HandlerContext, svc *corev1.Service,
 				Kind: &api.Policy_Backend{
 					Backend: &api.BackendPolicySpec{
 						Kind: &api.BackendPolicySpec_A2A_{
-							A2A: &api.BackendPolicySpec_A2A{},
+							A2A: &api.BackendPolicySpec_A2A{
+								AgentCardPath: agentCardPath,
+							},
 						},
 					},
 				},

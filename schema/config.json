@@ -4921,7 +4921,17 @@
       "additionalProperties": false
     },
     "A2aPolicy": {
+      "description": "A2A policy configuration for agent-to-agent communication.",
       "type": "object",
+      "properties": {
+        "agentCardPath": {
+          "description": "Custom path suffix for agent card requests (e.g., \"/agent.json\").\nSupplements standard paths: /.well-known/agent.json and /.well-known/agent-card.json.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
       "additionalProperties": false
     },
     "Policy": {
