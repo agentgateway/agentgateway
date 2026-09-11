@@ -691,13 +691,17 @@ func translateMCPAuthenticationSpec(
 	}
 
 	var errs []error
-	translatedInlineJwks, err := resolveJWKSInlineForOwner(
-		ctx,
-		jwks.PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, authnPolicy.JWKS),
-	)
-	if err != nil {
-		logger.Error("failed resolving jwks", "error", err)
-		errs = append(errs, err)
+	var translatedInlineJwks string
+	if authnPolicy.JWKS != nil {
+		var err error
+		translatedInlineJwks, err = resolveJWKSInlineForOwner(
+			ctx,
+			jwks.PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, *authnPolicy.JWKS),
+		)
+		if err != nil {
+			logger.Error("failed resolving jwks", "error", err)
+			errs = append(errs, err)
+		}
 	}
 
 	extraResourceMetadata, metadataErr := translateJSONValueMap("resourceMetadata field", authnPolicy.ResourceMetadata)
@@ -755,8 +759,8 @@ func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySp
 	}, nil
 }
 
-func translateTokenIntrospection(ctx PolicyCtx, intro *agentgateway.TokenIntrospection, policy types.NamespacedName) (*api.TrafficPolicySpec_JWT_Introspection, error) {
-	p := &api.TrafficPolicySpec_JWT_Introspection{
+func translateTokenIntrospection(ctx PolicyCtx, intro *agentgateway.TokenIntrospection, policy types.NamespacedName) (*api.TrafficPolicySpec_Introspection, error) {
+	p := &api.TrafficPolicySpec_Introspection{
 		ClientId: intro.ClientID,
 	}
 

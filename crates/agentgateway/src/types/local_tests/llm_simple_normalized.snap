@@ -56,7 +56,6 @@ policies:
     policy:
       traffic:
         jwtAuth:
-          introspection: false
           location:
             header:
               name: authorization

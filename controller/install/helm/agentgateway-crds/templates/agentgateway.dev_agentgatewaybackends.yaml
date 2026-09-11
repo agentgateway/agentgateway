@@ -15754,7 +15754,8 @@ spec:
                           introspection:
                             description: |-
                               RFC 7662 Token Introspection for opaque access tokens.
-                              When set, tokens that cannot be parsed as JWTs are introspected against
+                              Mutually exclusive with `jwks` — use either local JWKS verification
+                              or remote introspection, not both.
                               the configured endpoint instead of being rejected.
                             properties:
                               backendRef:
@@ -15902,8 +15903,9 @@ spec:
                             type: string
                           jwks:
                             description: |-
-                              Remote JSON Web Key used to validate the signature of
-                              the JWT.
+                              Remote JSON Web Key used to validate the signature of the JWT.
+                              Mutually exclusive with `introspection` — use either local JWKS
+                              verification or remote introspection, not both.
                             properties:
                               backendRef:
                                 description: |-
@@ -16043,9 +16045,12 @@ spec:
                                 type: array
                                 x-kubernetes-list-type: atomic
                             type: object
-                        required:
-                        - jwks
                         type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of the fields in [jwks introspection]
+                            must be set
+                          rule: (has(self.jwks)?1:0)+(has(self.introspection)?1:0)
+                            == 1
                       authorization:
                         description: |-
                           MCP backend authorization. Unlike authorization at the HTTP level, which rejects

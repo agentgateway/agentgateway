@@ -259,8 +259,6 @@ pub fn test_ed25519_jwt_validation() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let now = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
@@ -351,8 +349,6 @@ fn setup_test_jwt_with_required_claims(
 			providers: vec![provider],
 			location: bearer_location(),
 			preserve_token: false,
-			introspection: None,
-			introspection_cache: None,
 		},
 		kid,
 		issuer,
@@ -507,8 +503,6 @@ pub async fn test_apply_strict_missing_token() {
 		providers: vec![],
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 
 	// Minimal Request without Authorization header
@@ -530,8 +524,6 @@ pub async fn test_apply_permissive_no_token_ok() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
@@ -549,8 +541,6 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -581,8 +571,6 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -615,8 +603,6 @@ pub async fn test_apply_optional_no_token_ok() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
@@ -634,8 +620,6 @@ pub async fn test_apply_optional_invalid_token_err() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -662,8 +646,6 @@ pub async fn test_apply_optional_valid_token_respects_preserve_token() {
 			providers: base.providers.clone(),
 			location: bearer_location(),
 			preserve_token,
-			introspection: None,
-			introspection_cache: None,
 		};
 		let mut req = crate::http::Request::new(crate::http::Body::empty());
 		req.headers_mut().insert(
@@ -694,8 +676,6 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -731,8 +711,6 @@ pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_p
 			name: "token".into(),
 		},
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -852,8 +830,6 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 			providers: vec![provider1, provider2],
 			location: bearer_location(),
 			preserve_token: false,
-			introspection: None,
-			introspection_cache: None,
 		},
 		(kid1, issuer1, aud1),
 		(kid2, issuer2, aud2),
@@ -915,8 +891,6 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 
 	let token = build_signed_token_with_payload(
@@ -970,8 +944,6 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 
 	let token = build_signed_token_with_payload(
@@ -1023,8 +995,6 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 
 	let token = build_signed_token_with_payload(
@@ -1076,8 +1046,6 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
-		introspection: None,
-		introspection_cache: None,
 	};
 
 	// Token with exp but without nbf should be rejected when nbf is required

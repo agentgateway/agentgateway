@@ -35,7 +35,7 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorPreservesRemoteProv
 		Providers: []agentgateway.JWTProvider{{
 			Issuer:    "issuer.example",
 			Audiences: []string{"aud-a"},
-			JWKS: agentgateway.JWKS{
+			JWKS: &agentgateway.JWKS{
 				Remote: &agentgateway.RemoteJWKS{
 					JwksPath: longStringPtr("/keys"),
 					BackendRef: &gwv1.BackendObjectReference{
@@ -88,7 +88,7 @@ func TestProcessJWKSInvalidInline(t *testing.T) {
 		Mode: agentgateway.JWTAuthenticationModeStrict,
 		Providers: []agentgateway.JWTProvider{{
 			Issuer: "cool-issuer.corp",
-			JWKS: agentgateway.JWKS{
+			JWKS: &agentgateway.JWKS{
 				Inline: &inlineBad,
 			},
 		}},
@@ -115,7 +115,7 @@ func TestProcessJWTAuthenticationPolicyTranslatesEmptyRequiredClaims(t *testing.
 		Mode: agentgateway.JWTAuthenticationModeStrict,
 		Providers: []agentgateway.JWTProvider{{
 			Issuer: "issuer.example",
-			JWKS:   agentgateway.JWKS{Inline: &inline},
+			JWKS:   &agentgateway.JWKS{Inline: &inline},
 			Validation: &agentgateway.JWTValidationOptions{
 				RequiredClaims: new([]agentgateway.JWTClaim{}),
 			},
@@ -157,7 +157,7 @@ func TestProcessJWTAuthenticationPolicyDefaultsRequiredClaimsWhenOptionsEmpty(t 
 		Mode: agentgateway.JWTAuthenticationModeStrict,
 		Providers: []agentgateway.JWTProvider{{
 			Issuer:     "issuer.example",
-			JWKS:       agentgateway.JWKS{Inline: &inline},
+			JWKS:       &agentgateway.JWKS{Inline: &inline},
 			Validation: &agentgateway.JWTValidationOptions{},
 		}},
 	}
@@ -184,7 +184,7 @@ func TestProcessJWTAuthenticationPolicyOmitsValidationOptionsWhenUnset(t *testin
 		Mode: agentgateway.JWTAuthenticationModeStrict,
 		Providers: []agentgateway.JWTProvider{{
 			Issuer: "issuer.example",
-			JWKS:   agentgateway.JWKS{Inline: &inline},
+			JWKS:   &agentgateway.JWKS{Inline: &inline},
 		}},
 	}
 
@@ -206,7 +206,7 @@ func TestProcessJWTAuthenticationPolicyOmitsValidationOptionsWhenUnset(t *testin
 func TestTranslateMCPAuthenticationSpecTranslatesEmptyRequiredClaims(t *testing.T) {
 	authn := &agentgateway.MCPAuthentication{
 		Issuer: "issuer.example",
-		JWKS: agentgateway.RemoteJWKS{
+		JWKS: &agentgateway.RemoteJWKS{
 			JwksPath: longStringPtr("/keys"),
 			PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
 				BackendRef: &gwv1.BackendObjectReference{
@@ -255,7 +255,7 @@ func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorEmitsEmptyKeySetAnd
 		Issuer:    "issuer.example",
 		Audiences: []string{"aud-a"},
 		Mode:      agentgateway.JWTAuthenticationModePermissive,
-		JWKS: agentgateway.RemoteJWKS{
+		JWKS: &agentgateway.RemoteJWKS{
 			JwksPath: longStringPtr("/keys"),
 			PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
 				BackendRef: &gwv1.BackendObjectReference{

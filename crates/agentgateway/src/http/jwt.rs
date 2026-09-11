@@ -77,15 +77,17 @@ pub struct Jwt {
 	providers: Vec<Provider>,
 	location: AuthorizationLocation,
 	preserve_token: bool,
-	// RFC 7662 Token Introspection for opaque access tokens.
-	introspection: Option<std::sync::Arc<crate::http::introspection::IntrospectionConfig>>,
-	introspection_cache: Option<std::sync::Arc<crate::http::introspection::IntrospectionCache>>,
 }
 
 #[derive(Clone)]
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	// RFC 7662 Token Introspection for opaque access tokens.
+	// When set on a provider, opaque tokens (non-JWT) are validated via introspection
+	// against this provider's configured endpoint.
+	introspection: Option<std::sync::Arc<crate::http::introspection::IntrospectionConfig>>,
+	introspection_cache: Option<std::sync::Arc<crate::http::introspection::IntrospectionCache>>,
 }
 
 // TODO: can we give anything useful here?
@@ -102,14 +104,12 @@ impl serde::Serialize for Jwt {
 			location: &'a AuthorizationLocation,
 			#[serde(default, skip_serializing_if = "std::ops::Not::not")]
 			preserve_token: bool,
-			introspection: bool,
 		}
 		Serde {
 			mode: self.mode,
 			providers: &self.providers,
 			location: &self.location,
 			preserve_token: self.preserve_token,
-			introspection: self.introspection.is_some(),
 		}
 		.serialize(serializer)
 	}
@@ -372,8 +372,6 @@ impl LocalJwtConfig {
 			providers,
 			location: authorization_location,
 			preserve_token,
-			introspection: None,
-			introspection_cache: None,
 		})
 	}
 }
@@ -485,7 +483,46 @@ impl Provider {
 			);
 		}
 
-		Ok(Provider { issuer, keys })
+		Ok(Provider {
+			issuer,
+			keys,
+			introspection: None,
+			introspection_cache: None,
+		})
+	}
+
+	/// Create a provider that uses only RFC 7662 introspection (no JWKS keys).
+	pub fn introspection_only(
+		issuer: String,
+		_audiences: Option<Vec<String>>,
+		_jwt_validation_options: JWTValidationOptions,
+	) -> Self {
+		Provider {
+			issuer,
+			keys: HashMap::new(),
+			introspection: None,
+			introspection_cache: None,
+		}
+	}
+
+	/// Attach RFC 7662 Token Introspection configuration to this provider.
+	///
+	/// When set, opaque tokens (non-JWT) matching this provider's issuer are
+	/// introspected against the configured endpoint.
+	pub fn with_introspection(
+		mut self,
+		config: crate::http::introspection::IntrospectionConfig,
+	) -> Self {
+		let cache = if config.cache_duration.as_secs() > 0 {
+			Some(std::sync::Arc::new(
+				crate::http::introspection::IntrospectionCache::new(config.cache_duration),
+			))
+		} else {
+			None
+		};
+		self.introspection = Some(std::sync::Arc::new(config));
+		self.introspection_cache = cache;
+		self
 	}
 }
 
@@ -501,29 +538,7 @@ impl Jwt {
 			providers,
 			location: authorization_location,
 			preserve_token,
-			introspection: None,
-			introspection_cache: None,
 		}
-	}
-
-	/// Attach RFC 7662 Token Introspection configuration.
-	///
-	/// When set, tokens that cannot be parsed as JWTs will be introspected against
-	/// the configured endpoint instead of being rejected.
-	pub fn with_introspection(
-		mut self,
-		config: crate::http::introspection::IntrospectionConfig,
-	) -> Self {
-		let cache = if config.cache_duration.as_secs() > 0 {
-			Some(std::sync::Arc::new(
-				crate::http::introspection::IntrospectionCache::new(config.cache_duration),
-			))
-		} else {
-			None
-		};
-		self.introspection = Some(std::sync::Arc::new(config));
-		self.introspection_cache = cache;
-		self
 	}
 }
 
@@ -627,85 +642,13 @@ impl Jwt {
 			Ok(claims) => claims,
 			Err(e)
 				if self.should_try_introspection(&e)
-					&& self.introspection.is_some()
+					&& self.has_introspection_provider()
 					&& client.is_some() =>
 			{
-				// JWT validation failed with a format error and introspection is configured.
-				// Attempt RFC 7662 introspection as a fallback.
-				let config = self.introspection.as_ref().unwrap();
+				// JWT validation failed with a format error and a provider with
+				// introspection is configured. Attempt RFC 7662 introspection.
 				let policy_client = client.unwrap();
-
-				// Determine endpoint (may need OIDC discovery)
-				let endpoint = match &config.endpoint {
-					Some(ep) => ep.clone(),
-					None => {
-						match crate::http::introspection::discover_introspection_endpoint(
-							policy_client,
-							&config.expected_issuer,
-						)
-						.await
-						{
-							Ok(Some(ep)) => ep,
-							Ok(None) => {
-								return Err(TokenError::IntrospectionFailed(
-									"introspection_endpoint not found in OIDC discovery".to_string(),
-								));
-							},
-							Err(e) => {
-								return Err(TokenError::IntrospectionFailed(e));
-							},
-						}
-					},
-				};
-
-				// Check cache first
-				if let Some(cache) = &self.introspection_cache {
-					if let Some(cached) = cache.get(&token).await {
-						tracing::debug!("introspection cache hit");
-						cached
-					} else {
-						// Cache miss: call introspection
-						let claims = match crate::http::introspection::introspect(
-							policy_client,
-							config,
-							&token,
-							&endpoint,
-						)
-						.await
-						{
-							Ok(claims) => claims,
-							Err(e) => match config.failure_mode {
-								crate::http::introspection::FailureMode::FailOpen => {
-									tracing::warn!("introspection failed ({e}), failing open");
-									return Ok(());
-								},
-								crate::http::introspection::FailureMode::FailClosed => {
-									return Err(TokenError::IntrospectionFailed(e.to_string()));
-								},
-							},
-						};
-
-						// Cache the result
-						cache.insert(&token, claims.clone()).await;
-						claims
-					}
-				} else {
-					// No cache: call introspection directly
-					match crate::http::introspection::introspect(policy_client, config, &token, &endpoint)
-						.await
-					{
-						Ok(claims) => claims,
-						Err(e) => match config.failure_mode {
-							crate::http::introspection::FailureMode::FailOpen => {
-								tracing::warn!("introspection failed ({e}), failing open");
-								return Ok(());
-							},
-							crate::http::introspection::FailureMode::FailClosed => {
-								return Err(TokenError::IntrospectionFailed(e.to_string()));
-							},
-						},
-					}
-				}
+				self.try_introspection(&token, policy_client).await?
 			},
 			Err(e) if self.mode == Mode::Permissive => {
 				dtrace::pol_result!(
@@ -745,6 +688,77 @@ impl Jwt {
 		);
 		req.extensions_mut().insert(claims);
 		Ok(())
+	}
+
+	/// Returns true if any provider has introspection configured.
+	fn has_introspection_provider(&self) -> bool {
+		self.providers.iter().any(|p| p.introspection.is_some())
+	}
+
+	/// Try RFC 7662 introspection against the first provider that has it configured.
+	async fn try_introspection(
+		&self,
+		token: &str,
+		policy_client: &crate::proxy::httpproxy::PolicyClient,
+	) -> Result<Claims, TokenError> {
+		let provider = self
+			.providers
+			.iter()
+			.find(|p| p.introspection.is_some())
+			.expect("caller checked has_introspection_provider");
+		let config = provider.introspection.as_ref().unwrap();
+
+		// Determine endpoint (may need OIDC discovery)
+		let endpoint = match &config.endpoint {
+			Some(ep) => ep.clone(),
+			None => {
+				match crate::http::introspection::discover_introspection_endpoint(
+					policy_client,
+					&config.expected_issuer,
+				)
+				.await
+				{
+					Ok(Some(ep)) => ep,
+					Ok(None) => {
+						return Err(TokenError::IntrospectionFailed(
+							"introspection_endpoint not found in OIDC discovery".to_string(),
+						));
+					},
+					Err(e) => {
+						return Err(TokenError::IntrospectionFailed(e));
+					},
+				}
+			},
+		};
+
+		// Check cache first
+		if let Some(cache) = &provider.introspection_cache {
+			if let Some(cached) = cache.get(token).await {
+				tracing::debug!("introspection cache hit");
+				return Ok(cached);
+			}
+		}
+
+		// Call introspection
+		let claims =
+			match crate::http::introspection::introspect(policy_client, config, token, &endpoint).await {
+				Ok(claims) => claims,
+				Err(e) => match config.failure_mode {
+					crate::http::introspection::FailureMode::FailOpen => {
+						tracing::warn!("introspection failed ({e}), failing open");
+						return Ok(Claims::default());
+					},
+					crate::http::introspection::FailureMode::FailClosed => {
+						return Err(TokenError::IntrospectionFailed(e.to_string()));
+					},
+				},
+			};
+
+		// Cache the result
+		if let Some(cache) = &provider.introspection_cache {
+			cache.insert(token, claims.clone()).await;
+		}
+		Ok(claims)
 	}
 
 	/// Determine whether to fall back to RFC 7662 introspection.

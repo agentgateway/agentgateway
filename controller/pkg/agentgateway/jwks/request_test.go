@@ -41,7 +41,7 @@ func TestResolveEndpoint(t *testing.T) {
 	tests := []struct {
 		name                string
 		inputs              []any
-		remoteProvider      agentgateway.RemoteJWKS
+		remoteProvider      *agentgateway.RemoteJWKS
 		disableAutoResolver bool
 		expectedError       string
 		expectedURL         string
@@ -56,7 +56,7 @@ func TestResolveEndpoint(t *testing.T) {
 		{
 			name: "service-backed remote jwks uses attached backend tls policy",
 			inputs: []any{
-				gatewayJWTPolicy(serviceRemote),
+				gatewayJWTPolicy(*serviceRemote),
 				testCAConfigMap(),
 				attachedBackendPolicy(gwv1.Group(""), gwv1.Kind("Service"), "dummy-idp", &agentgateway.BackendTLS{
 					CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca"}},
@@ -75,7 +75,7 @@ func TestResolveEndpoint(t *testing.T) {
 		{
 			name: "backend-backed remote jwks uses attached backend policy",
 			inputs: []any{
-				gatewayJWTPolicy(backendRemote),
+				gatewayJWTPolicy(*backendRemote),
 				staticBackend("dummy-idp", "dummy-idp.default", 8443, nil),
 				testCAConfigMap(),
 				attachedBackendPolicy(
@@ -100,7 +100,7 @@ func TestResolveEndpoint(t *testing.T) {
 		{
 			name: "returns resolver error for missing backend",
 			inputs: []any{
-				gatewayJWTPolicy(backendRemote),
+				gatewayJWTPolicy(*backendRemote),
 			},
 			remoteProvider: backendRemote,
 			expectedError:  "backend default/dummy-idp not found, policy default/gw-policy",
@@ -108,7 +108,7 @@ func TestResolveEndpoint(t *testing.T) {
 		{
 			name: "returns resolver error for non-static backend",
 			inputs: []any{
-				gatewayJWTPolicy(backendRemote),
+				gatewayJWTPolicy(*backendRemote),
 				&agentgateway.AgentgatewayBackend{
 					Name: "dummy-idp", Namespace: "default",
 				},
@@ -126,7 +126,7 @@ func TestResolveEndpoint(t *testing.T) {
 				resolver = testutils.BuildRemoteHTTPResolver(ctx.Collections)
 			}
 
-			endpoint, err := jwks.ResolveEndpoint(ctx.Krt, resolver, "gw-policy", "default", tt.remoteProvider)
+			endpoint, err := jwks.ResolveEndpoint(ctx.Krt, resolver, "gw-policy", "default", *tt.remoteProvider)
 			if tt.expectedError != "" {
 				require.EqualError(t, err, tt.expectedError)
 				require.Nil(t, endpoint)
@@ -165,7 +165,7 @@ func gatewayJWTPolicy(remote agentgateway.RemoteJWKS) *agentgateway.Agentgateway
 					Mode: agentgateway.JWTAuthenticationModeStrict,
 					Providers: []agentgateway.JWTProvider{{
 						Issuer: "https://agentgateway.dev",
-						JWKS:   agentgateway.JWKS{Remote: &remote},
+						JWKS:   &agentgateway.JWKS{Remote: &remote},
 					}},
 				},
 			},
@@ -204,9 +204,9 @@ func staticBackend(name, host string, port int32, tlsPolicy *agentgateway.Backen
 	}
 }
 
-func remoteProvider(path string, backendRef gwv1.BackendObjectReference) agentgateway.RemoteJWKS {
+func remoteProvider(path string, backendRef gwv1.BackendObjectReference) *agentgateway.RemoteJWKS {
 	jwksPath := path
-	return agentgateway.RemoteJWKS{
+	return &agentgateway.RemoteJWKS{
 		JwksPath:   &jwksPath,
 		BackendRef: &backendRef,
 	}

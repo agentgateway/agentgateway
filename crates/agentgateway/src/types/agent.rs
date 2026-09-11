@@ -3157,11 +3157,8 @@ impl LocalMcpAuthentication {
 		&self,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> anyhow::Result<McpAuthentication> {
-		let jwt_cfg = self.as_jwt()?;
-		let mut jwt = jwt_cfg.try_into(resources).await?;
-
-		// Attach RFC 7662 Token Introspection if configured
-		if let Some(intro) = &self.introspection {
+		let jwt = if let Some(intro) = &self.introspection {
+			// Introspection-only provider (opaque tokens)
 			let config = crate::http::introspection::IntrospectionConfig {
 				endpoint: intro.url.clone(),
 				client_id: intro.client_id.clone(),
@@ -3172,8 +3169,23 @@ impl LocalMcpAuthentication {
 				expected_issuer: self.issuer.clone(),
 				expected_audiences: self.audiences.clone().unwrap_or_default(),
 			};
-			jwt = jwt.with_introspection(config);
-		}
+			let provider = crate::http::jwt::Provider::introspection_only(
+				self.issuer.clone(),
+				self.audiences.clone(),
+				self.jwt_validation_options.clone(),
+			)
+			.with_introspection(config);
+			crate::http::jwt::Jwt::from_providers(
+				vec![provider],
+				self.mode.into(),
+				self.authorization_location.clone(),
+				false,
+			)
+		} else {
+			// JWKS-based provider
+			let jwt_cfg = self.as_jwt()?;
+			jwt_cfg.try_into(resources).await?
+		};
 
 		Ok(McpAuthentication {
 			issuer: self.issuer.clone(),

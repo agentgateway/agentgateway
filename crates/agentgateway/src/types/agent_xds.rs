@@ -549,9 +549,9 @@ fn mcp_authentication_from_proto(
 	m: &proto::agent::backend_policy_spec::McpAuthentication,
 	diagnostics: &mut Diagnostics,
 ) -> Result<McpAuthentication, ProtoError> {
-	if m.jwks_inline.is_empty() {
+	if m.jwks_inline.is_empty() && m.introspection.is_none() {
 		return Err(ProtoError::Generic(
-			"MCP Authentication requires jwks_inline to be set.".to_string(),
+			"MCP Authentication requires either jwks_inline or introspection to be set.".to_string(),
 		));
 	}
 
@@ -563,14 +563,6 @@ fn mcp_authentication_from_proto(
 			required_claims: vo.required_claims.iter().cloned().collect(),
 		})
 		.unwrap_or_default();
-	let jwt_provider = jwt_provider_from_inline_jwks_or_warn(
-		diagnostics,
-		"MCP Authentication",
-		&m.jwks_inline,
-		m.issuer.clone(),
-		audiences,
-		jwt_validation_options,
-	);
 
 	let mode = match proto::agent::backend_policy_spec::mcp_authentication::Mode::try_from(m.mode)
 		.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
@@ -586,15 +578,8 @@ fn mcp_authentication_from_proto(
 		},
 	};
 
-	let mut jwt_validator = http::jwt::Jwt::from_providers(
-		jwt_provider.into_iter().collect(),
-		mode.into(),
-		http::auth::AuthorizationLocation::bearer_header(),
-		false,
-	);
-
-	// RFC 7662 Token Introspection configuration
-	if let Some(intro) = &m.introspection {
+	let jwt_validator = if let Some(intro) = &m.introspection {
+		// Introspection-only provider (opaque tokens)
 		let endpoint = if intro.url.is_empty() {
 			None
 		} else {
@@ -614,8 +599,32 @@ fn mcp_authentication_from_proto(
 			expected_issuer: m.issuer.clone(),
 			expected_audiences: m.audiences.clone(),
 		};
-		jwt_validator = jwt_validator.with_introspection(config);
-	}
+		let provider =
+			http::jwt::Provider::introspection_only(m.issuer.clone(), audiences, jwt_validation_options)
+				.with_introspection(config);
+		http::jwt::Jwt::from_providers(
+			vec![provider],
+			mode.into(),
+			http::auth::AuthorizationLocation::bearer_header(),
+			false,
+		)
+	} else {
+		let jwt_provider = jwt_provider_from_inline_jwks_or_warn(
+			diagnostics,
+			"MCP Authentication",
+			&m.jwks_inline,
+			m.issuer.clone(),
+			audiences,
+			jwt_validation_options,
+		);
+		http::jwt::Jwt::from_providers(
+			jwt_provider.into_iter().collect(),
+			mode.into(),
+			http::auth::AuthorizationLocation::bearer_header(),
+			false,
+		)
+	};
+
 	Ok(build_mcp_authentication(
 		m.issuer.clone(),
 		m.audiences.clone(),
@@ -2643,14 +2652,6 @@ fn traffic_policy_from_proto(
 				.providers
 				.iter()
 				.map(|p| {
-					let jwks_json = match &p.jwks_source {
-						Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline,
-						None => {
-							return Err(ProtoError::Generic(
-								"JWT policy missing JWKS source".to_string(),
-							));
-						},
-					};
 					let audiences = if p.audiences.is_empty() {
 						None
 					} else {
@@ -2663,16 +2664,60 @@ fn traffic_policy_from_proto(
 							required_claims: vo.required_claims.iter().cloned().collect(),
 						})
 						.unwrap_or_default();
-					Ok(jwt_provider_from_inline_jwks_or_warn(
-						diagnostics,
-						"JWT policy",
-						jwks_json,
-						p.issuer.clone(),
-						audiences,
-						jwt_validation_options,
-					))
+
+					if let Some(intro) = &p.introspection {
+						// Introspection-only provider (opaque tokens)
+						let endpoint = if intro.url.is_empty() {
+							None
+						} else {
+							Some(intro.url.clone())
+						};
+						let failure_mode = match intro.failure_mode {
+							1 => http::introspection::FailureMode::FailOpen,
+							_ => http::introspection::FailureMode::FailClosed,
+						};
+						let config = http::introspection::IntrospectionConfig {
+							endpoint,
+							client_id: intro.client_id.clone(),
+							client_secret: intro.client_secret.clone().map(secrecy::SecretString::from),
+							cache_duration: std::time::Duration::from_secs(intro.cache_duration_seconds as u64),
+							timeout: std::time::Duration::from_secs(intro.timeout_seconds.max(1) as u64),
+							failure_mode,
+							expected_issuer: p.issuer.clone(),
+							expected_audiences: audiences.clone().unwrap_or_default(),
+						};
+						Ok(vec![
+							http::jwt::Provider::introspection_only(
+								p.issuer.clone(),
+								audiences,
+								jwt_validation_options,
+							)
+							.with_introspection(config),
+						])
+					} else {
+						let jwks_json = match &p.jwks_source {
+							Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline,
+							None => {
+								return Err(ProtoError::Generic(
+									"JWT provider requires either jwks or introspection".to_string(),
+								));
+							},
+						};
+						Ok(
+							jwt_provider_from_inline_jwks_or_warn(
+								diagnostics,
+								"JWT policy",
+								jwks_json,
+								p.issuer.clone(),
+								audiences,
+								jwt_validation_options,
+							)
+							.into_iter()
+							.collect(),
+						)
+					}
 				})
-				.collect::<Result<Vec<_>, _>>()?
+				.collect::<Result<Vec<Vec<_>>, _>>()?
 				.into_iter()
 				.flatten()
 				.collect();
@@ -2687,38 +2732,6 @@ fn traffic_policy_from_proto(
 				)?,
 				jwt.preserve_token,
 			);
-			// RFC 7662 Token Introspection configuration
-			let jwt_auth = match &jwt.introspection {
-				Some(intro) => {
-					let endpoint = if intro.url.is_empty() {
-						None
-					} else {
-						Some(intro.url.clone())
-					};
-					let failure_mode = match intro.failure_mode {
-						1 => http::introspection::FailureMode::FailOpen,
-						_ => http::introspection::FailureMode::FailClosed,
-					};
-					// Use first provider's issuer/audiences as expected values
-					let (expected_issuer, expected_audiences) = jwt
-						.providers
-						.first()
-						.map(|p| (p.issuer.clone(), p.audiences.clone()))
-						.unwrap_or_default();
-					let config = http::introspection::IntrospectionConfig {
-						endpoint,
-						client_id: intro.client_id.clone(),
-						client_secret: intro.client_secret.clone().map(secrecy::SecretString::from),
-						cache_duration: std::time::Duration::from_secs(intro.cache_duration_seconds as u64),
-						timeout: std::time::Duration::from_secs(intro.timeout_seconds.max(1) as u64),
-						failure_mode,
-						expected_issuer,
-						expected_audiences,
-					};
-					jwt_auth.with_introspection(config)
-				},
-				None => jwt_auth,
-			};
 			let mcp = match &jwt.mcp {
 				Some(mcp) => {
 					if jwt.providers.len() != 1 {
