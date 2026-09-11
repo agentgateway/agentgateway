@@ -90,6 +90,12 @@ pub trait Handler {
 
 	async fn on_request(&mut self, _request: &ProcessingRequest) {}
 
+	// Return true after handling a request to end the response stream cleanly,
+	// simulating an ext_proc server that closes the gRPC stream when it is done.
+	async fn close_stream_after_request(&mut self) -> bool {
+		false
+	}
+
 	async fn handle_request_headers(
 		&mut self,
 		_headers: &HttpHeaders,
@@ -267,6 +273,10 @@ where
 						// Invalid request
 						continue;
 					},
+				}
+				if handler.close_stream_after_request().await {
+					// Dropping tx ends the response stream with a clean gRPC OK status.
+					break;
 				}
 			}
 			Ok::<(), Status>(())

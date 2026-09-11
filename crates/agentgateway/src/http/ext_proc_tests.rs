@@ -1774,6 +1774,81 @@ mod immediate_and_failure {
 		let res = send_request(io, Method::POST, "http://lo").await;
 		assert_eq!(res.status(), 200);
 	}
+
+	// The ext_proc server answers the request phases and then closes the gRPC
+	// stream cleanly. The ext_proc protocol defines a clean close as "the data
+	// plane proceeds without the server", so the upstream response must pass
+	// through instead of failing with a 500.
+	#[tokio::test]
+	async fn clean_close_after_request_phase_passes_response_through() {
+		let mock = body_mock(b"upstream-response").await;
+		let processing_options = json!({
+			"requestBodyMode": "fullDuplexStreamed",
+			"responseBodyMode": "fullDuplexStreamed",
+			"requestHeaderMode": "send",
+			"responseHeaderMode": "send",
+			"requestTrailerMode": "send",
+			"responseTrailerMode": "send",
+		});
+		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_processing_options(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(CleanCloseAfterRequestExtProc::default),
+			"{}",
+			Some(processing_options),
+		)
+		.await;
+		let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+		assert_eq!(res.status(), 200);
+		let body = read_body_raw(res.into_body()).await;
+		assert_eq!(body.as_ref(), b"upstream-response");
+	}
+
+	// Same scenario driven directly against ExtProcRequest so the clean close is
+	// observed before the response phase starts.
+	#[tokio::test]
+	async fn clean_close_disengages_response_processing() {
+		let ext_proc = ExtProcMock::new(CleanCloseAfterRequestExtProc::default)
+			.spawn()
+			.await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_body_mode: ext_proc::BodySendMode::FullDuplexStreamed,
+			response_body_mode: ext_proc::BodySendMode::FullDuplexStreamed,
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			response_header_mode: ext_proc::HeaderSendMode::Send,
+			request_trailer_mode: ext_proc::TrailerSendMode::Send,
+			response_trailer_mode: ext_proc::TrailerSendMode::Send,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+
+		let frames = tokio_stream::iter(vec![Ok::<Frame<bytes::Bytes>, Infallible>(Frame::data(
+			bytes::Bytes::from_static(b"request"),
+		))]);
+		let mut req = crate::proxy::request_builder::RequestBuilder::new(Method::POST, "http://lo")
+			.body(Body::new(http_body_util::StreamBody::new(frames)))
+			.build()
+			.unwrap();
+		let _ = ext_proc_request.mutate_request(&mut req).await.unwrap();
+
+		// Let the stream task observe the clean close before the response phase.
+		tokio::time::sleep(Duration::from_millis(50)).await;
+
+		let frames = tokio_stream::iter(vec![
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::data(bytes::Bytes::from_static(
+				b"upstream-response",
+			))),
+			Ok::<Frame<bytes::Bytes>, Infallible>(Frame::trailers(::http::HeaderMap::new())),
+		]);
+		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(frames)));
+		ext_proc_request
+			.mutate_response(&mut resp, None)
+			.await
+			.unwrap();
+		let collected = resp.into_body().collect().await.unwrap();
+		assert_eq!(collected.to_bytes().as_ref(), b"upstream-response");
+	}
 }
 
 // Dynamic metadata propagation through request/response extensions.
@@ -3764,6 +3839,40 @@ impl Handler for RequestBodyFailureExtProc {
 		_: &mpsc::Sender<Result<ProcessingResponse, Status>>,
 	) -> Result<(), Status> {
 		Err(Status::failed_precondition("injected request body error"))
+	}
+}
+
+/// Simulates an ext_proc server that answers the request phases and then closes
+/// the gRPC stream cleanly, as the llm-d endpoint picker does for requests whose
+/// response processing is skipped.
+#[derive(Debug, Default)]
+struct CleanCloseAfterRequestExtProc {
+	closed: bool,
+}
+
+#[async_trait::async_trait]
+impl Handler for CleanCloseAfterRequestExtProc {
+	async fn handle_request_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(request_header_response(None)).await;
+		Ok(())
+	}
+
+	async fn handle_request_body(
+		&mut self,
+		_: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(request_body_response(None)).await;
+		self.closed = true;
+		Ok(())
+	}
+
+	async fn close_stream_after_request(&mut self) -> bool {
+		self.closed
 	}
 }
 

@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -396,6 +397,9 @@ impl ExtProcRequest {
 struct ExtProcInstance {
 	failure_mode: FailureMode,
 	skipped: bool,
+	// Set by the stream task when the server closes the gRPC stream cleanly (gRPC OK);
+	// the rest of the request/response continues without the server.
+	server_disengaged: Arc<AtomicBool>,
 	request_body_immediate_response: Arc<Mutex<Option<http::Response>>>,
 	protocol_config_sent: bool,
 	mode_state: ModeStateMachine,
@@ -427,6 +431,7 @@ impl ExtProcInstance {
 		let chan = target.grpc_channel(client.clone());
 		Self {
 			skipped: Default::default(),
+			server_disengaged: Arc::new(AtomicBool::new(false)),
 			request_body_immediate_response: Arc::new(Mutex::new(None)),
 			failure_mode,
 			protocol_config_sent: false,
@@ -460,6 +465,7 @@ impl ExtProcInstance {
 		let failure_mode = self.failure_mode;
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
+		let server_disengaged = self.server_disengaged.clone();
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
 		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
@@ -492,6 +498,7 @@ impl ExtProcInstance {
 						}
 					},
 					Ok(None) => {
+						server_disengaged.store(true, Ordering::SeqCst);
 						if let Some(span) = span.as_deref_mut() {
 							span.record_grpc_status(tonic::Code::Ok);
 						}
@@ -552,6 +559,10 @@ impl ExtProcInstance {
 
 	fn request_sender(&self) -> Result<Sender<ProcessingRequest>, Error> {
 		self.tx_req.clone().ok_or(Error::RequestSend)
+	}
+
+	fn disengaged(&self) -> bool {
+		self.server_disengaged.load(Ordering::SeqCst)
 	}
 
 	fn protocol_config_for_headers(
@@ -1438,7 +1449,7 @@ impl ExtProcInstance {
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
 	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
-		if self.skipped {
+		if self.skipped || self.disengaged() {
 			return Ok((response, None));
 		}
 		let response_trailers = Arc::new(Mutex::new(None));
@@ -1495,9 +1506,12 @@ impl ExtProcInstance {
 		// Send the response headers to ext_proc.
 		// No response side fail_open handling.
 		if send_response_headers {
+			if self.disengaged() {
+				return Ok((http::Response::from_parts(parts, body), None));
+			}
 			let (header_protocol_config, sends_protocol_config) =
 				self.protocol_config_for_headers(protocol_config);
-			self
+			if let Err(e) = self
 				.send_request(ProcessingRequest {
 					request: Some(Request::ResponseHeaders(HttpHeaders {
 						headers,
@@ -1508,7 +1522,15 @@ impl ExtProcInstance {
 					protocol_config: header_protocol_config,
 					observability_mode: false,
 				})
-				.await?;
+				.await
+			{
+				// The server may have closed the stream cleanly after finishing the
+				// request phase; in that case pass the response through.
+				if self.disengaged() {
+					return Ok((http::Response::from_parts(parts, body), None));
+				}
+				return Err(e);
+			}
 			self.mark_protocol_config_sent_if(sends_protocol_config);
 		}
 
@@ -1585,7 +1607,23 @@ impl ExtProcInstance {
 			.take()
 			.expect("mutate_response called twice");
 		loop {
-			let msg = Self::recv_response_loop_message(&mut rx).await?;
+			let msg = match Self::recv_response_loop_message(&mut rx).await {
+				Ok(msg) => msg,
+				// The response headers were sent before the clean close was observed;
+				// no response will arrive. Pass the original body through when it has
+				// not already been forwarded to the ext_proc server.
+				Err(Error::NoMoreResponses) if self.disengaged() => {
+					if let Some(original) = pending_response_body
+						.take()
+						.or_else(|| BufferedBodyPhase::take_deferred_body(&mut pending_response_buffer))
+					{
+						let (parts, _) = resp.into_parts();
+						return Ok((http::Response::from_parts(parts, original), None));
+					}
+					return Ok((resp, None));
+				},
+				Err(e) => return Err(e),
+			};
 			let (transitioned, eos, streamed_body_mutation) = match msg {
 				ResponseLoopMessage::Immediate(dr) => return Ok((resp, Some(dr))),
 				ResponseLoopMessage::Processing(presp) => {
