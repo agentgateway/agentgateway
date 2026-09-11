@@ -5,6 +5,27 @@ info:
   input:
     - role: user
       content: Hello
+    - type: reasoning
+      id: rs_replay
+      summary: []
+      encrypted_content: cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo
+    - role: assistant
+      content: Hello!
+    - role: user
+      content: How are you?
+    - type: reasoning
+      id: rs_unsigned
+      summary: []
+      content:
+        - type: reasoning_text
+          text: Let me think through this.
+    - role: user
+      content: Continue.
+    - type: reasoning
+      id: rs_empty
+      summary: []
+    - role: user
+      content: Please continue.
   model: gpt-4o
   stream: true
 ---
@@ -16,6 +37,28 @@ info:
         "content": [
           {
             "text": "Hello"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "text": "Hello!"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "How are you?"
+          },
+          {
+            "text": "Continue."
+          },
+          {
+            "text": "Please continue."
           }
         ]
       }
@@ -35,6 +78,22 @@ info:
       {
         "role": "user",
         "content": "Hello"
+      },
+      {
+        "role": "assistant",
+        "content": "Hello!"
+      },
+      {
+        "role": "user",
+        "content": "How are you?"
+      },
+      {
+        "role": "user",
+        "content": "Continue."
+      },
+      {
+        "role": "user",
+        "content": "Please continue."
       }
     ]
   }

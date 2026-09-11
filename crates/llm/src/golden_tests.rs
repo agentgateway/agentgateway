@@ -649,22 +649,25 @@ mod responses {
 			*raw = raw.replace("\r\n", "\n");
 		}
 
-		let resp = xlate(Bytes::copy_from_slice(&provider_bytes))
-			.expect("failed to translate provider response to expected format");
-		let llm_response = resp.to_llm_response(crate::LogContentFields {
-			completion: false,
-			tool_calls: true,
-		});
-		let raw = resp.serialize().expect("failed to serialize response");
-		let mut resp_val = serde_json::from_slice::<Value>(&raw)
-			.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
-		if let Value::String(raw) = &mut resp_val {
-			*raw = raw.replace("\r\n", "\n");
-		}
-		let report = json!({
-			"response": resp_val,
-			"parsed": llm_response,
-		});
+		let report = match xlate(Bytes::copy_from_slice(&provider_bytes)) {
+			Ok(resp) => {
+				let llm_response = resp.to_llm_response(crate::LogContentFields {
+					completion: false,
+					tool_calls: true,
+				});
+				let raw = resp.serialize().expect("failed to serialize response");
+				let mut resp_val = serde_json::from_slice::<Value>(&raw)
+					.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
+				if let Value::String(raw) = &mut resp_val {
+					*raw = raw.replace("\r\n", "\n");
+				}
+				json!({
+					"response": resp_val,
+					"parsed": llm_response,
+				})
+			},
+			Err(error) => json!({ "error": error.to_string() }),
+		};
 		let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
 		insta::with_settings!({
@@ -796,6 +799,7 @@ mod responses {
 		("max_tokens", &[BEDROCK_TO_RESPONSES]),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
+		("reasoning_redacted", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
 		(
 			"cache_write",

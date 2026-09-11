@@ -14,12 +14,23 @@ info:
         - type: thinking
           thinking: Two plus two.
           signature: SIG-replay==
+        - type: redacted_thinking
+          data: cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo
         - type: text
           text: "4"
     - role: user
       content:
         - type: text
           text: And 3+3?
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Three plus three is six.
+          signature: ""
+        - type: text
+          text: "6"
+    - role: user
+      content: Continue.
 ---
 {
   "request": {
@@ -52,6 +63,25 @@ info:
             "text": "And 3+3?"
           }
         ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "6"
+          }
+        ],
+        "reasoning_content": "Three plus three is six."
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Continue."
+          }
+        ]
       }
     ],
     "model": "claude-3-7-sonnet-20250219-v1:0",
@@ -79,6 +109,14 @@ info:
       {
         "role": "user",
         "content": "And 3+3?"
+      },
+      {
+        "role": "assistant",
+        "content": "6"
+      },
+      {
+        "role": "user",
+        "content": "Continue."
       }
     ]
   }

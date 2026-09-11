@@ -1,0 +1,26 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock/reasoning_redacted.json
+info:
+  output:
+    message:
+      role: assistant
+      content:
+        - reasoningContent:
+            reasoningText:
+              text: Two plus two is four.
+              signature: SIG-xyz==
+        - reasoningContent:
+            redactedContent: cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo
+        - text: The answer is 4.
+  stopReason: end_turn
+  usage:
+    inputTokens: 18
+    outputTokens: 46
+    totalTokens: 64
+  metrics:
+    latencyMs: 2083
+---
+{
+  "error": "failed to parse response: data did not match any variant of untagged enum ReasoningContentBlock at line 18 column 8"
+}
