@@ -37,7 +37,8 @@ type backendEndpointState struct {
 		WorkloadUID string `json:"workloadUid"`
 		Name        string `json:"name"`
 	} `json:"endpoint"`
-	Info backendEndpointInfo `json:"info"`
+	Info       backendEndpointInfo   `json:"info"`
+	ScopedInfo []backendEndpointInfo `json:"scoped_info"`
 }
 
 type backendEndpointInfo struct {
@@ -175,10 +176,21 @@ func backendRowsForEndpointStates(
 		if rejected {
 			row.Health = formatEvictedHealth(state.Info)
 		}
-		if !showAll && row.Requests == 0 {
-			continue
+		if showAll || row.Requests != 0 {
+			rows = append(rows, row)
 		}
-		rows = append(rows, row)
+		for scope, info := range state.ScopedInfo {
+			scopedState := state
+			scopedState.Info = info
+			scopedRow := buildBackendRow(backendType, fmt.Sprintf("%s (scope %d)", name, scope), namespace, endpointName, scopedState)
+			if rejected || info.EvictedUntil != nil {
+				scopedRow.Health = formatEvictedHealth(info)
+			}
+			if !showAll && scopedRow.Requests == 0 {
+				continue
+			}
+			rows = append(rows, scopedRow)
+		}
 	}
 	return rows
 }

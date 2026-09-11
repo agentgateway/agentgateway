@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::cel::{ContextBuilder, Expression};
+use crate::types::loadbalancer::hash_affinity_key;
 use crate::{serde_dur_option, *};
 
 /// Eviction sub-policy: how long to remove a backend from the active set after an unhealthy response.
@@ -49,6 +50,11 @@ pub struct Eviction {
 #[derive(Default)]
 #[apply(schema_ser!)]
 pub struct Policy {
+	/// CEL expression evaluated against the request to isolate health state. The resulting string or
+	/// bytes value is hashed before use. Evaluation failures fall back to global health state.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub scope: Option<Arc<Expression>>,
+
 	/// CEL expression evaluated per response; `true` means this response is unhealthy (evict).
 	/// When absent, any 5xx response, non-zero gRPC status, or a connection failure is treated as unhealthy.
 	/// This default lowers the backend's health score but does not trigger eviction on its own.
@@ -64,9 +70,43 @@ const DEFAULT_EVICTION_SECS: u64 = 3;
 
 impl Policy {
 	pub fn register_expressions(&self, ctx: &mut ContextBuilder) {
+		if let Some(expr) = self.scope.as_ref() {
+			ctx.register_expression(expr.as_ref());
+		}
 		if let Some(expr) = self.unhealthy_expression.as_ref() {
 			ctx.register_expression(expr.as_ref());
 		}
+	}
+
+	/// Returns the hashed health scope. Missing, invalid, and empty values intentionally fall back
+	/// to the global scope.
+	pub fn scope_key(&self, req: &http::Request) -> Option<u64> {
+		let expression = self.scope.as_ref()?;
+		let executor = crate::cel::Executor::new_request(req);
+		let value = match executor.eval(expression) {
+			Ok(value) => value,
+			Err(err) => {
+				trace!(
+					expression = %expression.original_expression,
+					error = %err,
+					"health scope: expression evaluation failed; falling back to global scope"
+				);
+				return None;
+			},
+		};
+		let value = value.always_materialize();
+		let Ok(bytes) = value.as_bytes_pre_materialized() else {
+			trace!(
+				expression = %expression.original_expression,
+				value_type = value.type_of().as_str(),
+				"health scope: expression did not return a string or bytes value; falling back to global scope"
+			);
+			return None;
+		};
+		if bytes.is_empty() {
+			return None;
+		}
+		Some(hash_affinity_key(bytes))
 	}
 
 	/// Returns the configured base eviction duration, if any.
@@ -163,6 +203,9 @@ pub struct LocalEviction {
 #[derive(Default)]
 #[apply(schema_de!)]
 pub struct LocalHealthPolicy {
+	/// CEL expression whose string or bytes result scopes health state.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub scope: Option<String>,
 	/// CEL expression where `true` marks the backend response as unhealthy.
 	/// When unset, any 5xx response or connection failure is treated as unhealthy.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -203,7 +246,12 @@ impl TryFrom<LocalHealthPolicy> for Policy {
 			Some(s) if !s.trim().is_empty() => Some(Arc::new(Expression::new_strict(&s)?)),
 			_ => None,
 		};
+		let scope = match local.scope {
+			Some(s) if !s.trim().is_empty() => Some(Arc::new(Expression::new_strict(&s)?)),
+			_ => None,
+		};
 		Ok(Policy {
+			scope,
 			unhealthy_expression,
 			eviction,
 		})
@@ -213,6 +261,7 @@ impl TryFrom<LocalHealthPolicy> for Policy {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::http::transformation_cel::TransformationMetadata;
 
 	fn policy_with_threshold(threshold: f64) -> Policy {
 		Policy {
@@ -242,6 +291,35 @@ mod tests {
 			}),
 			..Default::default()
 		}
+	}
+
+	#[test]
+	fn scope_hashes_metadata_and_falls_back_to_global() {
+		let policy = Policy {
+			scope: Some(Arc::new(
+				Expression::new_strict(r#"metadata["agentgateway.dev/backend-auth"]"#).unwrap(),
+			)),
+			..Default::default()
+		};
+		let mut first = http::Request::new(http::Body::empty());
+		first
+			.extensions_mut()
+			.insert(TransformationMetadata(serde_json::Map::from_iter([(
+				"agentgateway.dev/backend-auth".to_string(),
+				serde_json::Value::String("tenant-a".to_string()),
+			)])));
+		let mut same = http::Request::new(http::Body::empty());
+		same
+			.extensions_mut()
+			.insert(TransformationMetadata(serde_json::Map::from_iter([(
+				"agentgateway.dev/backend-auth".to_string(),
+				serde_json::Value::String("tenant-a".to_string()),
+			)])));
+		let missing = http::Request::new(http::Body::empty());
+
+		assert_eq!(policy.scope_key(&first), policy.scope_key(&same));
+		assert!(policy.scope_key(&first).is_some());
+		assert_eq!(policy.scope_key(&missing), None);
 	}
 
 	// --- healthy responses never trigger eviction ---

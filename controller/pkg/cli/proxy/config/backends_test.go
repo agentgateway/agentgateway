@@ -193,6 +193,40 @@ func TestParseBackendRowsIncludesTopLevelBackendProviders(t *testing.T) {
 	}
 }
 
+func TestParseBackendRowsIncludesScopedHealth(t *testing.T) {
+	raw := []byte(`{
+		"backends": [{
+			"backend": {"ai": {
+				"name": "model",
+				"target": {"providers": [{
+					"active": {"*": {
+						"endpoint": {"name": "*"},
+						"info": {"health": 1, "totalRequests": 0},
+						"scoped_info": [
+							{"health": 0.5, "requestLatency": 0.25, "totalRequests": 2},
+							{"health": 0, "requestLatency": 0.5, "totalRequests": 1, "evictedUntil": "30s"}
+						]
+					}}
+				}]}
+			}}
+		}]
+	}`)
+
+	rows, err := parseBackendRows(raw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2: %#v", len(rows), rows)
+	}
+	if rows[0].Name != "model (scope 0)" || rows[0].Health != "0.50" || rows[0].Requests != 2 {
+		t.Fatalf("unexpected first scope: %#v", rows[0])
+	}
+	if rows[1].Name != "model (scope 1)" || rows[1].Health != "Evict (30.0s)" || rows[1].Requests != 1 {
+		t.Fatalf("unexpected second scope: %#v", rows[1])
+	}
+}
+
 func TestParseBackendRowsIgnoresTopLevelBackendStringTargets(t *testing.T) {
 	raw := []byte(`{
 		"backends": [
