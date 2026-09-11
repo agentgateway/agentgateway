@@ -1548,7 +1548,7 @@ async fn task_methods_respect_mcp_authorization_deny_policy() {
 	)
 	.await;
 	assert_eq!(get["error"]["code"], -32602);
-	assert_eq!(get["error"]["message"], "Unknown task: task-abc");
+	assert_eq!(get["error"]["message"], "unknown resource");
 }
 
 /// Test that a policy keyed on mcp.methodName sees the right method for each
@@ -1736,7 +1736,7 @@ async fn streamable_http_validates_protocol_version_header() {
 			"id": 3,
 			"error": {
 				"code": -32601,
-				"message": "method not found: initialize"
+				"message": "method not found"
 			}
 		})
 	);
@@ -2720,7 +2720,7 @@ async fn stream_to_stream_single_tls() {
 }
 
 /// Test that calling a tool denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown tool: {tool_name}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_tool_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -2743,7 +2743,7 @@ async fn authorization_denied_returns_unknown_tool_error() {
 
 	let client = mcp_streamable_client(io).await;
 
-	// Attempt to call a tool - should fail with "Unknown tool" error
+	// Attempt to call a tool - should fail with "unknown resource" error
 	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
@@ -2777,8 +2777,8 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 	assert_eq!(
 		mcp_error.message.as_ref(),
-		"Unknown tool: echo",
-		"Expected error message 'Unknown tool: echo', got: {}",
+		"unknown resource",
+		"Expected error message 'unknown resource', got: {}",
 		mcp_error.message
 	);
 }
@@ -2917,7 +2917,7 @@ async fn stateful_session_cannot_cross_mcp_backends() {
 }
 
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown prompt: {prompt_name}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_prompt_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -2962,8 +2962,8 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 			);
 			assert_eq!(
 				mcp_error.message.as_ref(),
-				"Unknown prompt: example_prompt",
-				"Expected error message 'Unknown prompt: example_prompt', got: {}",
+				"unknown resource",
+				"Expected error message 'unknown resource', got: {}",
 				mcp_error.message
 			);
 		},
@@ -3015,7 +3015,7 @@ async fn authorization_by_method_name_allows_prompts_list_denies_prompts_get() {
 }
 
 /// Test that reading a resource denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown resource: {resource_uri}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_resource_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -3062,8 +3062,8 @@ async fn authorization_denied_returns_unknown_resource_error() {
 			);
 			assert_eq!(
 				mcp_error.message.as_ref(),
-				"Unknown resource: memo://insights",
-				"Expected error message 'Unknown resource: memo://insights', got: {}",
+				"unknown resource",
+				"Expected error message 'unknown resource', got: {}",
 				mcp_error.message
 			);
 		},
@@ -7285,7 +7285,7 @@ async fn mcp_guardrails_metadata_consumed_by_authz() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
-	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
+	assert_eq!(e.message.as_ref(), "unknown resource");
 }
 
 // Simiilar to mcp_guardrails_metadata_consumed_by_authz but for the fanout path.
@@ -7615,7 +7615,7 @@ async fn mcp_guardrails_fail_closed_on_grpc_error() {
 		"gRPC failure should map to internal error"
 	);
 	assert!(
-		e.message.contains("mcpGuardrails checkRequest failed"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);
@@ -7721,7 +7721,7 @@ async fn mcp_guardrails_protocol_violation_fails_closed() {
 		"protocol violation should map to internal error"
 	);
 	assert!(
-		e.message.contains("protocol violation"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);
@@ -7766,7 +7766,7 @@ async fn mcp_guardrails_non_object_mutation_is_protocol_violation() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert!(
-		e.message.contains("protocol violation"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);

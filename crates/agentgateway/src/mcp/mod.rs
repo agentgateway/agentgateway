@@ -223,18 +223,60 @@ pub enum Error {
 }
 
 impl Error {
+	/// A client-safe message; Display retains the internal diagnostic details.
+	pub fn external_message(&self) -> &'static str {
+		match self {
+			Error::GetStreamNotSupported => "GET event stream is not supported",
+			Error::UnsupportedVersion { .. } => "unsupported MCP protocol version",
+			Error::VersionMismatch(_) => "MCP protocol version header/body mismatch",
+			Error::HeaderBodyMismatch(_, _) => "header/body mismatch",
+			Error::InvalidRoutingHeader(_, _) => "invalid MCP routing header",
+			Error::MethodNotFound(_, _) => "method not found",
+			Error::InvalidParams(_, _) => "invalid request parameters",
+			Error::Unavailable(_, _) => "service unavailable",
+			Error::McpGuardrails(_, _) => "request rejected by guardrail",
+			Error::RateLimited { .. } => "rate limit exceeded",
+			Error::MethodNotAllowed => "method not allowed",
+			Error::InvalidAccept => "invalid accept header",
+			Error::InvalidAcceptGet => "invalid accept header",
+			Error::InvalidContentType => "invalid content type",
+			Error::Deserialize(_) => "invalid request body",
+			Error::StartSession(_) => "failed to create session",
+			Error::UnknownSession => "session not found",
+			Error::MissingSessionHeader => "session header is required",
+			Error::SessionIdRequired => "session id is required",
+			Error::InvalidSessionIdHeader => "invalid session id header",
+			Error::InvalidProtocolVersion => "invalid protocol version",
+			Error::Stdio(_) => "failed to start stdio server",
+			Error::SendError(_, _) => "failed to send message",
+			Error::Authorization(_, _, _) => "unknown resource",
+			Error::InvalidSessionIdQuery => "invalid session id query",
+			Error::EstablishGetStream(_) => "failed to establish stream",
+			Error::ForwardLegacySse(_) => "failed to forward message",
+			Error::CreateSseUrl(_) => "failed to create sse url",
+			Error::OpenAPI(_) => "failed to parse openapi",
+			Error::UpstreamError(_) => "upstream error",
+			Error::NoBackends => "no backends available",
+		}
+	}
+
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		let (id, error) = match self {
+			// Policy rejections are explicit client responses; retain their message and data.
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
 			Error::RateLimited {
 				request_id: id,
 				status,
+				message,
 				..
 			} => (
 				id.clone(),
 				ErrorData {
 					code: RESOURCE_EXHAUSTED,
-					message: self.to_string().into(),
+					message: message
+						.clone()
+						.unwrap_or_else(|| self.external_message().to_owned())
+						.into(),
 					data: status.map(|s| {
 						serde_json::json!({
 							"limit": s.limit,
@@ -252,7 +294,7 @@ impl Error {
 				id.clone(),
 				ErrorData {
 					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
-					message: self.to_string().into(),
+					message: self.external_message().into(),
 					// This gate runs before backend selection, so it reports the gateway set.
 					// With single-server discover passthrough, SEP-2575's supported/discover
 					// correlation holds only when the upstream advertises a superset of this list.
@@ -281,7 +323,7 @@ impl Error {
 					id,
 					ErrorData {
 						code,
-						message: self.to_string().into(),
+						message: self.external_message().into(),
 						data: None,
 					},
 				)
