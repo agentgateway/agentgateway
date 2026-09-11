@@ -5932,8 +5932,11 @@ type AwsAssumeRole struct {
 	// request is rejected. At most one of session_name and session_name_expression
 	// may be set.
 	SessionNameExpression string `protobuf:"bytes,4,opt,name=session_name_expression,json=sessionNameExpression,proto3" json:"session_name_expression,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Set when the role's trust policy requires sts:ExternalId. Must match
+	// [\w+=,.@:/-]{2,1224}.
+	ExternalId    string `protobuf:"bytes,5,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AwsAssumeRole) Reset() {
@@ -5990,6 +5993,13 @@ func (x *AwsAssumeRole) GetTags() []*AwsSessionTag {
 func (x *AwsAssumeRole) GetSessionNameExpression() string {
 	if x != nil {
 		return x.SessionNameExpression
+	}
+	return ""
+}
+
+func (x *AwsAssumeRole) GetExternalId() string {
+	if x != nil {
+		return x.ExternalId
 	}
 	return ""
 }
@@ -18304,12 +18314,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x06region\x18\x03 \x01(\tR\x06region\x12(\n" +
 	"\rsession_token\x18\x04 \x01(\tH\x00R\fsessionToken\x88\x01\x01B\x10\n" +
 	"\x0e_session_token\"\r\n" +
-	"\vAwsImplicit\"\xc3\x01\n" +
+	"\vAwsImplicit\"\xe4\x01\n" +
 	"\rAwsAssumeRole\x12\x19\n" +
 	"\brole_arn\x18\x01 \x01(\tR\aroleArn\x12!\n" +
 	"\fsession_name\x18\x02 \x01(\tR\vsessionName\x12<\n" +
 	"\x04tags\x18\x03 \x03(\v2(.agentgateway.dev.resource.AwsSessionTagR\x04tags\x126\n" +
-	"\x17session_name_expression\x18\x04 \x01(\tR\x15sessionNameExpression\"W\n" +
+	"\x17session_name_expression\x18\x04 \x01(\tR\x15sessionNameExpression\x12\x1f\n" +
+	"\vexternal_id\x18\x05 \x01(\tR\n" +
+	"externalId\"W\n" +
 	"\rAwsSessionTag\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x1e\n" +

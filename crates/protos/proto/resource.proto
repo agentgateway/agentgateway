@@ -525,6 +525,9 @@ message AwsAssumeRole {
   // request is rejected. At most one of session_name and session_name_expression
   // may be set.
   string session_name_expression = 4;
+  // Set when the role's trust policy requires sts:ExternalId. Must match
+  // [\w+=,.@:/-]{2,1224}.
+  string external_id = 5;
 }
 
 // AWS STS session tag passed to AssumeRole for cost attribution.
