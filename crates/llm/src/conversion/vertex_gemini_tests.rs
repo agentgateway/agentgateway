@@ -2472,3 +2472,27 @@ fn msg_effort_uses_the_shared_budget_table() {
 	assert_eq!(budget_for("xhigh"), 8192);
 	assert_eq!(budget_for("max"), 16384);
 }
+
+#[test]
+fn msg_resp_signed_thought_parts_become_separate_thinking_blocks() {
+	// A thoughtSignature attests only the thought text it arrives with. Merging several signed
+	// parts into one block kept just the last signature, so echoing the block back 400s.
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "first thought", "thought": true, "thoughtSignature": "sig-a" },
+				{ "text": "second thought", "thought": true, "thoughtSignature": "sig-b" },
+				{ "text": "answer" }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+
+	let blocks = r["content"].as_array().unwrap();
+	let thinking: Vec<_> = blocks.iter().filter(|b| b["type"] == "thinking").collect();
+	assert_eq!(thinking.len(), 2, "one block per signature, got: {r}");
+	assert_eq!(thinking[0]["thinking"], "first thought");
+	assert_eq!(thinking[0]["signature"], "sig-a");
+	assert_eq!(thinking[1]["thinking"], "second thought");
+	assert_eq!(thinking[1]["signature"], "sig-b");
+}
