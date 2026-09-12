@@ -152,6 +152,7 @@ sqlx.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
 mimalloc = { workspace = true, optional = true }
+redis.workspace = true
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true

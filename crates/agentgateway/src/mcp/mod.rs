@@ -303,7 +303,9 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 	// currently only rate limit denials have a JSON-RPC shape.
 	if !matches!(
 		err,
-		ProxyError::RateLimitExceeded { .. } | ProxyError::RemoteRateLimitExceeded { .. }
+		ProxyError::RateLimitExceeded { .. }
+			| ProxyError::ConcurrencyLimitExceeded { .. }
+			| ProxyError::RemoteRateLimitExceeded { .. }
 	) {
 		return Err(ProxyResponse::Error(err));
 	}
@@ -350,6 +352,15 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 			status,
 			message: (!raw_body.is_empty()).then(|| String::from_utf8_lossy(&raw_body).into_owned()),
 			headers: response_headers,
+		}
+		.into(),
+		ProxyError::ConcurrencyLimitExceeded { limit, in_flight } => Error::RateLimited {
+			request_id,
+			status: None,
+			message: Some(format!(
+				"concurrency limit exceeded: {in_flight} of {limit} requests in flight"
+			)),
+			headers: Box::new(crate::http::HeaderMap::new()),
 		}
 		.into(),
 		e => e,

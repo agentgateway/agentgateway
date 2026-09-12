@@ -1946,7 +1946,18 @@
           "description": "Local rate limits for incoming requests.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalRateLimitPolicy"
+              "$ref": "#/$defs/LocalPolicyList_RateLimitSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "concurrencyLimit": {
+          "description": "Limits on in-flight requests, counted per key on this proxy instance.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalPolicyList_ConcurrencyLimit"
             },
             {
               "type": "null"
@@ -5802,7 +5813,8 @@
         }
       ]
     },
-    "LocalRateLimitPolicy": {
+    "LocalPolicyList_RateLimitSpec": {
+      "description": "A list of rules, given either as the list itself or as conditional entries that each carry\none rule.",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalConditionalPolicies_RateLimitSpec"
@@ -5918,6 +5930,207 @@
       "additionalProperties": false,
       "required": [
         "fillInterval"
+      ]
+    },
+    "LocalPolicyList_ConcurrencyLimit": {
+      "description": "A list of rules, given either as the list itself or as conditional entries that each carry\none rule.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalConditionalPolicies_ConcurrencyLimit"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConcurrencyLimit"
+          }
+        }
+      ]
+    },
+    "LocalConditionalPolicies_ConcurrencyLimit": {
+      "type": "object",
+      "properties": {
+        "conditional": {
+          "description": "conditional policy entries. An entry without a condition must be the final fallback.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalConditionalPolicy_ConcurrencyLimit"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "conditional"
+      ]
+    },
+    "LocalConditionalPolicy_ConcurrencyLimit": {
+      "description": "Limits how many requests may be in flight at once for a key.",
+      "type": "object",
+      "properties": {
+        "condition": {
+          "description": "condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "maxConcurrent": {
+          "description": "Maximum number of in-flight requests allowed per key. Requests over the limit are rejected\nwith a 429.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "key": {
+          "description": "CEL expression selecting the counter, for example `jwt.sub` or\n`jwt.sub + \"/\" + llm.requestModel`. Requests without a key, or whose key cannot be\nevaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has\nbeen parsed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limitOverride": {
+          "description": "CEL expression computing the limit for this request instead of `maxConcurrent`. It must\nevaluate to a non-negative integer; when it does not, `maxConcurrent` applies.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "shared": {
+          "description": "Keep the slots in a store every proxy instance shares, instead of on this instance.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SharedCounters"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "maxConcurrent"
+      ]
+    },
+    "SharedCounters": {
+      "description": "Keeps a rule's slots in a store every proxy instance shares, so the limit holds across\ninstances instead of once per instance.",
+      "type": "object",
+      "properties": {
+        "redis": {
+          "description": "The store that keeps the counters.",
+          "$ref": "#/$defs/RedisStore"
+        },
+        "lease": {
+          "description": "How long a slot stays counted without renewal. Slots are renewed while their request runs\nand dropped when it ends, so this only bounds how long a slot taken by an instance that went\naway is counted. Defaults to 60s.",
+          "type": "string",
+          "default": "1m0s"
+        },
+        "timeout": {
+          "description": "How long a store call may take before `failureMode` applies. Defaults to 1s.",
+          "type": "string",
+          "default": "1s"
+        },
+        "keyPrefix": {
+          "description": "Prefix of the store keys. Rules with the same settings and prefix count together, so give\ngateways that must not share their slots different prefixes. Defaults to\n`agentgateway:concurrency`.",
+          "type": "string",
+          "default": "agentgateway:concurrency"
+        },
+        "failureMode": {
+          "description": "What happens to a request when the store cannot be reached. Defaults to `allow`.",
+          "$ref": "#/$defs/ConcurrencyFailureMode",
+          "default": "allow"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "redis"
+      ]
+    },
+    "RedisStore": {
+      "description": "A Redis store.",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Connection URL, such as `redis://redis:6379/0`, or `rediss://` for TLS.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ]
+    },
+    "ConcurrencyFailureMode": {
+      "oneOf": [
+        {
+          "description": "The request goes through without taking a slot.",
+          "type": "string",
+          "const": "allow"
+        },
+        {
+          "description": "The request is rejected with a 503.",
+          "type": "string",
+          "const": "deny"
+        }
+      ]
+    },
+    "ConcurrencyLimit": {
+      "description": "Limits how many requests may be in flight at once for a key.",
+      "type": "object",
+      "properties": {
+        "maxConcurrent": {
+          "description": "Maximum number of in-flight requests allowed per key. Requests over the limit are rejected\nwith a 429.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "key": {
+          "description": "CEL expression selecting the counter, for example `jwt.sub` or\n`jwt.sub + \"/\" + llm.requestModel`. Requests without a key, or whose key cannot be\nevaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has\nbeen parsed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limitOverride": {
+          "description": "CEL expression computing the limit for this request instead of `maxConcurrent`. It must\nevaluate to a non-negative integer; when it does not, `maxConcurrent` applies.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "shared": {
+          "description": "Keep the slots in a store every proxy instance shares, instead of on this instance.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SharedCounters"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "maxConcurrent"
       ]
     },
     "LocalExplicitOrConditional_RemoteRateLimit": {
@@ -12537,6 +12750,14 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/RateLimitSpec"
+          },
+          "default": []
+        },
+        "concurrencyLimit": {
+          "description": "Limits on in-flight requests, counted per key on this proxy instance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConcurrencyLimit"
           },
           "default": []
         },

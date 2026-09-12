@@ -288,6 +288,15 @@ async fn apply_request_policies(
 		.apply_selected("remote rate limit", c, l, req, &mut rp.rate_limit_headers)
 		.await?;
 
+	rp.llm_request_policies.concurrency_limit = pol
+		.concurrency_limit
+		.apply_selected("concurrency limit", c, l, req, rp.headers())
+		.await?;
+	rp.concurrency_guard = req
+		.extensions()
+		.get::<Arc<http::concurrencylimit::ConcurrencyGuard>>()
+		.cloned();
+
 	rp.buffer = pol.buffer.apply("buffer", c, l, req, rp.headers()).await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
@@ -581,6 +590,34 @@ async fn apply_llm_request_policies(
 			status.reset_seconds,
 		);
 	}
+	// Concurrency limits keyed on the LLM request wait until it is parsed. The guard makes sure
+	// they run once per request, not once per retry attempt.
+	if let Some(limits) = policies.concurrency_limit.as_deref()
+		&& let Some(guard) = req
+			.extensions()
+			.get::<Arc<http::concurrencylimit::ConcurrencyGuard>>()
+			.cloned()
+		&& guard.begin_llm_check()
+	{
+		let llm_ctx = cel::LLMContext::from_llm_info(
+			llm::LLMInfo {
+				request: llm_req.clone(),
+				response: Default::default(),
+			},
+			None,
+		);
+		let mut exec = cel::Executor::new_request(req);
+		exec.llm = cel::ExtensionOrDirect::Direct(Some(&llm_ctx));
+		let wanted: Vec<_> = limits
+			.iter()
+			.filter(|l| l.needs_llm())
+			.map(|l| (l, l.evaluate(&exec)))
+			.collect();
+		drop(exec);
+		for (limit, (key, max)) in wanted {
+			guard.hold(limit.take(key, max).await?);
+		}
+	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
 		// For the LLM request side, request either the count of the input tokens (if tokenization was done)
 		// or 0.
@@ -761,6 +798,9 @@ impl HTTPProxy {
 				}
 			},
 		};
+		if let Some(guard) = response_policies.concurrency_guard.take() {
+			http::concurrencylimit::hold_until_complete(&mut resp, guard);
+		}
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
 		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
 		llm::encode_deferred_response(&mut resp);
@@ -4662,6 +4702,9 @@ struct ResponsePolicies {
 	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
 	llm_request_policies: LLMRequestPolicies,
 	a2a_type: a2a::RequestType,
+	// Slots taken by concurrency limits. Attached to the final response body so they are released
+	// when the response has been fully sent.
+	concurrency_guard: Option<Arc<http::concurrencylimit::ConcurrencyGuard>>,
 }
 
 impl ResponsePolicies {

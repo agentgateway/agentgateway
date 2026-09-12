@@ -1,0 +1,183 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for concurrency_limit: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+  - key: bind/4000
+    address: "[::]:4000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      llm:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: llm
+        listenerName: llm
+        protocol: HTTP
+listener_routes:
+  - - ns/name/bind/3000/listener0
+    - - backends:
+          - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+            weight: 1
+        inlinePolicies:
+          - concurrencyLimit:
+              - maxConcurrent: 16
+              - maxConcurrent: 2
+                key: "request.headers[\"x-user\"]"
+                limitOverride: "request.headers[\"x-tier\"] == \"gold\" ? 8 : 2"
+        key: ns/name/bind/3000/listener0/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+      - backends:
+          - backend: /ns/name/bind/3000/listener0/default/route1/backend0
+            weight: 1
+        inlinePolicies:
+          - concurrencyLimit:
+              - pol:
+                  - maxConcurrent: 8
+                condition: "request.headers[\"x-tier\"] == \"gold\""
+              - pol:
+                  - maxConcurrent: 1
+                condition: ~
+        key: ns/name/bind/3000/listener0/default/route1
+        matches:
+          - path:
+              pathPrefix: /
+        name: route1
+        namespace: default
+  - - llm
+    - - backends:
+          - backend: "/llm:router"
+            weight: 1
+        key: "llm:request"
+        matches:
+          - path:
+              pathPrefix: /
+        name: "llm:request"
+        namespace: internal
+listener_tcp_routes:
+  - - ns/name/bind/3000/listener0
+    - []
+  - - llm
+    - []
+policies:
+  - key: listener/0
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        concurrencyLimit:
+          - maxConcurrent: 4
+            key: jwt.sub
+          - maxConcurrent: 1
+            key: "jwt.sub + \"/\" + llm.requestModel"
+          - maxConcurrent: 16
+            key: jwt.team
+            shared:
+              redis:
+                url: "redis://redis.internal:6379/0"
+              lease: 30s
+              timeout: 1s
+              keyPrefix: "agentgateway:concurrency"
+              failureMode: deny
+        phase: route
+backends:
+  - backend:
+      host:
+        name: ns/name/bind/3000/listener0/default/route0/backend0
+        namespace: ""
+        target: "localhost:8080"
+  - backend:
+      host:
+        name: ns/name/bind/3000/listener0/default/route1/backend0
+        namespace: ""
+        target: "localhost:8081"
+  - backend:
+      ai:
+        name: "llm:model:qwen3:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                qwen3:
+                  endpoint:
+                    name: qwen3
+                    provider:
+                      openAI: {}
+                    hostOverride: "vllm.internal:8000"
+                    pathOverride: ~
+                    pathPrefix: /v1
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - ai: {}
+  - backend:
+      llmRouter:
+        name: "llm:router"
+        namespace: ""
+        target:
+          models:
+            - name: qwen3
+              created: 0
+              visibility: public
+              headerMatches: []
+              backend:
+                backend: "/llm:model:qwen3:0"
+                weight: 1
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":countTokens": geminiCountTokens
+                    ":generateContent": generateContent
+                    ":rawPredict": messages
+                    ":streamGenerateContent": generateContent
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+          virtualModels: []
+route_groups: []
+workloads: []
+services: []

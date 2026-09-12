@@ -103,6 +103,7 @@ impl ProxyError {
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
 			ProxyError::RateLimitFailed
 			| ProxyError::RateLimitExceeded { .. }
+			| ProxyError::ConcurrencyLimitExceeded { .. }
 			| ProxyError::RemoteRateLimitExceeded { .. }
 			| ProxyError::BudgetExceeded(_) => ProxyResponseReason::RateLimit,
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
@@ -257,6 +258,8 @@ pub enum ProxyError {
 		remaining: u64,
 		reset_seconds: u64,
 	},
+	#[error("concurrency limit exceeded")]
+	ConcurrencyLimitExceeded { limit: u32, in_flight: u32 },
 	// remote (RLS) denial; into_response_with_grpc builds the 429 body and headers
 	#[error("rate limit exceeded")]
 	RemoteRateLimitExceeded {
@@ -450,6 +453,7 @@ impl ProxyError {
 			ProxyError::RequestLimitExceeded => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::SubstrateIngressFailed(status, _) => status,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+			ProxyError::ConcurrencyLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::RemoteRateLimitExceeded {
 				response_headers,
 				raw_body,

@@ -1,0 +1,107 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: concurrency-limit-conditional
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    rateLimit:
+      conditional:
+      - condition: 'jwt.team == "research"'
+        policy:
+          concurrency:
+          - maxConcurrent: 8
+            key: jwt.sub
+      - policy:
+          concurrency:
+          - maxConcurrent: 1
+            key: jwt.sub
+          local:
+          - requests: 100
+            unit: Minutes
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: jwt.team == "research"
+          traffic:
+            concurrencyLimit:
+              rules:
+              - key: jwt.sub
+                maxConcurrent: 8
+        - traffic:
+            concurrencyLimit:
+              rules:
+              - key: jwt.sub
+                maxConcurrent: 1
+      key: traffic/default/concurrency-limit-conditional:concurrency:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: concurrency-limit-conditional
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - traffic:
+            localRateLimit:
+              fillInterval: 60s
+              maxTokens: "100"
+              rules:
+              - fillInterval: 60s
+                maxTokens: "100"
+                tokensPerFill: "100"
+              tokensPerFill: "100"
+      key: traffic/default/concurrency-limit-conditional:rl-local:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: concurrency-limit-conditional
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: concurrency-limit-conditional
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
