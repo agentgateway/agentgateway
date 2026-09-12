@@ -344,11 +344,35 @@ pub(super) async fn authorization_server_metadata(
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
 		.map_err(ProxyError::Body)?;
+	apply_provider_metadata_overrides(req, auth, &mut resp)?;
+
+	rewrite_authorization_server_issuer(req, auth, &mut resp)?;
+
+	let response = ::http::Response::builder()
+		.status(StatusCode::OK)
+		.header("content-type", "application/json")
+		.header("access-control-allow-origin", "*")
+		.header("access-control-allow-methods", "GET, OPTIONS")
+		.header("access-control-allow-headers", "content-type")
+		.body(axum::body::Body::from(Bytes::from(
+			serde_json::to_string(&resp).map_err(|e| ProxyError::Body(crate::http::Error::new(e)))?,
+		)))?;
+
+	Ok(response)
+}
+
+/// Apply provider-specific rewrites to the authorization server metadata served to
+/// MCP clients, so that endpoints the gateway handles itself are advertised as its own.
+fn apply_provider_metadata_overrides(
+	req: &Request,
+	auth: &McpAuthentication,
+	resp: &mut serde_json::Value,
+) -> Result<(), ProxyError> {
 	match &auth.provider {
 		Some(McpIDP::Auth0 {}) => {
 			// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+				json::traverse_mut(resp, &["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
@@ -358,11 +382,21 @@ pub(super) async fn authorization_server_metadata(
 			if let Some(aud) = auth.audiences.first() {
 				ae.push_str(&format!("?audience={}", aud));
 			}
+			// Auth0's own registration endpoint is only live when Dynamic Application
+			// Registration is enabled on the tenant, and it is not proxied, so clients that
+			// follow this metadata bypass the `clientId` short-circuit entirely. Point them at
+			// the gateway's registration handler, as every other provider adapter does.
+			let current_uri = request_uri_for_oauth_metadata(req);
+			if let Some(serde_json::Value::String(re)) =
+				json::traverse_mut(resp, &["registration_endpoint"])
+			{
+				*re = format!("{current_uri}/client-registration");
+			}
 		},
 		Some(McpIDP::Okta {}) => {
 			// Okta does not support RFC 8707. Workaround by appending audience as a query param.
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+				json::traverse_mut(resp, &["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
@@ -375,7 +409,7 @@ pub(super) async fn authorization_server_metadata(
 			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
 			let current_uri = request_uri_for_oauth_metadata(req);
 			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
+				json::traverse_mut(resp, &["registration_endpoint"])
 			{
 				*re = format!("{current_uri}/client-registration");
 			}
@@ -386,7 +420,7 @@ pub(super) async fn authorization_server_metadata(
 			// Note: DCR requires a management key; recommend using clientId short-circuit instead.
 			let current_uri = request_uri_for_oauth_metadata(req);
 			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
+				json::traverse_mut(resp, &["registration_endpoint"])
 			{
 				*re = format!("{current_uri}/client-registration");
 			}
@@ -403,7 +437,7 @@ pub(super) async fn authorization_server_metadata(
 
 			let current_uri = request_uri_for_oauth_metadata(req);
 			let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
+				json::traverse_mut(resp, &["registration_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"registration_endpoint missing".to_string(),
@@ -435,14 +469,14 @@ pub(super) async fn authorization_server_metadata(
 			// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010). Advertise
 			// gateway-proxied authorization/token endpoints that strip it before forwarding.
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+				json::traverse_mut(resp, &["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
 				));
 			};
 			*ae = format!("{current_uri}/authorize");
-			let Some(serde_json::Value::String(te)) = json::traverse_mut(&mut resp, &["token_endpoint"])
+			let Some(serde_json::Value::String(te)) = json::traverse_mut(resp, &["token_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"token_endpoint missing".to_string(),
@@ -468,19 +502,7 @@ pub(super) async fn authorization_server_metadata(
 		_ => {},
 	}
 
-	rewrite_authorization_server_issuer(req, auth, &mut resp)?;
-
-	let response = ::http::Response::builder()
-		.status(StatusCode::OK)
-		.header("content-type", "application/json")
-		.header("access-control-allow-origin", "*")
-		.header("access-control-allow-methods", "GET, OPTIONS")
-		.header("access-control-allow-headers", "content-type")
-		.body(axum::body::Body::from(Bytes::from(
-			serde_json::to_string(&resp).map_err(|e| ProxyError::Body(crate::http::Error::new(e)))?,
-		)))?;
-
-	Ok(response)
+	Ok(())
 }
 
 pub(super) async fn client_registration(
@@ -994,6 +1016,62 @@ mod tests {
 			.expect("request should build");
 		req.extensions_mut().insert(auth);
 		req
+	}
+
+	#[rstest::rstest]
+	#[case::auth0(McpIDP::Auth0 {})]
+	#[case::okta(McpIDP::Okta {})]
+	#[case::descope(McpIDP::Descope {})]
+	#[case::keycloak(McpIDP::Keycloak {})]
+	fn provider_metadata_advertises_gateway_registration_endpoint(#[case] provider: McpIDP) {
+		// A provider's own registration endpoint bypasses the `clientId` short-circuit, so
+		// clients that follow the served metadata never reach it.
+		let mut auth = default_auth();
+		auth.provider = Some(provider);
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+		let mut metadata = serde_json::json!({
+			"authorization_endpoint": "https://idp.example.com/authorize",
+			"registration_endpoint": "https://idp.example.com/oidc/register",
+		});
+
+		apply_provider_metadata_overrides(&req, &auth, &mut metadata)
+			.expect("metadata should be rewritten");
+
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+	}
+
+	#[test]
+	fn auth0_metadata_keeps_audience_workaround_alongside_registration_rewrite() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Auth0 {});
+		auth.audiences = vec!["https://mcp.example.com/mcp".to_string()];
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+		let mut metadata = serde_json::json!({
+			"authorization_endpoint": "https://idp.example.com/authorize",
+			"registration_endpoint": "https://idp.example.com/oidc/register",
+		});
+
+		apply_provider_metadata_overrides(&req, &auth, &mut metadata)
+			.expect("metadata should be rewritten");
+
+		// Auth0 has no RFC 8707 support, so the audience must still be pinned on authorize.
+		assert_eq!(
+			metadata["authorization_endpoint"],
+			"https://idp.example.com/authorize?audience=https://mcp.example.com/mcp"
+		);
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
 	}
 
 	fn default_auth() -> McpAuthentication {
