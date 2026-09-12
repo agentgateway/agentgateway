@@ -1617,6 +1617,9 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		if auth.AssumeRole.SessionNameExpression != nil {
 			assumeRole.SessionNameExpression = string(*auth.AssumeRole.SessionNameExpression)
 		}
+		if auth.AssumeRole.ExternalID != nil {
+			assumeRole.ExternalId = *auth.AssumeRole.ExternalID
+		}
 	}
 
 	awsAuth := &api.Aws{

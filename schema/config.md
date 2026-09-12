@@ -295,6 +295,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -637,6 +638,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -915,6 +917,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1193,6 +1196,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1469,6 +1473,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1783,6 +1788,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2061,6 +2067,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2337,6 +2344,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2664,6 +2672,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2898,6 +2907,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3324,6 +3334,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3611,6 +3622,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3980,6 +3992,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4280,6 +4293,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4583,6 +4597,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4873,6 +4888,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5164,6 +5180,7 @@
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5450,6 +5467,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5816,6 +5834,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6137,6 +6156,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6562,6 +6582,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6854,6 +6875,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7166,6 +7188,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7484,6 +7507,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7762,6 +7786,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8040,6 +8065,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8316,6 +8342,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8630,6 +8657,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8908,6 +8936,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9184,6 +9213,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9536,6 +9566,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9961,6 +9992,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10253,6 +10285,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10565,6 +10598,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10883,6 +10917,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11161,6 +11196,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11439,6 +11475,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11715,6 +11752,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12029,6 +12067,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12307,6 +12346,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12583,6 +12623,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12898,6 +12939,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13323,6 +13365,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13615,6 +13658,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13927,6 +13971,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14245,6 +14290,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14523,6 +14569,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14801,6 +14848,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15077,6 +15125,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15391,6 +15440,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15669,6 +15719,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15945,6 +15996,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16299,6 +16351,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16620,6 +16673,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16920,6 +16974,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17223,6 +17278,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17513,6 +17569,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17915,6 +17972,7 @@
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`frontendPolicies.networkExtAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`frontendPolicies.networkExtAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18216,6 +18274,7 @@
 |`frontendPolicies.substrateEgressActorResolution.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`frontendPolicies.substrateEgressActorResolution.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`frontendPolicies.substrateEgressActorResolution.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`frontendPolicies.substrateEgressActorResolution.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`frontendPolicies.substrateEgressActorResolution.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.substrateEgressActorResolution.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`frontendPolicies.substrateEgressActorResolution.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18508,6 +18567,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18801,6 +18861,7 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19089,6 +19150,7 @@
 |`frontendPolicies.tracing.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`frontendPolicies.tracing.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`frontendPolicies.tracing.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`frontendPolicies.tracing.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`frontendPolicies.tracing.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19465,6 +19527,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19807,6 +19870,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -20085,6 +20149,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -20363,6 +20428,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -20639,6 +20705,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -20953,6 +21020,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -21231,6 +21299,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -21507,6 +21576,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -21834,6 +21904,7 @@
 |`policies[].policy.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -22068,6 +22139,7 @@
 |`policies[].policy.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -22494,6 +22566,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -22781,6 +22854,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -23150,6 +23224,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -23450,6 +23525,7 @@
 |`policies[].policy.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -23753,6 +23829,7 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -24043,6 +24120,7 @@
 |`policies[].policy.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -24334,6 +24412,7 @@
 |`policies[].policy.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.substrateIngress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.substrateIngress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.substrateIngress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.substrateIngress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -24620,6 +24699,7 @@
 |`policies[].policy.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`policies[].policy.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`policies[].policy.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.substrateEgress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`policies[].policy.substrateEgress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.substrateEgress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.substrateEgress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -24986,6 +25066,7 @@
 |`backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].mcp.targets[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -25307,6 +25388,7 @@
 |`backends[].ai.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -25732,6 +25814,7 @@
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -26024,6 +26107,7 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -26336,6 +26420,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -26654,6 +26739,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -26932,6 +27018,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -27210,6 +27297,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -27486,6 +27574,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -27800,6 +27889,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -28078,6 +28168,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -28354,6 +28445,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -28706,6 +28798,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -29131,6 +29224,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -29423,6 +29517,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -29735,6 +29830,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -30053,6 +30149,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -30331,6 +30428,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -30609,6 +30707,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -30885,6 +30984,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -31199,6 +31299,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -31477,6 +31578,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -31753,6 +31855,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -32066,6 +32169,7 @@
 |`backends[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -32491,6 +32595,7 @@
 |`backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -32783,6 +32888,7 @@
 |`backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -33095,6 +33201,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -33413,6 +33520,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -33691,6 +33799,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -33969,6 +34078,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -34245,6 +34355,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -34559,6 +34670,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -34837,6 +34949,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -35113,6 +35226,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -35509,6 +35623,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -35851,6 +35966,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -36129,6 +36245,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -36407,6 +36524,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -36683,6 +36801,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -36997,6 +37116,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -37275,6 +37395,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -37551,6 +37672,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -37878,6 +38000,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -38112,6 +38235,7 @@
 |`routeGroups[].routes[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -38538,6 +38662,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -38825,6 +38950,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -39194,6 +39320,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -39494,6 +39621,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -39797,6 +39925,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -40087,6 +40216,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -40378,6 +40508,7 @@
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -40664,6 +40795,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -41030,6 +41162,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -41351,6 +41484,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -41776,6 +41910,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -42068,6 +42203,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -42380,6 +42516,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -42698,6 +42835,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -42976,6 +43114,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -43254,6 +43393,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -43530,6 +43670,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -43844,6 +43985,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -44122,6 +44264,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -44398,6 +44541,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -44750,6 +44894,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -45175,6 +45320,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -45467,6 +45613,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -45779,6 +45926,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -46097,6 +46245,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -46375,6 +46524,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -46653,6 +46803,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -46929,6 +47080,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -47243,6 +47395,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -47521,6 +47674,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -47797,6 +47951,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -48112,6 +48267,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -48537,6 +48693,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -48829,6 +48986,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -49141,6 +49299,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -49459,6 +49618,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -49737,6 +49897,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -50015,6 +50176,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -50291,6 +50453,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -50605,6 +50768,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -50883,6 +51047,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -51159,6 +51324,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -51542,6 +51708,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -51842,6 +52009,7 @@
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.listeners[].extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -52145,6 +52313,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -52435,6 +52604,7 @@
 |`gateways.*.listeners[].extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.listeners[].extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -52863,6 +53033,7 @@
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -53163,6 +53334,7 @@
 |`gateways.*.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -53466,6 +53638,7 @@
 |`gateways.*.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -53756,6 +53929,7 @@
 |`gateways.*.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`gateways.*.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`gateways.*.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`gateways.*.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`gateways.*.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`gateways.*.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -54204,6 +54378,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -54546,6 +54721,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -54824,6 +55000,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -55102,6 +55279,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -55378,6 +55556,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -55692,6 +55871,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -55970,6 +56150,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -56246,6 +56427,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -56573,6 +56755,7 @@
 |`routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -56807,6 +56990,7 @@
 |`routes[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -57233,6 +57417,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -57520,6 +57705,7 @@
 |`routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -57889,6 +58075,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -58189,6 +58376,7 @@
 |`routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -58492,6 +58680,7 @@
 |`routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -58782,6 +58971,7 @@
 |`routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -59073,6 +59263,7 @@
 |`routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.substrateIngress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.substrateIngress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.substrateIngress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -59359,6 +59550,7 @@
 |`routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.substrateEgress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].policies.substrateEgress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].policies.substrateEgress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].policies.substrateEgress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -59725,6 +59917,7 @@
 |`routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].mcp.targets[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -60046,6 +60239,7 @@
 |`routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -60471,6 +60665,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -60763,6 +60958,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -61075,6 +61271,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -61393,6 +61590,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -61671,6 +61869,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -61949,6 +62148,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -62225,6 +62425,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -62539,6 +62740,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -62817,6 +63019,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -63093,6 +63296,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -63445,6 +63649,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -63870,6 +64075,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -64162,6 +64368,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -64474,6 +64681,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -64792,6 +65000,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -65070,6 +65279,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -65348,6 +65558,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -65624,6 +65835,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -65938,6 +66150,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -66216,6 +66429,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -66492,6 +66706,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -66807,6 +67022,7 @@
 |`routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -67232,6 +67448,7 @@
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -67524,6 +67741,7 @@
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -67836,6 +68054,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -68154,6 +68373,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -68432,6 +68652,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -68710,6 +68931,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -68986,6 +69208,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -69300,6 +69523,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -69578,6 +69802,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -69854,6 +70079,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -70209,6 +70435,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -70520,6 +70747,7 @@
 |`llm.providers[].defaults.auth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.providers[].defaults.auth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.providers[].defaults.auth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.providers[].defaults.auth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.providers[].defaults.auth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.providers[].defaults.auth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.providers[].defaults.auth.azure.explicitConfig.clientSecret`|object||
@@ -70941,6 +71169,7 @@
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.providers[].defaults.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -71251,6 +71480,7 @@
 |`llm.models[].auth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].auth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].auth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].auth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].auth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].auth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].auth.azure.explicitConfig.clientSecret`|object||
@@ -71672,6 +71902,7 @@
 |`llm.models[].backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -71963,6 +72194,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -72241,6 +72473,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -72519,6 +72752,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -72795,6 +73029,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -73109,6 +73344,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -73387,6 +73623,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -73663,6 +73900,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -74033,6 +74271,7 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -74333,6 +74572,7 @@
 |`llm.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -74636,6 +74876,7 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -74926,6 +75167,7 @@
 |`llm.policies.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -75313,6 +75555,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -75591,6 +75834,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -75869,6 +76113,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -76145,6 +76390,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -76459,6 +76705,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -76737,6 +76984,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -77013,6 +77261,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -77312,6 +77561,7 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -77631,6 +77881,7 @@
 |`mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.targets[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.targets[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.targets[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -77974,6 +78225,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -78316,6 +78568,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -78594,6 +78847,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -78872,6 +79126,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -79148,6 +79403,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -79462,6 +79718,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -79740,6 +79997,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -80016,6 +80274,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -80343,6 +80602,7 @@
 |`mcp.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -80577,6 +80837,7 @@
 |`mcp.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -81003,6 +81264,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -81290,6 +81552,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -81659,6 +81922,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -81959,6 +82223,7 @@
 |`mcp.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -82262,6 +82527,7 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -82552,6 +82818,7 @@
 |`mcp.policies.extProc.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.extProc.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.extProc.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.extProc.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.extProc.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -82843,6 +83110,7 @@
 |`mcp.policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.substrateIngress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.substrateIngress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.substrateIngress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.substrateIngress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.substrateIngress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -83129,6 +83397,7 @@
 |`mcp.policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`mcp.policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`mcp.policies.substrateEgress.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.substrateEgress.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`mcp.policies.substrateEgress.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.substrateEgress.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.substrateEgress.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -83519,6 +83788,7 @@
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`ui.policies.extAuthz.conditional[].policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -83819,6 +84089,7 @@
 |`ui.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
 |`ui.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
 |`ui.policies.extAuthz.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`ui.policies.extAuthz.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
 |`ui.policies.extAuthz.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`ui.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`ui.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||

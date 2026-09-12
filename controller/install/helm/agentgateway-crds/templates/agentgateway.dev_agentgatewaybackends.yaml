@@ -755,6 +755,14 @@ spec:
                                                                     AWS STS AssumeRole settings to use before signing backend requests.
                                                                     Ambient AWS credentials are used as the source credentials for STS.
                                                                   properties:
+                                                                    externalId:
+                                                                      description: ExternalID
+                                                                        is set when
+                                                                        the role's
+                                                                        trust policy
+                                                                        requires sts:ExternalId.
+                                                                      pattern: ^[\w+=,.@:/-]{2,1224}$
+                                                                      type: string
                                                                     roleArn:
                                                                       description: AWS
                                                                         IAM role ARN
@@ -2888,6 +2896,14 @@ spec:
                                                                     AWS STS AssumeRole settings to use before signing backend requests.
                                                                     Ambient AWS credentials are used as the source credentials for STS.
                                                                   properties:
+                                                                    externalId:
+                                                                      description: ExternalID
+                                                                        is set when
+                                                                        the role's
+                                                                        trust policy
+                                                                        requires sts:ExternalId.
+                                                                      pattern: ^[\w+=,.@:/-]{2,1224}$
+                                                                      type: string
                                                                     roleArn:
                                                                       description: AWS
                                                                         IAM role ARN
@@ -4471,6 +4487,12 @@ spec:
                                               AWS STS AssumeRole settings to use before signing backend requests.
                                               Ambient AWS credentials are used as the source credentials for STS.
                                             properties:
+                                              externalId:
+                                                description: ExternalID is set when
+                                                  the role's trust policy requires
+                                                  sts:ExternalId.
+                                                pattern: ^[\w+=,.@:/-]{2,1224}$
+                                                type: string
                                               roleArn:
                                                 description: AWS IAM role ARN to assume.
                                                 minLength: 1
@@ -7809,6 +7831,11 @@ spec:
                                             AWS STS AssumeRole settings to use before signing backend requests.
                                             Ambient AWS credentials are used as the source credentials for STS.
                                           properties:
+                                            externalId:
+                                              description: ExternalID is set when
+                                                the role's trust policy requires sts:ExternalId.
+                                              pattern: ^[\w+=,.@:/-]{2,1224}$
+                                              type: string
                                             roleArn:
                                               description: AWS IAM role ARN to assume.
                                               minLength: 1
@@ -10365,6 +10392,12 @@ spec:
                                                     AWS STS AssumeRole settings to use before signing backend requests.
                                                     Ambient AWS credentials are used as the source credentials for STS.
                                                   properties:
+                                                    externalId:
+                                                      description: ExternalID is set
+                                                        when the role's trust policy
+                                                        requires sts:ExternalId.
+                                                      pattern: ^[\w+=,.@:/-]{2,1224}$
+                                                      type: string
                                                     roleArn:
                                                       description: AWS IAM role ARN
                                                         to assume.
@@ -12216,6 +12249,12 @@ spec:
                                                     AWS STS AssumeRole settings to use before signing backend requests.
                                                     Ambient AWS credentials are used as the source credentials for STS.
                                                   properties:
+                                                    externalId:
+                                                      description: ExternalID is set
+                                                        when the role's trust policy
+                                                        requires sts:ExternalId.
+                                                      pattern: ^[\w+=,.@:/-]{2,1224}$
+                                                      type: string
                                                     roleArn:
                                                       description: AWS IAM role ARN
                                                         to assume.
@@ -13594,6 +13633,11 @@ spec:
                               AWS STS AssumeRole settings to use before signing backend requests.
                               Ambient AWS credentials are used as the source credentials for STS.
                             properties:
+                              externalId:
+                                description: ExternalID is set when the role's trust
+                                  policy requires sts:ExternalId.
+                                pattern: ^[\w+=,.@:/-]{2,1224}$
+                                type: string
                               roleArn:
                                 description: AWS IAM role ARN to assume.
                                 minLength: 1

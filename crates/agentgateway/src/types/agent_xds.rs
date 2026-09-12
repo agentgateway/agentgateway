@@ -1322,11 +1322,19 @@ fn backend_auth_kind_from_proto(
 							));
 						},
 					};
+					let external_id = if assume_role.external_id.is_empty() {
+						None
+					} else {
+						auth::aws::validate_external_id(&assume_role.external_id)
+							.map_err(|e| ProtoError::Generic(format!("assumeRole externalId: {e}")))?;
+						Some(assume_role.external_id)
+					};
 					Ok(auth::AwsAssumeRole {
 						role_arn: assume_role.role_arn,
 						session_name,
 						tags: auth::aws::AwsSessionTags::try_new(tags)
 							.map_err(|e| ProtoError::Generic(e.to_string()))?,
+						external_id,
 					})
 				})
 				.transpose()?;
