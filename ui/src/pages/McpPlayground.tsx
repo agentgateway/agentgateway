@@ -66,13 +66,14 @@ export function McpPlaygroundPage() {
 			: false;
 	const fileCorsOwned = Boolean(
 		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.prototype.hasOwnProperty.call(mcpData.rawConfig.data.mcp.policies, 'cors')
+			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
 	);
 
 	useEffect(() => {
 		localStorage.removeItem('mcpPlaygroundArgs');
 	}, []);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: See ui/BIOME.md for why this exception exists and how to remove it.
 	useEffect(() => {
 		if (selectedTool?.inputSchema) {
 			setArgumentValues(defaultArgumentsFromSchema(selectedTool.inputSchema));
@@ -585,6 +586,7 @@ function McpResultView(props: { response: McpResponse }) {
 				<div className="mcp-result-card">
 					<strong>Tool output</strong>
 					{content.map((item, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 						<ContentBlock block={item} key={index} />
 					))}
 					{structuredContent !== undefined ? (

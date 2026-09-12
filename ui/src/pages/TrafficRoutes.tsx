@@ -1142,6 +1142,7 @@ function HeaderConditionsEditor(props: {
 				<div className="match-header-list">
 					{props.headers.map((header, index) => (
 						<HeaderConditionRow
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 							key={index}
 							header={header}
 							onChange={next =>
@@ -1243,6 +1244,7 @@ function QueryConditionsEditor(props: {
 				<div className="match-header-list">
 					{props.query.map((query, index) => (
 						<QueryConditionRow
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 							key={index}
 							query={query}
 							onChange={next =>
@@ -1355,6 +1357,7 @@ function RouteBackendsEditor(props: {
 				<div className="route-backend-list">
 					{props.backends.map((backend, index) => (
 						<RouteBackendRow
+							// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 							key={index}
 							kind={props.kind}
 							help={props.help}

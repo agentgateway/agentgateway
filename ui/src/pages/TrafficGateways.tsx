@@ -289,7 +289,12 @@ export function TrafficGatewaysPage() {
 											</thead>
 											<tbody>
 												{gateway.listeners.map((listener, listenerIndex) => (
-													<tr key={`${listener.name}-${listenerIndex}`}>
+													<tr
+														key={`${listener.name}-${
+															// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+															listenerIndex
+														}`}
+													>
 														<td className="strong">
 															{gatewayListenerName(listener, listenerIndex)}
 														</td>
@@ -675,7 +680,7 @@ function GatewayEditor(props: {
 function defaultGatewayTraffic(config: GatewayConfig | undefined) {
 	const traffic: string[] = [];
 	if (config?.llm) traffic.push('LLM');
-	if (config && Object.prototype.hasOwnProperty.call(config, 'ui')) {
+	if (config && Object.hasOwn(config, 'ui')) {
 		traffic.push('UI');
 	}
 	if (config?.mcp) traffic.push('MCP');

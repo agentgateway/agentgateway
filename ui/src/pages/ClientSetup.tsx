@@ -320,6 +320,7 @@ function ClientRecipeCard(props: {
 			{props.recipe.steps?.length ? (
 				<ol className="client-recipe-steps">
 					{props.recipe.steps.map((step, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
 						<li key={index}>{step}</li>
 					))}
 				</ol>
@@ -690,7 +691,13 @@ function HighlightedCode(props: { code: string; language: string }) {
 
 function highlightCode(code: string, language: string) {
 	return code.split('\n').flatMap((line, lineIndex, lines) => [
-		<span className="code-line" key={`line-${lineIndex}`}>
+		<span
+			className="code-line"
+			key={`line-${
+				// biome-ignore lint/suspicious/noArrayIndexKey: See ui/BIOME.md for why this exception exists and how to remove it.
+				lineIndex
+			}`}
+		>
 			{highlightLine(line, language, lineIndex)}
 		</span>,
 		lineIndex < lines.length - 1 ? '\n' : null
