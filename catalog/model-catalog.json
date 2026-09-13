@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-11T08:34:21Z"
+    "generatedAt": "2026-09-13T08:31:43Z"
   },
   "providers": {
     "anthropic": {
@@ -1082,8 +1082,8 @@
         },
         "mistral.voxtral-small-24b-2507": {
           "rates": {
-            "input": "0.15",
-            "output": "0.35"
+            "input": "0.1",
+            "output": "0.3"
           }
         },
         "moonshot.kimi-k2-thinking": {
@@ -1268,26 +1268,26 @@
         },
         "qwen.qwen3-coder-480b-a35b-v1:0": {
           "rates": {
-            "input": "0.22",
+            "input": "0.45",
             "output": "1.8"
           }
         },
         "qwen.qwen3-coder-next": {
           "rates": {
-            "input": "0.22",
-            "output": "1.8"
+            "input": "0.5",
+            "output": "1.2"
           }
         },
         "qwen.qwen3-next-80b-a3b": {
           "rates": {
-            "input": "0.14",
-            "output": "1.4"
+            "input": "0.15",
+            "output": "1.2"
           }
         },
         "qwen.qwen3-vl-235b-a22b": {
           "rates": {
-            "input": "0.3",
-            "output": "1.5"
+            "input": "0.53",
+            "output": "2.66"
           }
         },
         "us-gov.openai.gpt-oss-120b-1:0": {
@@ -2284,6 +2284,13 @@
           "rates": {
             "input": "1.32",
             "output": "3.96"
+          }
+        },
+        "deepseek-ai/DeepSeek-V4.1-Flash": {
+          "rates": {
+            "input": "0.3",
+            "output": "1.2",
+            "cacheRead": "0.03"
           }
         },
         "moonshotai/Kimi-K2.5": {
@@ -5276,6 +5283,13 @@
             "input": "1.32",
             "output": "3.96",
             "cacheRead": "0.13"
+          }
+        },
+        "deepseek-ai/DeepSeek-V4.1-Flash": {
+          "rates": {
+            "input": "0.3",
+            "output": "1.2",
+            "cacheRead": "0.006"
           }
         },
         "google/gemma-3n-E4B-it": {
