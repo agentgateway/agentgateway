@@ -53,17 +53,13 @@ test('log filters reach the query for the fields the store supports', async ({ p
 
 	await page.getByPlaceholder('Any trace').fill('trace-123456789');
 	await page.keyboard.press('Enter');
-	await expect
-		.poll(() => searches.at(-1))
-		.toContain('"traceId":"trace-123456789"');
+	await expect.poll(() => searches.at(-1)).toContain('"traceId":"trace-123456789"');
 
 	await page.getByPlaceholder('key').fill('route');
 	await page.keyboard.press('Enter');
 	await page.getByPlaceholder('value').fill('default/subscription-claude');
 	await page.keyboard.press('Enter');
-	await expect
-		.poll(() => searches.at(-1))
-		.toContain('"route":["default/subscription-claude"]');
+	await expect.poll(() => searches.at(-1)).toContain('"route":["default/subscription-claude"]');
 
 	await page.getByRole('button', { name: /Any payload/ }).click();
 	await page.getByRole('checkbox', { name: 'Not recorded' }).check();
