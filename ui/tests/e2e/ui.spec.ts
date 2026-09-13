@@ -42,6 +42,38 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 	}
 });
 
+test('log filters reach the query for the fields the store supports', async ({ page }) => {
+	await mockGateway(page);
+	const searches: string[] = [];
+	page.on('request', request => {
+		if (request.url().includes('/api/logs/search')) searches.push(request.postData() ?? '');
+	});
+	await page.goto('/llm/logs');
+	await expect(page.locator('.logs-filter-bar')).toBeVisible();
+
+	await page.getByPlaceholder('Any trace').fill('trace-123456789');
+	await page.keyboard.press('Enter');
+	await expect
+		.poll(() => searches.at(-1))
+		.toContain('"traceId":"trace-123456789"');
+
+	await page.getByPlaceholder('key').fill('route');
+	await page.keyboard.press('Enter');
+	await page.getByPlaceholder('value').fill('default/subscription-claude');
+	await page.keyboard.press('Enter');
+	await expect
+		.poll(() => searches.at(-1))
+		.toContain('"route":["default/subscription-claude"]');
+
+	await page.getByRole('button', { name: /Any payload/ }).click();
+	await page.getByRole('checkbox', { name: 'Not recorded' }).check();
+	await expect.poll(() => searches.at(-1)).toContain('"hasPayload":false');
+
+	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'Clear filters' }).click();
+	await expect.poll(() => searches.at(-1)).not.toContain('traceId');
+});
+
 test('log detail renders the normalized conversation', async ({ page }) => {
 	await mockGateway(page);
 	await page.goto('/llm/logs?log=log-1#conversation-step-3');
