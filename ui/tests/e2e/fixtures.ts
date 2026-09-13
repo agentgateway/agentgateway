@@ -342,7 +342,12 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 						totalTokens: 30
 					},
 					cost: 0.0005,
-					hasPayload: true
+					hasPayload: true,
+					attributes: {
+						route: 'internal/llm:request',
+						'agentgateway.user': 'alpha',
+						'user_agent.name': 'curl'
+					}
 				}
 			],
 			nextCursor: null

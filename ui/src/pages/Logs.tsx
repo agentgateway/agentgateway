@@ -151,6 +151,20 @@ export function LogsPage() {
 		}
 		return next;
 	}, [logFiltersKey, status, payload, traceId, attributeKey, attributeValue]);
+	// Attribute names are discoverable from the records already loaded, so the
+	// two attribute inputs can suggest what this deployment actually records
+	// instead of leaving the operator to guess a key.
+	const attributeNames = useMemo(() => {
+		const names = new Set<string>();
+		for (const entry of response.logs) {
+			const attributes = entry.attributes;
+			if (attributes && typeof attributes === 'object') {
+				for (const name of Object.keys(attributes)) names.add(name);
+			}
+		}
+		return [...names].sort();
+	}, [response.logs]);
+
 	const visibleLogs = useMemo(() => {
 		if (!expanded || !expandedId || response.logs.some(entry => entry.id === expandedId))
 			return response.logs;
@@ -446,6 +460,7 @@ export function LogsPage() {
 						label="Attribute"
 						placeholder="key"
 						value={attributeKey}
+						suggestions={attributeNames}
 						onCommit={setAttributeKey}
 					/>
 					<CommittedInput
@@ -458,6 +473,7 @@ export function LogsPage() {
 						label="Group by attribute"
 						placeholder="attribute"
 						value={groupKey}
+						suggestions={attributeNames}
 						onCommit={setGroupKey}
 					/>
 					<label className="toggle-row logs-stream-toggle">
@@ -662,8 +678,10 @@ function CommittedInput(props: {
 	label: string;
 	placeholder: string;
 	value: string;
+	suggestions?: string[];
 	onCommit: (value: string) => void;
 }) {
+	const listId = `${props.label.replace(/\s+/g, '-').toLowerCase()}-suggestions`;
 	const [draft, setDraft] = useState(props.value);
 	useEffect(() => {
 		setDraft(props.value);
@@ -679,6 +697,7 @@ function CommittedInput(props: {
 				type="text"
 				value={draft}
 				placeholder={props.placeholder}
+				list={props.suggestions?.length ? listId : undefined}
 				onChange={event => setDraft(event.target.value)}
 				onBlur={commit}
 				onKeyDown={event => {
@@ -688,6 +707,13 @@ function CommittedInput(props: {
 					}
 				}}
 			/>
+			{props.suggestions?.length ? (
+				<datalist id={listId}>
+					{props.suggestions.map(name => (
+						<option key={name} value={name} />
+					))}
+				</datalist>
+			) : null}
 		</Field>
 	);
 }

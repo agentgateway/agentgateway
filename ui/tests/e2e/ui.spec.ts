@@ -79,6 +79,15 @@ test('grouping the log list by an attribute rolls it up and drills back down', a
 	await page.goto('/llm/logs');
 	await expect(page.locator('.logs-filter-bar')).toBeVisible();
 
+	// The names come from the records already loaded, so the field is not a guess.
+	// The names come from the records already loaded, so the field is not a guess.
+	const suggestions = page.locator('datalist#group-by-attribute-suggestions option');
+	await expect(suggestions).toHaveCount(3);
+	await expect(suggestions.filter({ hasText: '' }).nth(0)).toHaveAttribute(
+		'value',
+		'agentgateway.user'
+	);
+
 	await page.getByPlaceholder('attribute').fill('agentgateway.user');
 	await page.keyboard.press('Enter');
 
