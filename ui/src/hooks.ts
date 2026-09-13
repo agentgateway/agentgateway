@@ -14,7 +14,14 @@ import {
 	updateConfigResource
 } from '@/api/configResourcesApi';
 import { getRuntimeInfo } from '@/api/runtimeApi';
-import { cloneConfig, configWarnings } from '@/config';
+import {
+	cloneConfig,
+	configWarnings,
+	enableTrafficConfig,
+	ensureLlmFrontendDefaults,
+	startupLlmConfig,
+	startupMcpConfig
+} from '@/config';
 import { validateGatewayConfig } from '@/configValidation';
 import type { GatewayConfig, LlmApiKeyPolicy, LlmConfig } from '@/types';
 
@@ -240,6 +247,54 @@ export function useUpdateConfig() {
 			queryClient.setQueryData(['config'], next);
 			invalidateConfigViews(queryClient);
 		}
+	});
+}
+
+export function useEnableSurface() {
+	const queryClient = useQueryClient();
+	const update = useUpdateConfig();
+	return useMutation({
+		mutationFn: async ({
+			surface,
+			gateway
+		}: {
+			surface: 'llm' | 'mcp' | 'traffic';
+			gateway?: string;
+		}) => {
+			const runtime = await requireWritableRuntime(queryClient);
+			const hybrid = runtime.ui.configStoreMode === 'hybrid';
+			function apply(next: GatewayConfig) {
+				if (surface === 'llm') {
+					next.llm ??= startupLlmConfig(next, gateway);
+					ensureLlmFrontendDefaults(next);
+				} else if (surface === 'mcp') {
+					next.mcp ??= startupMcpConfig(next, gateway);
+				} else {
+					enableTrafficConfig(next);
+				}
+			}
+			if (!hybrid) {
+				await update.mutateAsync(next => {
+					apply(next);
+				});
+				return { hybrid };
+			}
+			const current = await getEffectiveConfig();
+			if (surface !== 'traffic' && current[surface]) return { hybrid };
+			const next = cloneConfig(current);
+			apply(next);
+			const gateways = Object.entries(next.gateways ?? {})
+				.filter(([name]) => !current.gateways?.[name])
+				.map(([name, value]) => ({ ...value, name }));
+			if (gateways.length) await putConfigResources('traffic.gateway', gateways);
+			if (surface === 'llm') {
+				await putConfigResources('llm.settings', [{ gateways: next.llm?.gateways }]);
+			} else if (surface === 'mcp') {
+				await putConfigResources('mcp.settings', [{ gateways: next.mcp?.gateways }]);
+			}
+			return { hybrid };
+		},
+		onSettled: () => invalidateConfigViews(queryClient)
 	});
 }
 

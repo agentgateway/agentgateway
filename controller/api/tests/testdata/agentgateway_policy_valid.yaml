@@ -44,6 +44,37 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: backend-tls-custom-ca-key
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: corporate-trust
+          kind: Secret
+          key: corporate-roots.pem
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-explicit-default-ca-key
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: ca-bundle
+          key: ca.crt
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: backend-mtls
 spec:
   targetRefs:

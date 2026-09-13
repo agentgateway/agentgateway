@@ -17,10 +17,10 @@ impl super::Provider for Provider {
 }
 pub const DEFAULT_HOST_STR: &str = "generativelanguage.googleapis.com";
 pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
-/// Google API keys are uniformly `AIza`-prefixed. Used to distinguish API keys (which the
+/// Google API keys use `AIza` or `AQ.` prefixes. Used to distinguish API keys (which the
 /// native endpoints authenticate via `x-goog-api-key`) from OAuth access tokens (which stay
 /// in `Authorization: Bearer`).
-pub const API_KEY_PREFIX: &str = "AIza";
+pub const API_KEY_PREFIXES: &[&str] = &["AIza", "AQ."];
 
 pub fn path(route: RouteType) -> &'static str {
 	match route {

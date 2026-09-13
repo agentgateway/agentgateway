@@ -1634,7 +1634,7 @@ async fn messages_to_completions_final_transformation() {
 	};
 
 	let vec_body = br#"{
-				"model": "gpt-4o",
+				"model": "gpt-5.6",
 				"max_tokens": 64,
 				"system": "be brief",
 				"messages": [{"role": "user", "content": "hello"}],
@@ -1679,10 +1679,7 @@ async fn messages_to_completions_final_transformation() {
 	assert_eq!(forwarded_json["max_completion_tokens"], json!(64));
 	// Indexing returns Null for a missing key too, so assert on key presence.
 	let reasoning_effort = forwarded_json.get("reasoning_effort");
-	assert!(
-		reasoning_effort.is_some(),
-		"reasoning_effort should not be empty, got: {reasoning_effort:?}"
-	);
+	assert_eq!(reasoning_effort, Some(&json!("none")));
 }
 
 #[tokio::test]

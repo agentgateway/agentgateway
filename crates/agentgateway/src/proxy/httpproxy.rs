@@ -257,6 +257,10 @@ async fn apply_request_policies(
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
 	pol
+		.substrate_egress
+		.apply_without_response("substrate egress", c, l, req, rp.headers())
+		.await?;
+	pol
 		.substrate_ingress
 		.apply_without_response("substrate ingress", c, l, req, rp.headers())
 		.await?;
@@ -680,6 +684,7 @@ impl HTTPProxy {
 			.expect("tcp connection must be set")
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
+		connection.copy::<http::substrate::ActorIdentity>(req.extensions_mut());
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		connection.copy::<cel::DestinationContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
@@ -817,6 +822,7 @@ impl HTTPProxy {
 		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
+		set_destination_hostname(&mut req);
 		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
 			req.extensions_mut().remove::<OnUpgrade>()
 		} else {
@@ -1889,6 +1895,7 @@ pub async fn build_transport(
 			}),
 			target: call.target.clone(),
 			token,
+			connect_headers: backend_call.connect_headers.clone(),
 			connect: tun.mode == backend::TunnelMode::Connect,
 		};
 		return Ok(Transport::Tunnel(app_transport, tc));
@@ -2174,6 +2181,15 @@ fn configure_tunnel_backend_call(
 				ProxyError::ProcessingString(format!("invalid Substrate CONNECT authority: {error}"))
 			})?;
 	}
+	if let Some(state) = req
+		.extensions()
+		.get::<http::substrate::SubstrateRequestState>()
+	{
+		backend_call.connect_headers = vec![(
+			HeaderName::from_static("ate-target-actor"),
+			state.target_actor_header(),
+		)];
+	}
 	backend_call.set_tunnel_proxy(resolve_tunnel_backend_call(inputs, &tunnel, req)?);
 	Ok(())
 }
@@ -2329,6 +2345,10 @@ async fn make_backend_call(
 ) -> Result<Response, ProxyResponse> {
 	let resolved_backend;
 	let backend = if let Backend::LLMRouter(_, router) = backend {
+		// Model routing parses the LLM body before provider request processing.
+		req
+			.extensions_mut()
+			.get_or_insert_with(|| crate::transport::BufferLimit::new(llm::DEFAULT_BUFFER_LIMIT));
 		let resolved = match router.resolve(&mut req).await {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
@@ -2388,13 +2408,15 @@ async fn make_backend_call(
 		.get::<http::substrate::SubstrateRequestState>()
 	{
 		*substrate_state = Some(state.clone());
-		let resume = state.resume().as_str();
+		let resume = state.resume();
 		let actor_uid = state.actor_uid();
 		let route_duration = state.route_duration();
+		let route_outcome = state.route_outcome();
 		log.add(|l| {
 			l.ate_router_resume = Some(resume);
 			l.ate_actor_uid = actor_uid;
 			l.ate_router_route_duration = Some(route_duration);
+			l.ate_router_outcome = route_outcome;
 		});
 	}
 	substrate_selection?;
@@ -2652,6 +2674,9 @@ async fn make_backend_call(
 
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
+			req
+				.extensions_mut()
+				.get_or_insert_with(|| crate::transport::BufferLimit::new(llm::DEFAULT_BUFFER_LIMIT));
 			// LLM requires CEL execution after the snapshot so we do not clear extensions
 			let mut req = req.take_and_snapshot_without_clearing_extensions(log.as_mut())?;
 			let route_type = llm_request_policies
@@ -3245,6 +3270,7 @@ pub fn build_service_call(
 			http_version_override,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+			connect_headers: vec![],
 			advanced_routing: None,
 			backend_policies,
 			tunnel_proxy: None,
@@ -3417,6 +3443,7 @@ pub fn build_service_call(
 		http_version_override,
 		transport_override,
 		hbone_port,
+		connect_headers: vec![],
 		advanced_routing: BackendCallAdvancedRouting::new(network_gateway, waypoint),
 		backend_policies,
 		tunnel_proxy: None,
@@ -4428,6 +4455,59 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 	Ok(())
 }
 
+/// Record the normalized HTTP request hostname in the destination CEL context.
+fn set_destination_hostname(req: &mut Request) {
+	let hostname = req
+		.uri()
+		.authority()
+		.map(|authority| authority.host())
+		.and_then(normalize_hostname)
+		.map(strng::new);
+	if let Some(destination) = req.extensions_mut().get_mut::<cel::DestinationContext>() {
+		destination.hostname = hostname;
+	}
+}
+
+fn normalize_hostname(hostname: &str) -> Option<String> {
+	let hostname = hostname.strip_suffix('.').unwrap_or(hostname);
+	(!hostname.is_empty()).then(|| hostname.to_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod destination_context_tests {
+	use super::*;
+
+	#[test]
+	fn http_host_populates_normalized_destination_hostname() {
+		let mut req = ::http::Request::builder()
+			.version(::http::Version::HTTP_11)
+			.uri("/v1/models")
+			.header(::http::header::HOST, "API.Example.com.:8443")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(cel::DestinationContext {
+			address: "192.0.2.1".parse().unwrap(),
+			port: 443,
+			hostname: None,
+		});
+
+		normalize_uri(None, &mut req).unwrap();
+		set_destination_hostname(&mut req);
+
+		assert_eq!(
+			req.uri().authority().map(|authority| authority.as_str()),
+			Some("API.Example.com.:8443")
+		);
+		assert_eq!(
+			req
+				.extensions()
+				.get::<cel::DestinationContext>()
+				.and_then(|destination| destination.hostname.as_deref()),
+			Some("api.example.com")
+		);
+	}
+}
+
 fn apply_auto_hostname(req: &mut Request, target: &Target) -> Result<(), ProxyError> {
 	let Some(auto) = req.extensions().get::<filters::AutoHostname>() else {
 		return Ok(());
@@ -4475,6 +4555,7 @@ pub struct BackendCall {
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub hbone_port: u16,
+	connect_headers: Vec<(HeaderName, HeaderValue)>,
 	advanced_routing: Option<Box<BackendCallAdvancedRouting>>,
 	pub backend_policies: Arc<BackendPolicies>,
 	tunnel_proxy: Option<Box<BackendCall>>,
@@ -4496,6 +4577,7 @@ impl BackendCall {
 			http_version_override: None,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+			connect_headers: vec![],
 			advanced_routing: None,
 			backend_policies,
 			tunnel_proxy: None,
@@ -4987,10 +5069,14 @@ impl PolicyClient {
 
 	fn internal_call_with_policies<'a>(
 		&'a self,
-		req: Request,
+		mut req: Request,
 		backend: Backend,
 		pols: BackendPolicies,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		// Preserve caller timeouts; backend policies can override this fallback.
+		req
+			.extensions_mut()
+			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
 		let mut req = Some(req);
 		Box::pin(async move {
 			let mut response_policies = Default::default();
@@ -5020,6 +5106,9 @@ impl PolicyClient {
 		&self,
 		mut req: Request,
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		req
+			.extensions_mut()
+			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
 		Box::pin(async move {
 			let start = std::time::Instant::now();
 			let mut span = self.start_outbound_span(&mut req);

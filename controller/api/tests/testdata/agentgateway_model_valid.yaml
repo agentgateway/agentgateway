@@ -25,7 +25,7 @@ spec:
   match:
     model: gpt-5-mini
   provider: OpenAI
-  baseURL: https://api.openai.com
+  baseURL: https://api.openai.com/v1
   policies:
     authorization:
       policy:

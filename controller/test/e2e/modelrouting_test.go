@@ -115,6 +115,25 @@ func testGatewayBoundModelsUseDefaultRoute(t base.Test, gw base.Gateway) {
 		modelRoutingExpectModel("agw-public-direct"),
 		modelRoutingCompletion("public-direct")...,
 	)
+
+	// This model has transformations; they must preserve the Messages route format.
+	expected := modelRoutingExpectModel("agw-public-direct")
+	expected.Body = gomega.And(
+		gomega.ContainSubstring(`"type":"message"`),
+		gomega.ContainSubstring(`"content":[{"type":"text","text":"The name of this project is agentgateway"}]`),
+		gomega.ContainSubstring(`"stop_reason":"end_turn"`),
+		gomega.ContainSubstring(`"input_tokens":10`),
+		gomega.ContainSubstring(`"output_tokens":10`),
+		gomega.Not(gomega.ContainSubstring(`"choices"`)),
+	)
+	gw.Send(
+		t,
+		expected,
+		curl.WithPath("/v1/messages"),
+		curl.WithPostBody(`{"model":"public-direct","max_tokens":128,"messages":[{"role":"user","content":[{"type":"text","text":"What is the name of this project?"}]}]}`),
+		curl.WithHeader("Content-Type", "application/json"),
+		curl.WithHeader("anthropic-version", "2023-06-01"),
+	)
 }
 
 func testAgentgatewayModelWeightedRouting(t base.Test, gw base.Gateway) {

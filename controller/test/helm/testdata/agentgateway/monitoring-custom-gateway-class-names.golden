@@ -24,4 +24,6 @@ spec:
   - port: metrics
     path: /metrics
     interval: 15s
+  podTargetLabels:
+    - gateway.networking.k8s.io/gateway-name
 

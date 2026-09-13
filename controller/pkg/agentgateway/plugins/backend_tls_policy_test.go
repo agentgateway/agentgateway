@@ -87,7 +87,7 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 			name:    "secret missing ca key",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
 			secret:  &corev1.Secret{Name: "ca", Namespace: "default"},
-			wantErr: "missing ca.crt",
+			wantErr: `missing key "ca.crt"`,
 		},
 		{
 			name: "secret has invalid pem",
@@ -95,7 +95,7 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 			secret: &corev1.Secret{Name: "ca", Namespace: "default", Data: map[string][]byte{
 				"ca.crt": []byte("not pem"),
 			}},
-			wantErr: "invalid ca.crt in Secret default/ca",
+			wantErr: `invalid CA certificate in Secret default/ca key "ca.crt"`,
 		},
 		{
 			name: "configmap has invalid pem",
@@ -103,7 +103,41 @@ func TestTranslateBackendTLSCAReference(t *testing.T) {
 			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
 				"ca.crt": "not pem",
 			}},
-			wantErr: "invalid ca.crt in ConfigMap default/ca",
+			wantErr: `invalid CA certificate in ConfigMap default/ca key "ca.crt"`,
+		},
+		{
+			name: "custom key in ConfigMap",
+			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "ConfigMap", Key: "corporate-roots.pem"},
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
+				"ca.crt":              "not pem",
+				"corporate-roots.pem": string(configMapCA),
+			}},
+			wantRoot: configMapCA,
+		},
+		{
+			name: "custom key in Secret",
+			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret", Key: "corporate-roots.pem"},
+			secret: &corev1.Secret{Name: "ca", Namespace: "default", Data: map[string][]byte{
+				"ca.crt":              []byte("not pem"),
+				"corporate-roots.pem": secretCA,
+			}},
+			wantRoot: secretCA,
+		},
+		{
+			name: "explicit ca.crt key matches the default",
+			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "ConfigMap", Key: "ca.crt"},
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
+				"ca.crt": string(configMapCA),
+			}},
+			wantRoot: configMapCA,
+		},
+		{
+			name: "missing custom key",
+			ref:  agentgateway.LocalCACertificateRef{Name: "ca", Kind: "ConfigMap", Key: "absent.pem"},
+			configMap: &corev1.ConfigMap{Name: "ca", Namespace: "default", Data: map[string]string{
+				"ca.crt": string(configMapCA),
+			}},
+			wantErr: `missing key "absent.pem"`,
 		},
 		{
 			name:    "unsupported kind",

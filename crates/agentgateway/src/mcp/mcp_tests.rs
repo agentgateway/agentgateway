@@ -26,6 +26,92 @@ use crate::types::agent::{BackendTrafficPolicy, FrontendPolicy, PolicyTarget, Ta
 use crate::*;
 
 #[tokio::test]
+async fn token_exchange_rejections_preserve_http_status() {
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, ResponseTemplate};
+	for target_policy in [false, true] {
+		for (message_kind, status, expected_status) in [
+			("request", 400u16, 400u16),
+			("notification", 401, 500),
+			("legacy_initialize", 503, 502),
+		] {
+			let token = wiremock::MockServer::start().await;
+			let upstream = wiremock::MockServer::start().await;
+			Mock::given(method("POST"))
+				.and(path("/token"))
+				.respond_with(
+					ResponseTemplate::new(status).set_body_json(serde_json::json!({
+						"error": "invalid_grant"
+					})),
+				)
+				.mount(&token)
+				.await;
+			let auth = serde_json::from_value(serde_json::json!({
+				"host": token.address().to_string(), "path": "/token",
+				"cache": {"maxEntries": 0}
+			}))
+			.unwrap();
+			let policies = vec![BackendTrafficPolicy::backend_auth(
+				BackendAuthKind::OAuthTokenExchange(Box::new(auth)),
+			)];
+			let (mcp_policies, target_policies) = if target_policy {
+				(vec![], policies)
+			} else {
+				(policies, vec![])
+			};
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_mcp_backend_and_target_policies(
+					*upstream.address(),
+					false,
+					false,
+					mcp_policies,
+					target_policies,
+					false,
+				)
+				.with_bind(simple_bind())
+				.with_route(basic_route(*upstream.address()));
+			let io = t.serve_real_listener(BIND_KEY).await;
+			let body = match message_kind {
+				"request" => serde_json::json!({"jsonrpc": "2.0", "id": 1,
+					"method": "tools/call", "params": {"name": "echo", "arguments": {}, "_meta": task_meta()}}),
+				"notification" => {
+					serde_json::json!({"jsonrpc": "2.0", "method": "notifications/roots/list_changed"})
+				},
+				_ => mcp_initialize_body(),
+			};
+			let client = reqwest::Client::new();
+			let url = format!("http://{io}/mcp");
+			let mut request = mcp_json_post(&client, &url, &body).bearer_auth("subject-token");
+			if message_kind != "legacy_initialize" {
+				request = request.header("mcp-protocol-version", "2026-07-28");
+				if message_kind == "request" {
+					request = request
+						.header("mcp-method", "tools/call")
+						.header("mcp-name", "echo");
+				} else {
+					request = request.header("mcp-method", "notifications/roots/list_changed");
+				}
+			}
+			let response = request.send().await.unwrap();
+			let actual_status = response.status();
+			let text = response.text().await.unwrap();
+			let requests = token.received_requests().await.unwrap();
+			assert!(
+				!requests.is_empty(),
+				"token endpoint not reached: {target_policy} {message_kind} {status}: {actual_status} {text}"
+			);
+			assert!(upstream.received_requests().await.unwrap().is_empty());
+			assert_eq!(
+				actual_status.as_u16(),
+				expected_status,
+				"target_policy={target_policy} message={message_kind} token_status={status}: {text}"
+			);
+		}
+	}
+}
+
+#[tokio::test]
 async fn stream_to_stream_single() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -3661,6 +3747,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		key: "frontend/accessLog".into(),
 		name: None,
 		target: PolicyTarget::Gateway(listener_name.clone().into()),
+		creation_timestamp: 0,
 		inheritance: Default::default(),
 		policy: FrontendPolicy::AccessLog(access_log_payload_policy()).into(),
 	});

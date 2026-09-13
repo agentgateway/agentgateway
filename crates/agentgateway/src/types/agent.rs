@@ -1832,6 +1832,18 @@ pub struct McpBackend {
 	#[serde(with = "crate::serdes::serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub session_idle_ttl: Duration,
+	/// Interval at which SSE keep-alive comments are sent on long-lived MCP streams.
+	/// Disabled when unset. Without it, a stream that legitimately carries no traffic
+	/// (for example a `FailOpen` GET stream held open with no reachable upstream, or an
+	/// idle session) is indistinguishable from a dead connection and is dropped by
+	/// intermediaries such as load balancers and API gateways.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub sse_keep_alive: Option<Duration>,
 	/// When true, reject MCP requests whose Host/Origin is not localhost
 	/// (`localhost`, `127.0.0.1`, `[::1]`, with optional port). Off by default:
 	/// agentgateway is typically not a browser-facing localhost MCP server.
@@ -2431,6 +2443,8 @@ pub struct TargetedPolicy {
 	pub key: PolicyKey,
 	pub name: Option<TypedResourceName>,
 	pub target: PolicyTarget,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub creation_timestamp: i64,
 	#[serde(default, skip_serializing_if = "PolicyInheritance::is_default")]
 	pub inheritance: PolicyInheritance,
 	pub policy: PolicyType,
@@ -2771,7 +2785,7 @@ pub enum FrontendPolicy {
 	TCP(frontend::TCP),
 	NetworkAuthorization(frontend::NetworkAuthorization),
 	NetworkExtAuthz(Arc<ext_authz::ExtAuthz>),
-	SubstrateEgress(crate::http::substrate::SubstrateEgress),
+	SubstrateEgressActorResolution(crate::http::substrate::EgressActorResolution),
 	Proxy(frontend::Proxy),
 	Connect(frontend::Connect),
 	AccessLog(frontend::LoggingPolicy),
@@ -2791,6 +2805,7 @@ pub enum TrafficPolicy {
 	LocalRateLimit(RequestPolicy<Vec<crate::http::localratelimit::RateLimit>>),
 	RemoteRateLimit(RequestPolicy<remoteratelimit::RemoteRateLimit>),
 	ExtAuthz(RequestPolicy<ext_authz::ExtAuthz>),
+	SubstrateEgress(RequestPolicy<crate::http::substrate::SubstrateEgress>),
 	SubstrateIngress(RequestPolicy<crate::http::substrate::SubstrateIngress>),
 	ExtProc(RequestPolicy<ext_proc::ExtProc>),
 	JwtAuth(RequestPolicy<JwtAuthentication>),

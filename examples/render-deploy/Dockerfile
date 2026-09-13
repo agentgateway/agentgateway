@@ -7,7 +7,7 @@
 # UI-only config.yaml on first boot, then execs the gateway. Add models
 # and MCP in the UI after login.
 #
-# Pin: https://agentgateway.dev/docs/standalone/latest/setup/install/docker/
+# Pin: https://agentgateway.dev/docs/standalone/latest/documentation/setup/install/docker/
 #
 # The published image USER is 65532. Render disks are typically root-owned,
 # so this image starts as root to claim /config, then the entrypoint chowns

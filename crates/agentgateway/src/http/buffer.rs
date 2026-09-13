@@ -68,9 +68,12 @@ impl Buffer {
 			},
 		};
 		*req.body_mut() = buffered;
-		req
-			.extensions_mut()
-			.insert(crate::transport::BufferLimit::new(limit));
+		// Preserve an unset limit so LLM processing can apply its own default later.
+		if let Some(limit) = request.max_bytes {
+			req
+				.extensions_mut()
+				.insert(crate::transport::BufferLimit::new(limit));
+		}
 		Ok(())
 	}
 

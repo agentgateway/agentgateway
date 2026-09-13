@@ -31,6 +31,8 @@ fn snapshot_path_and_name(relative_path: &str, provider: &str) -> (String, Strin
 
 const ANTHROPIC: &str = "anthropic";
 const BEDROCK: &str = "bedrock";
+const BEDROCK_OPENAI: &str = "bedrock-openai";
+const BEDROCK_OPENAI_GPT: &str = "bedrock-openai-gpt";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
 const GEMINI: &str = "gemini";
@@ -65,7 +67,9 @@ mod requests {
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => BEDROCK,
+					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA | BEDROCK_OPENAI | BEDROCK_OPENAI_GPT => {
+						BEDROCK
+					},
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -145,8 +149,8 @@ mod requests {
 		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("reasoning-adaptive", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI]),
-		("reasoning_replay", &[BEDROCK]),
-		("reasoning_replay_unsigned", &[BEDROCK]),
+		("reasoning_replay", &[ANTHROPIC, BEDROCK]),
+		("reasoning_replay_unsigned", &[ANTHROPIC, BEDROCK]),
 		("image-url", &[ANTHROPIC]),
 		("image-inline", &[VERTEX_GEMINI]),
 		("image-file", &[VERTEX_GEMINI]),
@@ -176,7 +180,7 @@ mod requests {
 		("cache_control", &[ANTHROPIC, COMPLETIONS, BEDROCK]),
 		("cache_control_responses", &[RESPONSES]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
-		("reasoning_replay", &[BEDROCK]),
+		("reasoning_replay", &[BEDROCK, COMPLETIONS]),
 		("tool_history_without_tools", &[BEDROCK]),
 		("tool_reference", &[COMPLETIONS, BEDROCK, RESPONSES]),
 		(
@@ -189,6 +193,7 @@ mod requests {
 		("basic", &[BEDROCK, GEMINI]),
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
+		("codex-assistant-history", &[BEDROCK, GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
@@ -268,6 +273,28 @@ mod requests {
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
 				}
 			}
+		}
+	}
+
+	#[test]
+	fn from_completions_bedrock_reasoning() {
+		for (model, provider) in [
+			("openai.gpt-oss-120b-1:0", BEDROCK_OPENAI),
+			("us.openai.gpt-5.6-luna", BEDROCK_OPENAI_GPT),
+			("us.openai.gpt-5.6-sol", BEDROCK_OPENAI_GPT),
+			("deepseek.v3.2", BEDROCK_OPENAI),
+			("us.amazon.nova-2-lite-v1:0", BEDROCK_NOVA),
+		] {
+			let bedrock = bedrock::Provider {
+				model: Some(strng::new(model)),
+				region: strng::new("us-west-2"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+			};
+			test_request(provider, "requests/completions/reasoning.json", |i| {
+				conversion::bedrock::from_completions::translate(i, &bedrock, None, None, None)
+					.map(|r| r.body)
+			});
 		}
 	}
 
@@ -649,22 +676,25 @@ mod responses {
 			*raw = raw.replace("\r\n", "\n");
 		}
 
-		let resp = xlate(Bytes::copy_from_slice(&provider_bytes))
-			.expect("failed to translate provider response to expected format");
-		let llm_response = resp.to_llm_response(crate::LogContentFields {
-			completion: false,
-			tool_calls: true,
-		});
-		let raw = resp.serialize().expect("failed to serialize response");
-		let mut resp_val = serde_json::from_slice::<Value>(&raw)
-			.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
-		if let Value::String(raw) = &mut resp_val {
-			*raw = raw.replace("\r\n", "\n");
-		}
-		let report = json!({
-			"response": resp_val,
-			"parsed": llm_response,
-		});
+		let report = match xlate(Bytes::copy_from_slice(&provider_bytes)) {
+			Ok(resp) => {
+				let llm_response = resp.to_llm_response(crate::LogContentFields {
+					completion: false,
+					tool_calls: true,
+				});
+				let raw = resp.serialize().expect("failed to serialize response");
+				let mut resp_val = serde_json::from_slice::<Value>(&raw)
+					.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
+				if let Value::String(raw) = &mut resp_val {
+					*raw = raw.replace("\r\n", "\n");
+				}
+				json!({
+					"response": resp_val,
+					"parsed": llm_response,
+				})
+			},
+			Err(error) => json!({ "error": error.to_string() }),
+		};
 		let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
 		insta::with_settings!({
@@ -796,6 +826,7 @@ mod responses {
 		("max_tokens", &[BEDROCK_TO_RESPONSES]),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
+		("reasoning_redacted", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
 		(
 			"cache_write",
@@ -828,6 +859,11 @@ mod responses {
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
 		),
 		("openrouter_reasoning", ALL_COMPLETIONS),
+		(
+			"reasoning",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
+		),
+		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
 		("tool_call", ALL_COMPLETIONS),
@@ -1473,6 +1509,41 @@ data: {"type":"message_stop"}
 				.cache_write_tokens,
 			None
 		);
+	}
+
+	#[tokio::test]
+	async fn passthrough_stream_records_inter_chunk_latencies() {
+		let input_bytes = fs::read(fixture_path("response/completions/stream.json"))
+			.expect("failed to read streaming input file");
+		let info = Arc::new(Mutex::new(LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Detect,
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: strng::literal!("input-model"),
+				provider: Default::default(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse::default(),
+		)));
+		let reporter = TestStreamingReporter { info: info.clone() };
+		let response = http::Response::new(axum_core::body::Body::from(input_bytes));
+		let response = crate::conversion::completions::passthrough_stream(
+			StreamingUsageGuard::new(Box::new(reporter)),
+			crate::LogContentFields::default(),
+			response,
+		);
+		// Drain the body so the passthrough closures actually run.
+		let _ = response.collect().await.unwrap().to_bytes();
+
+		let llm_response = info.lock().unwrap().response.clone();
+		// The fixture has many content-bearing chunks; every one after the first
+		// token should record a gap.
+		assert!(!llm_response.inter_chunk_latencies.is_empty());
+		assert!(llm_response.first_token.is_some());
 	}
 }
 

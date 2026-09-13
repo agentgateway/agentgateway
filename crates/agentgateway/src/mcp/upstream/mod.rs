@@ -462,6 +462,7 @@ pub(crate) struct UpstreamGroup {
 	pub prefix_mode: McpPrefixMode,
 	pub is_multiplexing: bool,
 	pub failure_mode: FailureMode,
+	pub sse_keep_alive: Option<Duration>,
 }
 
 impl UpstreamGroup {
@@ -477,6 +478,7 @@ impl UpstreamGroup {
 		let mut s = Self {
 			failure_mode: backend.failure_mode,
 			prefix_mode: backend.prefix_mode,
+			sse_keep_alive: backend.sse_keep_alive,
 			backend,
 			client,
 			by_name: IndexMap::new(),

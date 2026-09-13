@@ -112,6 +112,7 @@ impl App {
 				prefix_mode: backend.prefix_mode,
 				failure_mode: backend.failure_mode,
 				session_idle_ttl: backend.session_idle_ttl,
+				sse_keep_alive: backend.sse_keep_alive,
 			}
 		};
 		let sessions = self.session.clone();
@@ -238,6 +239,7 @@ pub struct McpBackendGroup {
 	pub prefix_mode: McpPrefixMode,
 	pub failure_mode: FailureMode,
 	pub session_idle_ttl: Duration,
+	pub sse_keep_alive: Option<Duration>,
 }
 
 impl Default for McpBackendGroup {
@@ -248,6 +250,7 @@ impl Default for McpBackendGroup {
 			prefix_mode: McpPrefixMode::default(),
 			failure_mode: crate::mcp::FailureMode::default(),
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
+			sse_keep_alive: None,
 		}
 	}
 }

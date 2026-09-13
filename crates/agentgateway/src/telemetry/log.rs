@@ -35,6 +35,7 @@ use value_bag::visit::Visit;
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::substrate::ateattr;
+use crate::http::substrate::ateattr::{ResumeDisposition, RouteOutcome};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
@@ -42,7 +43,7 @@ use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
-	OutboundCallLabels, RouteIdentifier,
+	OutboundCallLabels, RouteIdentifier, SubstrateRouteLabels,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, semconv, trc};
@@ -393,8 +394,9 @@ pub struct Config {
 	pub filter: Option<Arc<cel::Expression>>,
 	/// Deprecated: use frontendPolicies.accessLog
 	pub fields: LoggingFields,
-	/// Database-only request log fields.
-	pub database_fields: LoggingFields,
+	/// Compiled standard attributes, replaced on config reload and snapshotted per request.
+	#[serde(skip)]
+	pub database_fields: Arc<arc_swap::ArcSwap<LoggingFields>>,
 	/// Level sets the level for logs
 	pub level: String,
 	/// Format sets the logging format (text or json)
@@ -722,6 +724,11 @@ impl<'a> CelLoggingExecutor<'a> {
 
 impl CelLogging {
 	pub fn new(cfg: Config, metrics: MetricsConfig) -> Self {
+		let database_fields = if cfg.database.is_some() {
+			cfg.database_fields.load().as_ref().clone()
+		} else {
+			LoggingFields::default()
+		};
 		let mut cel_context = cel::ContextBuilder::new();
 		if let Some(f) = &cfg.filter {
 			cel_context.register_log_expression(f.as_ref());
@@ -729,7 +736,7 @@ impl CelLogging {
 		for v in cfg.fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
-		for v in cfg.database_fields.add.values_unordered() {
+		for v in database_fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
 		for v in metrics.metric_fields.add.values_unordered() {
@@ -745,7 +752,7 @@ impl CelLogging {
 			fields: cfg.fields,
 			otlp_filter: None,
 			otlp_fields: LoggingFields::default(),
-			database_fields: cfg.database_fields,
+			database_fields,
 			metric_fields: metrics.metric_fields,
 		}
 	}
@@ -1003,6 +1010,20 @@ impl DropOnLog {
 					.get_or_create(&gen_ai_labels)
 					.observe(time_per_output_token.as_secs_f64());
 			}
+			if !llm_response.inter_chunk_latencies.is_empty() {
+				let hist = log
+					.metrics
+					.gen_ai_inter_chunk_latency
+					.get_or_create(&gen_ai_labels);
+				// Replay the bucketed summary: each bucket's mean is observed `count`
+				// times, so the resulting histogram's per-bucket counts and sum are
+				// identical to what observing every raw gap would have produced.
+				for (count, mean) in llm_response.inter_chunk_latencies.iter() {
+					for _ in 0..count {
+						hist.observe(mean);
+					}
+				}
+			}
 		}
 	}
 }
@@ -1121,6 +1142,7 @@ impl RequestLog {
 			ate_atespace: None,
 			ate_router_resume: None,
 			ate_router_route_duration: None,
+			ate_router_outcome: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -1299,8 +1321,9 @@ pub struct RequestLog {
 	pub ate_actor_name: Option<String>,
 	pub ate_actor_uid: Option<String>,
 	pub ate_atespace: Option<String>,
-	pub ate_router_resume: Option<&'static str>,
+	pub ate_router_resume: Option<ResumeDisposition>,
 	pub ate_router_route_duration: Option<Duration>,
+	pub ate_router_outcome: Option<RouteOutcome>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1447,6 +1470,18 @@ impl Drop for DropOnLog {
 				.request_duration
 				.get_or_create(&http_labels)
 				.observe(duration.as_secs_f64());
+			if let (Some(route_duration), Some(outcome)) =
+				(log.ate_router_route_duration, log.ate_router_outcome)
+			{
+				log
+					.metrics
+					.substrate_route_duration
+					.get_or_create(&SubstrateRouteLabels {
+						ate_router_outcome: outcome.into(),
+						ate_router_resume: log.ate_router_resume.unwrap_or_default().into(),
+					})
+					.observe(route_duration.as_secs_f64());
+			}
 
 			if let Some(retry_count) = log.retry_attempt {
 				log
@@ -2397,11 +2432,14 @@ impl OtelAccessLogger {
 				.build()
 		};
 
-		let logger = provider.logger("agentgateway.access");
+		Ok(Self::from_provider(provider))
+	}
 
-		Ok(Self {
+	fn from_provider(provider: SdkLoggerProvider) -> Self {
+		let logger = provider.logger("agentgateway.access");
+		Self {
 			inner: super::NonBlockingDrop::new(OtelAccessLoggerInner { provider, logger }),
-		})
+		}
 	}
 
 	pub fn shutdown(&self) {
@@ -2410,7 +2448,7 @@ impl OtelAccessLogger {
 }
 
 impl OtelLogSink for OtelAccessLogger {
-	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
+	fn emit<'v>(&self, level: &str, _target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
 		let severity = match level {
 			"error" => Severity::Error,
 			"warn" => Severity::Warn,
@@ -2431,7 +2469,6 @@ impl OtelLogSink for OtelAccessLogger {
 		let mut record = self.inner.logger.create_log_record();
 		record.set_severity_number(severity);
 		record.set_severity_text(severity_text);
-		record.set_target(target.to_string());
 
 		let mut trace_id_val: Option<u128> = None;
 		let mut span_id_val: Option<u64> = None;
@@ -2714,6 +2751,7 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 
+	use opentelemetry::InstrumentationScope;
 	use opentelemetry::trace::SpanKind;
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
@@ -2726,6 +2764,44 @@ mod tests {
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
 	use crate::types::frontend::{DatabaseLlmMode, LoggingPolicy};
+
+	#[derive(Clone, Debug, Default)]
+	struct RecordingLogExporter {
+		records: Arc<Mutex<Vec<(opentelemetry_sdk::logs::SdkLogRecord, InstrumentationScope)>>>,
+	}
+
+	impl opentelemetry_sdk::logs::LogExporter for RecordingLogExporter {
+		fn export(
+			&self,
+			batch: opentelemetry_sdk::logs::LogBatch<'_>,
+		) -> impl std::future::Future<Output = OTelSdkResult> + Send {
+			let mut records = self.records.lock().unwrap();
+			for (record, scope) in batch.iter() {
+				records.push((record.clone(), scope.clone()));
+			}
+			ready(Ok(()))
+		}
+	}
+
+	#[test]
+	fn otlp_access_log_scope_is_logger_name_not_tracing_target() {
+		let exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(exporter.clone())
+			.build();
+		let logger = OtelAccessLogger::from_provider(provider);
+
+		let kv = [("http.request.method", Some(ValueBag::from("GET")))];
+		logger.emit("info", "request", &kv);
+		logger.inner.provider.force_flush().unwrap();
+
+		let records = exporter.records.lock().unwrap();
+		assert_eq!(records.len(), 1);
+		let (record, scope) = &records[0];
+		assert_eq!(scope.name(), "agentgateway.access");
+		// opentelemetry-proto uses a record target as the wire scope name when one is set.
+		assert!(record.target().is_none());
+	}
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
@@ -2766,6 +2842,10 @@ mod tests {
 	}
 
 	fn test_request_log() -> RequestLog {
+		test_request_log_with_registry().0
+	}
+
+	fn test_request_log_with_registry() -> (RequestLog, Registry) {
 		let cel = CelLogging {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
@@ -2781,7 +2861,7 @@ mod tests {
 			Default::default(),
 			Default::default(),
 		));
-		RequestLog::new(
+		let log = RequestLog::new(
 			cel,
 			metrics,
 			ModelCatalog::empty(),
@@ -2792,7 +2872,28 @@ mod tests {
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
-		)
+		);
+		(log, registry)
+	}
+
+	#[test]
+	fn substrate_route_metric_uses_resolution_outcome_not_application_status() {
+		let (mut log, registry) = test_request_log_with_registry();
+		log.status = Some(crate::http::StatusCode::NOT_FOUND);
+		log.ate_router_resume = Some(ateattr::ResumeDisposition::Triggered);
+		log.ate_router_route_duration = Some(Duration::from_millis(10));
+		log.ate_router_outcome = Some(ateattr::RouteOutcome::Ok);
+		drop(DropOnLog::from(log));
+
+		let mut encoded = String::new();
+		prometheus_client::encoding::text::encode(&mut encoded, &registry).unwrap();
+		assert!(
+			encoded.contains("atenet_router_route_duration_seconds_bucket")
+				&& encoded.contains("ate_router_outcome=\"ok\"")
+				&& encoded.contains("ate_router_resume=\"triggered\""),
+			"{encoded}"
+		);
+		assert!(!encoded.contains("ate_router_outcome=\"resume_error\""));
 	}
 
 	fn sampler_request() -> crate::http::Request {

@@ -155,6 +155,7 @@ output:
           audiences:
           - api://test
           issuer: https://sts.windows.net/test-path/
+          jwksInline: '{"keys":[]}'
           mode: STRICT
           resourceMetadata:
             extra:
@@ -182,6 +183,7 @@ output:
           audiences:
           - api://test
           issuer: https://sts.windows.net/test-path/
+          jwksInline: '{"keys":[]}'
           mode: STRICT
           resourceMetadata:
             extra:
@@ -209,6 +211,7 @@ output:
           audiences:
           - api://test
           issuer: https://sts.windows.net/test-path/
+          jwksInline: '{"keys":[]}'
           mode: STRICT
           resourceMetadata:
             extra:
@@ -236,6 +239,7 @@ output:
           audiences:
           - api://test
           issuer: https://sts.windows.net/test-path/
+          jwksInline: '{"keys":[]}'
           mode: STRICT
           resourceMetadata:
             extra:

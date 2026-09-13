@@ -14,12 +14,13 @@ import (
 
 func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.PromptguardRequest) ([]*api.BackendPolicySpec_Ai_RequestGuard, error) {
 	var res []*api.BackendPolicySpec_Ai_RequestGuard
+	var errs []error
 	for _, req := range reqs {
 		pgReq := &api.BackendPolicySpec_Ai_RequestGuard{}
 		if req.Webhook != nil {
 			wh, err := processWebhook(ctx, namespace, req.Webhook)
 			if err != nil {
-				return nil, err
+				errs = append(errs, err)
 			}
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_Webhook{
 				Webhook: wh,
@@ -54,7 +55,7 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 		res = append(res, pgReq)
 	}
 
-	return res, nil
+	return res, errors.Join(errs...)
 }
 
 func processContentScope(scope agentgateway.ContentScope) api.BackendPolicySpec_Ai_ContentScope {
@@ -74,12 +75,13 @@ func processContentScope(scope agentgateway.ContentScope) api.BackendPolicySpec_
 
 func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.PromptguardResponse) ([]*api.BackendPolicySpec_Ai_ResponseGuard, error) {
 	var res []*api.BackendPolicySpec_Ai_ResponseGuard
+	var errs []error
 	for _, req := range resps {
 		pgReq := &api.BackendPolicySpec_Ai_ResponseGuard{}
 		if req.Webhook != nil {
 			wh, err := processWebhook(ctx, namespace, req.Webhook)
 			if err != nil {
-				return nil, err
+				errs = append(errs, err)
 			}
 			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_Webhook{
 				Webhook: wh,
@@ -107,7 +109,7 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 		res = append(res, pgReq)
 	}
 
-	return res, nil
+	return res, errors.Join(errs...)
 }
 
 func processPromptEnrichment(enrichment *agentgateway.AIPromptEnrichment) *api.BackendPolicySpec_Ai_PromptEnrichment {
@@ -137,9 +139,12 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 		return nil, nil
 	}
 
+	var errs []error
 	be, err := BuildBackendRef(ctx, webhook.BackendRef, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build webhook: %v", err)
+		errs = append(errs, fmt.Errorf("failed to build webhook: %v", err))
+		// A nil backend translates to an invalid target, preserving failureMode.
+		be = nil
 	}
 
 	w := &api.BackendPolicySpec_Ai_Webhook{
@@ -148,13 +153,9 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 		Action:      mapRejectAuditAction(webhook.Action),
 	}
 
-	var errs []error
 	w.Headers = castCELMap(webhook.Headers, func(key string, expr agentgateway.CELExpression) {
 		errs = append(errs, fmt.Errorf("webhook header %q is not a valid CEL expression: %s", key, expr))
 	})
-	if err := errors.Join(errs...); err != nil {
-		return nil, err
-	}
 
 	if len(webhook.ForwardHeaderMatches) > 0 {
 		headers := make([]*api.HeaderMatch, 0, len(webhook.ForwardHeaderMatches))
@@ -176,7 +177,7 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 		w.ForwardHeaderMatches = headers
 	}
 
-	return w, nil
+	return w, errors.Join(errs...)
 }
 
 func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_Webhook_FailureMode {

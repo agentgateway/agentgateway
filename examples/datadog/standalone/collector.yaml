@@ -1,0 +1,35 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  transform/gateway_errors:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # Compatibility workaround for v1.5.0. PR #3261 fixes this on main;
+          # remove this processor after upgrading to a release that contains it.
+          # Do not relabel unrelated HTTP spans or clear existing error statuses.
+          - set(span.status.code, STATUS_CODE_ERROR) where span.attributes["gen_ai.operation.name"] != nil and span.attributes["http.status"] >= 400
+          - set(span.attributes["error.type"], "http_error") where span.attributes["gen_ai.operation.name"] != nil and span.attributes["http.status"] >= 400 and span.attributes["error.type"] == nil
+  batch:
+    timeout: 1s
+    send_batch_size: 128
+
+exporters:
+  otlp_http:
+    endpoint: ${env:OTLP_EXPORT_ENDPOINT}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/gateway_errors, batch]
+      exporters: [otlp_http]

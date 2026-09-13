@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ::http::StatusCode;
 use axum::extract::Query;
 use axum::response::Sse;
-use axum::response::sse::Event;
+use axum::response::sse::{Event, KeepAlive};
 use axum_core::response::IntoResponse;
 use futures_util::StreamExt;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
@@ -91,6 +91,7 @@ impl LegacySSEService {
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		let idle_ttl = inputs.backend.session_idle_ttl;
+		let keep_alive = inputs.backend.sse_keep_alive;
 		let backend_id = inputs.backend_id.clone();
 		let relay = inputs.build_new_connections()?;
 
@@ -125,7 +126,15 @@ impl LegacySSEService {
 			}),
 		);
 		let (parts, _) = request.into_parts();
-		Ok(Sse::new(stream).into_response().map(|b| {
+		// An SSE stream that legitimately carries no traffic is indistinguishable from a dead
+		// connection to anything in the path; without a keep-alive comment it gets reaped.
+		let sse = match keep_alive {
+			Some(interval) => Sse::new(stream)
+				.keep_alive(KeepAlive::new().interval(interval))
+				.into_response(),
+			None => Sse::new(stream).into_response(),
+		};
+		Ok(sse.map(|b| {
 			DropBody::new(
 				b,
 				session::dropper(self.session_manager.clone(), session, parts),

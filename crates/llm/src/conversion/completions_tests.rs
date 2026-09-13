@@ -184,3 +184,182 @@ mod stop_sequence_reporting_streaming {
 		assert_eq!(stop_sequence_from_fields([None, None, None]), None);
 	}
 }
+
+mod thinking_round_trip {
+	use axum_core::body::Body;
+	use bytes::Bytes;
+	use http_body_util::BodyExt;
+	use serde_json::{Value, json};
+
+	use super::super::from_messages;
+	use crate::conversion::messages::from_completions;
+	use crate::{LogContentFields, StreamingUsageGuard};
+
+	async fn events(body: Body) -> Vec<Value> {
+		let bytes = body.collect().await.unwrap().to_bytes();
+		String::from_utf8(bytes.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter(|data| *data != "[DONE]")
+			.map(|data| serde_json::from_str(data).unwrap())
+			.collect()
+	}
+
+	/// The event type, then the block index and the block or delta type when the event has them.
+	fn shape(event: &Value) -> String {
+		let mut out = event["type"].as_str().unwrap_or_default().to_string();
+		if let Some(index) = event["index"].as_u64() {
+			out.push_str(&format!(" {index}"));
+		}
+		for key in ["content_block", "delta"] {
+			if let Some(kind) = event[key]["type"].as_str() {
+				out.push(' ');
+				out.push_str(kind);
+			}
+		}
+		out
+	}
+
+	/// The single signed block is covered by the `reasoning_replay` request goldens; what is left to
+	/// pin down is a turn with several blocks, or with nothing an engine can replay.
+	#[test]
+	fn several_thinking_blocks_are_joined_when_a_turn_is_replayed() {
+		let request: crate::types::messages::Request = serde_json::from_value(json!({
+			"model": "m",
+			"max_tokens": 64,
+			"messages": [
+				{"role": "user", "content": "hi"},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "plan", "signature": "sig"},
+					{"type": "redacted_thinking", "data": "opaque"},
+					{"type": "text", "text": "answer"}
+				]},
+				{"role": "user", "content": "more"},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "one", "signature": "s1"},
+					{"type": "thinking", "thinking": "two", "signature": "s2"}
+				]}
+			]
+		}))
+		.unwrap();
+		let translated: Value =
+			serde_json::from_slice(&from_messages::translate(&request).unwrap()).unwrap();
+		let msgs = translated["messages"].as_array().unwrap();
+		assert_eq!(msgs.len(), 4);
+		// A redacted block holds nothing an engine can replay, so the turn keeps its signed block.
+		assert_eq!(msgs[1]["reasoning_content"], "plan");
+		assert_eq!(msgs[1]["reasoning_signature"], "sig");
+		assert_eq!(msgs[1]["content"][0]["text"], "answer");
+		// A turn made of thinking alone is still sent, joined into one reasoning text. Two blocks
+		// have two signatures, neither of which attests to the joined text.
+		assert_eq!(msgs[3]["role"], "assistant");
+		assert_eq!(msgs[3]["reasoning_content"], "one\n\ntwo");
+		assert!(msgs[3].get("reasoning_signature").is_none());
+		assert!(msgs[3].get("content").is_none());
+	}
+
+	/// The same rule on the response path, where the single-block case is the `thinking` golden.
+	#[test]
+	fn several_thinking_blocks_are_joined_in_a_response() {
+		let body = json!({
+			"id": "m1", "type": "message", "role": "assistant", "model": "m",
+			"stop_reason": "end_turn", "stop_sequence": null,
+			"usage": {"input_tokens": 1, "output_tokens": 1},
+			"content": [
+				{"type": "thinking", "thinking": "one", "signature": "s1"},
+				{"type": "thinking", "thinking": "two", "signature": "s2"},
+				{"type": "text", "text": "answer"}
+			]
+		});
+		let translated =
+			from_completions::translate_response(&Bytes::from(serde_json::to_vec(&body).unwrap()))
+				.unwrap();
+		let translated: Value = serde_json::from_slice(&translated.serialize().unwrap()).unwrap();
+		let message = &translated["choices"][0]["message"];
+		assert_eq!(message["reasoning_content"], "one\n\ntwo");
+		assert!(message.get("reasoning_signature").is_none());
+		assert_eq!(message["content"], "answer");
+	}
+
+	#[tokio::test]
+	async fn streamed_reasoning_opens_a_thinking_block_before_the_text() {
+		let input = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"pl"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"reasoning_content":"an"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"reasoning_signature":"sig"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"content":"answer"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+
+data: [DONE]
+
+"#;
+		let events = events(from_messages::translate_stream(
+			Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		))
+		.await;
+		let shapes: Vec<String> = events.iter().map(shape).collect();
+		assert_eq!(
+			shapes,
+			[
+				"message_start",
+				"content_block_start 0 thinking",
+				"content_block_delta 0 thinking_delta",
+				"content_block_delta 0 thinking_delta",
+				"content_block_delta 0 signature_delta",
+				"content_block_stop 0",
+				"content_block_start 1 text",
+				"content_block_delta 1 text_delta",
+				"content_block_stop 1",
+				"message_delta",
+				"message_stop",
+			]
+		);
+		assert_eq!(events[2]["delta"]["thinking"], "pl");
+		assert_eq!(events[4]["delta"]["signature"], "sig");
+	}
+
+	/// Reasoning that is withheld arrives as a signature with no text, and the block still has to
+	/// reach the client: it is what the next turn replays.
+	#[tokio::test]
+	async fn a_streamed_signature_alone_still_opens_a_thinking_block() {
+		let input = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"role":"assistant","reasoning_signature":"sig"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"content":"answer"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+
+data: [DONE]
+
+"#;
+		let events = events(from_messages::translate_stream(
+			Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		))
+		.await;
+		let shapes: Vec<String> = events.iter().map(shape).collect();
+		assert_eq!(
+			shapes,
+			[
+				"message_start",
+				"content_block_start 0 thinking",
+				"content_block_delta 0 signature_delta",
+				"content_block_stop 0",
+				"content_block_start 1 text",
+				"content_block_delta 1 text_delta",
+				"content_block_stop 1",
+				"message_delta",
+				"message_stop",
+			]
+		);
+		assert_eq!(events[2]["delta"]["signature"], "sig");
+	}
+}

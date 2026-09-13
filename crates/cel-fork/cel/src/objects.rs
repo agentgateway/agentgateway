@@ -1010,7 +1010,10 @@ impl<'a> Value<'a> {
 		ctx: &'vars Context,
 		resolver: &'rf dyn VariableResolver<'vars>,
 	) -> ResolveResult<'a> {
-		let mut map = hashbrown::HashMap::with_capacity(map_expr.entries.len());
+		let mut map = crate::types::map::IndexMap::with_capacity_and_hasher(
+			map_expr.entries.len(),
+			Default::default(),
+		);
 		for entry in map_expr.entries.iter() {
 			let (k, v, is_optional) = match &entry.expr {
 				EntryExpr::StructField(_) => panic!("WAT?"),
@@ -2287,7 +2290,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, "b": 2, ?"c": optional.of(3)}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			expected_map.insert("b".into(), Value::Int(2));
 			expected_map.insert("c".into(), Value::Int(3));
@@ -2300,7 +2303,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, "b": 2, ?"c": optional.none()}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			expected_map.insert("b".into(), Value::Int(2));
 			assert_eq!(
@@ -2312,7 +2315,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, ?"b": optional.none(), ?"c": optional.of(3)}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			expected_map.insert("c".into(), Value::Int(3));
 			assert_eq!(
@@ -2324,7 +2327,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, ?"b": mymap[?"missing"]}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			assert_eq!(
 				Value::resolve(&expr, &ctx, &map_vars),
@@ -2335,7 +2338,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"x": 10, ?"y": mymap[?"a"]}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("x".into(), Value::Int(10));
 			expected_map.insert("y".into(), Value::Int(1));
 			assert_eq!(
@@ -2350,7 +2353,7 @@ mod tests {
 			assert_eq!(
 				Value::resolve(&expr, &ctx, &empty_vars),
 				Ok(Value::Map(MapValue::Owned(Arc::from(
-					hashbrown::HashMap::new()
+					crate::types::map::IndexMap::default()
 				)))),
 			);
 		}

@@ -114,12 +114,18 @@ pub enum VirtualModelRouting {
 pub struct WeightedTarget {
 	pub model: String,
 	pub weight: usize,
+	// XDS-only resolution state. User-facing configuration does not expose this field.
+	#[serde(skip_serializing_if = "std::ops::Not::not")]
+	pub invalid: bool,
 }
 
 #[apply(schema_ser_schema!)]
 pub struct ConditionalTarget {
 	pub model: String,
 	pub when: Option<Arc<cel::Expression>>,
+	// XDS-only resolution state. User-facing configuration does not expose this field.
+	#[serde(skip_serializing_if = "std::ops::Not::not")]
+	pub invalid: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -247,10 +253,10 @@ impl ModelRouter {
 		req: &mut Request,
 		location: RequestedModelLocation,
 	) -> ResolveResult {
-		let target = match &virtual_model.routing {
+		let (target, invalid) = match &virtual_model.routing {
 			VirtualModelRouting::Weighted(targets) => {
 				match targets.choose_weighted(&mut rand::rng(), |target| target.weight) {
-					Ok(target) => target.model.clone(),
+					Ok(target) => (target.model.clone(), target.invalid),
 					Err(err) => {
 						tracing::debug!(%err, "failed to select weighted virtual model target");
 						return ResolveResult::DirectResponse(llm_error_response(
@@ -279,7 +285,7 @@ impl ModelRouter {
 						.map(|expr| exec.eval_bool(expr))
 						.unwrap_or(true)
 				}) {
-					Some(target) => target.model.clone(),
+					Some(target) => (target.model.clone(), target.invalid),
 					None => {
 						return ResolveResult::DirectResponse(llm_error_response(
 							::http::StatusCode::BAD_REQUEST,
@@ -293,6 +299,21 @@ impl ModelRouter {
 				}
 			},
 		};
+		if invalid {
+			tracing::debug!(
+				virtual_model = %virtual_model.name,
+				target_model = %target,
+				"virtual model selected an invalid target",
+			);
+			return ResolveResult::DirectResponse(llm_error_response(
+				::http::StatusCode::NOT_FOUND,
+				&format!(
+					"Virtual model {} selected invalid target {target}",
+					virtual_model.name
+				),
+				"virtual_model_target_not_found",
+			));
+		}
 
 		if let Err(resp) = Box::pin(rewrite_request_model(req, location, &target)).await {
 			return ResolveResult::DirectResponse(*resp);
@@ -905,6 +926,7 @@ mod tests {
 				routing: VirtualModelRouting::Conditional(vec![
 					ConditionalTarget {
 						model: "economy-model".to_string(),
+						invalid: false,
 						when: Some(Arc::new(
 							cel::Expression::new_strict("llmRequest.max_tokens <= 1024")
 								.expect("valid CEL expression"),
@@ -912,6 +934,7 @@ mod tests {
 					},
 					ConditionalTarget {
 						model: "premium-model".to_string(),
+						invalid: false,
 						when: None,
 					},
 				]),
@@ -933,6 +956,79 @@ mod tests {
 			.expect("rewritten request body");
 		let body: Value = serde_json::from_slice(&body).expect("valid JSON request body");
 		assert_eq!(body["model"], "economy-model");
+	}
+
+	#[tokio::test]
+	async fn weighted_virtual_model_invalid_target_fails_when_selected() {
+		let router = ModelRouter::new(
+			vec![],
+			vec![VirtualModelRoute {
+				name: "weighted-model".to_string(),
+				created: 0,
+				llm_policy: default_route_types(),
+				routing: VirtualModelRouting::Weighted(vec![WeightedTarget {
+					model: "missing-model".to_string(),
+					weight: 1,
+					invalid: true,
+				}]),
+			}],
+		);
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(r#"{"model":"weighted-model"}"#))
+			.expect("valid request");
+
+		let ResolveResult::DirectResponse(resp) = router.resolve(&mut req).await else {
+			panic!("invalid weighted target should fail");
+		};
+		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
+		let body = http::read_body_with_limit(resp.into_body(), 1024)
+			.await
+			.expect("error body");
+		let body: Value = serde_json::from_slice(&body).expect("error JSON");
+		assert_eq!(body["error"]["code"], "virtual_model_target_not_found");
+	}
+
+	#[tokio::test]
+	async fn conditional_virtual_model_invalid_match_does_not_fall_through() {
+		let router = ModelRouter::new(
+			vec![],
+			vec![VirtualModelRoute {
+				name: "conditional-model".to_string(),
+				created: 0,
+				llm_policy: default_route_types(),
+				routing: VirtualModelRouting::Conditional(vec![
+					ConditionalTarget {
+						model: "missing-model".to_string(),
+						when: Some(Arc::new(
+							cel::Expression::new_strict("request.headers['x-use-missing'] == 'true'")
+								.expect("valid CEL expression"),
+						)),
+						invalid: true,
+					},
+					ConditionalTarget {
+						model: "fallback-model".to_string(),
+						when: None,
+						invalid: false,
+					},
+				]),
+			}],
+		);
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.header("x-use-missing", "true")
+			.body(http::Body::from(r#"{"model":"conditional-model"}"#))
+			.expect("valid request");
+
+		let ResolveResult::DirectResponse(resp) = router.resolve(&mut req).await else {
+			panic!("invalid conditional target should fail");
+		};
+		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
+		let body = http::read_body_with_limit(resp.into_body(), 1024)
+			.await
+			.expect("error body");
+		let body: Value = serde_json::from_slice(&body).expect("error JSON");
+		assert_eq!(body["error"]["code"], "virtual_model_target_not_found");
 	}
 
 	#[test]

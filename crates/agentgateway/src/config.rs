@@ -563,12 +563,10 @@ pub fn parse_config(
 			database: logging_database.clone(),
 				fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))
 					.ctx("invalid config.logging.fields")?,
-				database_fields: if logging_database.is_some() {
-					database_logging_fields(raw.standard_attributes.as_ref())
-						.ctx("invalid config.standardAttributes")?
-				} else {
-					Default::default()
-				},
+				database_fields: Arc::new(arc_swap::ArcSwap::from_pointee(
+					standard_attributes(raw.standard_attributes.as_ref())
+						.ctx("invalid config.standardAttributes")?,
+				)),
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -653,7 +651,7 @@ fn logging_fields(fields: Option<RawLoggingFields>) -> anyhow::Result<LoggingFie
 	})
 }
 
-fn database_logging_fields(
+pub(crate) fn standard_attributes(
 	standard_attributes: Option<&crate::RawStandardAttributes>,
 ) -> anyhow::Result<LoggingFields> {
 	let add = [

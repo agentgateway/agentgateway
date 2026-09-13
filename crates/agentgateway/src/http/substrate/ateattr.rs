@@ -18,8 +18,8 @@ pub(crate) const ATE_ROUTER_ROUTE_DURATION: &str = "ate.router.route.duration";
 ///
 /// Ordered weakest to strongest so `max` keeps the strongest disposition a request observed across
 /// stale-assignment retries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub(crate) enum ResumeDisposition {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub enum ResumeDisposition {
 	#[default]
 	None,
 	Joined,
@@ -45,6 +45,28 @@ impl ResumeDisposition {
 }
 
 impl Display for ResumeDisposition {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		f.write_str(self.as_str())
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum RouteOutcome {
+	#[default]
+	Ok,
+	ResumeError,
+}
+
+impl RouteOutcome {
+	pub(crate) const fn as_str(self) -> &'static str {
+		match self {
+			Self::Ok => "ok",
+			Self::ResumeError => "resume_error",
+		}
+	}
+}
+
+impl Display for RouteOutcome {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.write_str(self.as_str())
 	}

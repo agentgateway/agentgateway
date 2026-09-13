@@ -259,6 +259,11 @@ impl LocalClient {
 			.model_catalog
 			.unwrap_or_else(|| self.config.model_catalog.sources.clone());
 		self.model_catalog.replace_sources(model_catalog).await?;
+		self
+			.config
+			.logging
+			.database_fields
+			.store(config.standard_attributes);
 		info!("loaded config from {:?}", self.cfg);
 
 		// Sync binds first, but always run discovery sync even when a new bind cannot open.
@@ -465,6 +470,8 @@ mod tests {
 		format!(
 			r#"
 config:
+  standardAttributes:
+    user: '"{remove_field}"'
   modelCatalog:
   - inline:
       providers:
@@ -623,9 +630,10 @@ frontendPolicies:
 			metrics,
 		};
 
-		local_client.run().await.unwrap();
+		local_client.clone().run().await.unwrap();
 		wait_for_access_log_remove(&config, &stores, "first").await;
 		wait_for_catalog_model(&model_catalog, "first").await;
+		let first_attributes = config.logging.database_fields.load_full();
 
 		fs_err::tokio::write(&path, local_config("ready"))
 			.await
@@ -646,5 +654,38 @@ frontendPolicies:
 		replace_config(&path, "third").await;
 		wait_for_access_log_remove(&config, &stores, "third").await;
 		wait_for_catalog_model(&model_catalog, "third").await;
+		let current_attributes = config.logging.database_fields.load_full();
+		let request = crate::http::Request::new(crate::http::Body::empty());
+		let exec = crate::cel::Executor::new_request(&request);
+		for (snapshot, expected) in [(&first_attributes, "first"), (&current_attributes, "third")] {
+			let expression = snapshot
+				.add
+				.iter()
+				.find(|(name, _)| name.as_ref() == "agentgateway.user")
+				.unwrap()
+				.1;
+			assert_eq!(
+				exec.eval(expression).unwrap().as_string().unwrap(),
+				expected
+			);
+		}
+
+		// Reject invalid expressions without publishing a partial attribute update.
+		let invalid = local_config("invalid").replace("'\"invalid\"'", "'('");
+		fs_err::tokio::write(&path, invalid).await.unwrap();
+		assert!(
+			local_client
+				.reload_config(PreviousState::default())
+				.await
+				.is_err()
+		);
+		let retained = config.logging.database_fields.load_full();
+		let expression = retained
+			.add
+			.iter()
+			.find(|(name, _)| name.as_ref() == "agentgateway.user")
+			.unwrap()
+			.1;
+		assert_eq!(exec.eval(expression).unwrap().as_string().unwrap(), "third");
 	}
 }

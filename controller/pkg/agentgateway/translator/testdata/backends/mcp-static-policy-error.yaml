@@ -17,7 +17,37 @@ spec:
               name: missing-secret
 ---
 # Output
-output: []
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-static-policy-error
+      mcp:
+        targets:
+        - backend:
+            backend: default/mcp-static-policy-error/target-with-bad-policy
+          name: target-with-bad-policy
+          protocol: SSE
+      name:
+        name: mcp-static-policy-error
+        namespace: default
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - auth:
+          key: {}
+      key: default/mcp-static-policy-error/target-with-bad-policy
+      name:
+        name: mcp-static-policy-error
+        namespace: default
+      static:
+        host: mcp-server.example.com
+        port: 8080
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayBackend
@@ -29,6 +59,6 @@ status:
     conditions:
     - lastTransitionTime: fake
       message: 'failed to translate backend: secret default/missing-secret not found'
-      reason: TranslationError
-      status: "False"
+      reason: PartiallyValid
+      status: "True"
       type: Accepted

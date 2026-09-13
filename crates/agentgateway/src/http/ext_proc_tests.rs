@@ -2890,6 +2890,7 @@ async fn custom_llm_provider_service_backend_runs_inference_routing() {
 	t.with_policy(TargetedPolicy {
 		key: "custom-provider-epp".into(),
 		name: None,
+		creation_timestamp: 0,
 		inheritance: PolicyInheritance::default(),
 		target: PolicyTarget::Backend(BackendTarget::Service {
 			hostname: service.hostname.clone(),
@@ -2989,6 +2990,7 @@ async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token
 	t.with_policy(TargetedPolicy {
 		key: "custom-provider-epp".into(),
 		name: None,
+		creation_timestamp: 0,
 		inheritance: PolicyInheritance::default(),
 		target: PolicyTarget::Backend(BackendTarget::Service {
 			hostname: service.hostname.clone(),

@@ -11,7 +11,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use websocket_sans_io::{FrameInfo, Opcode, WebsocketFrameEncoder, WebsocketFrameEvent};
 
 use crate::llm::policy::PromptGuard;
-use crate::llm::{LLMInfo, LLMResponse};
+use crate::llm::{LLMInfo, LLMResponse, TokenGapSummary};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 
@@ -75,6 +75,8 @@ impl<IO> Parser<IO> {
 						completion: None,
 						output_messages: None,
 						first_token: None,
+						last_token_at: None,
+						inter_chunk_latencies: TokenGapSummary::default(),
 						count_tokens: None,
 						reasoning_tokens: None,
 						cache_creation_input_tokens: None,
@@ -554,6 +556,8 @@ pub async fn guarded_realtime_proxy<C, S>(
 												completion: None,
 												output_messages: None,
 												first_token: None,
+												last_token_at: None,
+												inter_chunk_latencies: TokenGapSummary::default(),
 												count_tokens: None,
 												reasoning_tokens: None,
 												cache_creation_input_tokens: None,

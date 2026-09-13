@@ -155,6 +155,17 @@ pub mod from_messages {
 			.ok_or_else(|| AIError::InvalidResponse(strng::literal!("chat response missing choices")))?;
 
 		let mut content: Vec<messages::ContentBlock> = Vec::new();
+		// Engines report reasoning beside the text; the Messages contract puts it first. A turn whose
+		// reasoning text is withheld carries the signature alone, so the signature is enough to send
+		// the block: it is what the next turn has to replay.
+		let thinking = choice.message.reasoning_content.unwrap_or_default();
+		let signature = choice.message.reasoning_signature.unwrap_or_default();
+		if !thinking.is_empty() || !signature.is_empty() {
+			content.push(messages::ContentBlock::Thinking {
+				thinking,
+				signature,
+			});
+		}
 		if let Some(text) = choice.message.content {
 			content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
 				text,
@@ -266,8 +277,11 @@ pub mod from_messages {
 			sent_message_start: bool,
 			sent_message_stop: bool,
 			sent_first_token: bool,
+			last_token_at: Option<Instant>,
 			next_block_index: usize,
 			text_block_index: Option<usize>,
+			thinking_block_index: Option<usize>,
+			thinking_signature: Option<String>,
 			tool_block_indices: HashMap<u32, usize>,
 			open_tool_blocks: HashSet<u32>,
 			pending_tool_calls: HashMap<u32, PendingToolCall>,
@@ -294,6 +308,52 @@ pub mod from_messages {
 					messages::MessagesStreamEvent::ContentBlockStop { index },
 				);
 			}
+		}
+
+		fn close_thinking_block(
+			state: &mut StreamState,
+			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+		) {
+			if let Some(index) = state.thinking_block_index.take() {
+				if let Some(signature) = state.thinking_signature.take() {
+					push_event(
+						events,
+						messages::MessagesStreamEvent::ContentBlockDelta {
+							index,
+							delta: messages::ContentBlockDelta::SignatureDelta { signature },
+						},
+					);
+				}
+				push_event(
+					events,
+					messages::MessagesStreamEvent::ContentBlockStop { index },
+				);
+			}
+		}
+
+		fn open_thinking_block(
+			state: &mut StreamState,
+			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+		) -> usize {
+			if let Some(index) = state.thinking_block_index {
+				return index;
+			}
+			close_text_block(state, events);
+			close_all_tool_blocks(state, events);
+			let index = state.next_block_index;
+			state.next_block_index += 1;
+			state.thinking_block_index = Some(index);
+			push_event(
+				events,
+				messages::MessagesStreamEvent::ContentBlockStart {
+					index,
+					content_block: messages::ContentBlock::Thinking {
+						thinking: String::new(),
+						signature: String::new(),
+					},
+				},
+			);
+			index
 		}
 
 		fn close_all_tool_blocks(
@@ -328,6 +388,7 @@ pub mod from_messages {
 				return index;
 			}
 			close_all_tool_blocks(state, events);
+			close_thinking_block(state, events);
 			let index = state.next_block_index;
 			state.next_block_index += 1;
 			state.text_block_index = Some(index);
@@ -353,6 +414,7 @@ pub mod from_messages {
 			name: String,
 		) -> usize {
 			close_text_block(state, events);
+			close_thinking_block(state, events);
 			let index = *state
 				.tool_block_indices
 				.entry(tool_index)
@@ -382,13 +444,19 @@ pub mod from_messages {
 		}
 
 		fn maybe_set_first_token(state: &mut StreamState, log: &StreamingUsageGuard) {
-			if state.sent_first_token {
+			let now = Instant::now();
+			if !state.sent_first_token {
+				state.sent_first_token = true;
+				state.last_token_at = Some(now);
+				log.update(|r| {
+					r.response.first_token = Some(now);
+				});
 				return;
 			}
-			state.sent_first_token = true;
-			log.update(|r| {
-				r.response.first_token = Some(Instant::now());
-			});
+			if let Some(prev) = state.last_token_at.replace(now) {
+				let gap = now.duration_since(prev);
+				log.update(|r| r.response.inter_chunk_latencies.record(gap));
+			}
 		}
 
 		fn flush_message_end(
@@ -416,6 +484,7 @@ pub mod from_messages {
 			};
 			let finish_reason = crate::types::serialize_str(&stop_reason);
 
+			close_thinking_block(state, events);
 			close_text_block(state, events);
 			close_all_tool_blocks(state, events);
 
@@ -545,6 +614,37 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
+						if let Some(thinking) = choice
+							.delta
+							.reasoning_content
+							.as_deref()
+							.filter(|s| !s.is_empty())
+						{
+							let index = open_thinking_block(&mut state, &mut events);
+							maybe_set_first_token(&mut state, &log);
+							push_event(
+								&mut events,
+								messages::MessagesStreamEvent::ContentBlockDelta {
+									index,
+									delta: messages::ContentBlockDelta::ThinkingDelta {
+										thinking: thinking.to_string(),
+									},
+								},
+							);
+						}
+						// The signature goes out when the block closes, as a Messages stream sends it.
+						// Reasoning that is withheld arrives as a signature with no text, before any block
+						// has been opened, and opens one of its own to carry it.
+						if let Some(signature) = choice
+							.delta
+							.reasoning_signature
+							.as_deref()
+							.filter(|s| !s.is_empty())
+							&& (state.thinking_block_index.is_some() || state.next_block_index == 0)
+						{
+							open_thinking_block(&mut state, &mut events);
+							state.thinking_signature = Some(signature.to_string());
+						}
 						if let Some(content) = choice.delta.content.as_deref().filter(|s| !s.is_empty()) {
 							let index = open_text_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
@@ -904,6 +1004,8 @@ pub mod from_messages {
 				messages::Role::Assistant => {
 					let mut assistant_parts = Vec::new();
 					let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
+					let mut reasoning_content: Option<String> = None;
+					let mut reasoning_signatures = Vec::new();
 					for block in msg.content {
 						match block {
 							messages::ContentBlock::Text(messages::ContentTextBlock {
@@ -929,16 +1031,31 @@ pub mod from_messages {
 									},
 								));
 							},
-							messages::ContentBlock::Thinking { .. } => {
-								// TODO
+							// Chat Completions carries one reasoning text per turn, so the blocks are joined.
+							messages::ContentBlock::Thinking {
+								thinking,
+								signature,
+							} => {
+								match reasoning_content.as_mut() {
+									Some(text) => {
+										text.push_str("\n\n");
+										text.push_str(&thinking);
+									},
+									None => reasoning_content = Some(thinking),
+								}
+								reasoning_signatures.push(signature);
 							},
-							messages::ContentBlock::RedactedThinking { .. } => {
-								// TODO
-							},
+							// A redacted block holds nothing an OpenAI-compatible engine could replay.
+							messages::ContentBlock::RedactedThinking { .. } => {},
 							_ => {},
 						}
 					}
-					if !assistant_parts.is_empty() || !tool_calls.is_empty() {
+					// A signature attests to one block, so it only survives a turn with exactly one.
+					let reasoning_signature = match reasoning_signatures.as_slice() {
+						[signature] if !signature.is_empty() => Some(signature.clone()),
+						_ => None,
+					};
+					if !assistant_parts.is_empty() || !tool_calls.is_empty() || reasoning_content.is_some() {
 						msgs.push(completions::RequestMessage::Assistant(
 							completions::RequestAssistantMessage {
 								content: if assistant_parts.is_empty() {
@@ -957,8 +1074,8 @@ pub mod from_messages {
 								refusal: None,
 								audio: None,
 								function_call: None,
-								reasoning_content: None,
-								reasoning_signature: None,
+								reasoning_content,
+								reasoning_signature,
 							},
 						));
 					}
@@ -1021,8 +1138,9 @@ pub mod from_messages {
 
 		// OpenAI rejects reasoning+tools+modern models+chat completions API combination.
 		// TODO: Move Messages requests with reasoning and function tools to the Responses API.
-		// Allow anything that is not a gpt model, unless its a known-allowed one.
-		let supports_reasoning_with_tools = !model.starts_with("gpt-")
+		// Disable reasoning for GPT-5 tool requests except the allowed GPT-5/5.1/5.2 models.
+		// Leave other models unchanged; gpt-4o rejects reasoning_effort.
+		let supports_reasoning_with_tools = !model.starts_with("gpt-5")
 			|| model == "gpt-5"
 			|| model.starts_with("gpt-5-")
 			|| model.starts_with("gpt-5.1")
@@ -1195,6 +1313,7 @@ pub fn passthrough_stream(
 	resp.map(|b| {
 		let mut seen_provider = false;
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		parse::sse::json_passthrough::<types::completions::typed::StreamResponse>(
 			b,
 			buffer_limit,
@@ -1231,11 +1350,16 @@ pub fn passthrough_stream(
 								}
 							}
 						}
+						let now = Instant::now();
 						if !saw_token {
 							saw_token = true;
+							last_token_at = Some(now);
 							log.update(|r| {
-								r.response.first_token = Some(Instant::now());
+								r.response.first_token = Some(now);
 							});
+						} else if let Some(prev) = last_token_at.replace(now) {
+							let gap = now.duration_since(prev);
+							log.update(|r| r.response.inter_chunk_latencies.record(gap));
 						}
 						if !seen_provider {
 							seen_provider = true;

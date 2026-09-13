@@ -28,7 +28,7 @@ func longStringPtr(s string) *agentgateway.LongString {
 	return &v
 }
 
-func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProviderAndReturnsError(t *testing.T) {
+func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorPreservesRemoteProviderAndReturnsError(t *testing.T) {
 	sentinel := errors.New("lookup failed")
 	jwtAuth := &agentgateway.JWTAuthentication{
 		Mode: agentgateway.JWTAuthenticationModeStrict,
@@ -67,8 +67,15 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProvider
 	if jwtSpec == nil {
 		t.Fatal("expected jwt spec")
 	}
-	if got := len(jwtSpec.Providers); got != 0 {
-		t.Fatalf("expected remote provider to be omitted, got %d providers", got)
+	if got := len(jwtSpec.Providers); got != 1 {
+		t.Fatalf("expected remote provider to be preserved, got %d providers", got)
+	}
+	provider := jwtSpec.Providers[0]
+	if provider.GetInline() != `{"keys":[]}` {
+		t.Fatalf("expected empty key set, got %q", provider.GetInline())
+	}
+	if provider.Issuer != jwtAuth.Providers[0].Issuer || len(provider.Audiences) != 1 || provider.Audiences[0] != "aud-a" {
+		t.Fatalf("expected issuer and audiences to be preserved, got %v", provider)
 	}
 	if jwtSpec.Mode != api.TrafficPolicySpec_JWT_STRICT {
 		t.Fatalf("expected strict mode, got %v", jwtSpec.Mode)
@@ -242,7 +249,7 @@ func TestTranslateMCPAuthenticationSpecTranslatesEmptyRequiredClaims(t *testing.
 	}
 }
 
-func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAndReturnsError(t *testing.T) {
+func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorEmitsEmptyKeySetAndReturnsError(t *testing.T) {
 	sentinel := errors.New("lookup failed")
 	authn := &agentgateway.MCPAuthentication{
 		Issuer:    "issuer.example",
@@ -273,8 +280,8 @@ func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAn
 	if spec == nil {
 		t.Fatal("expected spec to still be emitted")
 	}
-	if spec.JwksInline != "" {
-		t.Fatalf("expected jwks inline to be empty, got %q", spec.JwksInline)
+	if spec.JwksInline != `{"keys":[]}` {
+		t.Fatalf("expected empty key set, got %q", spec.JwksInline)
 	}
 	if spec.Issuer != authn.Issuer {
 		t.Fatalf("expected issuer %q, got %q", authn.Issuer, spec.Issuer)

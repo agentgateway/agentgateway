@@ -346,11 +346,11 @@ llm:
   - name: openai/*
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
   - name: direct-model
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
 "#,
 		mock.address(),
 		mock.address(),
@@ -389,7 +389,7 @@ llm:
       rules:
       - 'request.headers["x-model-auth"] == "yes"'
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     health:
       eviction: {{}}
       unhealthyExpression: 'response.code == 403'
@@ -397,7 +397,7 @@ llm:
     visibility: internal
     provider: openai
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     transformation:
       model: llmRequest.model.stripPrefix("prefix/")
   - name: direct-model
@@ -406,7 +406,7 @@ llm:
       rules:
       - 'request.headers["x-model-auth"] == "yes"'
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
   virtualModels:
   - name: virtual-model
     routing:
@@ -539,7 +539,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
   virtualModels:
   - name: public-model
     routing:
@@ -580,7 +580,7 @@ llm:
   - name: real-model
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     passthrough: detect
 "#,
 		mock.address()
@@ -631,7 +631,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     passthrough: detect
   virtualModels:
   - name: public-model
@@ -671,7 +671,7 @@ llm:
   - name: public-model
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
       model: upstream-model
     passthrough: opaque
 "#,
@@ -707,7 +707,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
       model: upstream-model
     passthrough: detect
   virtualModels:
@@ -749,7 +749,7 @@ llm:
     visibility: internal
     provider: openAI
     params:
-      baseUrl: http://{}
+      baseUrl: http://{}/v1
     passthrough: opaque
   virtualModels:
   - name: public-model

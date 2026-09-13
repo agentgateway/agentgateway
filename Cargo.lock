@@ -26,8 +26,8 @@ dependencies = [
  "base64 0.23.1",
  "cel",
  "divan",
- "hashbrown 0.17.1",
  "hex",
+ "indexmap 2.14.2",
  "ipnet",
  "md-5 0.11.0",
  "percent-encoding",
@@ -639,7 +639,7 @@ dependencies = [
 [[package]]
 name = "async-openai"
 version = "0.41.1"
-source = "git+https://github.com/howardjohn/async-openai?rev=d3e79d9e65a865f73811b3f72bc4d238e07702eb#d3e79d9e65a865f73811b3f72bc4d238e07702eb"
+source = "git+https://github.com/howardjohn/async-openai?rev=2e3e2ddf0d3f3ed4249354b3c668b076bfbef08a#2e3e2ddf0d3f3ed4249354b3c668b076bfbef08a"
 dependencies = [
  "bytes",
  "derive_builder",
@@ -1594,6 +1594,7 @@ dependencies = [
  "erased-serde",
  "hashbrown 0.17.1",
  "http 1.5.0",
+ "indexmap 2.14.2",
  "itertools 0.15.0",
  "lazy_static",
  "nom",

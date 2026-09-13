@@ -70,8 +70,8 @@
 
 ## Getting Started
 
-- [Standalone Quickstart](https://agentgateway.dev/docs/standalone/latest/quickstart) — Get started with agentgateway in minutes.
-- [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest/quickstart) — Deploy on Kubernetes using the built-in controller and Gateway API.
+- [Standalone Quickstart](https://agentgateway.dev/docs/standalone/latest/documentation/quickstart) — Get started with agentgateway in minutes.
+- [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest/documentation/quickstart) — Deploy on Kubernetes using the built-in controller and Gateway API.
 
 ## Documentation
 

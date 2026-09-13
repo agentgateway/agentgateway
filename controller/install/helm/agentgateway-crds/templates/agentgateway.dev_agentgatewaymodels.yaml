@@ -101,6 +101,10 @@ spec:
                   BaseURL overrides the provider address and base path prefix. It must use the
                   http or https scheme. Backend policies may override the default TLS
                   configuration. Query parameters, fragments, and user info are not supported.
+                  The URL path is the upstream base path and defaults to / when omitted.
+                  Provider-specific endpoint paths are appended to this base path.
+                  For example, https://api.openai.com/v1 sends completions to /v1/chat/completions,
+                  while https://api.openai.com sends them to /chat/completions.
                 format: uri
                 maxLength: 1024
                 minLength: 1
@@ -2105,13 +2109,23 @@ spec:
                                         caCertificateRefs:
                                           description: |-
                                             CA certificate source to use to verify the server certificate. Omitted kind
-                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                            key is required. If unset, the system's trusted certificates are used.
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                            read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                            system's trusted certificates are used.
                                           items:
                                             description: |-
                                               LocalCACertificateRef references a same-namespace CA certificate source.
-                                              An omitted kind defaults to ConfigMap.
+                                              An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
+                                              key:
+                                                default: ca.crt
+                                                description: |-
+                                                  Key within the referenced source holding the PEM-encoded CA bundle.
+                                                  Omitted defaults to `ca.crt`.
+                                                maxLength: 253
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                type: string
                                               kind:
                                                 default: ConfigMap
                                                 description: Kind of the referenced
@@ -2564,13 +2578,23 @@ spec:
                                         caCertificateRefs:
                                           description: |-
                                             CA certificate source to use to verify the server certificate. Omitted kind
-                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                            key is required. If unset, the system's trusted certificates are used.
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                            read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                            system's trusted certificates are used.
                                           items:
                                             description: |-
                                               LocalCACertificateRef references a same-namespace CA certificate source.
-                                              An omitted kind defaults to ConfigMap.
+                                              An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
+                                              key:
+                                                default: ca.crt
+                                                description: |-
+                                                  Key within the referenced source holding the PEM-encoded CA bundle.
+                                                  Omitted defaults to `ca.crt`.
+                                                maxLength: 253
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                type: string
                                               kind:
                                                 default: ConfigMap
                                                 description: Kind of the referenced
@@ -3043,13 +3067,23 @@ spec:
                                         caCertificateRefs:
                                           description: |-
                                             CA certificate source to use to verify the server certificate. Omitted kind
-                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                            key is required. If unset, the system's trusted certificates are used.
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                            read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                            system's trusted certificates are used.
                                           items:
                                             description: |-
                                               LocalCACertificateRef references a same-namespace CA certificate source.
-                                              An omitted kind defaults to ConfigMap.
+                                              An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
+                                              key:
+                                                default: ca.crt
+                                                description: |-
+                                                  Key within the referenced source holding the PEM-encoded CA bundle.
+                                                  Omitted defaults to `ca.crt`.
+                                                maxLength: 253
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                type: string
                                               kind:
                                                 default: ConfigMap
                                                 description: Kind of the referenced
@@ -3891,13 +3925,23 @@ spec:
                                         caCertificateRefs:
                                           description: |-
                                             CA certificate source to use to verify the server certificate. Omitted kind
-                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                            key is required. If unset, the system's trusted certificates are used.
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                            read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                            system's trusted certificates are used.
                                           items:
                                             description: |-
                                               LocalCACertificateRef references a same-namespace CA certificate source.
-                                              An omitted kind defaults to ConfigMap.
+                                              An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
+                                              key:
+                                                default: ca.crt
+                                                description: |-
+                                                  Key within the referenced source holding the PEM-encoded CA bundle.
+                                                  Omitted defaults to `ca.crt`.
+                                                maxLength: 253
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                type: string
                                               kind:
                                                 default: ConfigMap
                                                 description: Kind of the referenced
@@ -4350,13 +4394,23 @@ spec:
                                         caCertificateRefs:
                                           description: |-
                                             CA certificate source to use to verify the server certificate. Omitted kind
-                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                                            key is required. If unset, the system's trusted certificates are used.
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                                            read from the `ca.crt` key unless `key` names a different one. If unset, the
+                                            system's trusted certificates are used.
                                           items:
                                             description: |-
                                               LocalCACertificateRef references a same-namespace CA certificate source.
-                                              An omitted kind defaults to ConfigMap.
+                                              An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
+                                              key:
+                                                default: ca.crt
+                                                description: |-
+                                                  Key within the referenced source holding the PEM-encoded CA bundle.
+                                                  Omitted defaults to `ca.crt`.
+                                                maxLength: 253
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                                                type: string
                                               kind:
                                                 default: ConfigMap
                                                 description: Kind of the referenced
@@ -4839,13 +4893,23 @@ spec:
                       caCertificateRefs:
                         description: |-
                           CA certificate source to use to verify the server certificate. Omitted kind
-                          and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
-                          key is required. If unset, the system's trusted certificates are used.
+                          and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
+                          read from the `ca.crt` key unless `key` names a different one. If unset, the
+                          system's trusted certificates are used.
                         items:
                           description: |-
                             LocalCACertificateRef references a same-namespace CA certificate source.
-                            An omitted kind defaults to ConfigMap.
+                            An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                           properties:
+                            key:
+                              default: ca.crt
+                              description: |-
+                                Key within the referenced source holding the PEM-encoded CA bundle.
+                                Omitted defaults to `ca.crt`.
+                              maxLength: 253
+                              minLength: 1
+                              pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                              type: string
                             kind:
                               default: ConfigMap
                               description: Kind of the referenced CA certificate source.

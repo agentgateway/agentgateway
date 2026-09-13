@@ -800,7 +800,8 @@ pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGatewa
 }
 
 async fn assert_log(path: &str, streaming: bool, test_id: &str) {
-	assert_log_with_output_range(path, streaming, test_id, 1, 100).await;
+	// A short answer can still use many reasoning tokens.
+	assert_log_with_output_range(path, streaming, test_id, 1, i64::MAX).await;
 }
 
 async fn assert_request_log(path: &str, streaming: bool, test_id: &str) {

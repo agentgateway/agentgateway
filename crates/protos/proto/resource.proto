@@ -167,6 +167,9 @@ message Policy {
   // Controls whether more-specific child policy levels can be included when
   // computing the effective policy.
   Inheritance inheritance = 8;
+  // Kubernetes creationTimestamp as Unix seconds. Older policies take
+  // precedence when multiple policies of the same kind target the same level.
+  int64 creation_timestamp = 9;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;
@@ -1999,6 +2002,14 @@ message MCPBackend {
     FAIL_OPEN = 1;
   }
   FailureMode failure_mode = 5;
+
+  // Interval at which SSE keep-alive comments are sent on long-lived MCP
+  // streams. Disabled when unset. Without it, a stream that legitimately
+  // carries no traffic (for example a FAIL_OPEN GET stream held open with
+  // no reachable upstream, or an idle session) is indistinguishable from a
+  // dead connection and is dropped by intermediaries such as load balancers
+  // and API gateways.
+  optional google.protobuf.Duration sse_keep_alive = 6;
 }
 
 message MCPTarget {
@@ -2244,6 +2255,9 @@ message ModelRoute {
         // referenced resource name when match.model is omitted.
         string model = 1;
         uint32 weight = 2;
+        // The control plane could not resolve this target. If selected, the
+        // request fails instead of resolving model against wildcard routes.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }
@@ -2257,6 +2271,9 @@ message ModelRoute {
         // not a ModelRoute resource key.
         string model = 1;
         optional string when = 2;
+        // The control plane could not resolve this target. If its condition
+        // matches, the request fails instead of falling through.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }

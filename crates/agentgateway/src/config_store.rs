@@ -65,6 +65,8 @@ pub enum ConfigResourceKind {
 	McpTarget,
 	#[serde(rename = "mcp.policy")]
 	McpPolicy,
+	#[serde(rename = "llm.settings")]
+	LlmSettings,
 	#[serde(rename = "mcp.settings")]
 	McpSettings,
 	#[serde(rename = "traffic.gateway")]
@@ -78,6 +80,14 @@ pub enum ConfigResourceKind {
 }
 
 impl ConfigResourceKind {
+	pub(crate) fn settings_fields(self) -> Option<(&'static str, &'static [&'static str])> {
+		match self {
+			Self::LlmSettings => Some(("llm", &["gateways", "port", "tls"])),
+			Self::McpSettings => Some(("mcp", &MCP_SETTINGS_FIELDS)),
+			_ => None,
+		}
+	}
+
 	pub const fn as_str(self) -> &'static str {
 		match self {
 			Self::ModelCatalog => "modelCatalog",
@@ -89,6 +99,7 @@ impl ConfigResourceKind {
 			Self::McpTarget => "mcp.target",
 			Self::McpPolicy => "mcp.policy",
 			Self::McpSettings => "mcp.settings",
+			Self::LlmSettings => "llm.settings",
 			Self::TrafficGateway => "traffic.gateway",
 			Self::TrafficRoute => "traffic.route",
 			Self::TrafficTcpRoute => "traffic.tcpRoute",
@@ -117,6 +128,7 @@ impl FromStr for ConfigResourceKind {
 			"mcp.target" => Ok(Self::McpTarget),
 			"mcp.policy" => Ok(Self::McpPolicy),
 			"mcp.settings" => Ok(Self::McpSettings),
+			"llm.settings" => Ok(Self::LlmSettings),
 			"traffic.gateway" => Ok(Self::TrafficGateway),
 			"traffic.route" => Ok(Self::TrafficRoute),
 			"traffic.tcpRoute" => Ok(Self::TrafficTcpRoute),
@@ -380,7 +392,8 @@ fn file_resource_collection(kind: ConfigResourceKind) -> Option<FileResourceColl
 		ConfigResourceKind::TrafficTcpRoute => Some(FileResourceCollection::List(&["tcpRoutes"])),
 		ConfigResourceKind::ModelCatalog
 		| ConfigResourceKind::LlmApiKey
-		| ConfigResourceKind::McpSettings => None,
+		| ConfigResourceKind::McpSettings
+		| ConfigResourceKind::LlmSettings => None,
 	}
 }
 
@@ -402,7 +415,9 @@ pub(crate) fn upsert_file_config_resource(
 	match prepared.kind {
 		ConfigResourceKind::ModelCatalog => upsert_file_model_catalog(config, &prepared.value),
 		ConfigResourceKind::LlmApiKey => upsert_file_api_key(config, prepared, previous_id),
-		ConfigResourceKind::McpSettings => upsert_file_mcp_settings(config, &prepared.value),
+		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
+			upsert_file_settings(config, prepared.kind, &prepared.value)
+		},
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
@@ -430,7 +445,9 @@ pub(crate) fn delete_file_config_resource(
 	match kind {
 		ConfigResourceKind::ModelCatalog => delete_file_model_catalog(config),
 		ConfigResourceKind::LlmApiKey => delete_file_api_key(config, id),
-		ConfigResourceKind::McpSettings => delete_file_mcp_settings(config),
+		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
+			delete_file_settings(config, kind)
+		},
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
@@ -660,29 +677,36 @@ fn delete_file_api_key(config: &mut Value, id: &str) -> anyhow::Result<bool> {
 	Ok(false)
 }
 
-/// Projects the singleton MCP settings resource onto its top-level `mcp` fields.
-fn upsert_file_mcp_settings(config: &mut Value, value: &Value) -> anyhow::Result<()> {
+/// Projects the singleton surface settings resource onto its top-level fields.
+fn upsert_file_settings(
+	config: &mut Value,
+	kind: ConfigResourceKind,
+	value: &Value,
+) -> anyhow::Result<()> {
+	let (section, fields) = kind.settings_fields().expect("settings resource");
 	let value = value
 		.as_object()
-		.ok_or_else(|| anyhow::anyhow!("mcp.settings/default must be an object"))?;
-	let mcp = ensure_file_object(config, &["mcp"])?;
-	for field in MCP_SETTINGS_FIELDS {
+		.ok_or_else(|| anyhow::anyhow!("{kind}/default must be an object"))?;
+	let settings = ensure_file_object(config, &[section])?;
+	for &field in fields {
 		if let Some(value) = value.get(field) {
-			mcp.insert(field.to_string(), value.clone());
+			settings.insert(field.to_string(), value.clone());
 		} else {
-			mcp.remove(field);
+			settings.remove(field);
 		}
 	}
 	Ok(())
 }
 
-fn delete_file_mcp_settings(config: &mut Value) -> anyhow::Result<bool> {
-	let Some(mcp) = crate::json::traverse_mut(config, &["mcp"]).and_then(Value::as_object_mut) else {
+fn delete_file_settings(config: &mut Value, kind: ConfigResourceKind) -> anyhow::Result<bool> {
+	let (section, fields) = kind.settings_fields().expect("settings resource");
+	let Some(settings) = crate::json::traverse_mut(config, &[section]).and_then(Value::as_object_mut)
+	else {
 		return Ok(false);
 	};
 	let mut deleted = false;
-	for field in MCP_SETTINGS_FIELDS {
-		deleted |= mcp.remove(field).is_some();
+	for &field in fields {
+		deleted |= settings.remove(field).is_some();
 	}
 	Ok(deleted)
 }
@@ -876,7 +900,8 @@ fn overlay_config_resources(
 	let has_llm_resources = resources.iter().any(|resource| {
 		matches!(
 			resource.kind,
-			ConfigResourceKind::LlmProvider
+			ConfigResourceKind::LlmSettings
+				| ConfigResourceKind::LlmProvider
 				| ConfigResourceKind::LlmModel
 				| ConfigResourceKind::LlmVirtualModel
 				| ConfigResourceKind::LlmApiKey
@@ -935,10 +960,16 @@ fn overlay_config_resources(
 		anyhow::bail!("local config root must be a JSON object");
 	};
 	if has_llm_resources {
-		if has_llm_policies && !root.contains_key("llm") {
+		if has_llm_policies
+			&& !root.contains_key("llm")
+			&& !resources
+				.iter()
+				.any(|r| r.kind == ConfigResourceKind::LlmSettings)
+		{
 			return Err(
 				ConfigResourceError::Conflict(
-					"DB-backed LLM policies require llm in the file config".to_string(),
+					"DB-backed LLM policies require llm in the file config or a llm.settings resource"
+						.to_string(),
 				)
 				.into(),
 			);
@@ -958,6 +989,7 @@ fn overlay_config_resources(
 			anyhow::bail!("local config llm must be a JSON object");
 		};
 
+		append_settings(llm, resources, ConfigResourceKind::LlmSettings)?;
 		append_policy_kind(llm, resources, ConfigResourceKind::LlmPolicy, "llm")?;
 		append_llm_kind(llm, resources, ConfigResourceKind::LlmProvider, "providers")?;
 		append_llm_kind(llm, resources, ConfigResourceKind::LlmModel, "models")?;
@@ -980,7 +1012,7 @@ fn overlay_config_resources(
 			.entry("targets")
 			.or_insert_with(|| Value::Array(Vec::new()));
 
-		append_mcp_settings(mcp, resources)?;
+		append_settings(mcp, resources, ConfigResourceKind::McpSettings)?;
 		append_policy_kind(mcp, resources, ConfigResourceKind::McpPolicy, "mcp")?;
 		append_list_kind(
 			mcp,
@@ -1155,37 +1187,36 @@ fn append_llm_kind(
 	append_list_kind(llm, resources, kind, field, "llm")
 }
 
-fn append_mcp_settings(
-	mcp: &mut serde_json::Map<String, Value>,
+fn append_settings(
+	settings: &mut serde_json::Map<String, Value>,
 	resources: &[ConfigResource],
+	kind: ConfigResourceKind,
 ) -> anyhow::Result<()> {
-	let Some(settings) = resources
-		.iter()
-		.find(|resource| resource.kind == ConfigResourceKind::McpSettings)
-	else {
+	let (_, fields) = kind.settings_fields().expect("settings resource");
+	let Some(resource) = resources.iter().find(|resource| resource.kind == kind) else {
 		return Ok(());
 	};
-	let value = settings.value.as_object().ok_or_else(|| {
-		ConfigResourceError::InvalidRequest("mcp.settings/default must be an object".to_string())
+	let value = resource.value.as_object().ok_or_else(|| {
+		ConfigResourceError::InvalidRequest(format!("{kind}/default must be an object"))
 	})?;
 	for (field, value) in value {
-		if !MCP_SETTINGS_FIELDS.contains(&field.as_str()) {
+		if !fields.contains(&field.as_str()) {
 			return Err(
 				ConfigResourceError::InvalidRequest(format!(
-					"mcp.settings/default contains unsupported field: {field}"
+					"{kind}/default contains unsupported field: {field}"
 				))
 				.into(),
 			);
 		}
-		if mcp.contains_key(field) {
+		if settings.contains_key(field) {
 			return Err(
 				ConfigResourceError::Conflict(format!(
-					"config resource mcp.settings/default field {field} conflicts with file-owned configuration"
+					"config resource {kind}/default field {field} conflicts with file-owned configuration"
 				))
 				.into(),
 			);
 		}
-		mcp.insert(field.clone(), value.clone());
+		settings.insert(field.clone(), value.clone());
 	}
 	Ok(())
 }
@@ -1302,7 +1333,7 @@ pub(crate) fn prepare_resource(
 fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String> {
 	match kind {
 		ConfigResourceKind::ModelCatalog => Ok("default".to_string()),
-		ConfigResourceKind::McpSettings => Ok("default".to_string()),
+		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => Ok("default".to_string()),
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmVirtualModel
 		| ConfigResourceKind::McpTarget

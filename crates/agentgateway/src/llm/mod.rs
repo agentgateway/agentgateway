@@ -10,8 +10,8 @@ pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
 pub use agent_llm::{
 	AIError, CacheTokenConvention, ChatFormat, ContentScope, InputFormat, LLMInfo, LLMRequest,
 	LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState,
-	RequestType, ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion,
-	copilot, custom, gemini, logged_response_parsing, openai, types,
+	RequestType, ResponseType, RouteType, SimpleChatCompletionMessage, TokenGapSummary, anthropic,
+	conversion, copilot, custom, gemini, logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -32,6 +32,9 @@ use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
 pub mod model_router;
 pub use agent_llm::{azure, bedrock, vertex};
+
+/// Default body buffer limit once a request enters LLM processing.
+pub const DEFAULT_BUFFER_LIMIT: usize = 32 * 1024 * 1024;
 
 pub mod catalog;
 pub mod policy;
@@ -1516,10 +1519,14 @@ impl AIProvider {
 
 						// The native endpoints authenticate API keys via x-goog-api-key;
 						// `Authorization: Bearer` is reserved for OAuth access tokens there.
-						// Google API keys are uniformly "AIza"-prefixed, so relocate exactly
+						// Google API keys use "AIza" or "AQ." prefixes, so relocate exactly
 						// those, keeping OAuth tokens (ya29., JWTs, ...) and explicitly
 						// configured Authorization intact.
-						if !explicit_authorization && authz.token().starts_with(gemini::API_KEY_PREFIX) {
+						if !explicit_authorization
+							&& gemini::API_KEY_PREFIXES
+								.iter()
+								.any(|prefix| authz.token().starts_with(prefix))
+						{
 							req.headers.remove(http::header::AUTHORIZATION);
 							let mut api_key = HeaderValue::from_str(authz.token())?;
 							api_key.set_sensitive(true);

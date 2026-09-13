@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::prelude::Strng;
 pub use agent_core::serdes;
@@ -400,6 +400,68 @@ pub struct LLMResponse {
 	pub output_messages: Option<Vec<types::OutputMessage>>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
+	/// Timestamp of the most recently observed output token, used to compute
+	/// inter_chunk_latencies. Not the same as first_token once more than one token has arrived.
+	#[serde(skip)]
+	pub last_token_at: Option<Instant>,
+	/// Bucketed summary of gaps between consecutive output chunks, replayed into
+	/// the inter-chunk-latency histogram at request completion.
+	#[serde(skip)]
+	pub inter_chunk_latencies: TokenGapSummary,
+}
+
+/// Upper bounds for bucketing inter-chunk gaps before they're replayed into the
+/// Prometheus histogram at request completion. MUST stay numerically identical
+/// to agentgateway::telemetry::metrics::OUTPUT_TOKEN_BUCKET — this crate can't
+/// import that private constant, so the two arrays are kept in sync by hand.
+const INTER_CHUNK_LATENCY_BUCKETS: [f64; 14] = [
+	0.001, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 2.5,
+];
+
+/// Fixed-size bucketed summary of gaps between consecutive streamed output
+/// chunks. Avoids buffering one Duration per chunk (unbounded for very long
+/// streaming responses) while still letting the exact per-bucket counts and
+/// sum be replayed into the real histogram once labels are known, at request
+/// completion.
+#[derive(Debug, Clone)]
+pub struct TokenGapSummary {
+	// One (count, sum_of_values) pair per INTER_CHUNK_LATENCY_BUCKETS entry,
+	// plus one trailing overflow bucket for values above the last boundary.
+	buckets: [(u64, f64); INTER_CHUNK_LATENCY_BUCKETS.len() + 1],
+}
+
+impl Default for TokenGapSummary {
+	fn default() -> Self {
+		Self {
+			buckets: [(0, 0.0); INTER_CHUNK_LATENCY_BUCKETS.len() + 1],
+		}
+	}
+}
+
+impl TokenGapSummary {
+	pub fn record(&mut self, gap: Duration) {
+		let v = gap.as_secs_f64();
+		let idx = INTER_CHUNK_LATENCY_BUCKETS
+			.iter()
+			.position(|&upper| v <= upper)
+			.unwrap_or(INTER_CHUNK_LATENCY_BUCKETS.len());
+		let (count, sum) = &mut self.buckets[idx];
+		*count += 1;
+		*sum += v;
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.buckets.iter().all(|(c, _)| *c == 0)
+	}
+
+	/// (count, mean_value) pairs in bucket order, for replaying into a
+	/// Prometheus histogram at request completion.
+	pub fn iter(&self) -> impl Iterator<Item = (u64, f64)> + '_ {
+		self
+			.buckets
+			.iter()
+			.map(|&(count, sum)| (count, if count == 0 { 0.0 } else { sum / count as f64 }))
+	}
 }
 
 /// LogContentFields controls which response content is captured for observability.
@@ -541,6 +603,58 @@ impl Default for PromptCachingConfig {
 			cache_tools: false,
 			min_tokens: Some(1024),
 			cache_message_offset: 0,
+		}
+	}
+}
+
+#[cfg(test)]
+mod token_gap_summary_tests {
+	use super::*;
+
+	#[test]
+	fn empty_summary_reports_empty() {
+		assert!(TokenGapSummary::default().is_empty());
+	}
+
+	#[test]
+	fn record_buckets_and_sums_correctly() {
+		let mut summary = TokenGapSummary::default();
+		// Falls in the first bucket (upper bound 0.001).
+		summary.record(Duration::from_micros(500));
+		// Falls in the last defined bucket (upper bound 2.5).
+		summary.record(Duration::from_millis(2000));
+		summary.record(Duration::from_millis(2400));
+		// Exceeds every defined bucket; goes into the overflow bucket.
+		summary.record(Duration::from_secs(10));
+
+		assert!(!summary.is_empty());
+
+		let buckets: Vec<(u64, f64)> = summary.iter().collect();
+		assert_eq!(buckets.len(), INTER_CHUNK_LATENCY_BUCKETS.len() + 1);
+
+		// First bucket: one observation of 0.0005s.
+		assert_eq!(buckets[0], (1, 0.0005));
+
+		// Last defined bucket (index 13, upper bound 2.5): two observations,
+		// mean should be their average.
+		let last_defined = buckets[INTER_CHUNK_LATENCY_BUCKETS.len() - 1];
+		assert_eq!(last_defined.0, 2);
+		assert!((last_defined.1 - 2.2).abs() < 1e-9);
+
+		// Overflow bucket: one observation of 10s.
+		let overflow = buckets[INTER_CHUNK_LATENCY_BUCKETS.len()];
+		assert_eq!(overflow, (1, 10.0));
+
+		// All other buckets remain untouched.
+		for (i, &(count, mean)) in buckets.iter().enumerate() {
+			if i == 0
+				|| i == INTER_CHUNK_LATENCY_BUCKETS.len() - 1
+				|| i == INTER_CHUNK_LATENCY_BUCKETS.len()
+			{
+				continue;
+			}
+			assert_eq!(count, 0);
+			assert_eq!(mean, 0.0);
 		}
 	}
 }

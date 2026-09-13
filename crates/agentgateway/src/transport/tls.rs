@@ -885,6 +885,18 @@ pub mod trustdomain {
 			assert!(info.identity.is_none());
 		}
 
+		#[test]
+		fn istio_mode_substrate_actor_id_no_identity() {
+			let cert = make_cert_with_uri("spiffe://substrate-actor.local/atespace/demo/actor/example");
+			let info = super::super::tls_info_from_der(&cert, super::super::PeerIdentityMode::Istio)
+				.expect("parse cert");
+			assert_eq!(
+				info.spiffe_id.as_deref(),
+				Some("spiffe://substrate-actor.local/atespace/demo/actor/example")
+			);
+			assert!(info.identity.is_none());
+		}
+
 		/// Minimal no-op ClientCertVerifier — only used to satisfy TrustDomainVerifier's
 		/// constructor; none of its methods are called by verify_trust_domain.
 		#[derive(Debug)]
@@ -1233,7 +1245,7 @@ fn sans(
 
 	if let Some(names) = names {
 		// In SPIFFE mode we do not attempt to interpret the peer as an Istio identity, so skip the
-		// ns/sa parse entirely (avoiding a spurious warning for valid non-ns/sa SPIFFE IDs).
+		// ns/sa parse entirely.
 		let istio = if mode == PeerIdentityMode::Istio {
 			names
 				.iter()
@@ -1243,13 +1255,7 @@ fn sans(
 						_ => return None,
 					};
 
-					match id {
-						Ok(id) => Some(id),
-						Err(err) => {
-							warn!("SAN {n} could not be parsed: {err}");
-							None
-						},
-					}
+					id.ok()
 				})
 				.collect()
 		} else {

@@ -561,6 +561,10 @@ impl ExtAuthz {
 			}),
 		};
 		let mut authz_req = tonic::Request::new(authz_req);
+		// Set the default request timeout. This can be overridden by a timeout on the Backend object itself.
+		authz_req
+			.extensions_mut()
+			.insert(BackendRequestTimeout(Duration::from_secs(2)));
 		copy_span_writer(req.extensions(), authz_req.extensions_mut());
 		let mut span = policy_client.start_grpc_span(
 			&mut authz_req,

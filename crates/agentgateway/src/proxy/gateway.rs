@@ -756,15 +756,11 @@ impl Gateway {
 		policies: FrontendPolices,
 		drain: DrainWatcher,
 	) -> anyhow::Result<()> {
+		let policies = Arc::new(policies);
 		let connection = Arc::new(raw_stream.get_ext());
-		let def = frontend::HTTP::default();
-		let buffer = policies
-			.http
-			.as_ref()
-			.map(|h| h.max_buffer_size)
-			.unwrap_or(def.max_buffer_size);
+		let buffer = policies.http.as_ref().and_then(|h| h.max_buffer_size);
 		let server = auto_server(policies.http.as_ref());
-		let substrate_egress = policies.substrate_egress;
+		let substrate_egress_actor_resolution = policies.substrate_egress_actor_resolution.clone();
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(raw_stream),
@@ -772,10 +768,12 @@ impl Gateway {
 				let inputs = inputs.clone();
 				let connection = connection.clone();
 				let drain = drain.clone();
-				let substrate_egress = substrate_egress.clone();
+				let substrate_egress_actor_resolution = substrate_egress_actor_resolution.clone();
 				async move {
 					let mut req = req.map(crate::http::Body::new);
-					req.extensions_mut().insert(BufferLimit::new(buffer));
+					if let Some(buffer) = buffer {
+						req.extensions_mut().insert(BufferLimit::new(buffer));
+					}
 					if req.method() != ::http::Method::CONNECT {
 						return Ok::<_, Infallible>(
 							ProxyError::MethodNotAllowed.into_response_with_grpc(false),
@@ -840,15 +838,33 @@ impl Gateway {
 							(SocketAddr::new(target_ip, port), bind)
 						}
 					};
-					if let Some(policy) = substrate_egress
-						&& let Err(error) = policy
+					let actor_identity = if let Some(policy) = substrate_egress_actor_resolution {
+						match policy
 							.authorize_connect(&inputs, connection.as_ref(), &mut req)
 							.await
-					{
-						return Ok(match error {
-							crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
-							crate::proxy::ProxyResponse::DirectResponse(response) => *response,
-						});
+						{
+							Ok(identity) => Some(identity),
+							Err(error) => {
+								return Ok(match error {
+									crate::proxy::ProxyResponse::Error(error) => error.into_response_with_grpc(false),
+									crate::proxy::ProxyResponse::DirectResponse(response) => *response,
+								});
+							},
+						}
+					} else {
+						None
+					};
+					if let Some(identity) = actor_identity.as_ref() {
+						debug!(
+							bind = %bind.key,
+							target = %target_address,
+							actor_name = %identity.actor_name,
+							actor_uid = %identity.actor_uid,
+							atespace = %identity.atespace,
+							"CONNECT tunnel terminated"
+						);
+					} else {
+						debug!(bind = %bind.key, target = %target_address, "CONNECT tunnel terminated");
 					}
 
 					tokio::task::spawn(async move {
@@ -860,8 +876,13 @@ impl Gateway {
 							},
 						};
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
+						if let Some(identity) = actor_identity {
+							downstream.ext_mut().insert(identity);
+						}
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
-						downstream.ext_mut().insert(BufferLimit::new(buffer));
+						if let Some(buffer) = buffer {
+							downstream.ext_mut().insert(BufferLimit::new(buffer));
+						}
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
 					});
 
@@ -968,14 +989,12 @@ impl Gateway {
 		let mut stream = stream;
 		stream.set_transport_metrics(transport_metrics, transport_labels);
 
-		let def = frontend::HTTP::default();
 		let tunneled_buffer = stream.ext::<BufferLimit>().map(|b| b.0);
 		let buffer = policies
 			.http
 			.as_ref()
-			.map(|h| h.max_buffer_size)
-			.or(tunneled_buffer)
-			.unwrap_or(def.max_buffer_size);
+			.and_then(|h| h.max_buffer_size)
+			.or(tunneled_buffer);
 
 		let max_connection_duration = policies
 			.http
@@ -1012,7 +1031,9 @@ impl Gateway {
 					)));
 				};
 
-				req.extensions_mut().insert(BufferLimit::new(buffer));
+				if let Some(buffer) = buffer {
+					req.extensions_mut().insert(BufferLimit::new(buffer));
+				}
 				let req = req.map(crate::http::Body::new);
 
 				Either::Right(async move {

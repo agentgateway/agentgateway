@@ -1,0 +1,363 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: gw-8080
+      protocol: HTTP
+      port: 8080
+      hostname: gateway.example.com
+  allowedListeners:
+    namespaces:
+      from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: aaa-newer
+  namespace: default
+  creationTimestamp: "2026-01-02T00:00:00Z"
+spec:
+  parentRef:
+    name: example
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  listeners:
+    - name: shared
+      protocol: HTTP
+      port: 8080
+      hostname: shared.example.com
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: zzz-older
+  namespace: default
+  creationTimestamp: "2026-01-01T00:00:00Z"
+spec:
+  parentRef:
+    name: example
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  listeners:
+    - name: shared
+      protocol: HTTP
+      port: 8080
+      hostname: shared.example.com
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: first-on-8081
+      protocol: HTTP
+      port: 8081
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: second-on-8081
+      protocol: TCP
+      port: 8081
+      allowedRoutes:
+        namespaces:
+          from: All
+
+---
+# Output
+output:
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/example
+      port: 8080
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8081/default/example
+      port: 8081
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: shared.example.com
+      key: default/aaa-newer.shared
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: shared
+        listenerSet:
+          name: aaa-newer
+          namespace: default
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: gateway.example.com
+      key: default/example.gw-8080
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: gw-8080
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8081/default/example
+      key: default/zzz-older.first-on-8081
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: first-on-8081
+        listenerSet:
+          name: zzz-older
+          namespace: default
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8081/default/example
+      key: default/zzz-older.second-on-8081
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: second-on-8081
+        listenerSet:
+          name: zzz-older
+          namespace: default
+      protocol: TCP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: shared.example.com
+      key: default/zzz-older.shared
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: shared
+        listenerSet:
+          name: zzz-older
+          namespace: default
+      protocol: HTTP
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: aaa-newer
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: shared
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: zzz-older
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: shared
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: first-on-8081
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: second-on-8081
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: TCPRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: example
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 1
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: gw-8080
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

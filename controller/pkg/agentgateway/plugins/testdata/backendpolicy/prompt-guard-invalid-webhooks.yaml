@@ -1,0 +1,115 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-invalid-webhooks
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - webhook:
+            backendRef:
+              name: guardrails
+              port: 8000
+            headers:
+              x-session-id: "not( valid cel"
+        - regex:
+            matches:
+            - secret
+        - webhook:
+            backendRef:
+              name: missing-guardrails
+              port: 8000
+            failureMode: FailOpen
+        response:
+        - webhook:
+            backendRef:
+              name: guardrails
+              port: 8000
+            headers:
+              x-session-id: "not( valid cel"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guardrails
+  namespace: default
+spec:
+  ports:
+  - port: 8000
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        ai:
+          promptGuard:
+            request:
+            - webhook:
+                action: REJECT_AUDIT_ACTION_REJECT
+                backend:
+                  port: 8000
+                  service:
+                    hostname: guardrails.default.svc.cluster.local
+                    namespace: default
+                headers:
+                  x-session-id: not( valid cel
+            - regex:
+                rules:
+                - regex: secret
+            - webhook:
+                action: REJECT_AUDIT_ACTION_REJECT
+                failureMode: FAIL_OPEN
+            response:
+            - webhook:
+                action: REJECT_AUDIT_ACTION_REJECT
+                backend:
+                  port: 8000
+                  service:
+                    hostname: guardrails.default.svc.cluster.local
+                    namespace: default
+                headers:
+                  x-session-id: not( valid cel
+      key: backend/default/prompt-guard-invalid-webhooks:ai:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: prompt-guard-invalid-webhooks
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: prompt-guard-invalid-webhooks
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: |-
+          webhook header "x-session-id" is not a valid CEL expression: not( valid cel
+          failed to build webhook: unable to find the Service default/missing-guardrails
+          webhook header "x-session-id" is not a valid CEL expression: not( valid cel
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

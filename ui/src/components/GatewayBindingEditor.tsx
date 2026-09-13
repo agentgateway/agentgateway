@@ -114,7 +114,7 @@ function PortField(props: {
 	);
 }
 
-function gatewayOptions(config: GatewayConfig | null | undefined) {
+export function gatewayOptions(config: GatewayConfig | null | undefined) {
 	return Object.entries(config?.gateways ?? {}).flatMap(([name, gateway]) => {
 		const listeners = gateway.listeners ?? [];
 		if (!listeners.length) {

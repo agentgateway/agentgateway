@@ -226,7 +226,7 @@ fn provider_connection_from_url(
 		host_override: Some(Target::from((host, port))),
 		path_prefix: {
 			let path = url.path().trim_end_matches('/');
-			(!path.is_empty()).then(|| strng::new(path))
+			Some(strng::new(if path.is_empty() { "/" } else { path }))
 		},
 		use_tls: url.scheme() == "https",
 	})
@@ -1646,7 +1646,14 @@ impl ModelRoute {
 		let llm_policy = s
 			.ai_policy
 			.as_ref()
-			.map(|policy| convert_backend_ai_policy(policy, diagnostics).map(Arc::new))
+			.map(|policy| {
+				let mut policy = convert_backend_ai_policy(policy, diagnostics)?;
+				// Preserve default model endpoint formats when the policy does not specify routes.
+				if policy.routes.is_empty() {
+					policy.routes = llm::model_router::default_route_types().routes.clone();
+				}
+				Ok::<_, ProtoError>(Arc::new(policy))
+			})
 			.transpose()?
 			.unwrap_or_else(llm::model_router::default_route_types);
 		let authorization = s
@@ -1701,6 +1708,7 @@ impl ModelRoute {
 								.map(|target| llm::model_router::WeightedTarget {
 									model: target.model.clone(),
 									weight: target.weight as usize,
+									invalid: target.invalid,
 								})
 								.collect(),
 						)
@@ -1728,6 +1736,7 @@ impl ModelRoute {
 										expr.clone(),
 									)
 								}),
+								invalid: target.invalid,
 							});
 						}
 						llm::model_router::VirtualModelRouting::Conditional(targets)
@@ -2057,6 +2066,7 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 				},
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				sse_keep_alive: m.sse_keep_alive.map(convert_duration),
 				dns_rebinding_protection: false,
 			},
 		),
@@ -3341,10 +3351,7 @@ fn frontend_policy_from_proto(
 
 	Ok(match &spec.kind {
 		Some(fps::Kind::Http(h)) => FrontendPolicy::HTTP(frontend::HTTP {
-			max_buffer_size: h
-				.max_buffer_size
-				.map(|v| v as usize)
-				.unwrap_or_else(crate::defaults::max_buffer_size),
+			max_buffer_size: h.max_buffer_size.map(|v| v as usize),
 			http1_max_headers: h.http1_max_headers.map(|v| v as usize),
 			http1_idle_timeout: h
 				.http1_idle_timeout
@@ -3784,6 +3791,7 @@ pub(crate) fn targeted_policy_from_proto(
 		key: strng::new(&p.key),
 		name: p.name.as_ref().map(Into::into),
 		target,
+		creation_timestamp: p.creation_timestamp,
 		inheritance: policy_inheritance_from_proto(p.inheritance),
 		policy,
 	})
@@ -3911,6 +3919,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
 		TrafficPolicy::RemoteRateLimit(_) => "remoteRateLimit",
 		TrafficPolicy::ExtAuthz(_) => "extAuthz",
+		TrafficPolicy::SubstrateEgress(_) => "substrateEgress",
 		TrafficPolicy::SubstrateIngress(_) => "substrateIngress",
 		TrafficPolicy::ExtProc(_) => "extProc",
 		TrafficPolicy::JwtAuth(_) => "jwt",
@@ -4389,6 +4398,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			creation_timestamp: 123,
 			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
@@ -4411,6 +4421,7 @@ mod tests {
 		};
 
 		let policy = targeted_policy_from_proto(&policy, &mut Diagnostics::default())?;
+		assert_eq!(policy.creation_timestamp, 123);
 		let PolicyType::Traffic(PhasedTrafficPolicy {
 			policy: TrafficPolicy::RequestHeaderModifier(policies),
 			..
@@ -4436,6 +4447,7 @@ mod tests {
 					},
 				)),
 			}),
+			creation_timestamp: 0,
 			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Backend(
 				proto::agent::BackendPolicySpec {
@@ -4462,6 +4474,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			creation_timestamp: 0,
 			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
@@ -4504,6 +4517,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			creation_timestamp: 0,
 			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
@@ -4577,6 +4591,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			creation_timestamp: 0,
 			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
@@ -4607,6 +4622,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			creation_timestamp: 0,
 			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
@@ -4694,6 +4710,68 @@ mod tests {
 			jwt.validate_claims(&build_unsigned_token("kid")),
 			Err(TokenError::UnknownKeyId(kid)) if kid == "kid"
 		));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn mcp_empty_jwks_loads_and_rejects_authentication() -> Result<(), ProtoError> {
+		use proto::agent::traffic_policy_spec as tps;
+
+		use crate::http::jwt::TokenError;
+
+		let spec = proto::agent::TrafficPolicySpec {
+			kind: Some(tps::Kind::Jwt(tps::Jwt {
+				mode: tps::jwt::Mode::Strict as i32,
+				providers: vec![tps::JwtProvider {
+					issuer: "https://issuer.example.com".into(),
+					jwks_source: Some(tps::jwt_provider::JwksSource::Inline(
+						r#"{"keys":[]}"#.into(),
+					)),
+					..Default::default()
+				}],
+				mcp: Some(Default::default()),
+				..Default::default()
+			})),
+			..Default::default()
+		};
+		let mut diagnostics = Diagnostics::default();
+		let TrafficPolicy::JwtAuth(policy) = traffic_policy_from_proto(&spec, &mut diagnostics)? else {
+			panic!("expected JWT auth policy");
+		};
+		let jwt = &policy.iter().next().expect("expected JWT policy").pol;
+		let mcp = jwt.mcp.as_ref().expect("expected MCP extension");
+		let legacy = mcp_authentication_from_proto(
+			&proto::agent::backend_policy_spec::McpAuthentication {
+				issuer: "https://issuer.example.com".into(),
+				jwks_inline: r#"{"keys":[]}"#.into(),
+				mode: proto::agent::backend_policy_spec::mcp_authentication::Mode::Strict as i32,
+				..Default::default()
+			},
+			&mut diagnostics,
+		)?;
+		assert!(diagnostics.into_warnings().is_empty());
+
+		for validator in [
+			&jwt.jwt,
+			mcp.jwt_validator.as_ref(),
+			legacy.jwt_validator.as_ref(),
+		] {
+			let mut request = ::http::Request::new(crate::http::Body::empty());
+			assert!(matches!(
+				validator.apply(None, &mut request).await,
+				Err(TokenError::Missing)
+			));
+			request.headers_mut().insert(
+				::http::header::AUTHORIZATION,
+				format!("Bearer {}", build_unsigned_token("kid"))
+					.parse()
+					.unwrap(),
+			);
+			assert!(matches!(
+				validator.apply(None, &mut request).await,
+				Err(TokenError::UnknownKeyId(kid)) if kid == "kid"
+			));
+		}
 		Ok(())
 	}
 
@@ -5244,7 +5322,10 @@ mod tests {
 				}),
 				backend_policies: vec![],
 			})),
-			ai_policy: None,
+			ai_policy: Some(proto::agent::backend_policy_spec::Ai {
+				transformations: [("model".to_string(), "\"gpt-5-mini\"".to_string())].into(),
+				..Default::default()
+			}),
 			authorization: Some(proto::agent::traffic_policy_spec::Rbac {
 				allow: vec!["request.headers['x-model-access'] == 'allowed'".to_string()],
 				deny: vec![],
@@ -5273,6 +5354,11 @@ mod tests {
 				.contains_key("/v1/chat/completions")
 		);
 		assert!(model.policies.authorization.is_some());
+		assert!(model.policies.llm.transformations.is_some());
+		assert_eq!(
+			model.policies.llm.resolve_route("/v1/messages"),
+			llm::RouteType::Messages
+		);
 		assert_eq!(model.backend.weight, 1);
 		match model.backend.target {
 			RouteBackendTarget::Backend(key) => {
@@ -5325,10 +5411,12 @@ mod tests {
 						weighted::Target {
 							model: "openai/gpt-5-mini".to_string(),
 							weight: 40,
+							invalid: true,
 						},
 						weighted::Target {
 							model: "anthropic/claude-haiku-4-5".to_string(),
 							weight: 60,
+							invalid: false,
 						},
 					],
 				})),
@@ -5351,8 +5439,10 @@ mod tests {
 		assert_eq!(targets.len(), 2);
 		assert_eq!(targets[0].model, "openai/gpt-5-mini");
 		assert_eq!(targets[0].weight, 40);
+		assert!(targets[0].invalid);
 		assert_eq!(targets[1].model, "anthropic/claude-haiku-4-5");
 		assert_eq!(targets[1].weight, 60);
+		assert!(!targets[1].invalid);
 		Ok(())
 	}
 
@@ -5375,10 +5465,12 @@ mod tests {
 						conditional::Target {
 							model: "gpt-5-large".to_string(),
 							when: Some(r#"request.headers["x-tier"] == "premium""#.to_string()),
+							invalid: true,
 						},
 						conditional::Target {
 							model: "gpt-5-mini".to_string(),
 							when: None,
+							invalid: false,
 						},
 					],
 				})),
@@ -5398,8 +5490,10 @@ mod tests {
 		assert_eq!(targets.len(), 2);
 		assert_eq!(targets[0].model, "gpt-5-large");
 		assert!(targets[0].when.is_some());
+		assert!(targets[0].invalid);
 		assert_eq!(targets[1].model, "gpt-5-mini");
 		assert!(targets[1].when.is_none());
+		assert!(!targets[1].invalid);
 		Ok(())
 	}
 
@@ -5422,10 +5516,12 @@ mod tests {
 						conditional::Target {
 							model: "gpt-5-mini".to_string(),
 							when: None,
+							invalid: false,
 						},
 						conditional::Target {
 							model: "gpt-5-large".to_string(),
 							when: Some("true".to_string()),
+							invalid: false,
 						},
 					],
 				})),
@@ -5525,6 +5621,51 @@ mod tests {
 		let path = config.get_path();
 		assert!(path.starts_with("/runtimes/"));
 		assert!(path.contains("qualifier=v1"));
+		Ok(())
+	}
+
+	fn mcp_proto_backend(sse_keep_alive: Option<prost_types::Duration>) -> proto::agent::Backend {
+		proto::agent::Backend {
+			key: "test-ns/mcp-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "mcp-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Mcp(proto::agent::McpBackend {
+				targets: vec![],
+				stateful_mode: proto::agent::mcp_backend::StatefulMode::Stateless as i32,
+				prefix_mode: proto::agent::mcp_backend::PrefixMode::Conditional as i32,
+				failure_mode: proto::agent::mcp_backend::FailureMode::FailClosed as i32,
+				sse_keep_alive,
+			})),
+			inline_policies: vec![],
+		}
+	}
+
+	#[test]
+	fn test_backend_kind_mcp_sse_keep_alive_from_xds() -> Result<(), ProtoError> {
+		let proto_backend = mcp_proto_backend(Some(prost_types::Duration {
+			seconds: 10,
+			nanos: 0,
+		}));
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::MCP(_, mcp_backend) = &bw.backend else {
+			panic!("Expected Backend::MCP, got {:?}", bw.backend);
+		};
+		assert_eq!(mcp_backend.sse_keep_alive, Some(Duration::from_secs(10)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_kind_mcp_sse_keep_alive_unset_from_xds() -> Result<(), ProtoError> {
+		let proto_backend = mcp_proto_backend(None);
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::MCP(_, mcp_backend) = &bw.backend else {
+			panic!("Expected Backend::MCP, got {:?}", bw.backend);
+		};
+		assert_eq!(mcp_backend.sse_keep_alive, None);
 		Ok(())
 	}
 
@@ -5755,6 +5896,11 @@ mod tests {
 
 	#[test]
 	fn test_provider_connection_precedence() -> Result<(), ProtoError> {
+		for base_url in ["http://override.example", "http://override.example/"] {
+			let connection = provider_connection_from_url(base_url, 0)?;
+			assert_eq!(connection.path_prefix.as_deref(), Some("/"));
+		}
+
 		let explicit = resolve_provider_connection(
 			Some(llm::custom::ProviderPreset::Ollama),
 			Some("https://override.example/v2/"),

@@ -7,8 +7,8 @@ mod tls;
 use std::str::FromStr;
 use std::task;
 
-use ::http::HeaderValue;
 use ::http::uri::{Authority, Scheme};
+use ::http::{HeaderName, HeaderValue};
 use agent_pool::pool::ExpectedCapacity;
 use agent_pool::rt::TokioIo;
 use tracing::event;
@@ -76,6 +76,7 @@ pub struct TunnelConfig {
 	pub target: Target,
 	pub connection: Box<ConnectionConfig>,
 	pub token: Option<HeaderValue>,
+	pub connect_headers: Vec<(HeaderName, HeaderValue)>,
 	pub connect: bool,
 }
 
@@ -357,9 +358,15 @@ impl Connector {
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.connection, false)).await?;
 
-				let con = connect_tunnel::handshake(con, &dest, tcfg.token, self.h2_config.clone())
-					.await
-					.map_err(crate::http::Error::new)?;
+				let con = connect_tunnel::handshake(
+					con,
+					&dest,
+					tcfg.token,
+					&tcfg.connect_headers,
+					self.h2_config.clone(),
+				)
+				.await
+				.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");
 				con
 			},

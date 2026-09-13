@@ -10,7 +10,7 @@
 # Builds examples/render-deploy/Dockerfile (entrypoint + official image).
 # Do not use runtime: image — that skips the Dockerfile and leaves /ui/
 # unauthenticated on an empty disk.
-# https://agentgateway.dev/docs/standalone/latest/setup/install/docker/
+# https://agentgateway.dev/docs/standalone/latest/documentation/setup/install/docker/
 #
 # dockerfilePath / dockerContext are relative to the repo root (Render
 # Blueprint spec), even though this file lives under examples/render-deploy/.
