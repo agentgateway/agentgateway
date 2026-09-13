@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Run from the repository root so the JWKS file resolves:
+#   cargo run --bin agentgateway -- -f examples/llm-composite-auth/config.yaml
+#
+# Send a composite credential using one of the repository's example JWTs:
+#   Read manifests/jwt/example1.key into a shell variable named JWT, then run:
+#   curl localhost:4000/v1/messages \
+#     -H "Authorization: Bearer agw_composite:<ANTHROPIC_API_KEY>:<JWT>" \
+#     -H 'content-type: application/json' \
+#     -d '{"model":"claude-sonnet-4-5-20250929","max_tokens":32,"messages":[{"role":"user","content":"Hello"}]}'
+
+frontendPolicies:
+  accessLog:
+    add:
+      backend_auth_override_used: 'metadata["agentgateway.dev/backend-auth-override-used"]'
+
+llm:
+  port: 4000
+  policies:
+    # Validate only the JWT portion of:
+    #   Bearer agw_composite:<backend credential>:<JWT>
+    jwtAuth:
+      mode: permissive
+      location:
+        expression: |
+          request.headers["authorization"].split(" ")[1].with(credential,
+            credential.split(":").with(parts,
+              parts[0] == "agw_composite" ? parts[2] : credential
+            )
+          )
+      issuer: agentgateway.dev
+      audiences:
+      - test.agentgateway.dev
+      jwks:
+        # Relative to the directory where agentgateway is started.
+        file: ./manifests/jwt/pub-key
+
+    # jwtAuth runs before transformations. Expression-based JWT extraction intentionally leaves
+    # the composite Authorization header available so this policy can extract its middle field.
+    transformations:
+      request:
+        metadata:
+          agentgateway.dev/backend-auth: |
+            request.headers["authorization"].split(" ")[1].with(credential,
+              credential.split(":").with(parts,
+                parts[0] == "agw_composite" ? parts[1] : ""
+              )
+            )
+          agentgateway.dev/backend-auth-override-used: |
+            request.headers["authorization"].split(" ")[1].with(credential,
+              credential.split(":").with(parts, parts[0] == "agw_composite")
+            )
+
+  models:
+  - name: '*'
+    provider: anthropic
+    params:
+      model: claude-haiku-4-5
+      apiKey:
+        file: $HOME/.secrets/anthropic
+    # The generic agentgateway.dev/backend-auth metadata value overrides this configured fallback
+    # and is sent as x-api-key.
+    health:
+      # Agentgateway hashes this CEL result before keying health state. Missing or invalid values
+      # silently use global health state.
+      scope: 'metadata["agentgateway.dev/backend-auth"]'
+      unhealthyExpression: response.code == 429 || response.code >= 500
+      eviction:
+        duration: 30s
