@@ -433,6 +433,29 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 
 	await page.route('**/api/logs/analytics/summary', async route => {
 		const now = new Date();
+		// Answer the grouping that was asked for, the way the store does: a rollup
+		// keyed by an attribute comes back keyed by that attribute.
+		const requested = route.request().postDataJSON() as {
+			groupBy?: Array<{ field?: string; key?: string | null }>;
+		} | null;
+		const attribute = requested?.groupBy?.find(entry => entry.field === 'attributes')?.key;
+		if (attribute) {
+			await json(route, {
+				timeRange: {
+					from: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+					to: now.toISOString()
+				},
+				bucketSeconds: 900,
+				buckets: [],
+				groups: [
+					{ group: { [attribute]: 'alpha' }, requests: 9, totalTokens: 1200, cost: 0.012 },
+					{ group: { [attribute]: 'beta' }, requests: 3, totalTokens: 400, cost: 0.004 },
+					{ group: { [attribute]: null }, requests: 2, totalTokens: 50, cost: null }
+				],
+				filterOptions: {}
+			});
+			return;
+		}
 		await json(route, {
 			timeRange: {
 				from: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),

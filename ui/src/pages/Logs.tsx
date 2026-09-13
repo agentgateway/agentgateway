@@ -120,6 +120,9 @@ export function LogsPage() {
 	const [traceId, setTraceId] = useState('');
 	const [attributeKey, setAttributeKey] = useState('');
 	const [attributeValue, setAttributeValue] = useState('');
+	const [groupKey, setGroupKey] = useState('');
+	const [groups, setGroups] = useState<AnalyticsGroup[] | null>(null);
+	const [groupsLoading, setGroupsLoading] = useState(false);
 	const [stream, setStream] = useState(false);
 	const [response, setResponse] = useState<SearchLogsResponse>({ logs: [] });
 	const [expanded, setExpanded] = useState<LogEntry | null>(null);
@@ -178,6 +181,35 @@ export function LogsPage() {
 	useEffect(() => {
 		void load();
 	}, [filters]);
+
+	useEffect(() => {
+		const key = groupKey.trim();
+		if (!key) {
+			setGroups(null);
+			return;
+		}
+		let cancelled = false;
+		setGroupsLoading(true);
+		void (async () => {
+			try {
+				// The store already aggregates by an arbitrary attribute, so a rollup is
+				// one request rather than a second pass over the rows.
+				const summary = await analyticsSummary({
+					filters,
+					groupBy: [{ field: 'attributes', key }],
+					bucketCount: 1
+				});
+				if (!cancelled) setGroups(summary.groups);
+			} catch {
+				if (!cancelled) setGroups([]);
+			} finally {
+				if (!cancelled) setGroupsLoading(false);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [groupKey, filters]);
 
 	useEffect(() => {
 		const loadSeq = filterOptionsSeqRef.current + 1;
@@ -422,6 +454,12 @@ export function LogsPage() {
 						value={attributeValue}
 						onCommit={setAttributeValue}
 					/>
+					<CommittedInput
+						label="Group by attribute"
+						placeholder="attribute"
+						value={groupKey}
+						onCommit={setGroupKey}
+					/>
 					<label className="toggle-row logs-stream-toggle">
 						<input
 							type="checkbox"
@@ -436,7 +474,8 @@ export function LogsPage() {
 					payload ||
 					traceId ||
 					attributeKey ||
-					attributeValue ? (
+					attributeValue ||
+					groupKey ? (
 						<button
 							className="button"
 							type="button"
@@ -447,6 +486,7 @@ export function LogsPage() {
 								setTraceId('');
 								setAttributeKey('');
 								setAttributeValue('');
+								setGroupKey('');
 							}}
 						>
 							Clear filters
@@ -456,7 +496,18 @@ export function LogsPage() {
 			</Panel>
 
 			<Panel className="logs-results-panel">
-				{visibleLogs.length === 0 ? (
+				{groups ? (
+					<LogGroupTable
+						attribute={groupKey.trim()}
+						groups={groups}
+						loading={groupsLoading}
+						onSelect={value => {
+							setAttributeKey(groupKey.trim());
+							setAttributeValue(value);
+							setGroupKey('');
+						}}
+					/>
+				) : visibleLogs.length === 0 ? (
 					<EmptyState
 						title={loading ? 'Loading logs' : 'No log entries'}
 						description={
@@ -536,6 +587,73 @@ export function LogsPage() {
 					}
 				/>
 			) : null}
+		</div>
+	);
+}
+
+function LogGroupTable(props: {
+	attribute: string;
+	groups: AnalyticsGroup[];
+	loading: boolean;
+	onSelect: (value: string) => void;
+}) {
+	const rows = props.groups
+		.map(entry => ({
+			value: String(entry.group[props.attribute] ?? ''),
+			requests: entry.requests,
+			totalTokens: entry.totalTokens,
+			cost: entry.cost ?? null
+		}))
+		// A row with no value is every request that does not carry the attribute.
+		// Counting them together would read as a group, which they are not.
+		.filter(row => row.value !== '' && row.value !== 'null')
+		.sort((a, b) => b.requests - a.requests);
+
+	if (!rows.length) {
+		return (
+			<EmptyState
+				title={props.loading ? 'Grouping' : 'Nothing carries that attribute'}
+				description={
+					props.loading
+						? `Rolling up by ${props.attribute}.`
+						: `No request in range records ${props.attribute}.`
+				}
+			/>
+		);
+	}
+
+	return (
+		<div className="log-table-wrap">
+			<table className="log-table log-group-table">
+				<thead>
+					<tr>
+						<th>{props.attribute}</th>
+						<th className="log-th-num">Requests</th>
+						<th className="log-th-num">Tokens</th>
+						<th className="log-th-num">Cost</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map(row => (
+						<tr key={row.value}>
+							<td>
+								<button
+									className="link-button"
+									type="button"
+									onClick={() => props.onSelect(row.value)}
+								>
+									{row.value}
+								</button>
+							</td>
+							<td className="log-td-num">{formatNumber(row.requests)}</td>
+							<td className="log-td-num">{formatNumber(row.totalTokens)}</td>
+							<td className="log-td-num">
+								{row.cost != null && row.cost > 0 ? formatCost(row.cost) : 'n/a'}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
 		</div>
 	);
 }

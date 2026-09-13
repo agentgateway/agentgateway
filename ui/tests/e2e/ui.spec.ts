@@ -70,6 +70,30 @@ test('log filters reach the query for the fields the store supports', async ({ p
 	await expect.poll(() => searches.at(-1)).not.toContain('traceId');
 });
 
+test('grouping the log list by an attribute rolls it up and drills back down', async ({ page }) => {
+	await mockGateway(page);
+	const searches: string[] = [];
+	page.on('request', request => {
+		if (request.url().includes('/api/logs/search')) searches.push(request.postData() ?? '');
+	});
+	await page.goto('/llm/logs');
+	await expect(page.locator('.logs-filter-bar')).toBeVisible();
+
+	await page.getByPlaceholder('attribute').fill('agentgateway.user');
+	await page.keyboard.press('Enter');
+
+	const grouped = page.locator('.log-group-table');
+	await expect(grouped).toBeVisible();
+	await expect(grouped.locator('tbody tr')).not.toHaveCount(0);
+
+	// Selecting a group leaves the rollup and filters the requests to it.
+	const first = grouped.locator('tbody tr').first().getByRole('button');
+	const value = (await first.textContent()) ?? '';
+	await first.click();
+	await expect(grouped).toHaveCount(0);
+	await expect.poll(() => searches.at(-1)).toContain(`"agentgateway.user":["${value}"]`);
+});
+
 test('log detail renders the normalized conversation', async ({ page }) => {
 	await mockGateway(page);
 	await page.goto('/llm/logs?log=log-1#conversation-step-3');
