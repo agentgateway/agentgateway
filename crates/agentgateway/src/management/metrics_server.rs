@@ -9,7 +9,7 @@ use headers::Header;
 use headers_accept::Accept;
 use hyper::body::Incoming;
 use hyper::{Request, StatusCode, header};
-use mediatype::{MediaType, ReadParams, WriteParams};
+use mediatype021::{MediaType, ReadParams, WriteParams};
 use prometheus_client::encoding::prometheus_protobuf;
 use prometheus_client::encoding::text::encode as encode_openmetrics;
 use prometheus_client::registry::Registry;
@@ -93,8 +93,8 @@ impl MetricsFormat {
 }
 
 fn negotiate_format<T>(req: &Request<T>) -> Option<MetricsFormat> {
-	use mediatype::Name;
-	use mediatype::names::{APPLICATION, PLAIN, Q, TEXT};
+	use mediatype021::Name;
+	use mediatype021::names::{APPLICATION, PLAIN, Q, TEXT};
 
 	let mut values = req.headers().get_all(http::header::ACCEPT).iter();
 	Accept::decode(&mut values)
