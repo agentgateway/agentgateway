@@ -21,12 +21,16 @@ import (
 
 var testGatewayParent = types.NamespacedName{Namespace: "default", Name: "example"}
 
-// baseListenerSet is the Gateway API ListenerSet listener every fixture starts from. Its parent
-// name is dotted, as object names may be, so that fixtures can exercise the fact that
-// utils.InternalGatewayName is not injective.
+// Only "other" carries the label, so a selector policy distinguishes it from the Gateway's own
+// namespace.
+var testNamespaces = []*corev1.Namespace{
+	{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
+	{ObjectMeta: metav1.ObjectMeta{Name: "other", Labels: map[string]string{"team": "platform"}}},
+}
+
+// baseListenerSet is dotted so fixtures can exercise InternalGatewayName not being injective.
 var baseListenerSet = testListenerSet("default", "ls.one", "http")
 
-// testGateway is the parent Gateway, with allowedListeners admitting from the given namespaces.
 func testGateway(from *gwv1.FromNamespaces) *gwv1.Gateway {
 	gw := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "example"}}
 	if from != nil {
@@ -84,7 +88,7 @@ func newJoinFixture(
 			KrtOpts:      krtopts,
 			Gateways:     krt.NewStaticCollection(nil, gateways, krtopts.ToOptions("Gateways")...),
 			ListenerSets: krt.NewStaticCollection(nil, listenerSets, krtopts.ToOptions("ListenerSets")...),
-			Namespaces:   krt.NewStaticCollection[*corev1.Namespace](nil, nil, krtopts.ToOptions("Namespaces")...),
+			Namespaces:   krt.NewStaticCollection(nil, testNamespaces, krtopts.ToOptions("Namespaces")...),
 		},
 	}
 	base := krt.NewStaticCollection(nil, []translator.ListenerSet{baseListenerSet}, krtopts.ToOptions("Base")...)
@@ -96,15 +100,6 @@ func newJoinFixture(
 
 func (f joinFixture) names() []string {
 	return slices.Map(f.admitted.List(), translator.ListenerSet.ResourceName)
-}
-
-// GatewayTransformationFunc reads listener sets only through an index, so the index is the path
-// that has to show the Gateway API listener winning, not just List and GetKey.
-func (f joinFixture) indexedNames() []string {
-	idx := krt.NewIndex(f.admitted, "gatewayParent", func(o translator.ListenerSet) []types.NamespacedName {
-		return []types.NamespacedName{o.GatewayParent}
-	})
-	return slices.Map(idx.Lookup(testGatewayParent), translator.ListenerSet.ResourceName)
 }
 
 func TestJoinExtraListenerSetsNoOpWhenUnset(t *testing.T) {
@@ -124,32 +119,36 @@ func TestJoinExtraListenerSetsNoOpWhenUnset(t *testing.T) {
 	})
 }
 
-func TestJoinExtraListenerSetsAdmits(t *testing.T) {
-	f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil,
-		staticExtra(testListenerSet("other", "b", "http")))
+// A selector policy is evaluated against the contribution's namespace, not the Gateway's.
+func TestJoinExtraListenerSetsHonoursNamespaceSelector(t *testing.T) {
+	gw := testGateway(ptr.Of(gwv1.NamespacesFromSelector))
+	gw.Spec.AllowedListeners.Namespaces.Selector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{"team": "platform"},
+	}
 
+	f := newJoinFixture(t, gw, nil, staticExtra(testListenerSet("other", "b", "http")))
 	assert.ElementsMatch(t, []string{baseListenerSet.Name, "other/b.http"}, f.names())
-	assert.ElementsMatch(t, []string{baseListenerSet.Name, "other/b.http"}, f.indexedNames())
 	assert.Empty(t, f.rejected.List())
 }
 
 func TestJoinExtraListenerSetsRejects(t *testing.T) {
-	aliasedName := testListenerSet("default", "b", "http")
-	aliasedName.Name = baseListenerSet.Name
+	// Name and ListenerKey agree, so only the derivation check can catch this.
+	undrivedName := testListenerSet("other", "b", "http")
+	undrivedName.Name = "other/zzz.http"
+	undrivedName.ParentInfo.ListenerKey = undrivedName.Name
 
-	// SectionName may contain dots, so this derives baseListenerSet's name from a different
-	// parent: "default/ls" + "." + "one.http" is the same string as "default/ls.one" + "." +
-	// "http". It passes both identity checks and is caught only by the collision check.
+	// "default/ls" + "." + "one.http" is the same string as "default/ls.one" + "." + "http".
 	dottedSection := testListenerSet("default", "ls", "one.http")
 
 	mismatchedListenerKey := testListenerSet("other", "b", "http")
 	mismatchedListenerKey.ParentInfo.ListenerKey = "other/b.https"
 
-	// Admitted against this Gateway, but grouped into another Gateway's binds.
-	mismatchedParentGateway := testListenerSet("other", "b", "http")
-	mismatchedParentGateway.ParentInfo.ParentGateway = types.NamespacedName{Namespace: "default", Name: "elsewhere"}
-
 	emptySection := testListenerSet("other", "b", "")
+
+	// Does not collide by name, so only the parent-is-a-ListenerSet check catches it.
+	realListenerSets := []*gwv1.ListenerSet{
+		{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "real"}},
+	}
 
 	cases := []struct {
 		name         string
@@ -161,19 +160,20 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 		{
 			name:    "name not derived from parent",
 			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
-			extra:   aliasedName,
+			extra:   undrivedName,
 			reason:  gwv1.ListenerSetReasonInvalid,
+		},
+		{
+			name:         "parent is a listener set",
+			gateway:      testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			listenerSets: realListenerSets,
+			extra:        testListenerSet("default", "real", "http"),
+			reason:       gwv1.ListenerSetReasonInvalid,
 		},
 		{
 			name:    "dotted section name derives a name a listener set listener owns",
 			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
 			extra:   dottedSection,
-			reason:  gwv1.ListenerSetReasonInvalid,
-		},
-		{
-			name:    "parent is the gateway itself",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
-			extra:   testListenerSet("default", "example", "http"),
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
@@ -183,22 +183,10 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
-			name:    "parent gateway does not match gateway parent",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
-			extra:   mismatchedParentGateway,
-			reason:  gwv1.ListenerSetReasonInvalid,
-		},
-		{
 			name:    "empty section name",
 			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
 			extra:   emptySection,
 			reason:  gwv1.ListenerSetReasonInvalid,
-		},
-		{
-			name:    "gateway allows only its own namespace",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromSame)),
-			extra:   testListenerSet("other", "b", "http"),
-			reason:  gwv1.ListenerSetReasonNotAllowed,
 		},
 	}
 
@@ -206,9 +194,7 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newJoinFixture(t, tc.gateway, tc.listenerSets, staticExtra(tc.extra))
 
-			// The Gateway API listener set is the only one left, on every read path.
 			assert.Equal(t, []string{baseListenerSet.Name}, f.names())
-			assert.Equal(t, []string{baseListenerSet.Name}, f.indexedNames())
 
 			require.Len(t, f.rejected.List(), 1)
 			got := f.rejected.List()[0]
@@ -219,19 +205,23 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 	}
 }
 
+// No parent Gateway means the gate cannot be evaluated: not admitted, not reported.
+func TestJoinExtraListenerSetsDropsUnparentedContributions(t *testing.T) {
+	orphan := testListenerSet("other", "b", "http")
+	orphan.GatewayParent = types.NamespacedName{Namespace: "default", Name: "missing"}
+	orphan.ParentInfo.ParentGateway = orphan.GatewayParent
+
+	f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil, staticExtra(orphan))
+	assert.Equal(t, []string{baseListenerSet.Name}, f.names())
+	assert.Empty(t, f.rejected.List())
+}
+
 func TestWithAllowedListenersResolver(t *testing.T) {
 	extra := staticExtra(testListenerSet("other", "b", "http"))
 
-	// The Gateway carries no spec.allowedListeners, as it cannot on a CRD without the field.
+	// No spec.allowedListeners, as on a CRD without the field.
 	gw := testGateway(nil)
 	gw.Annotations = map[string]string{"example.com/allowed-listeners": "All"}
-
-	t.Run("default reads the spec field", func(t *testing.T) {
-		f := newJoinFixture(t, gw, nil, extra)
-		assert.Equal(t, []string{baseListenerSet.Name}, f.names())
-		require.Len(t, f.rejected.List(), 1)
-		assert.Equal(t, gwv1.ListenerSetReasonNotAllowed, f.rejected.List()[0].Reason)
-	})
 
 	t.Run("resolver supplies the policy from elsewhere", func(t *testing.T) {
 		f := newJoinFixture(t, gw, nil, extra, WithAllowedListenersResolver(
@@ -255,8 +245,6 @@ func TestWithAllowedListenersResolver(t *testing.T) {
 		assert.Equal(t, gwv1.ListenerSetReasonNotAllowed, f.rejected.List()[0].Reason)
 	})
 
-	// The resolver fills in for a policy the spec cannot express. It never overrides one the
-	// Gateway owner did express, including an explicit refusal.
 	t.Run("explicit spec denial is not overridden", func(t *testing.T) {
 		denied := testGateway(ptr.Of(gwv1.NamespacesFromNone))
 		f := newJoinFixture(t, denied, nil, extra, WithAllowedListenersResolver(

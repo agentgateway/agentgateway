@@ -663,10 +663,8 @@ func NamespaceAcceptedByAllowListeners(localNamespace string, parent *gwv1.Gatew
 	return AllowedListenersAcceptNamespace(parent.Spec.AllowedListeners, localNamespace, parent.Namespace, lookupNamespace)
 }
 
-// AllowedListenersAcceptNamespace evaluates an allowed-listeners policy against the namespace of
-// something attaching to a Gateway in parentNamespace. Separate from
-// NamespaceAcceptedByAllowListeners so the policy can come from somewhere other than
-// Gateway.spec.allowedListeners, which only exists on newer Gateway API CRDs.
+// AllowedListenersAcceptNamespace takes the policy as an argument rather than reading
+// spec.allowedListeners, so callers can supply one for Gateways whose CRD predates the field.
 func AllowedListenersAcceptNamespace(
 	lr *gwv1.AllowedListeners,
 	localNamespace string,
