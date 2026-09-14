@@ -42,8 +42,9 @@ struct PreparedOidcPolicy {
 /// Browser-based OIDC authentication policy.
 ///
 /// Explicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.
-/// Unauthenticated non-callback requests always redirect to the provider login flow. Routes that
-/// need non-redirect authentication behavior should use a different auth policy.
+/// Unauthenticated document navigations redirect to the provider login flow. Browser requests
+/// positively identified as non-navigation requests return 401 so the caller can initiate a
+/// document navigation.
 #[apply(schema_de!)]
 pub struct LocalOidcConfig {
 	/// Issuer used for discovery and ID token validation.
@@ -84,12 +85,13 @@ pub struct LocalOidcConfig {
 	pub client_secret: SecretString,
 
 	/// Absolute callback URI handled by the gateway.
-	/// This policy always redirects unauthenticated non-callback requests back through this login
-	/// flow.
+	/// Unauthenticated document navigations are redirected back through this login flow.
 	#[serde(rename = "redirectURI")]
 	pub redirect_uri: String,
 
-	/// Additional OAuth2 scopes to request. `openid` is always included.
+	/// Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when
+	/// the provider requires it to issue a refresh token; returned refresh tokens are used
+	/// automatically.
 	#[serde(default)]
 	pub scopes: Vec<String>,
 }
@@ -316,7 +318,8 @@ impl PreparedOidcPolicy {
 		policy_id: PolicyId,
 		oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
 	) -> Result<OidcPolicy, Error> {
-		let (cookie_name, transaction_cookie_prefix) = session::derive_cookie_names(&policy_id);
+		let (cookie_name, refresh_cookie_name, transaction_cookie_prefix) =
+			session::derive_cookie_names(&policy_id);
 		let PreparedOidcPolicy {
 			provider,
 			client_id,
@@ -339,6 +342,7 @@ impl PreparedOidcPolicy {
 			redirect_uri,
 			session: SessionConfig {
 				cookie_name,
+				refresh_cookie_name,
 				transaction_cookie_prefix,
 				same_site: SameSiteMode::Lax,
 				secure: CookieSecureMode::Auto,

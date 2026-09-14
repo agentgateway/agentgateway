@@ -25,8 +25,8 @@ mod tests;
 pub use local::LocalOidcConfig;
 pub use redirect::RedirectUri;
 pub use session::{
-	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
-	TransactionState,
+	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, RefreshSession, SameSiteMode,
+	SessionConfig, TransactionState,
 };
 
 pub use crate::http::oauth::TokenEndpointAuth;
@@ -159,7 +159,7 @@ pub enum Error {
 	InvalidSession,
 	#[error("authentication required")]
 	AuthenticationRequired,
-	#[error("encoded browser session exceeds cookie size budget")]
+	#[error("encoded oidc session exceeds cookie size budget")]
 	SessionCookieTooLarge,
 	#[error("missing transaction")]
 	MissingTransaction,
@@ -209,9 +209,11 @@ impl OidcPolicy {
 		}
 
 		if let Some(cookie) = crate::http::read_request_cookie(req, &self.session.cookie_name) {
-			match self.session.decode_browser_session(&cookie) {
+			match self.session.decode_browser_session_for_refresh(&cookie) {
 				Ok(browser_session) => {
-					if browser_session.policy_id == self.policy_id
+					if browser_session.policy_id != self.policy_id {
+						debug!("oidc browser session rejected due to policy mismatch");
+					} else if !browser_session.is_expired()
 						&& let Ok(claims) = self
 							.provider
 							.id_token_validator
@@ -222,6 +224,37 @@ impl OidcPolicy {
 						}
 						req.extensions_mut().insert(claims);
 						return Ok(PolicyResponse::default());
+					} else if let Some(cookie) =
+						crate::http::read_request_cookie(req, &self.session.refresh_cookie_name)
+					{
+						match self.session.decode_refresh_session(&cookie) {
+							Ok(refresh_session)
+								if refresh_session.policy_id == browser_session.policy_id
+									&& refresh_session.subject == browser_session.subject =>
+							{
+								match self
+									.refresh_browser_session(browser_session, refresh_session, client)
+									.await
+								{
+									Ok((claims, response)) => {
+										if let Some(Value::String(sub)) = claims.inner.get("sub") {
+											log.jwt_sub = Some(sub.clone());
+										}
+										req.extensions_mut().insert(claims);
+										return Ok(response);
+									},
+									Err(err) => {
+										debug!(error=%err, "failed to refresh oidc browser session");
+									},
+								}
+							},
+							// The two encrypted cookies are independently valid, so bind them to the same
+							// policy and original subject before using the refresh credential.
+							Ok(_) => debug!("oidc refresh session rejected due to session mismatch"),
+							Err(err) => {
+								debug!(error=%err, "failed to decode oidc refresh session cookie");
+							},
+						}
 					}
 				},
 				Err(err) => {
@@ -230,8 +263,103 @@ impl OidcPolicy {
 			}
 		}
 
+		// Fetch Metadata is controlled by the browser. Known non-navigation modes identify requests
+		// that cannot complete a cross-origin OIDC redirect; return 401 so the caller can initiate a
+		// document navigation instead. Missing, navigation, and unknown modes retain the redirect.
+		if req.headers().get("sec-fetch-mode").is_some_and(|mode| {
+			matches!(
+				mode.to_str(),
+				Ok("cors" | "no-cors" | "same-origin" | "websocket")
+			)
+		}) {
+			return Err(Error::AuthenticationRequired);
+		}
+
 		// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.
 		callback::start_login(self, req)
+	}
+
+	async fn refresh_browser_session(
+		&self,
+		mut browser_session: BrowserSession,
+		mut refresh_session: RefreshSession,
+		client: PolicyClient,
+	) -> Result<(jwt::Claims, PolicyResponse), Error> {
+		let token = provider::refresh_token(
+			client,
+			&self.provider,
+			&self.client,
+			&refresh_session.refresh_token,
+		)
+		.await?;
+		let id_token = token.id_token.ok_or(Error::MissingIdToken)?;
+		let claims = self
+			.provider
+			.id_token_validator
+			.validate_claims(&id_token)
+			.map_err(Error::InvalidIdToken)?;
+		// OIDC Core 1.0 section 12.2 requires a refreshed ID token to have the same subject as the
+		// original ID token. Normal signature, issuer, and audience validation alone would still
+		// accept a valid token issued for a different user.
+		if claims.inner.get("sub").and_then(Value::as_str) != browser_session.subject.as_deref() {
+			return Err(Error::InvalidSession);
+		}
+
+		browser_session.raw_id_token = SecretString::new(id_token.into_boxed_str());
+		if let Some(refresh_token) = token.refresh_token {
+			refresh_session.refresh_token = SecretString::new(refresh_token.into_boxed_str());
+		}
+		refresh_session.expires_at_unix = now_unix().saturating_add(self.session.ttl.as_secs());
+		browser_session.expires_at_unix = Some(cap_session_expiry(
+			now_unix(),
+			self.session.ttl,
+			&claims.inner,
+		));
+
+		let encoded_session = self.session.encode_browser_session(&browser_session)?;
+		let session_cookie = self.session.set_cookie(
+			&self.session.cookie_name,
+			&encoded_session,
+			self.redirect_uri.https,
+			self.session.ttl,
+		);
+		let refresh_cookie = match self.session.encode_refresh_session(&refresh_session) {
+			Ok(encoded) => self.session.set_cookie(
+				&self.session.refresh_cookie_name,
+				&encoded,
+				self.redirect_uri.https,
+				self.session.ttl,
+			),
+			// A rotated token can be larger than the token it replaces. Keep the newly refreshed
+			// browser session usable, but discard refresh capability rather than the whole request.
+			Err(Error::SessionCookieTooLarge) => {
+				debug!(
+					"rotated oidc refresh token exceeds cookie size budget; refresh disabled for session"
+				);
+				self
+					.session
+					.clear_cookie(&self.session.refresh_cookie_name, self.redirect_uri.https)
+			},
+			Err(err) => return Err(err),
+		};
+		let mut response_headers = ::http::HeaderMap::new();
+		response_headers.append(
+			header::SET_COOKIE,
+			HeaderValue::from_str(&session_cookie)
+				.map_err(|e| Error::Config(format!("invalid set-cookie header: {e}")))?,
+		);
+		response_headers.append(
+			header::SET_COOKIE,
+			HeaderValue::from_str(&refresh_cookie)
+				.map_err(|e| Error::Config(format!("invalid set-cookie header: {e}")))?,
+		);
+		Ok((
+			claims,
+			PolicyResponse {
+				direct_response: None,
+				response_headers: Some(response_headers),
+			},
+		))
 	}
 
 	async fn maybe_handle_callback(
