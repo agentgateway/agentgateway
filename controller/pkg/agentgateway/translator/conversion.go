@@ -2,7 +2,6 @@ package translator
 
 import (
 	"cmp"
-	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -1323,27 +1322,6 @@ const (
 	gatewayTLSTerminateModeKey          = "gateway.istio.io/tls-terminate-mode"
 	agentgatewayTLSCertificateSourceKey = "agentgateway.dev/tls-certificate-source"
 )
-
-func validateTLS(certInfo *TLSInfo) *ConfigError {
-	if certInfo.IstioWorkloadCert || certInfo.Spiffe {
-		return nil
-	}
-	if _, err := tls.X509KeyPair(certInfo.Cert, certInfo.Key); err != nil {
-		return &ConfigError{
-			Reason:  InvalidTLS,
-			Message: fmt.Sprintf("invalid certificate reference, the certificate is malformed: %v", err),
-		}
-	}
-	if certInfo.CaCert != nil {
-		if !x509.NewCertPool().AppendCertsFromPEM(certInfo.Cert) {
-			return &ConfigError{
-				Reason:  InvalidTLSCA,
-				Message: fmt.Sprintf("invalid CA certificate reference, the bundle is malformed"),
-			}
-		}
-	}
-	return nil
-}
 
 func updateError(statusErr *ConfigError, newErr *ConfigError) *ConfigError {
 	if statusErr == nil {
