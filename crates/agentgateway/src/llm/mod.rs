@@ -408,13 +408,25 @@ fn apply_openai_moderation(
 
 fn render_anthropic_messages(
 	req: types::ChatRequest,
-	catalog: agent_llm::model_catalog::Catalog<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
+	let caching = matches!(ctx.provider, AIProvider::Anthropic(_))
+		.then_some(ctx.prompt_caching)
+		.flatten();
 	match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, catalog)
+			conversion::messages::from_completions::translate_with_prompt_caching(
+				&req,
+				caching,
+				ctx.catalog,
+			)
 		},
-		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Messages(mut req) => {
+			if let Some(caching) = caching {
+				conversion::messages::apply_prompt_caching(&mut req, caching);
+			}
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
@@ -516,9 +528,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx)?)
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
