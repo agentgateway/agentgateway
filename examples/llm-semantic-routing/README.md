@@ -20,7 +20,8 @@ Each example focuses on a different production use case.
 | Example | Demonstrates | Best for |
 | --- | --- | --- |
 | [Cost-based routing](k8s/cost-based/) | Route requests to lower-cost or higher-capability models based on semantic classification. | Cost optimization while maintaining response quality. |
-| [Tier-aware routing](k8s/tier-aware/) | Select different model pools according to authenticated user entitlements. | SaaS plans, internal vs external users, premium AI features. |
+| [Tier-aware routing with CRDs](k8s/tier-aware/) | Select a tier-specific vSR runtime configured by `IntelligentPool` and `IntelligentRoute`. | Kubernetes-native pool/route management and separate runtimes per tier. |
+| [Tier-aware routing with one runtime](k8s/tier-aware-single-runtime/) | Combine tier and semantic signals in a single vSR runtime using the [v0.3 Unified Config Contract](https://vllm-sr.ai/docs/proposals/unified-config-contract-v0-3). | This example **does not** use the vSR `IntelligentPool` and `IntelligentRoute` CRDs. |
 | [Semantic caching](k8s/semantic-cache/) | Cache semantically equivalent requests in Redis Open Source and optionally share entries across vSR replicas. | Product support, documentation assistants, FAQ chatbots, and other workloads with many repeated questions. |
 
 ## Choosing an example
@@ -52,7 +53,15 @@ Typical goals include:
 - premium AI features
 - provider-specific model pools
 
-See: `k8s/tier-aware`
+Choose a deployment pattern:
+
+- [CRD-based](k8s/tier-aware/): one vSR runtime per tier, with Kubernetes `IntelligentPool`
+  and `IntelligentRoute` custom resources.
+- [Single runtime](k8s/tier-aware-single-runtime/): one shared vSR runtime,
+  with tier-aware decisions in a canonical YAML ConfigMap.
+
+Both examples demonstrate Basic, Standard, and Pro user entitlements and use
+agentgateway for provider-based routing.
 
 ---
 

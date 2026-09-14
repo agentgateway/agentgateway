@@ -1,0 +1,127 @@
+# Tier-aware Agentgateway models and authz ExtProc policy.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: openai-gpt-4
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: gpt-4.1
+  provider: OpenAI
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: openai-gpt-5
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: gpt-5.4
+  provider: OpenAI
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: anthropic-haiku
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: claude-haiku-4-5-20251001
+  provider: Anthropic
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - request.headers["x-entitlement-tier"] in ["standard", "pro"]
+    auth:
+      secretRef:
+        name: anthropic-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: anthropic-sonnet
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: claude-sonnet-4-6
+  provider: Anthropic
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - request.headers["x-entitlement-tier"] == "pro"
+    auth:
+      secretRef:
+        name: anthropic-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tiered-semantic-routing
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  traffic:
+    phase: PreRouting
+    authorization:
+      policy:
+        matchExpressions:
+        - '"x-entitlement-tier" in request.headers && request.headers["x-entitlement-tier"]
+          in ["basic", "standard", "pro"] && "x-authz-user-id" in request.headers
+          && request.headers["x-authz-user-id"] != "" && !("x-vsr-skip-processing"
+          in request.headers)'
+    extProc:
+      backendRef:
+        name: semantic-router
+        port: 50051
+      failureMode: FailClosed
+      processingOptions:
+        requestHeaderMode: Send
+        requestBodyMode: FullDuplexStreamed
+        responseHeaderMode: Send
+        responseBodyMode: None
+        requestTrailerMode: Send
+        responseTrailerMode: Send
+        allowModeOverride: false
