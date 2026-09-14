@@ -660,7 +660,19 @@ func BuildRouteParents(
 
 // NamespaceAcceptedByAllowListeners determines a list of allowed namespaces for a given AllowedListener
 func NamespaceAcceptedByAllowListeners(localNamespace string, parent *gwv1.Gateway, lookupNamespace func(string) *corev1.Namespace) bool {
-	lr := parent.Spec.AllowedListeners
+	return AllowedListenersAcceptNamespace(parent.Spec.AllowedListeners, localNamespace, parent.Namespace, lookupNamespace)
+}
+
+// AllowedListenersAcceptNamespace evaluates an allowed-listeners policy against the namespace of
+// something attaching to a Gateway in parentNamespace. Separate from
+// NamespaceAcceptedByAllowListeners so the policy can come from somewhere other than
+// Gateway.spec.allowedListeners, which only exists on newer Gateway API CRDs.
+func AllowedListenersAcceptNamespace(
+	lr *gwv1.AllowedListeners,
+	localNamespace string,
+	parentNamespace string,
+	lookupNamespace func(string) *corev1.Namespace,
+) bool {
 	// Default allows none
 	if lr == nil || lr.Namespaces == nil {
 		return false
@@ -671,7 +683,7 @@ func NamespaceAcceptedByAllowListeners(localNamespace string, parent *gwv1.Gatew
 		case gwv1.NamespacesFromAll:
 			return true
 		case gwv1.NamespacesFromSame:
-			return localNamespace == parent.Namespace
+			return localNamespace == parentNamespace
 		case gwv1.NamespacesFromNone:
 			return false
 		case gwv1.NamespacesFromSelector:
