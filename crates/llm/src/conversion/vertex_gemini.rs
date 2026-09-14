@@ -2379,9 +2379,13 @@ pub mod to_messages {
 				service_tier: None,
 			};
 		};
-		let prompt = um.prompt_token_count.unwrap_or(0) as usize;
+		// `counts()` folds thoughtsTokenCount into the completion count. Gemini reports the two
+		// disjointly, but Anthropic's `output_tokens` includes thinking, and so does every other
+		// path over this provider, so fold them here too rather than under-report the answer by
+		// the whole thinking budget.
+		let (prompt, completion, _) = um.counts();
+		let (prompt, completion) = (prompt as usize, completion as usize);
 		let cached = um.cached_content_token_count.unwrap_or(0) as usize;
-		let completion = um.candidates_token_count.unwrap_or(0) as usize;
 		messages::Usage {
 			input_tokens: prompt.saturating_sub(cached),
 			output_tokens: completion,
@@ -2568,10 +2572,10 @@ pub mod to_messages {
 						// so a streamed record and a buffered one for the same response agree.
 						let usage = build_usage_messages(Some(um));
 						let input = usage.input_tokens as u64;
-						let (_, completion, _) = um.counts();
+						let output = usage.output_tokens as u64;
 						r.response.input_tokens = Some(input);
-						r.response.output_tokens = Some(completion);
-						r.response.total_tokens = Some(input.saturating_add(completion));
+						r.response.output_tokens = Some(output);
+						r.response.total_tokens = Some(input.saturating_add(output));
 						// Read the raw field, not `usage.cache_read_input_tokens`: the wire body omits a
 						// zero cache read, but the log should record an explicit 0 as 0.
 						r.response.cached_input_tokens = um.cached_content_token_count;

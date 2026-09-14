@@ -1532,7 +1532,7 @@ mod passthrough {
 		StreamingUsageGuard, StreamingUsageReporter,
 	};
 
-	struct Capture(Arc<Mutex<LLMInfo>>);
+	pub(super) struct Capture(pub(super) Arc<Mutex<LLMInfo>>);
 
 	impl StreamingUsageReporter for Capture {
 		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
@@ -1541,7 +1541,7 @@ mod passthrough {
 		fn report_usage(&mut self) {}
 	}
 
-	fn captured_info() -> Arc<Mutex<LLMInfo>> {
+	pub(super) fn captured_info() -> Arc<Mutex<LLMInfo>> {
 		Arc::new(Mutex::new(LLMInfo {
 			request: LLMRequest {
 				input_tokens: None,
@@ -2052,6 +2052,81 @@ fn msg_resp_llm_response_usage_matches_wire_usage() {
 	assert_eq!(r.input_tokens, Some(70), "cache-excluded, matches the wire");
 	assert_eq!(r.output_tokens, Some(20));
 	assert_eq!(r.cached_input_tokens, Some(30));
+}
+
+/// Gemini reports `candidatesTokenCount` and `thoughtsTokenCount` disjointly, but Anthropic's
+/// `output_tokens` includes thinking. Reporting candidates alone under-reports the answer by the
+/// whole thinking budget, and `amend_tokens` bills off this number.
+#[test]
+fn msg_resp_output_tokens_include_thinking() {
+	let r = msg_resp(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"totalTokenCount": 145,
+			"thoughtsTokenCount": 25
+		}
+	}));
+	assert_eq!(r["usage"]["input_tokens"], 100);
+	assert_eq!(r["usage"]["output_tokens"], 45, "20 answer + 25 thinking");
+}
+
+/// One response, three readings of its usage: buffered Messages, streamed Messages, and the
+/// completions path over the same provider. They must agree. They did not: the Messages usage
+/// builder dropped thoughtsTokenCount while the streamed telemetry reached past it to
+/// `UsageMetadata::counts()`, so the same response billed differently depending only on whether
+/// the client streamed.
+#[test]
+fn msg_usage_agrees_across_buffered_streamed_and_completions() {
+	let body = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"totalTokenCount": 145,
+			"thoughtsTokenCount": 25
+		}
+	});
+	let bytes = gemini_response_bytes(body.clone());
+
+	let buffered = to_messages::translate_response(&bytes)
+		.expect("translate_response ok")
+		.to_llm_response(crate::LogContentFields::default());
+	let completions = to_completions::translate_response(&bytes)
+		.expect("translate_response ok")
+		.to_llm_response(crate::LogContentFields::default());
+
+	let captured = passthrough::captured_info();
+	let guard = crate::StreamingUsageGuard::new(Box::new(passthrough::Capture(captured.clone())));
+	let mut state = to_messages::StreamState::new(crate::LogContentFields::default());
+	let chunk: vg::GenerateContentResponse =
+		serde_json::from_value(body).expect("valid gemini stream chunk");
+	let events = state.translate(&chunk, &guard);
+	let streamed = captured.lock().unwrap();
+
+	assert_eq!(buffered.output_tokens, Some(45), "buffered log");
+	assert_eq!(
+		streamed.response.output_tokens, buffered.output_tokens,
+		"streamed and buffered logs must agree"
+	);
+	assert_eq!(
+		completions.output_tokens, buffered.output_tokens,
+		"the Messages path must use the same output convention as completions"
+	);
+	assert_eq!(streamed.response.total_tokens, buffered.total_tokens);
+
+	// The wire `message_delta.usage` a streaming client sees must match the buffered body too.
+	let wire_output = events
+		.iter()
+		.find_map(|(_, ev)| match ev {
+			crate::types::messages::typed::MessagesStreamEvent::MessageDelta { usage, .. } => {
+				usage.output_tokens
+			},
+			_ => None,
+		})
+		.expect("message_delta carries usage");
+	assert_eq!(wire_output, 45, "streamed wire output_tokens");
 }
 
 // ---------- Streaming: Messages (to_messages) ----------
