@@ -2513,6 +2513,57 @@ fn msg_effort_uses_the_shared_budget_table() {
 	assert_eq!(budget_for("max"), 16384);
 }
 
+/// On Gemini 3 the budget becomes a coarse level. Effort and the equivalent explicit
+/// `budget_tokens` must land on the same level: they resolve through one table, so an
+/// `xhigh` request and a 8192-token request cannot disagree.
+#[test]
+fn msg_effort_and_budget_agree_on_thinking_level() {
+	let level_for_effort = |effort: &str| {
+		to_gemini_msg(json!({
+			"model": "gemini-3-pro",
+			"max_tokens": 32000,
+			"output_config": { "effort": effort },
+			"messages": [{ "role": "user", "content": "hi" }]
+		}))["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+			.as_str()
+			.expect("level present")
+			.to_string()
+	};
+	let level_for_budget = |budget: i64| {
+		to_gemini_msg(json!({
+			"model": "gemini-3-pro",
+			"max_tokens": 32000,
+			"thinking": { "type": "enabled", "budget_tokens": budget },
+			"messages": [{ "role": "user", "content": "hi" }]
+		}))["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+			.as_str()
+			.expect("level present")
+			.to_string()
+	};
+
+	for (effort, budget, expected) in [
+		("low", 1024, "low"),
+		("medium", 2048, "medium"),
+		("high", 4096, "high"),
+		("xhigh", 8192, "high"),
+		("max", 16384, "high"),
+	] {
+		assert_eq!(level_for_effort(effort), expected, "effort {effort}");
+		assert_eq!(level_for_budget(budget), expected, "budget {budget}");
+	}
+	// A level request must never also carry a numeric budget.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3-pro",
+		"max_tokens": 32000,
+		"output_config": { "effort": "high" },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}));
+	assert!(
+		g["generationConfig"]["thinkingConfig"]["thinkingBudget"].is_null(),
+		"got: {g}"
+	);
+}
+
 #[test]
 fn msg_resp_signed_thought_parts_become_separate_thinking_blocks() {
 	// A thoughtSignature attests only the thought text it arrives with. Merging several signed
