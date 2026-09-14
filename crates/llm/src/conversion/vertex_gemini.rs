@@ -194,6 +194,24 @@ fn reorder_function_responses(
 	}
 }
 
+/// Gemini 3 takes a coarse thinking level where 2.5 takes a token budget; the two are mutually
+/// exclusive on the wire.
+fn thinking_level_config(level: &str) -> vg::ThinkingConfig {
+	vg::ThinkingConfig {
+		thinking_level: Some(level.to_string()),
+		include_thoughts: Some(true),
+		..Default::default()
+	}
+}
+
+fn thinking_budget_config(budget: i32) -> vg::ThinkingConfig {
+	vg::ThinkingConfig {
+		thinking_budget: Some(budget),
+		include_thoughts: Some(true),
+		..Default::default()
+	}
+}
+
 fn wrap_tool_declarations(decls: Vec<vg::FunctionDeclaration>) -> Vec<vg::Tool> {
 	if decls.is_empty() {
 		Vec::new()
@@ -290,46 +308,9 @@ pub mod from_completions {
 		let tool_config = build_tool_config(req);
 		let generation_config = build_generation_config(req, model);
 
-		let cached_content = req
-			.rest
-			.get("cachedContent")
-			.or_else(|| req.rest.get("cached_content"))
-			.and_then(Value::as_str)
-			.map(str::to_string);
-
-		let safety_settings = match req
-			.rest
-			.get("safetySettings")
-			.or_else(|| req.rest.get("safety_settings"))
-		{
-			Some(v) => Vec::<vg::SafetySetting>::deserialize(v).unwrap_or_else(|e| {
-				tracing::warn!(error = %e, "ignoring malformed safetySettings");
-				Vec::new()
-			}),
-			None => Vec::new(),
-		};
-
-		let labels = req.rest.get("labels").and_then(|v| v.as_object().cloned());
-
-		let (system_instruction, tools, tool_config) = if cached_content.is_some() {
-			let dropped: Vec<&str> = [
-				("systemInstruction", system_instruction.is_some()),
-				("tools", !tools.is_empty()),
-				("toolConfig", tool_config.is_some()),
-			]
-			.into_iter()
-			.filter_map(|(name, present)| present.then_some(name))
-			.collect();
-			if !dropped.is_empty() {
-				tracing::warn!(
-					dropped = ?dropped,
-					"cachedContent is set; dropped cache-incompatible fields"
-				);
-			}
-			(None, Vec::new(), None)
-		} else {
-			(system_instruction, tools, tool_config)
-		};
+		let (cached_content, safety_settings, labels) = super::apply_rest_extras(&req.rest);
+		let (system_instruction, tools, tool_config) =
+			super::drop_if_cached(&cached_content, system_instruction, tools, tool_config);
 
 		Ok(vg::GenerateContentRequest {
 			contents,
@@ -424,40 +405,7 @@ pub mod from_completions {
 		// response group must follow the assistant's tool_calls order even when a client returns the
 		// `tool` messages out of order. Reorder the functionResponse parts, then drop the now-unused
 		// correlation id.
-		for content in &mut contents {
-			let mut ordered: Vec<vg::Part> = content
-				.parts
-				.iter()
-				.filter(|p| matches!(p, vg::Part::FunctionResponse(_)))
-				.cloned()
-				.collect();
-			if ordered.is_empty() {
-				continue;
-			}
-			ordered.sort_by_key(|p| match p {
-				vg::Part::FunctionResponse(fr) => fr
-					.function_response
-					.id
-					.as_deref()
-					.and_then(|id| call_meta.get(id))
-					.map(|(_, idx)| *idx)
-					.unwrap_or(usize::MAX),
-				_ => usize::MAX,
-			});
-			for p in &mut ordered {
-				if let vg::Part::FunctionResponse(fr) = p {
-					fr.function_response.id = None;
-				}
-			}
-			let mut ordered = ordered.into_iter();
-			for p in &mut content.parts {
-				if matches!(p, vg::Part::FunctionResponse(_)) {
-					*p = ordered
-						.next()
-						.expect("one reordered response per functionResponse slot");
-				}
-			}
-		}
+		super::reorder_function_responses(&mut contents, &call_meta);
 		Ok((system_text, contents))
 	}
 
@@ -736,14 +684,7 @@ pub mod from_completions {
 				rest: Default::default(),
 			})
 			.collect();
-		if decls.is_empty() {
-			Vec::new()
-		} else {
-			vec![vg::Tool {
-				function_declarations: decls,
-				rest: Default::default(),
-			}]
-		}
+		super::wrap_tool_declarations(decls)
 	}
 
 	fn build_tool_config(req: &types::completions::Request) -> Option<vg::ToolConfig> {
@@ -1190,23 +1131,13 @@ pub mod from_completions {
 				| types::completions::typed::ReasoningEffort::Xhigh
 				| types::completions::typed::ReasoningEffort::Max => "high",
 			};
-			Some(vg::ThinkingConfig {
-				thinking_level: Some(level.into()),
-				thinking_budget: None,
-				include_thoughts: Some(true),
-				rest: Default::default(),
-			})
+			Some(super::thinking_level_config(level))
 		} else {
 			// Gemini 2.5 takes the shared conservative budget scale. Some models cap the
 			// thinking budget at 32K; check every target model's limit before raising it.
 			// `none` omits thinkingConfig instead of sending budget 0.
 			let budget = crate::types::thinking_budget_for_reasoning_effort(effort)? as i32;
-			Some(vg::ThinkingConfig {
-				thinking_level: None,
-				thinking_budget: Some(budget),
-				include_thoughts: Some(true),
-				rest: Default::default(),
-			})
+			Some(super::thinking_budget_config(budget))
 		}
 	}
 }
@@ -1468,25 +1399,15 @@ pub mod from_messages {
 		use types::messages::typed::{ToolResultContent, ToolResultContentPart};
 		match content {
 			ToolResultContent::Text(s) => Ok(s.clone()),
-			ToolResultContent::Array(parts) => {
-				if parts
-					.iter()
-					.any(|p| !matches!(p, ToolResultContentPart::Text { .. }))
-				{
-					return Err(AIError::UnsupportedConversion(strng::literal!(
+			ToolResultContent::Array(parts) => parts
+				.iter()
+				.map(|p| match p {
+					ToolResultContentPart::Text { text, .. } => Ok(text.as_str()),
+					_ => Err(AIError::UnsupportedConversion(strng::literal!(
 						"messages non-text tool_result content cannot be represented by gemini"
-					)));
-				}
-				Ok(
-					parts
-						.iter()
-						.filter_map(|p| match p {
-							ToolResultContentPart::Text { text, .. } => Some(text.as_str()),
-							_ => None,
-						})
-						.collect::<String>(),
-				)
-			},
+					))),
+				})
+				.collect(),
 		}
 	}
 
@@ -1515,50 +1436,29 @@ pub mod from_messages {
 
 	fn build_tool_config(req: &types::messages::typed::Request) -> Option<vg::ToolConfig> {
 		use types::messages::typed::ToolChoice;
-		let tc = req.tool_choice.as_ref()?;
-		let (disable_parallel, cfg) = match tc {
-			ToolChoice::None {} => (
-				None,
-				vg::FunctionCallingConfig {
-					mode: Some("NONE".into()),
-					..Default::default()
-				},
-			),
+		// `Tool` is `ANY` narrowed to a single name; the rest differ only by mode.
+		let (mode, allowed_function_names, disable_parallel) = match req.tool_choice.as_ref()? {
+			ToolChoice::None {} => ("NONE", Vec::new(), None),
 			ToolChoice::Auto {
 				disable_parallel_tool_use,
-			} => (
-				disable_parallel_tool_use.as_ref(),
-				vg::FunctionCallingConfig {
-					mode: Some("AUTO".into()),
-					..Default::default()
-				},
-			),
+			} => ("AUTO", Vec::new(), *disable_parallel_tool_use),
 			ToolChoice::Any {
 				disable_parallel_tool_use,
-			} => (
-				disable_parallel_tool_use.as_ref(),
-				vg::FunctionCallingConfig {
-					mode: Some("ANY".into()),
-					..Default::default()
-				},
-			),
+			} => ("ANY", Vec::new(), *disable_parallel_tool_use),
 			ToolChoice::Tool {
 				name,
 				disable_parallel_tool_use,
-			} => (
-				disable_parallel_tool_use.as_ref(),
-				vg::FunctionCallingConfig {
-					mode: Some("ANY".into()),
-					allowed_function_names: vec![name.clone()],
-					rest: Default::default(),
-				},
-			),
+			} => ("ANY", vec![name.clone()], *disable_parallel_tool_use),
 		};
-		if disable_parallel.copied().unwrap_or(false) {
+		if disable_parallel.unwrap_or(false) {
 			tracing::warn!("disable_parallel_tool_use is not supported on Vertex Gemini; ignored");
 		}
 		Some(vg::ToolConfig {
-			function_calling_config: Some(cfg),
+			function_calling_config: Some(vg::FunctionCallingConfig {
+				mode: Some(mode.into()),
+				allowed_function_names,
+				rest: Default::default(),
+			}),
 			rest: Default::default(),
 		})
 	}
@@ -1612,96 +1512,52 @@ pub mod from_messages {
 	) -> Option<vg::ThinkingConfig> {
 		use types::messages::typed as mt;
 
-		// output_config.effort takes precedence when present.
-		if let Some(effort) = req.output_config.as_ref().and_then(|oc| oc.effort) {
-			return effort_to_thinking_config(effort, model, req.max_tokens);
-		}
+		// `output_config.effort` takes precedence over `thinking.budget_tokens` when both are set.
+		// Effort resolves through the same budget table every other Messages backend uses, so
+		// xhigh and max keep their own budgets rather than flattening into high.
+		let budget_tokens = match req.output_config.as_ref().and_then(|oc| oc.effort) {
+			Some(effort) => crate::types::thinking_budget_for_anthropic_effort(effort),
+			None => match req.thinking.as_ref()? {
+				mt::ThinkingInput::Disabled {} => return None,
+				mt::ThinkingInput::Adaptive {} => {
+					// Gemini 3 adapts on its own when thinkingConfig is omitted; 2.5 needs an
+					// explicit -1 to mean dynamic.
+					return (!uses_thinking_levels(model)).then(|| super::thinking_budget_config(-1));
+				},
+				mt::ThinkingInput::Enabled { budget_tokens } => *budget_tokens,
+			},
+		};
 
-		match req.thinking.as_ref()? {
-			mt::ThinkingInput::Disabled {} => None,
-			mt::ThinkingInput::Adaptive {} => {
-				if uses_thinking_levels(model) {
-					// Gemini 3: omit thinkingConfig; model adapts on its own.
-					None
-				} else {
-					// Gemini 2.5: -1 signals dynamic budget.
-					Some(vg::ThinkingConfig {
-						thinking_level: None,
-						thinking_budget: Some(-1),
-						include_thoughts: Some(true),
-						rest: Default::default(),
-					})
-				}
-			},
-			mt::ThinkingInput::Enabled { budget_tokens } => {
-				if uses_thinking_levels(model) {
-					let level = if *budget_tokens
-						<= crate::types::thinking_budget_for_anthropic_effort(mt::ThinkingEffort::Low)
-					{
-						"low"
-					} else if *budget_tokens
-						<= crate::types::thinking_budget_for_anthropic_effort(mt::ThinkingEffort::Medium)
-					{
-						"medium"
-					} else {
-						"high"
-					};
-					Some(vg::ThinkingConfig {
-						thinking_level: Some(level.to_string()),
-						thinking_budget: None,
-						include_thoughts: Some(true),
-						rest: Default::default(),
-					})
-				} else {
-					// Gemini counts thought tokens against maxOutputTokens, so a budget at the cap
-					// leaves nothing for the answer. Reuse the Anthropic-side bound, which keeps
-					// a token spare and refuses a max_tokens too small to think within at all.
-					let budget = crate::conversion::messages::cap_thinking_budget_to_max_tokens(
-						*budget_tokens,
-						req.max_tokens,
-					)?;
-					Some(vg::ThinkingConfig {
-						thinking_level: None,
-						thinking_budget: Some(i32::try_from(budget).unwrap_or(i32::MAX)),
-						include_thoughts: Some(true),
-						rest: Default::default(),
-					})
-				}
-			},
+		if uses_thinking_levels(model) {
+			return Some(super::thinking_level_config(budget_to_thinking_level(
+				budget_tokens,
+			)));
 		}
+		// Gemini counts thought tokens against maxOutputTokens, so a budget at the cap leaves
+		// nothing for the answer. Reuse the Anthropic-side bound, which keeps a token spare and
+		// refuses a max_tokens too small to think within at all.
+		let budget = crate::conversion::messages::cap_thinking_budget_to_max_tokens(
+			budget_tokens,
+			req.max_tokens,
+		)?;
+		Some(super::thinking_budget_config(
+			i32::try_from(budget).unwrap_or(i32::MAX),
+		))
 	}
 
-	fn effort_to_thinking_config(
-		effort: types::messages::typed::ThinkingEffort,
-		model: &str,
-		max_tokens: usize,
-	) -> Option<vg::ThinkingConfig> {
+	/// Gemini 3 takes a coarse level where 2.5 takes a token budget. Bucket the budget on the same
+	/// thresholds the effort table uses, so an explicit budget and the equivalent effort agree.
+	fn budget_to_thinking_level(budget_tokens: u64) -> &'static str {
 		use types::messages::typed::ThinkingEffort;
-		if uses_thinking_levels(model) {
-			let level = match effort {
-				ThinkingEffort::Low => "low",
-				ThinkingEffort::Medium => "medium",
-				ThinkingEffort::High | ThinkingEffort::Xhigh | ThinkingEffort::Max => "high",
-			};
-			return Some(vg::ThinkingConfig {
-				thinking_level: Some(level.to_string()),
-				thinking_budget: None,
-				include_thoughts: Some(true),
-				rest: Default::default(),
-			});
+		if budget_tokens <= crate::types::thinking_budget_for_anthropic_effort(ThinkingEffort::Low) {
+			"low"
+		} else if budget_tokens
+			<= crate::types::thinking_budget_for_anthropic_effort(ThinkingEffort::Medium)
+		{
+			"medium"
+		} else {
+			"high"
 		}
-		// Same budget table every other Messages backend uses, so xhigh/max are not flattened
-		// into high, and the same max_tokens bound as an explicit budget.
-		let budget = crate::conversion::messages::cap_thinking_budget_to_max_tokens(
-			crate::types::thinking_budget_for_anthropic_effort(effort),
-			max_tokens,
-		)?;
-		Some(vg::ThinkingConfig {
-			thinking_level: None,
-			thinking_budget: Some(i32::try_from(budget).unwrap_or(i32::MAX)),
-			include_thoughts: Some(true),
-			rest: Default::default(),
-		})
 	}
 }
 
@@ -2395,13 +2251,38 @@ pub mod to_messages {
 		}
 	}
 
-	/// Which kind of content block (if any) is currently open in the stream.
-	#[derive(Default)]
+	/// The kind of content block a Gemini part maps to.
+	#[derive(Clone, Copy, PartialEq, Eq)]
+	enum BlockKind {
+		Text,
+		Thinking,
+	}
+
+	impl BlockKind {
+		/// The `content_block` an Anthropic `content_block_start` opens with: empty, since the
+		/// content arrives as deltas.
+		fn empty_content_block(self) -> messages::ContentBlock {
+			match self {
+				Self::Thinking => messages::ContentBlock::Thinking {
+					thinking: String::new(),
+					signature: String::new(),
+				},
+				Self::Text => messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: String::new(),
+					citations: None,
+					cache_control: None,
+				}),
+			}
+		}
+	}
+
+	/// Which content block, if any, is currently open in the stream. Anthropic allows only one
+	/// at a time, so opening one of the other kind closes this one first.
+	#[derive(Default, Clone, Copy)]
 	enum OpenBlock {
 		#[default]
 		None,
-		Text(usize),
-		Thinking(usize),
+		Open(BlockKind, usize),
 	}
 
 	pub(super) struct StreamState {
@@ -2531,11 +2412,36 @@ pub mod to_messages {
 			self.message_stop_sent = true;
 		}
 
-		/// Emit a `content_block_stop` for the currently open block, and return the index.
+		/// Make `kind` the open block and return its index, emitting a `content_block_start` if a
+		/// block of that kind is not already open. Anthropic allows only one open block at a time,
+		/// so a block of the other kind is stopped first.
+		fn open_block(
+			&mut self,
+			kind: BlockKind,
+			out: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+		) -> usize {
+			if let OpenBlock::Open(open, index) = self.open_block
+				&& open == kind
+			{
+				return index;
+			}
+			self.close_open_block(out);
+			let index = self.block_index;
+			out.push(
+				messages::MessagesStreamEvent::ContentBlockStart {
+					index,
+					content_block: kind.empty_content_block(),
+				}
+				.into_sse_tuple(),
+			);
+			self.open_block = OpenBlock::Open(kind, index);
+			index
+		}
+
+		/// Emit a `content_block_stop` for the currently open block, if any.
 		fn close_open_block(&mut self, out: &mut Vec<(&'static str, messages::MessagesStreamEvent)>) {
-			let idx = match self.open_block {
-				OpenBlock::None => return,
-				OpenBlock::Text(i) | OpenBlock::Thinking(i) => i,
+			let OpenBlock::Open(_, idx) = self.open_block else {
+				return;
 			};
 			out.push(messages::MessagesStreamEvent::ContentBlockStop { index: idx }.into_sse_tuple());
 			self.open_block = OpenBlock::None;
@@ -2620,28 +2526,7 @@ pub mod to_messages {
 					match part {
 						vg::Part::Text(t) if t.thought == Some(true) => {
 							self.record_first_token(log);
-							// Close any open text block before starting/continuing a thinking block.
-							if matches!(self.open_block, OpenBlock::Text(_)) {
-								self.close_open_block(&mut out);
-							}
-							if matches!(self.open_block, OpenBlock::None) {
-								let idx = self.block_index;
-								out.push(
-									messages::MessagesStreamEvent::ContentBlockStart {
-										index: idx,
-										content_block: messages::ContentBlock::Thinking {
-											thinking: String::new(),
-											signature: String::new(),
-										},
-									}
-									.into_sse_tuple(),
-								);
-								self.open_block = OpenBlock::Thinking(idx);
-							}
-							let idx = match self.open_block {
-								OpenBlock::Thinking(i) => i,
-								_ => unreachable!(),
-							};
+							let idx = self.open_block(BlockKind::Thinking, &mut out);
 							out.push(
 								messages::MessagesStreamEvent::ContentBlockDelta {
 									index: idx,
@@ -2671,29 +2556,7 @@ pub mod to_messages {
 						},
 						vg::Part::Text(t) => {
 							self.record_first_token(log);
-							// Close any open thinking block before starting/continuing a text block.
-							if matches!(self.open_block, OpenBlock::Thinking(_)) {
-								self.close_open_block(&mut out);
-							}
-							if matches!(self.open_block, OpenBlock::None) {
-								let idx = self.block_index;
-								out.push(
-									messages::MessagesStreamEvent::ContentBlockStart {
-										index: idx,
-										content_block: messages::ContentBlock::Text(messages::ContentTextBlock {
-											text: String::new(),
-											citations: None,
-											cache_control: None,
-										}),
-									}
-									.into_sse_tuple(),
-								);
-								self.open_block = OpenBlock::Text(idx);
-							}
-							let idx = match self.open_block {
-								OpenBlock::Text(i) => i,
-								_ => unreachable!(),
-							};
+							let idx = self.open_block(BlockKind::Text, &mut out);
 							if let Some(c) = self.pending_completion.as_mut() {
 								c.push_str(&t.text);
 							}
