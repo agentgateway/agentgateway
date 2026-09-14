@@ -70,13 +70,10 @@ impl Provider {
 	) -> BedrockEndpoint {
 		use super::RouteType as RT;
 		match route_type {
-			// These routes are only served by the Runtime endpoint.
 			RT::Embeddings | RT::GeminiCountTokens | RT::Rerank | RT::Realtime => {
 				BedrockEndpoint::Runtime
 			},
-			// Model listing is a Mantle-native route.
 			RT::Models => BedrockEndpoint::Mantle,
-			// Passthrough/detect stay on Runtime; we cannot reason about the wire format.
 			RT::Detect | RT::Passthrough | RT::GenerateContent => BedrockEndpoint::Runtime,
 			// Chat, and Anthropic count-tokens, follow the model's endpoint: Runtime's Converse /
 			// CountTokens APIs, or Mantle's native OpenAI/Anthropic APIs.
@@ -123,22 +120,23 @@ impl Provider {
 	) -> Vec<super::ChatFormat> {
 		use super::ChatFormat;
 		const NATIVE: [ChatFormat; 3] = [
-			ChatFormat::OpenAICompletions,
-			ChatFormat::AnthropicMessages,
-			ChatFormat::OpenAIResponses,
-		];
+					ChatFormat::OpenAICompletions,
+					ChatFormat::AnthropicMessages,
+					ChatFormat::OpenAIResponses,
+				];
 		match self.chat_endpoint(request_model, catalog) {
+			// all chat runtime models seem to support converse
 			BedrockEndpoint::Runtime => vec![ChatFormat::BedrockConverse],
 			BedrockEndpoint::Mantle => {
+
 				if let Some(tags) = request_model.and_then(|m| catalog.and_then(|c| c.get_model_tags(m))) {
-					let declared: Vec<ChatFormat> = NATIVE
-						.into_iter()
-						.filter(|f| tags.contains(f.tag()))
-						.collect();
+					let declared: Vec<ChatFormat> =
+						NATIVE.into_iter().filter(|f| tags.contains(f.tag())).collect();
 					if !declared.is_empty() {
 						return declared;
 					}
 				}
+				// Untagged model: fall back to a model-family guess
 				if self.is_anthropic_model(request_model) {
 					vec![ChatFormat::AnthropicMessages]
 				} else {
@@ -360,7 +358,7 @@ mod tests {
 	}
 
 	#[test]
-	fn supported_chat_formats_mantle_advertises_native_runtime_converse() {
+	fn supported_chat_formats_without_catalog_falls_back_to_model_family() {
 		let mantle = provider(BedrockEndpointPreference::MantleOnly);
 		assert_eq!(
 			mantle.supported_chat_formats(Some("any"), None),
@@ -375,6 +373,61 @@ mod tests {
 			runtime.supported_chat_formats(Some("any"), None),
 			vec![ChatFormat::BedrockConverse]
 		);
+	}
+
+	#[test]
+	fn supported_chat_formats_prefers_catalog_declared_formats() {
+		use crate::model_catalog::{TestCatalog, tags};
+		let mantle = provider(BedrockEndpointPreference::MantleOnly);
+		let cat = TestCatalog::new([(
+			"openai.gpt-oss-safeguard-120b",
+			&[tags::MANTLE, tags::OPENAI_COMPLETIONS][..],
+		)]);
+		let catalog: crate::model_catalog::Catalog = Some(&cat);
+		assert_eq!(
+			mantle.supported_chat_formats(Some("openai.gpt-oss-safeguard-120b"), catalog),
+			vec![ChatFormat::OpenAICompletions]
+		);
+		// A Mantle model with no format tags still falls back to the model-family guess.
+		let untagged = TestCatalog::new([("some.model", &[tags::MANTLE][..])]);
+		let untagged: crate::model_catalog::Catalog = Some(&untagged);
+		assert_eq!(
+			mantle.supported_chat_formats(Some("some.model"), untagged),
+			vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
+		);
+	}
+
+	#[test]
+	fn resolve_endpoint_maps_every_route_type() {
+		use RouteType::*;
+		let mantle = provider(BedrockEndpointPreference::MantleOnly);
+		let all = [
+			Completions,
+			Messages,
+			Responses,
+			AnthropicTokenCount,
+			Models,
+			Embeddings,
+			Realtime,
+			Rerank,
+			GeminiCountTokens,
+			GenerateContent,
+			Detect,
+			Passthrough,
+		];
+		for rt in all {
+			let expected = match rt {
+				Completions | Messages | Responses | AnthropicTokenCount | Models => BedrockEndpoint::Mantle,
+				Embeddings | Realtime | Rerank | GeminiCountTokens | GenerateContent | Detect | Passthrough => {
+					BedrockEndpoint::Runtime
+				},
+			};
+			assert_eq!(
+				mantle.resolve_endpoint(rt, Some("m"), None),
+				expected,
+				"{rt:?} resolved to the wrong endpoint"
+			);
+		}
 	}
 
 	#[test]

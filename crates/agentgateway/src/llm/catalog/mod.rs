@@ -179,6 +179,18 @@ impl ModelCatalog {
 	pub fn as_handle(&self) -> &dyn agent_llm::model_catalog::ModelCatalogHandle {
 		self
 	}
+
+	/// Build a catalog from a JSON string for tests in other modules.
+	#[cfg(test)]
+	pub(crate) fn from_json(json: &str) -> Self {
+		Self {
+			state: ArcSwap::from_pointee(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::parse(json).unwrap()),
+				sources: Vec::new(),
+			}),
+			file_watch: Mutex::new(None),
+		}
+	}
 }
 
 impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {

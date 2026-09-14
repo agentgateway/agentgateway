@@ -81,22 +81,82 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 		);
 	}
 
-	// Mantle endpoint passes the client format through natively rather than to Converse.
+	let catalog = crate::llm::catalog::ModelCatalog::from_json(
+		r#"{"providers":{"aws.bedrock":{"models":{
+			"anthropic.claude-sonnet-5":{"tags":["mantle","anthropic_messages"]},
+			"openai.gpt-oss-120b":{"tags":["mantle","openai_completions","openai_responses"]}
+		}}}}"#,
+	);
+	let catalog = Some(catalog.as_handle());
 	let mantle = bedrock(bedrock::BedrockEndpointPreference::MantleOnly);
+	// gpt-oss-120b serves the two OpenAI-compatible formats on Mantle.
 	for (input, expected) in [
 		(InputFormat::Completions, ChatFormat::OpenAICompletions),
-		(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		(InputFormat::Responses, ChatFormat::OpenAIResponses),
 	] {
 		assert_eq!(
 			mantle
-				.chat_translation(input, Some("openai.gpt-oss-120b"), None)
+				.chat_translation(input, Some("openai.gpt-oss-120b"), catalog)
 				.unwrap()
 				.output,
 			expected,
 			"{input:?} must pass through natively on the Mantle endpoint"
 		);
 	}
+	// Claude serves the native Messages API on Mantle.
+	assert_eq!(
+		mantle
+			.chat_translation(InputFormat::Messages, Some("anthropic.claude-sonnet-5"), catalog)
+			.unwrap()
+			.output,
+		ChatFormat::AnthropicMessages,
+		"Messages must pass through natively for a Claude model on Mantle"
+	);
+}
+
+// A Claude model only speaks the Anthropic Messages API on Mantle, so an inbound Chat Completions
+// request must be translated to Messages, never sent to Mantle as OpenAI Chat Completions.
+#[test]
+fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
+	fn mantle_provider() -> AIProvider {
+		AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+			model: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+		}))
+	}
+	let mantle = mantle_provider();
+
+	// Tag-driven: the imported catalog tags Claude with anthropic_messages only.
+	let catalog = crate::llm::catalog::ModelCatalog::from_json(
+		r#"{"providers":{"aws.bedrock":{"models":{
+			"anthropic.claude-sonnet-5":{"tags":["mantle","anthropic_messages"]}
+		}}}}"#,
+	);
+	assert_eq!(
+		mantle
+			.chat_translation(
+				InputFormat::Completions,
+				Some("anthropic.claude-sonnet-5"),
+				Some(catalog.as_handle()),
+			)
+			.unwrap()
+			.output,
+		ChatFormat::AnthropicMessages,
+		"a Completions request to a tagged Claude model must translate to Messages, not completions"
+	);
+
+	// Untagged fallback: the is_anthropic_model heuristic must also keep Completions off completions.
+	assert_eq!(
+		mantle
+			.chat_translation(InputFormat::Completions, Some("anthropic.claude-opus-4-8"), None)
+			.unwrap()
+			.output,
+		ChatFormat::AnthropicMessages,
+		"an untagged Claude model must still translate Completions to Messages"
+	);
 }
 
 #[test]

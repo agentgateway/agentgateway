@@ -101,6 +101,76 @@ func TestParseMDModelCardSkipsInvalidIDs(t *testing.T) {
 	}
 }
 
+// Newer cards carry a per-endpoint API table; only the bedrock-mantle one drives format tags, and
+// only for the Mantle-served model ID. Modeled on model-card-openai-gpt-oss-120b.
+func TestParseMDModelCardFormatTagsPerEndpointTable(t *testing.T) {
+	card := `**APIs supported on ` + "`bedrock-runtime`" + ` endpoint**
+
+| **Messages** | **Responses** | **Chat Completions** | **Converse** | **Invoke** |
+| --- | --- | --- | --- | --- |
+| ![](icon-no.png) | ![](icon-yes.png) | ![](icon-yes.png) | ![](icon-yes.png) | ![](icon-yes.png) |
+
+**APIs supported on ` + "`bedrock-mantle`" + ` endpoint**
+
+| **Messages** | **Responses** | **Chat Completions** | **Converse** | **Invoke** |
+| --- | --- | --- | --- | --- |
+| ![](icon-no.png) | ![](icon-yes.png) | ![](icon-yes.png) | ![](icon-no.png) | ![](icon-no.png) |
+
+| **Endpoint** | **Model ID** | **In-Region endpoint URL** |
+| --- | --- | --- |
+| bedrock-runtime | openai.gpt-oss-120b-1:0 | https://bedrock-runtime.{region}.amazonaws.com |
+| bedrock-mantle | openai.gpt-oss-120b | https://bedrock-mantle.{region}.api.aws | `
+
+	got, _ := awsMDParseModelCard(strings.NewReader(card))
+	mantle := got["openai.gpt-oss-120b"]
+	slices.Sort(mantle)
+	wantMantle := []string{mantleTag, openaiCompletionsTag, openaiResponsesTag}
+	if !slices.Equal(mantle, wantMantle) {
+		t.Fatalf("mantle id tags = %v, want %v", mantle, wantMantle)
+	}
+	// The Runtime-only ID must not pick up the Mantle format tags (or the runtime API table's).
+	if runtime := got["openai.gpt-oss-120b-1:0"]; !slices.Equal(runtime, []string{runtimeTag}) {
+		t.Fatalf("runtime id tags = %v, want [runtime]", runtime)
+	}
+}
+
+// Older cards only have a summary "APIs supported" column with no endpoint split. We keep the APIs
+// Mantle serves (Chat Completions) and drop Runtime-only ones (Invoke/Converse). Modeled on
+// model-card-deepseek-deepseek-v3-1.
+func TestParseMDModelCardFormatTagsSummaryTable(t *testing.T) {
+	card := `| **Input Modalities** | **Output Modalities** | **[APIs supported](apis.html)** | **[Endpoints supported](endpoints.html)** |
+| --- | --- | --- | --- |
+| ![](icon-no.png) Image | ![](icon-no.png) Image | ![](icon-yes.png) Chat Completions | ![](icon-yes.png) bedrock-mantle |
+| ![](icon-yes.png) Text | ![](icon-yes.png) Text | ![](icon-yes.png) Invoke | ![](icon-yes.png) bedrock-runtime |
+| ![](icon-no.png) Video | ![](icon-no.png) Video | ![](icon-yes.png) Converse |  |
+
+| **Endpoint** | **Model ID** | **In-Region endpoint URL** |
+| --- | --- | --- |
+| bedrock-mantle | deepseek.v3.1 | https://bedrock-mantle.{region}.api.aws | `
+
+	got, _ := awsMDParseModelCard(strings.NewReader(card))
+	mantle := got["deepseek.v3.1"]
+	slices.Sort(mantle)
+	want := []string{mantleTag, openaiCompletionsTag}
+	if !slices.Equal(mantle, want) {
+		t.Fatalf("mantle id tags = %v, want %v", mantle, want)
+	}
+}
+
+// The per-endpoint table wins over the summary table when both are present, and Anthropic models
+// resolve to the Messages format. Modeled on model-card-anthropic-claude-sonnet-5.
+func TestParseMantleFormatsAnthropicMessages(t *testing.T) {
+	card := `**APIs supported on ` + "`bedrock-mantle`" + ` endpoint**
+
+| **Messages** | **Responses** | **Chat Completions** | **Converse** | **Invoke** |
+| --- | --- | --- | --- | --- |
+| ![](icon-yes.png) | ![](icon-no.png) | ![](icon-no.png) | ![](icon-no.png) | ![](icon-no.png) |`
+
+	if got := awsMDParseMantleFormats(strings.Split(card, "\n")); !slices.Equal(got, []string{anthropicMessagesTag}) {
+		t.Fatalf("formats = %v, want [%s]", got, anthropicMessagesTag)
+	}
+}
+
 func TestCardSlug(t *testing.T) {
 	if got := cardSlug("model-card-anthropic-claude-opus-4-8.md"); got != "anthropic-claude-opus-4-8" {
 		t.Fatalf("cardSlug = %q", got)
@@ -178,6 +248,8 @@ func TestAwsBedrockMantleFetchLive(t *testing.T) {
 	// We only validate the shape of whatever is returned.
 	models := cat.Providers[bedrockProviderID].Models
 	t.Logf("fetched %d served Bedrock models", len(models))
+	formatTags := map[string]bool{openaiCompletionsTag: true, openaiResponsesTag: true, anthropicMessagesTag: true}
+	var mantleModels, mantleWithFormat int
 	for id, m := range models {
 		if !slices.Contains(m.Tags, mantleTag) && !slices.Contains(m.Tags, runtimeTag) {
 			t.Errorf("model %q has no endpoint tag", id)
@@ -185,5 +257,16 @@ func TestAwsBedrockMantleFetchLive(t *testing.T) {
 		if !modelIDRe.MatchString(id) || !strings.Contains(id, ".") {
 			t.Errorf("model ID %q is not a valid base model ID", id)
 		}
+		if slices.Contains(m.Tags, mantleTag) {
+			mantleModels++
+			if slices.ContainsFunc(m.Tags, func(t string) bool { return formatTags[t] }) {
+				mantleWithFormat++
+				t.Logf("mantle model %q: %v", id, m.Tags)
+			}
+		}
+	}
+	// The whole point of fetching Mantle cards is the format tags; most Mantle models should carry one.
+	if mantleModels > 0 && mantleWithFormat == 0 {
+		t.Errorf("no Mantle model carries a chat-format tag (%d Mantle models); format import is broken", mantleModels)
 	}
 }

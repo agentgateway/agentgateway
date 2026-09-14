@@ -1137,9 +1137,8 @@ impl AIProvider {
 			AIProvider::Gemini(_) => Target::Hostname(gemini::DEFAULT_HOST, 443),
 			AIProvider::Anthropic(_) => Target::Hostname(anthropic::DEFAULT_HOST, 443),
 			AIProvider::Vertex(p) => Target::Hostname(p.get_host(route_type), 443),
-			// Model is not known before the body is parsed, so the target here is model-unaware
-			// (Runtime for chat routes); `setup_request` re-resolves it to the Mantle host if needed.
 			AIProvider::Bedrock(p) => {
+				// endpoint depends on model so gets reresolved here
 				let endpoint = p.resolve_endpoint(route_type, None, None);
 				Target::Hostname(p.get_host(route_type, endpoint), 443)
 			},
