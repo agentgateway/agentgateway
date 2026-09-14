@@ -774,26 +774,36 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			Audiences:            pp.Audiences,
 			JwtValidationOptions: translateJWTValidationOptions(pp.Validation),
 		}
-		if i := pp.JWKS.Inline; i != nil {
-			var ks jose.JSONWebKeySet
-			if err := json.Unmarshal([]byte(*i), &ks); err != nil {
-				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
-			}
-			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
-			p.Providers = append(p.Providers, jp)
-			continue
-		}
-		if r := pp.JWKS.Remote; r != nil {
-			owner, ok := jwks.PolicyJWTProviderLookupOwner(policy.Namespace, policy.Name, idx, pp)
-			if !ok {
+		if pp.JWKS != nil {
+			if i := pp.JWKS.Inline; i != nil {
+				var ks jose.JSONWebKeySet
+				if err := json.Unmarshal([]byte(*i), &ks); err != nil {
+					errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
+				}
+				jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
+				p.Providers = append(p.Providers, jp)
 				continue
 			}
-			inline, err := resolveJWKSInlineForOwner(ctx, owner)
+			if r := pp.JWKS.Remote; r != nil {
+				owner, ok := jwks.PolicyJWTProviderLookupOwner(policy.Namespace, policy.Name, idx, pp)
+				if !ok {
+					continue
+				}
+				inline, err := resolveJWKSInlineForOwner(ctx, owner)
+				if err != nil {
+					errs = append(errs, err)
+				}
+				jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: inline}
+				p.Providers = append(p.Providers, jp)
+			}
+		} else if pp.Introspection != nil {
+			intro, err := translateTokenIntrospection(ctx, pp.Introspection, policy)
 			if err != nil {
 				errs = append(errs, err)
+			} else {
+				jp.Introspection = intro
+				p.Providers = append(p.Providers, jp)
 			}
-			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: inline}
-			p.Providers = append(p.Providers, jp)
 		}
 	}
 

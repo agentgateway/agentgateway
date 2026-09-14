@@ -117,12 +117,10 @@ func TestResolverBackendRefGrant(t *testing.T) {
 				DefaultNamespace: tt.ownerNS,
 				Remote: agentgateway.RemoteJWKS{
 					JwksPath: ptr.Of(agentgateway.LongString("keys")),
-					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
-						BackendRef: &gwv1.BackendObjectReference{
-							Name:      targetName,
-							Namespace: tt.refNamespace,
-							Port:      new(gwv1.PortNumber(80)),
-						},
+					BackendRef: &gwv1.BackendObjectReference{
+						Name:      targetName,
+						Namespace: tt.refNamespace,
+						Port:      new(gwv1.PortNumber(80)),
 					},
 				},
 			})

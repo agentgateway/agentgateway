@@ -144,6 +144,7 @@ serde_yaml.workspace = true
 serde-untagged.workspace = true
 stacker.workspace = true
 shellexpand.workspace = true
+sha2.workspace = true
 socket2.workspace = true
 spiffe.workspace = true
 sse-stream.workspace = true
