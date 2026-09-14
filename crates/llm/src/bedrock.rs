@@ -128,6 +128,10 @@ impl Provider {
 			// all chat runtime models seem to support converse
 			BedrockEndpoint::Runtime => vec![ChatFormat::BedrockConverse],
 			BedrockEndpoint::Mantle => {
+				// Short circuit tag checks as we should just use the message endpoint
+				if self.is_anthropic_model(request_model) {
+					return vec![ChatFormat::AnthropicMessages];
+				}
 				if let Some(tags) = request_model.and_then(|m| catalog.and_then(|c| c.get_model_tags(m))) {
 					let declared: Vec<ChatFormat> = NATIVE
 						.into_iter()
@@ -137,12 +141,8 @@ impl Provider {
 						return declared;
 					}
 				}
-				// Untagged model: fall back to a model-family guess
-				if self.is_anthropic_model(request_model) {
-					vec![ChatFormat::AnthropicMessages]
-				} else {
-					vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
-				}
+				// fallback to open ai for now, hypothetically a hydrated catalog should preclude this
+				vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
 			},
 		}
 	}
@@ -395,6 +395,29 @@ mod tests {
 		assert_eq!(
 			mantle.supported_chat_formats(Some("some.model"), untagged),
 			vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
+		);
+	}
+
+	#[test]
+	fn supported_chat_formats_keeps_claude_on_messages_even_when_mistagged() {
+		use crate::model_catalog::{TestCatalog, tags};
+		let mantle = provider(BedrockEndpointPreference::MantleOnly);
+		// Claude only speaks the Messages API on Mantle. Even if the catalog wrongly tags it with the
+		// OpenAI formats, we must not advertise them — otherwise a Completions request would be sent to
+		// Claude as OpenAI chat completions, which Mantle rejects.
+		let cat = TestCatalog::new([(
+			"anthropic.claude-sonnet-5",
+			&[
+				tags::MANTLE,
+				tags::ANTHROPIC_MESSAGES,
+				tags::OPENAI_COMPLETIONS,
+				tags::OPENAI_RESPONSES,
+			][..],
+		)]);
+		let catalog: crate::model_catalog::Catalog = Some(&cat);
+		assert_eq!(
+			mantle.supported_chat_formats(Some("anthropic.claude-sonnet-5"), catalog),
+			vec![ChatFormat::AnthropicMessages]
 		);
 	}
 
