@@ -39,10 +39,10 @@ event: event
 data: {"type":"response.output_item.done","sequence_number":12,"output_index":2,"item":{"type":"function_call","arguments":"{\"sign\":\"world\"}","call_id":"call_xxx","name":"hello","id":"","status":"completed"}}
 
 event: event
-data: {"type":"response.output_item.done","sequence_number":13,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"I'll call both tools."}],"id":"","role":"assistant","status":"completed"}}
 
 event: event
-data: {"type":"response.completed","sequence_number":14,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[],"status":"completed","usage":{"input_tokens":150,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":45,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":195}}}
+data: {"type":"response.completed","sequence_number":14,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"I'll call both tools."}],"id":"","role":"assistant","status":"completed"},{"type":"function_call","arguments":"{\"sign\":\"WZPZ\"}","call_id":"call_xxx","name":"top_song","id":"","status":"completed"},{"type":"function_call","arguments":"{\"sign\":\"world\"}","call_id":"call_xxx","name":"hello","id":"","status":"completed"}],"status":"completed","usage":{"input_tokens":150,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":45,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":195}}}
 
 
 

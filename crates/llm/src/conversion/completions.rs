@@ -1138,8 +1138,9 @@ pub mod from_messages {
 
 		// OpenAI rejects reasoning+tools+modern models+chat completions API combination.
 		// TODO: Move Messages requests with reasoning and function tools to the Responses API.
-		// Allow anything that is not a gpt model, unless its a known-allowed one.
-		let supports_reasoning_with_tools = !model.starts_with("gpt-")
+		// Disable reasoning for GPT-5 tool requests except the allowed GPT-5/5.1/5.2 models.
+		// Leave other models unchanged; gpt-4o rejects reasoning_effort.
+		let supports_reasoning_with_tools = !model.starts_with("gpt-5")
 			|| model == "gpt-5"
 			|| model.starts_with("gpt-5-")
 			|| model.starts_with("gpt-5.1")

@@ -2,7 +2,7 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "f3e45a59786debf49e67d6bd6d8dcffc004d39ff" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "79e5f488d8bc3bce2f7b397b5791b5caef5129e6" }
-async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "d3e79d9e65a865f73811b3f72bc4d238e07702eb" }
+async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "2e3e2ddf0d3f3ed4249354b3c668b076bfbef08a" }
 
 [workspace]
 resolver = "2"

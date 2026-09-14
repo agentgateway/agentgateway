@@ -75,17 +75,8 @@ impl CachedRequest {
 		// Policies may have replaced the body after the early CEL parse. Exact byte equality makes
 		// reuse safe without requiring every possible body mutation to invalidate the cache.
 		match cached {
-			Some(cached) if cached.source_body.as_ref() == body => {
-				tracing::warn!("reusing early MCP request parse");
-				Ok(cached.message)
-			},
-			cached => {
-				tracing::warn!(
-					body_changed = cached.is_some(),
-					"not reusing early MCP request parse"
-				);
-				serde_json::from_slice(body)
-			},
+			Some(cached) if cached.source_body.as_ref() == body => Ok(cached.message),
+			_ => serde_json::from_slice(body),
 		}
 	}
 }
