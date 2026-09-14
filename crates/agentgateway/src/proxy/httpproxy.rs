@@ -822,6 +822,7 @@ impl HTTPProxy {
 		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
+		set_forwarded_proto(&mut req);
 		set_destination_hostname(&mut req);
 		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
 			req.extensions_mut().remove::<OnUpgrade>()
@@ -4455,6 +4456,26 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 	Ok(())
 }
 
+/// Set `X-Forwarded-Proto` based on the downstream connection's TLS state.
+///
+/// Always overwrites any existing value so that the header reflects what this
+/// gateway actually observed, matching the behavior of Envoy (with
+/// `use_remote_address`) and other major Gateway API implementations. This
+/// prevents client-side spoofing and ensures downstream backends always know
+/// the protocol the client used to reach the gateway.
+fn set_forwarded_proto(req: &mut Request) {
+	let proto = if req.extensions().get::<TLSConnectionInfo>().is_some() {
+		"https"
+	} else {
+		"http"
+	};
+	if let Ok(value) = HeaderValue::from_str(proto) {
+		req
+			.headers_mut()
+			.insert(http::x_headers::X_FORWARDED_PROTO, value);
+	}
+}
+
 /// Record the normalized HTTP request hostname in the destination CEL context.
 fn set_destination_hostname(req: &mut Request) {
 	let hostname = req
@@ -4504,6 +4525,133 @@ mod destination_context_tests {
 				.get::<cel::DestinationContext>()
 				.and_then(|destination| destination.hostname.as_deref()),
 			Some("api.example.com")
+		);
+	}
+}
+
+#[cfg(test)]
+mod forwarded_proto_tests {
+	use super::*;
+
+	#[test]
+	fn tls_connection_sets_x_forwarded_proto_https() {
+		let mut req = ::http::Request::builder()
+			.uri("https://example.com/test")
+			.body(http::Body::empty())
+			.unwrap();
+		// Simulate a TLS-terminated connection.
+		req.extensions_mut().insert(TLSConnectionInfo::default());
+
+		set_forwarded_proto(&mut req);
+
+		assert_eq!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.unwrap()
+				.to_str()
+				.unwrap(),
+			"https"
+		);
+	}
+
+	#[test]
+	fn plaintext_connection_sets_x_forwarded_proto_http() {
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/test")
+			.body(http::Body::empty())
+			.unwrap();
+		// No TLSConnectionInfo → plaintext.
+
+		set_forwarded_proto(&mut req);
+
+		assert_eq!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.unwrap()
+				.to_str()
+				.unwrap(),
+			"http"
+		);
+	}
+
+	#[test]
+	fn overwrites_existing_x_forwarded_proto() {
+		// A malicious or upstream proxy may have set a wrong value.
+		// The gateway should overwrite it with what it actually observed.
+		let mut req = ::http::Request::builder()
+			.uri("https://example.com/test")
+			.header("x-forwarded-proto", "ftp")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(TLSConnectionInfo::default());
+
+		set_forwarded_proto(&mut req);
+
+		// insert() replaces all existing values for the key.
+		let values: Vec<_> = req
+			.headers()
+			.get_all(http::x_headers::X_FORWARDED_PROTO)
+			.iter()
+			.collect();
+		assert_eq!(values.len(), 1);
+		assert_eq!(values[0].to_str().unwrap(), "https");
+	}
+
+	#[test]
+	fn no_tls_after_normalize_uri_sets_http() {
+		// End-to-end: normalize_uri + set_forwarded_proto without TLS.
+		let mut req = ::http::Request::builder()
+			.uri("/test")
+			.header(::http::header::HOST, "example.com")
+			.body(http::Body::empty())
+			.unwrap();
+
+		normalize_uri(None, &mut req).unwrap();
+		set_forwarded_proto(&mut req);
+
+		assert_eq!(req.uri().scheme().unwrap().as_str(), "http");
+		assert_eq!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.unwrap()
+				.to_str()
+				.unwrap(),
+			"http"
+		);
+	}
+
+	#[test]
+	fn tls_after_normalize_uri_sets_https() {
+		// End-to-end: normalize_uri + set_forwarded_proto with TLS.
+		// TLSConnectionInfo must be in extensions (matching the real proxy_internal flow
+		// where HTTPProxy::proxy copies it from the connection at line 686).
+		let mut req = ::http::Request::builder()
+			.uri("/test")
+			.header(::http::header::HOST, "example.com")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(TLSConnectionInfo::default());
+		let tls = req
+			.extensions()
+			.get::<TLSConnectionInfo>()
+			.cloned()
+			.unwrap();
+
+		normalize_uri(Some(&tls), &mut req).unwrap();
+		set_forwarded_proto(&mut req);
+
+		assert_eq!(req.uri().scheme().unwrap().as_str(), "https");
+		assert_eq!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.unwrap()
+				.to_str()
+				.unwrap(),
+			"https"
 		);
 	}
 }
