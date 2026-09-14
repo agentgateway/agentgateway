@@ -19,12 +19,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
 
-func TestWithExtraListenerSets(t *testing.T) {
-	assert.Nil(t, processAgentgatewaySyncerOptions().ExtraListenerSets)
-	assert.Nil(t, processAgentgatewaySyncerOptions(WithExtraListenerSets(nil)).ExtraListenerSets)
-	assert.NotNil(t, processAgentgatewaySyncerOptions(staticExtra()).ExtraListenerSets)
-}
-
 var testGatewayParent = types.NamespacedName{Namespace: "default", Name: "example"}
 
 // baseListenerSet is the Gateway API ListenerSet listener every fixture starts from. Its parent
@@ -51,6 +45,7 @@ func testListenerSet(namespace, name, section string) translator.ListenerSet {
 		Valid:         true,
 		ParentInfo: plugins.ParentInfo{
 			ParentGateway: testGatewayParent,
+			ListenerKey:   utils.InternalGatewayName(namespace, name, section),
 			SectionName:   gwv1.SectionName(section),
 			Port:          8080,
 			Protocol:      gwv1.HTTPProtocolType,
@@ -59,8 +54,8 @@ func testListenerSet(namespace, name, section string) translator.ListenerSet {
 }
 
 func staticExtra(sets ...translator.ListenerSet) AgentgatewaySyncerOption {
-	return WithExtraListenerSets(func(agw *plugins.AgwCollections) krt.Collection[translator.ListenerSet] {
-		return krt.NewStaticCollection(nil, sets, agw.KrtOpts.ToOptions("Extra")...)
+	return WithExtraListenerSets(func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[translator.ListenerSet] {
+		return krt.NewStaticCollection(nil, sets, krtopts.ToOptions("Extra")...)
 	})
 }
 
@@ -95,9 +90,7 @@ func newJoinFixture(
 	base := krt.NewStaticCollection(nil, []translator.ListenerSet{baseListenerSet}, krtopts.ToOptions("Base")...)
 	admitted, rejected := s.joinExtraListenerSets(base, krtopts)
 	admitted.WaitUntilSynced(krtopts.Stop)
-	if rejected != nil {
-		rejected.WaitUntilSynced(krtopts.Stop)
-	}
+	rejected.WaitUntilSynced(krtopts.Stop)
 	return joinFixture{admitted: admitted, rejected: rejected, base: base}
 }
 
@@ -118,16 +111,16 @@ func TestJoinExtraListenerSetsNoOpWhenUnset(t *testing.T) {
 	t.Run("option unset", func(t *testing.T) {
 		f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil)
 		assert.True(t, f.base == f.admitted)
-		assert.Nil(t, f.rejected)
+		assert.Empty(t, f.rejected.List())
 	})
 
 	t.Run("builder returns nil", func(t *testing.T) {
 		f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil,
-			WithExtraListenerSets(func(agw *plugins.AgwCollections) krt.Collection[translator.ListenerSet] {
+			WithExtraListenerSets(func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[translator.ListenerSet] {
 				return nil
 			}))
 		assert.True(t, f.base == f.admitted)
-		assert.Nil(t, f.rejected)
+		assert.Empty(t, f.rejected.List())
 	})
 }
 
@@ -149,6 +142,15 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 	// "http". It passes both identity checks and is caught only by the collision check.
 	dottedSection := testListenerSet("default", "ls", "one.http")
 
+	mismatchedListenerKey := testListenerSet("other", "b", "http")
+	mismatchedListenerKey.ParentInfo.ListenerKey = "other/b.https"
+
+	// Admitted against this Gateway, but grouped into another Gateway's binds.
+	mismatchedParentGateway := testListenerSet("other", "b", "http")
+	mismatchedParentGateway.ParentInfo.ParentGateway = types.NamespacedName{Namespace: "default", Name: "elsewhere"}
+
+	emptySection := testListenerSet("other", "b", "")
+
 	cases := []struct {
 		name         string
 		gateway      *gwv1.Gateway
@@ -163,25 +165,34 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
-			name:    "parent is a gateway api listener set",
-			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
-			listenerSets: []*gwv1.ListenerSet{
-				{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "real"}},
-			},
-			extra:  testListenerSet("default", "real", "http"),
-			reason: gwv1.ListenerSetReasonInvalid,
-		},
-		{
 			name:    "dotted section name derives a name a listener set listener owns",
 			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
 			extra:   dottedSection,
 			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
-			name:    "gateway allows no listener attachment",
-			gateway: testGateway(nil),
-			extra:   testListenerSet("other", "b", "http"),
-			reason:  gwv1.ListenerSetReasonNotAllowed,
+			name:    "parent is the gateway itself",
+			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			extra:   testListenerSet("default", "example", "http"),
+			reason:  gwv1.ListenerSetReasonInvalid,
+		},
+		{
+			name:    "listener key does not match name",
+			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			extra:   mismatchedListenerKey,
+			reason:  gwv1.ListenerSetReasonInvalid,
+		},
+		{
+			name:    "parent gateway does not match gateway parent",
+			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			extra:   mismatchedParentGateway,
+			reason:  gwv1.ListenerSetReasonInvalid,
+		},
+		{
+			name:    "empty section name",
+			gateway: testGateway(ptr.Of(gwv1.NamespacesFromAll)),
+			extra:   emptySection,
+			reason:  gwv1.ListenerSetReasonInvalid,
 		},
 		{
 			name:    "gateway allows only its own namespace",
@@ -209,9 +220,6 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 }
 
 func TestWithAllowedListenersResolver(t *testing.T) {
-	assert.Nil(t, processAgentgatewaySyncerOptions().AllowedListenersResolver)
-	assert.Nil(t, processAgentgatewaySyncerOptions(WithAllowedListenersResolver(nil)).AllowedListenersResolver)
-
 	extra := staticExtra(testListenerSet("other", "b", "http"))
 
 	// The Gateway carries no spec.allowedListeners, as it cannot on a CRD without the field.
@@ -239,8 +247,22 @@ func TestWithAllowedListenersResolver(t *testing.T) {
 	})
 
 	t.Run("resolver returning nil still denies", func(t *testing.T) {
-		f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil, extra, WithAllowedListenersResolver(
+		f := newJoinFixture(t, gw, nil, extra, WithAllowedListenersResolver(
 			func(gw *gwv1.Gateway) *gwv1.AllowedListeners { return nil },
+		))
+		assert.Equal(t, []string{baseListenerSet.Name}, f.names())
+		require.Len(t, f.rejected.List(), 1)
+		assert.Equal(t, gwv1.ListenerSetReasonNotAllowed, f.rejected.List()[0].Reason)
+	})
+
+	// The resolver fills in for a policy the spec cannot express. It never overrides one the
+	// Gateway owner did express, including an explicit refusal.
+	t.Run("explicit spec denial is not overridden", func(t *testing.T) {
+		denied := testGateway(ptr.Of(gwv1.NamespacesFromNone))
+		f := newJoinFixture(t, denied, nil, extra, WithAllowedListenersResolver(
+			func(gw *gwv1.Gateway) *gwv1.AllowedListeners {
+				return &gwv1.AllowedListeners{Namespaces: &gwv1.ListenerNamespaces{From: ptr.Of(gwv1.NamespacesFromAll)}}
+			},
 		))
 		assert.Equal(t, []string{baseListenerSet.Name}, f.names())
 		require.Len(t, f.rejected.List(), 1)

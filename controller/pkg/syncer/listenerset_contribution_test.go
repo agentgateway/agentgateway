@@ -1,6 +1,7 @@
 package syncer_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 )
 
@@ -69,13 +71,18 @@ func contributedListenerSet(name, section string, port gwv1.PortNumber, protocol
 }
 
 func syncerWithContributedListenerSets(t *testing.T, inputs []any, sets ...translator.ListenerSet) *syncer.Syncer {
+	_, s := syncerAndStatus(t, inputs, sets...)
+	return s
+}
+
+func syncerAndStatus(t *testing.T, inputs []any, sets ...translator.ListenerSet) (*testutils.TestStatusQueue, *syncer.Syncer) {
 	ctx := testutils.BuildMockPolicyContext(t, inputs)
-	_, s := testutils.SyncerWithOptions(t, ctx, nil, syncer.WithExtraListenerSets(
-		func(agw *plugins.AgwCollections) krt.Collection[translator.ListenerSet] {
-			return krt.NewStaticCollection(nil, sets, agw.KrtOpts.ToOptions("test/ContributedListenerSets")...)
+	sq, s := testutils.SyncerWithOptions(t, ctx, []string{"ListenerSet"}, syncer.WithExtraListenerSets(
+		func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[translator.ListenerSet] {
+			return krt.NewStaticCollection(nil, sets, krtopts.ToOptions("test/ContributedListenerSets")...)
 		},
 	))
-	return s
+	return sq, s
 }
 
 func binds(s *syncer.Syncer) map[string]*api.Bind {
@@ -186,7 +193,7 @@ func TestContributedListenerSetsRequireAllowedListeners(t *testing.T) {
 // bind it lost to into an externally reachable one.
 func TestContributedListenerSetsTakeListenerPrecedence(t *testing.T) {
 	older := contributedListenerSet("older", "older", 9090, gwv1.HTTPProtocolType, true)
-	s := syncerWithContributedListenerSets(t, []any{gatewayClassYAML, gatewayYAML, newerListenerSetYAML}, older)
+	sq, s := syncerAndStatus(t, []any{gatewayClassYAML, gatewayYAML, newerListenerSetYAML}, older)
 
 	b := binds(s)
 	require.Contains(t, b, "9090/default/example")
@@ -195,4 +202,42 @@ func TestContributedListenerSetsTakeListenerPrecedence(t *testing.T) {
 	keys := listenerKeys(s)
 	assert.Contains(t, keys, older.Name)
 	assert.NotContains(t, keys, "default/newer.shared")
+
+	// Losing is user-visible: the Gateway API ListenerSet has to say why its listener is gone.
+	dump, err := json.Marshal(sq.Dump())
+	require.NoError(t, err)
+	assert.Contains(t, string(dump), `"type":"Conflicted","status":"True","lastTransitionTime"`)
+	assert.Contains(t, string(dump), "BindModeConflict")
+}
+
+// A contribution cannot key itself as the parent Gateway's own listener, which would replace
+// that listener in the transform output while the Gateway still reports it as Accepted.
+func TestContributedListenerSetsCannotAliasAGatewayListener(t *testing.T) {
+	aliases := contributedListenerSet("example", "http", 8080, gwv1.TCPProtocolType, false)
+	s := syncerWithContributedListenerSets(t, []any{gatewayClassYAML, gatewayYAML}, aliases)
+
+	// The Gateway's own listener survives, with its own protocol.
+	b := binds(s)
+	require.Contains(t, b, "8080/default/example")
+	assert.Equal(t, api.Bind_HTTP, b["8080/default/example"].GetProtocol())
+	// Exactly one listener under the contested key, so nothing replaced the Gateway's own.
+	assert.Equal(t, []string{"default/example.http"}, listenerKeys(s))
+
+	require.Len(t, s.Outputs.RejectedListenerSets.List(), 1)
+	assert.Equal(t, gwv1.ListenerSetReasonInvalid, s.Outputs.RejectedListenerSets.List()[0].Reason)
+}
+
+// A contribution admitted against one Gateway's allowedListeners cannot land in another
+// Gateway's bind group.
+func TestContributedListenerSetsCannotCrossGatewayBinds(t *testing.T) {
+	crosses := contributedListenerSet("free", "free", 8081, gwv1.HTTPProtocolType, false)
+	crosses.ParentInfo.ParentGateway = types.NamespacedName{Namespace: "default", Name: "elsewhere"}
+	s := syncerWithContributedListenerSets(t, []any{gatewayClassYAML, gatewayYAML}, crosses)
+
+	assert.NotContains(t, binds(s), "8081/default/example")
+	assert.NotContains(t, binds(s), "8081/default/elsewhere")
+	assert.NotContains(t, listenerKeys(s), crosses.Name)
+
+	require.Len(t, s.Outputs.RejectedListenerSets.List(), 1)
+	assert.Equal(t, gwv1.ListenerSetReasonInvalid, s.Outputs.RejectedListenerSets.List()[0].Reason)
 }
