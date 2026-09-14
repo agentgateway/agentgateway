@@ -415,10 +415,7 @@ func parseMantleAPITable(lines []string) ([]string, bool) {
 		if !mantleAPISectionRe.MatchString(line) {
 			continue
 		}
-		end := i + 8
-		if end > len(lines) {
-			end = len(lines)
-		}
+		end := min(i+8, len(lines))
 		for _, row := range lines[i+1 : end] {
 			if !strings.Contains(row, "icon-yes") && !strings.Contains(row, "icon-no") {
 				continue

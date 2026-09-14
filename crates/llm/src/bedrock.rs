@@ -120,18 +120,19 @@ impl Provider {
 	) -> Vec<super::ChatFormat> {
 		use super::ChatFormat;
 		const NATIVE: [ChatFormat; 3] = [
-					ChatFormat::OpenAICompletions,
-					ChatFormat::AnthropicMessages,
-					ChatFormat::OpenAIResponses,
-				];
+			ChatFormat::OpenAICompletions,
+			ChatFormat::AnthropicMessages,
+			ChatFormat::OpenAIResponses,
+		];
 		match self.chat_endpoint(request_model, catalog) {
 			// all chat runtime models seem to support converse
 			BedrockEndpoint::Runtime => vec![ChatFormat::BedrockConverse],
 			BedrockEndpoint::Mantle => {
-
 				if let Some(tags) = request_model.and_then(|m| catalog.and_then(|c| c.get_model_tags(m))) {
-					let declared: Vec<ChatFormat> =
-						NATIVE.into_iter().filter(|f| tags.contains(f.tag())).collect();
+					let declared: Vec<ChatFormat> = NATIVE
+						.into_iter()
+						.filter(|f| tags.contains(f.tag()))
+						.collect();
 					if !declared.is_empty() {
 						return declared;
 					}
@@ -417,10 +418,11 @@ mod tests {
 		];
 		for rt in all {
 			let expected = match rt {
-				Completions | Messages | Responses | AnthropicTokenCount | Models => BedrockEndpoint::Mantle,
-				Embeddings | Realtime | Rerank | GeminiCountTokens | GenerateContent | Detect | Passthrough => {
-					BedrockEndpoint::Runtime
+				Completions | Messages | Responses | AnthropicTokenCount | Models => {
+					BedrockEndpoint::Mantle
 				},
+				Embeddings | Realtime | Rerank | GeminiCountTokens | GenerateContent | Detect
+				| Passthrough => BedrockEndpoint::Runtime,
 			};
 			assert_eq!(
 				mantle.resolve_endpoint(rt, Some("m"), None),

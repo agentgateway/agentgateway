@@ -106,7 +106,11 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	// Claude serves the native Messages API on Mantle.
 	assert_eq!(
 		mantle
-			.chat_translation(InputFormat::Messages, Some("anthropic.claude-sonnet-5"), catalog)
+			.chat_translation(
+				InputFormat::Messages,
+				Some("anthropic.claude-sonnet-5"),
+				catalog
+			)
 			.unwrap()
 			.output,
 		ChatFormat::AnthropicMessages,
@@ -151,7 +155,11 @@ fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
 	// Untagged fallback: the is_anthropic_model heuristic must also keep Completions off completions.
 	assert_eq!(
 		mantle
-			.chat_translation(InputFormat::Completions, Some("anthropic.claude-opus-4-8"), None)
+			.chat_translation(
+				InputFormat::Completions,
+				Some("anthropic.claude-opus-4-8"),
+				None
+			)
 			.unwrap()
 			.output,
 		ChatFormat::AnthropicMessages,

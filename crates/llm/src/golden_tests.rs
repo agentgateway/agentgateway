@@ -291,6 +291,7 @@ mod requests {
 				region: strng::new("us-west-2"),
 				guardrail_identifier: None,
 				guardrail_version: None,
+				endpoint_preference: Default::default(),
 			};
 			test_request(provider, "requests/completions/reasoning.json", |i| {
 				conversion::bedrock::from_completions::translate(i, &bedrock, None, None, None)
