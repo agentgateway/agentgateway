@@ -1626,7 +1626,14 @@ impl Gateway {
 				return;
 			},
 		};
-		let Some(bind) = pi.stores.read_binds().find_bind(socket_addr) else {
+		// HBONE re-entry bypasses the listening socket, so it must not expose binds
+		// scoped to a concrete address (for example, a loopback-only listener).
+		let Some(bind) = pi
+			.stores
+			.read_binds()
+			.find_bind(socket_addr)
+			.filter(|b| b.address.ip().is_unspecified())
+		else {
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))
