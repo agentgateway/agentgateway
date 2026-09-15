@@ -23,7 +23,6 @@ pub use oauth::{
 	OAuthTokenExchangeAuth, PrivateKeyJwt,
 };
 use secrecy::{ExposeSecret, SecretString};
-use url::form_urlencoded;
 
 use crate::http::Request;
 use crate::http::jwt::Claims;
@@ -406,7 +405,9 @@ impl AuthorizationLocation {
 					None => Some(Cow::Borrowed(value)),
 				}
 			},
-			AuthorizationLocation::QueryParameter { name } => query_parameter(req, name),
+			AuthorizationLocation::QueryParameter { name } => {
+				crate::http::query_parameter(req.uri(), name)
+			},
 			AuthorizationLocation::Cookie { name } => crate::http::read_request_cookie(req, name),
 			AuthorizationLocation::Expression(expression) => crate::cel::Executor::new_request(req)
 				.eval(expression)
@@ -487,15 +488,6 @@ fn strip_prefix_ascii_case_insensitive<'a>(value: &'a str, prefix: &str) -> Opti
 	} else {
 		None
 	}
-}
-
-fn query_parameter<'a>(req: &'a Request, name: &str) -> Option<Cow<'a, str>> {
-	for (key, value) in form_urlencoded::parse(req.uri().query().unwrap_or_default().as_bytes()) {
-		if key == name {
-			return Some(value);
-		}
-	}
-	None
 }
 
 fn set_request_cookie(

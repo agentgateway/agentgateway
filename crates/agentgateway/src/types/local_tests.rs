@@ -111,6 +111,8 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			client_secret: SecretString::new("client-secret".into()),
 			redirect_uri: "http://localhost:3000/oauth/callback".into(),
 			scopes: vec![],
+			login: None,
+			logout: None,
 		}),
 		..Default::default()
 	}
@@ -168,7 +170,8 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
 	let client = test_client();
 	let resources = crate::resource_manager::ResourceFetcher::direct(client);
-	let config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	let mut config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	config.oidc_cookie_encoder = test_config().oidc_cookie_encoder;
 
 	NormalizedLocalConfig::from(
 		&config,
@@ -489,6 +492,11 @@ async fn test_config_parsing(test_name: &str) {
 #[tokio::test]
 async fn test_basic_config() {
 	test_config_parsing("basic").await;
+}
+
+#[tokio::test]
+async fn test_ui_oidc_config() {
+	test_config_parsing("ui_oidc").await;
 }
 
 #[tokio::test]

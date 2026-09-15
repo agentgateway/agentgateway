@@ -13,6 +13,7 @@ use crate::http::{Body, PolicyResponse, Request, Response, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 
+mod browser;
 mod callback;
 mod local;
 mod provider;
@@ -22,7 +23,7 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use local::LocalOidcConfig;
+pub use local::{LocalOidcConfig, OidcLogin, OidcLogout};
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
@@ -125,6 +126,8 @@ impl<'de> Deserialize<'de> for ProviderEndpoint {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcPolicy {
+	pub login: Option<OidcLogin>,
+	pub logout: Option<OidcLogout>,
 	pub policy_id: PolicyId,
 	pub provider: Arc<Provider>,
 	pub client: ClientConfig,
@@ -200,6 +203,9 @@ impl OidcPolicy {
 		req: &mut Request,
 		client: PolicyClient,
 	) -> Result<PolicyResponse, Error> {
+		if let Some(response) = self.handle_logout(req)? {
+			return Ok(response);
+		}
 		if let Some(response) = self.maybe_handle_callback(req, client.clone()).await? {
 			return Ok(response);
 		}
@@ -220,6 +226,18 @@ impl OidcPolicy {
 						if let Some(Value::String(sub)) = claims.inner.get("sub") {
 							log.jwt_sub = Some(sub.clone());
 						}
+						if self
+							.login
+							.as_ref()
+							.is_some_and(|login| req.uri().path() == login.path)
+						{
+							return Ok(
+								PolicyResponse::default().with_response(build_redirect_response(
+									&self.return_target(req.uri()),
+									&[],
+								)?),
+							);
+						}
 						req.extensions_mut().insert(claims);
 						return Ok(PolicyResponse::default());
 					}
@@ -230,16 +248,51 @@ impl OidcPolicy {
 			}
 		}
 
-		// Fetch Metadata is controlled by the browser. Known non-navigation modes identify requests
-		// that cannot complete a cross-origin OIDC redirect; return 401 so the caller can initiate a
-		// document navigation instead. Missing, navigation, and unknown modes retain the redirect.
-		if req.headers().get("sec-fetch-mode").is_some_and(|mode| {
+		// Fetches cannot complete cross-origin login.
+		let non_navigation = req.headers().get("sec-fetch-mode").is_some_and(|mode| {
 			matches!(
 				mode.to_str(),
 				Ok("cors" | "no-cors" | "same-origin" | "websocket")
 			)
-		}) {
+		});
+		let login_redirect = self
+			.login
+			.as_ref()
+			.and_then(|login| login.redirect.as_deref());
+		if non_navigation {
+			if let Some(destination) = login_redirect {
+				let response = ::http::Response::builder()
+					.status(StatusCode::UNAUTHORIZED)
+					.header(header::LOCATION, destination)
+					.header(header::CACHE_CONTROL, "no-store")
+					.body(Body::empty())
+					.map_err(|e| Error::Config(e.to_string()))?;
+				return Ok(PolicyResponse::default().with_response(response));
+			}
 			return Err(Error::AuthenticationRequired);
+		}
+
+		if let Some(destination) = login_redirect
+			&& self
+				.login
+				.as_ref()
+				.is_some_and(|login| req.uri().path() != login.path)
+		{
+			let mut destination: http::Uri = destination
+				.parse()
+				.map_err(|e| Error::Config(format!("invalid login redirect: {e}")))?;
+			crate::http::modify_query_parameters(
+				&mut destination,
+				[(
+					"returnTo",
+					session::normalize_original_uri(req.uri().path_and_query()),
+				)],
+				std::iter::empty::<&str>(),
+			)?;
+			return Ok(
+				PolicyResponse::default()
+					.with_response(build_redirect_response(&destination.to_string(), &[])?),
+			);
 		}
 
 		// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.

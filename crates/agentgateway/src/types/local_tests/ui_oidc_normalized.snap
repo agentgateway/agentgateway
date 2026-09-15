@@ -1,0 +1,115 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for ui_oidc: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      gateway/default:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: gateway/default
+        listenerName: default
+        protocol: HTTP
+listener_routes:
+  - - gateway/default
+    - - backends:
+          - backend: /ui
+            weight: 1
+        inlinePolicies:
+          - authorization:
+              rules:
+                allow:
+                  - "jwt.email.endsWith(\"@example.com\")"
+          - oidc:
+              login:
+                path: /api/auth/login
+                redirect: /login
+              logout:
+                path: /api/auth/logout
+                redirect: /login
+              policyId: policy/ui
+              provider:
+                issuer: "https://issuer.example.com"
+                authorizationEndpoint: "https://issuer.example.com/authorize"
+                tokenEndpoint: "https://issuer.example.com/token"
+                idTokenValidator:
+                  mode: strict
+                  providers:
+                    - issuer: "https://issuer.example.com"
+                      keys:
+                        - kid-1
+                  location:
+                    header:
+                      name: authorization
+                      prefix: "Bearer "
+              client:
+                clientId: client-id
+                clientSecret: "<redacted>"
+                tokenEndpointAuth: clientSecretBasic
+              redirectUri: "http://localhost:3000/oauth/callback"
+              session:
+                cookieName: agw_oidc_s_37ad2d531026450e
+                transactionCookiePrefix: agw_oidc_t_37ad2d531026450e
+                sameSite: lax
+                secure: auto
+                ttl: 1h0m0s
+                transactionTtl: 5m0s
+                encoder: aes
+              scopes:
+                - openid
+        key: gateway/default/ui
+        matches:
+          - path:
+              exact: /
+          - path:
+              pathPrefix: /api/auth
+          - path:
+              pathPrefix: /ui
+          - path:
+              pathPrefix: /api/runtime
+          - path:
+              pathPrefix: /api/config
+          - path:
+              pathPrefix: /api/cel
+          - path:
+              pathPrefix: /api/logs
+          - path:
+              pathPrefix: /api/costs
+          - path:
+              pathPrefix: /api/budgets
+          - path:
+              exact: /oauth/callback
+        name: ui
+        namespace: internal
+      - backends:
+          - backend: /ui
+            weight: 1
+        key: "gateway/default/ui:login"
+        matches:
+          - path:
+              exact: /login
+          - path:
+              pathPrefix: /ui/assets
+          - path:
+              exact: /ui/favicon.svg
+        name: ui-login
+        namespace: internal
+listener_tcp_routes:
+  - - gateway/default
+    - []
+policies: []
+backends:
+  - backend:
+      internal:
+        name: ui
+        namespace: ""
+        target: forward
+route_groups: []
+workloads: []
+services: []

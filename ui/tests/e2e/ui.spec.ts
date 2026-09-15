@@ -1373,3 +1373,65 @@ function trafficBaseConfig() {
 	];
 	return config;
 }
+
+test('account menu shows the signed-in user and submits logout', async ({ page }) => {
+	await mockGateway(page);
+	await page.route('**/api/runtime', route =>
+		route.fulfill({
+			json: {
+				build: {},
+				ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+				user: { subject: 'user-1', name: 'Alex Rivera', email: 'alex@example.com' }
+			}
+		})
+	);
+	await page.route('**/api/auth/logout', route =>
+		route.fulfill({
+			contentType: 'text/html',
+			body: '<h1>Signed out</h1>'
+		})
+	);
+	await page.goto('/');
+	const account = page.getByRole('button', { name: 'Account: Alex Rivera' });
+	await expect(account).toBeVisible();
+	await expect(account.locator('.user-avatar')).toHaveText('AR');
+	await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
+	await account.click();
+	await expect(page.getByRole('region', { name: 'Your account' })).toContainText(
+		'alex@example.com'
+	);
+	await page.getByRole('button', { name: 'Sign out', exact: true }).focus();
+	await page.keyboard.press('Escape');
+	await expect(account).toBeFocused();
+	await expect(account).toHaveAttribute('aria-expanded', 'false');
+	await page.setViewportSize({ width: 390, height: 844 });
+	await account.click();
+	const logout = page.waitForRequest('**/api/auth/logout');
+	await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+	expect((await logout).method()).toBe('POST');
+	await expect(page.getByRole('heading', { name: 'Signed out' })).toBeVisible();
+});
+
+test('login loads without protected API requests and preserves the return destination', async ({
+	page
+}) => {
+	const apiRequests: string[] = [];
+	page.on('request', request => {
+		if (/^\/(api\/|config_dump)/.test(new URL(request.url()).pathname)) {
+			apiRequests.push(request.url());
+		}
+	});
+	await page.goto('/login?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall');
+	await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('img', { name: 'agentgateway' }).filter({ visible: true })
+	).toBeVisible();
+	await expect(page.getByRole('navigation')).toHaveCount(0);
+	await page.evaluate(() => document.fonts.ready);
+	expect(apiRequests).toEqual([]);
+
+	await page.route('**/api/auth/login?*', route => route.fulfill({ body: 'OAuth started' }));
+	await page.getByRole('link', { name: 'Sign in with SSO' }).click();
+	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
+	await expect(page.getByText('OAuth started')).toBeVisible();
+});

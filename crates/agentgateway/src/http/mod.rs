@@ -603,6 +603,15 @@ pub fn modify_url(
 	Ok(())
 }
 
+pub(crate) fn query_parameter<'a>(uri: &'a Uri, name: &str) -> Option<Cow<'a, str>> {
+	for (key, value) in form_urlencoded::parse(uri.query().unwrap_or_default().as_bytes()) {
+		if key == name {
+			return Some(value);
+		}
+	}
+	None
+}
+
 pub fn modify_query_parameters<S, R, KSet, VSet, KRemove>(
 	uri: &mut Uri,
 	query_parameters_to_set: S,

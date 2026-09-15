@@ -13,6 +13,7 @@ import { LlmGetStartedPage, McpGetStartedPage, TrafficGetStartedPage } from '@/p
 import { GuardrailsPage } from '@/pages/Guardrails';
 import { HomePage } from '@/pages/Home';
 import { KeysPage } from '@/pages/Keys';
+import { LoginPage } from '@/pages/Login';
 import { AnalyticsPage, LogsPage } from '@/pages/Logs';
 import { McpPlaygroundPage } from '@/pages/McpPlayground';
 import { McpServersPage } from '@/pages/McpServers';
@@ -246,8 +247,13 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
-		<QueryClientProvider client={queryClient}>
-			<RouterProvider router={router} />
-		</QueryClientProvider>
+		{/* Login lives outside the /ui router and must not mount the authenticated shell. */}
+		{window.location.pathname === '/login' ? (
+			<LoginPage />
+		) : (
+			<QueryClientProvider client={queryClient}>
+				<RouterProvider router={router} />
+			</QueryClientProvider>
+		)}
 	</React.StrictMode>
 );

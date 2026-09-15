@@ -4,26 +4,29 @@ let redirecting = false;
 let hasSuccessfulRequest = false;
 
 export async function requestApi(path: string, init?: RequestInit): Promise<Response> {
-	// Retry authentication as a document navigation; fetch cannot follow cross-origin login redirects.
+	// Authentication must use document navigation; fetch cannot follow cross-origin login redirects.
 	const response = await fetch(`${apiBase}${path}`, {
 		...init,
 		credentials: 'include',
 		redirect: 'manual'
 	});
 	if (response.status === 401 || response.type === 'opaqueredirect') {
-		// Only retry after this page has authenticated successfully, avoiding reload loops.
-		if (!hasSuccessfulRequest) {
+		const uiLogin = response.headers.get('location') === '/login';
+		if (!uiLogin && !hasSuccessfulRequest) {
 			throw new Error('Authentication required. Please sign in and reload the page.');
 		}
 		if (!redirecting) {
 			redirecting = true;
-			window.location.reload();
+			if (!uiLogin) {
+				window.location.reload();
+				return new Promise<Response>(() => {});
+			}
+			const returnTo = window.location.pathname + window.location.search + window.location.hash;
+			window.location.replace(`${apiBase}/login?returnTo=${encodeURIComponent(returnTo)}`);
 		}
 		return new Promise<Response>(() => {});
 	}
-	if (response.ok) {
-		hasSuccessfulRequest = true;
-	}
+	if (response.ok) hasSuccessfulRequest = true;
 	return response;
 }
 

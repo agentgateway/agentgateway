@@ -49,9 +49,9 @@ mcp:
 ui:
   policies:
     oidc:
-      issuer: http://localhost:7080/realms/agentgateway
-      clientId: agentgateway-browser
-      clientSecret: agentgateway-secret
+      issuer: http://dex.local
+      clientId: local
+      clientSecret: local-secret
       redirectURI: http://localhost:3000/oauth/callback
       scopes:
       - profile
