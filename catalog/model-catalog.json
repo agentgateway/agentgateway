@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-14T08:38:40Z"
+    "generatedAt": "2026-09-15T08:36:08Z"
   },
   "providers": {
     "anthropic": {
@@ -3012,9 +3012,16 @@
         },
         "Qwen/Qwen3.8-27B": {
           "rates": {
-            "input": "0.4",
-            "output": "3",
-            "cacheRead": "0.04"
+            "input": "0.2",
+            "output": "2.5",
+            "cacheRead": "0.05"
+          }
+        },
+        "Qwen/Qwen3.8-Flash": {
+          "rates": {
+            "input": "0.113",
+            "output": "0.382",
+            "cacheRead": "0.0141"
           }
         },
         "Qwen/Qwen3.8-Max": {
@@ -3268,7 +3275,7 @@
           "rates": {
             "input": "1.2",
             "output": "4",
-            "cacheRead": "0.12"
+            "cacheRead": "0.2"
           }
         },
         "zai-org/GLM-5.3-Flash": {
@@ -3420,7 +3427,7 @@
           "rates": {
             "input": "0.6",
             "output": "2.4",
-            "cacheRead": "0.119"
+            "cacheRead": "0.12"
           }
         },
         "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b": {
