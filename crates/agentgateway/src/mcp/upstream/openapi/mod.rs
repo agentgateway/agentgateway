@@ -12,7 +12,7 @@ use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING
 use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
-use regex::{Captures, Regex, Replacer};
+use regex::Regex;
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -49,6 +49,16 @@ pub enum ParseError {
 	IoError(#[from] std::io::Error),
 	#[error("Invalid URL: {0}")]
 	InvalidUrl(#[from] url::ParseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+enum PathParamError {
+	#[error("path parameter '{0}' is missing")]
+	Missing(String),
+	#[error("path parameter '{0}' must be a string or number")]
+	UnsupportedType(String),
+	#[error("path parameter '{0}' must not be empty or contain a dot segment")]
+	UnsafeSegment(String),
 }
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
@@ -465,7 +475,10 @@ fn build_schema_property(item: &Parameter) -> Result<(String, JsonObject, bool),
 		schema.insert("description".to_string(), json!(desc));
 	}
 
-	Ok((p.name.clone(), schema, p.required))
+	// OpenAPI requires path parameters to set `required: true`; openapiv3 tolerates the field
+	// being omitted and defaults it to false, so enforce the specification here
+	let required = matches!(item, Parameter::Path { .. }) || p.required;
+	Ok((p.name.clone(), schema, required))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -486,7 +499,7 @@ impl Default for JsonSchema {
 }
 
 /// Regex to match path template parameters like `{param_name}`.
-static PATH_PARAM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{([^}]+)\}").unwrap());
+static PATH_PARAM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{[^}]+\}").unwrap());
 
 /// Characters that are safe in path segments (RFC 3986 unreserved characters).
 /// All other characters will be percent-encoded to prevent path traversal/injection.
@@ -496,26 +509,37 @@ const PATH_SEGMENT_SAFE: &AsciiSet = &percent_encoding::NON_ALPHANUMERIC
 	.remove(b'_')
 	.remove(b'~');
 
-/// Replaces path template parameters.
-struct PathParamReplacer(serde_json::Map<String, Value>);
-
-impl Replacer for PathParamReplacer {
-	fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
-		let param = &caps[1];
-		match self.0.get(param) {
-			Some(Value::Number(n_val)) => return dst.push_str(&n_val.to_string()),
-			Some(Value::String(s_val)) => {
-				return dst.extend(utf8_percent_encode(s_val, PATH_SEGMENT_SAFE));
+fn substitute_path_params(
+	template: &str,
+	params: &serde_json::Map<String, Value>,
+) -> Result<String, PathParamError> {
+	let mut path = String::with_capacity(template.len());
+	let mut last_end = 0;
+	for placeholder in PATH_PARAM_RE.find_iter(template) {
+		path.push_str(&template[last_end..placeholder.start()]);
+		let matched = placeholder.as_str();
+		// The regex guarantees ASCII braces at both ends
+		let param = &matched[1..matched.len() - 1];
+		match params.get(param) {
+			Some(Value::Number(value)) => path.push_str(&value.to_string()),
+			// `.` is unreserved so percent-encoding leaves dot segments intact; reject them per
+			// decoded segment so upstreams that resolve `%2F` before the path still cannot traverse
+			Some(Value::String(value))
+				if value
+					.split(['/', '\\'])
+					.any(|segment| matches!(segment, "" | "." | "..")) =>
+			{
+				return Err(PathParamError::UnsafeSegment(param.to_string()));
 			},
-			Some(unexpected) => warn!(
-				"Unexpected parameter '{param}' (value: {:?}), leaving path param",
-				unexpected
-			),
-			_ => {},
-		};
-		// fallback to use path parm
-		dst.push_str(&caps[0]);
+			Some(Value::String(value)) => path.extend(utf8_percent_encode(value, PATH_SEGMENT_SAFE)),
+			Some(_) => return Err(PathParamError::UnsupportedType(param.to_string())),
+			None => return Err(PathParamError::Missing(param.to_string())),
+		}
+		last_end = placeholder.end();
 	}
+	path.push_str(&template[last_end..]);
+
+	Ok(path)
 }
 
 /// Normalizes URL path construction to avoid double slashes
@@ -732,7 +756,8 @@ impl Handler {
 
 		// --- URL Construction ---
 		// Substitute path parameters into the path template in a single pass
-		let path = PATH_PARAM_RE.replace_all(&info.path, PathParamReplacer(path_params));
+		let path = substitute_path_params(&info.path, &path_params)
+			.map_err(|error| UpstreamError::InvalidRequest(error.to_string()))?;
 
 		// Use normalize_url_path to avoid double slashes
 		let normalized_path = normalize_url_path(&self.prefix, &path);

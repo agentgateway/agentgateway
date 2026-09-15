@@ -100,6 +100,36 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		allowed_headers: HashSet::from(["X-Request-ID".to_string()]),
 		content_type: None,
 	};
+	let test_tool_doc = Tool::new(
+		Cow::Borrowed("get_doc"),
+		Cow::Borrowed("Get an internal document"),
+		Arc::new(
+			json!({
+				"type": "object",
+				"properties": {
+					"path": {
+						"type": "object",
+						"properties": {
+							"tenant": {"type": "string"},
+							"kind": {"type": "string"},
+							"id": {"type": "string"}
+						},
+						"required": ["tenant", "kind", "id"]
+					}
+				},
+				"required": ["path"]
+			})
+			.as_object()
+			.unwrap()
+			.clone(),
+		),
+	);
+	let upstream_call_doc = UpstreamOpenAPICall {
+		method: "GET".to_string(),
+		path: "/v1/{tenant}/{kind}/{id}".to_string(),
+		allowed_headers: HashSet::new(),
+		content_type: None,
+	};
 
 	let test_tool_post = Tool::new(
 		Cow::Borrowed("create_user"),
@@ -161,6 +191,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		upstream_client,
 		vec![
 			(test_tool_get, upstream_call_get),
+			(test_tool_doc, upstream_call_doc),
 			(test_tool_post, upstream_call_post),
 		],
 		prefix.to_string(),
@@ -567,45 +598,21 @@ async fn test_call_tool_invalid_query_param_value() {
 #[tokio::test]
 async fn test_call_tool_invalid_path_param_value() {
 	let (server, handler) = setup().await;
-
-	let invalid_user_id = json!(12345); // Not a string
-	// Mock is set up for the *literal* path, as substitution will fail
-	Mock::given(method("GET"))
-		.and(path("/users/{user_id}")) // Path doesn't get substituted
-		.respond_with(
-			ResponseTemplate::new(404) // Or whatever the server does with a literal {user_id}
-				.set_body_string("Not Found - Literal Path"),
-		)
-		.mount(&server)
-		.await;
-
 	let args = json!({
-			"path": { "user_id": invalid_user_id }
+		"path": { "user_id": true }
 	});
 
-	// The call might succeed at the HTTP level but might return an error from the server,
-	// or potentially fail if the path is fundamentally invalid after non-substitution.
-	// Here we assume the server returns 404 for the literal path.
-	let result = handler
+	let error = handler
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&IncomingRequestContext::empty(),
 		)
-		.await;
+		.await
+		.unwrap_err();
 
-	// Depending on server behavior for the literal path, this might be Ok or Err.
-	// If server returns 404 for the literal path:
-	assert!(result.is_ok());
-	// assert!(
-	// 	result.unwrap()
-	// 		.contains("failed with status 404 Not Found"),
-	// 	"{}",
-	// 	result.unwrap_err().to_string()
-	// );
-
-	// If the request *itself* failed before sending (e.g., invalid URL formed),
-	// the error might be different.
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -852,21 +859,28 @@ fn test_parse_openapi_schema_maps_summary_to_tool_title() {
 	assert_eq!(without_summary.title, None);
 }
 
-#[test]
-fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
-	let raw = r#"{
+#[rstest]
+#[case::required_true(Some(true))]
+#[case::required_omitted(None)]
+#[case::required_false(Some(false))]
+fn test_parse_openapi_schema_requires_path_item_parameters(#[case] required: Option<bool>) {
+	let mut parameter = json!({
+		"name": "workspace_gid",
+		"in": "path",
+		"schema": {"type": "string"}
+	});
+	if let Some(required) = required {
+		parameter
+			.as_object_mut()
+			.unwrap()
+			.insert("required".to_string(), json!(required));
+	}
+	let open_api: OpenAPI = serde_json::from_value(json!({
 		"openapi": "3.0.0",
 		"info": {"title": "Path Params", "version": "1.0.0"},
 		"paths": {
 			"/workspaces/{workspace_gid}/tags": {
-				"parameters": [
-					{
-						"name": "workspace_gid",
-						"in": "path",
-						"required": true,
-						"schema": {"type": "string"}
-					}
-				],
+				"parameters": [parameter],
 				"get": {
 					"operationId": "getTagsForWorkspace",
 					"summary": "Get tags in a workspace",
@@ -876,8 +890,8 @@ fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
 				}
 			}
 		}
-	}"#;
-	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	}))
+	.expect("parseable OpenAPI schema");
 	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
 	let (_tool, upstream) = tools
 		.iter()
@@ -887,6 +901,14 @@ fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
 	assert_eq!(upstream.path, "/workspaces/{workspace_gid}/tags");
 
 	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
+	let required = schema
+		.get("required")
+		.and_then(serde_json::Value::as_array)
+		.expect("tool schema should include required array");
+	assert!(
+		required.iter().any(|value| value == "path"),
+		"path should be required in the tool schema"
+	);
 	let path_schema = nested_schema(schema, "path");
 	let properties = path_schema
 		.get("properties")
@@ -934,7 +956,6 @@ fn test_parse_openapi_schema_operation_level_parameter_overrides_path_level_para
 						{
 							"name": "workspace_gid",
 							"in": "path",
-							"required": true,
 							"description": "operation-level parameter",
 							"schema": {"type": "string", "pattern": "^ws_"}
 						}
@@ -946,7 +967,7 @@ fn test_parse_openapi_schema_operation_level_parameter_overrides_path_level_para
 			}
 		}
 	}"#;
-	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("parseable OpenAPI schema");
 	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
 
 	let schema = tool_schema_for(&tools, "getWorkspaceTag");
@@ -1262,8 +1283,9 @@ async fn test_query_param_types(
 #[case::numeric_id("456", "/users/456")]
 #[case::spaces("user name", "/users/user%20name")]
 #[case::unicode("user\u{00e9}", "/users/user%C3%A9")]
-#[case::path_traversal("../admin", "/users/..%2Fadmin")]
+#[case::dotted_value("v1.2-file..name", "/users/v1.2-file..name")]
 #[case::embedded_slashes("user-1/o/er-1001", "/users/user-1%2Fo%2Fer-1001")]
+#[case::encoded_project_path("group/project", "/users/group%2Fproject")]
 #[case::query_injection("123?admin=true", "/users/123%3Fadmin%3Dtrue")]
 #[case::query_with_ampersand("123?a=1&b=2", "/users/123%3Fa%3D1%26b%3D2")]
 #[case::hash_fragment("user#section", "/users/user%23section")]
@@ -1291,6 +1313,97 @@ async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: 
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
 	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+}
+
+#[rstest]
+#[case::empty("")]
+#[case::dot(".")]
+#[case::dot_dot("..")]
+#[case::leading_parent("../admin")]
+#[case::leading_current("./profile")]
+#[case::embedded_parent("user/../admin")]
+#[case::repeated_separator("user//../admin")]
+#[case::backslash_parent("..\\admin")]
+#[case::embedded_backslash_parent("user\\..\\admin")]
+fn rejects_unsafe_path_params(#[case] value: &str) {
+	let params = json!({ "user_id": value }).as_object().unwrap().clone();
+	assert!(substitute_path_params("/users/{user_id}", &params).is_err());
+}
+
+#[tokio::test]
+async fn rejects_traversal_before_sending() {
+	let (server, handler) = setup().await;
+	let args = json!({ "path": { "user_id": "../admin" } });
+
+	let error = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn rejects_segment_injection_before_sending() {
+	let (server, handler) = setup().await;
+	let args = json!({ "path": { "user_id": "123/../admin" } });
+
+	let error = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[rstest]
+#[case::missing(json!({}), "path parameter 'user_id' is missing")]
+#[case::null(json!({"user_id": null}), "path parameter 'user_id' must be a string or number")]
+#[case::boolean(json!({"user_id": true}), "path parameter 'user_id' must be a string or number")]
+#[case::array(json!({"user_id": []}), "path parameter 'user_id' must be a string or number")]
+#[case::object(json!({"user_id": {}}), "path parameter 'user_id' must be a string or number")]
+fn rejects_missing_or_unsupported_path_params(#[case] params: Value, #[case] expected_error: &str) {
+	let error = substitute_path_params("/users/{user_id}", params.as_object().unwrap()).unwrap_err();
+	assert_eq!(error.to_string(), expected_error);
+}
+
+#[test]
+fn accepts_numeric_path_params() {
+	let params = json!({ "user_id": 123 }).as_object().unwrap().clone();
+	assert_eq!(
+		substitute_path_params("/users/{user_id}", &params).unwrap(),
+		"/users/123"
+	);
+}
+
+#[tokio::test]
+async fn rejects_multi_parameter_dot_segment_traversal_before_sending() {
+	let (server, handler) = setup().await;
+	let args = json!({
+		"path": {"tenant": "..", "kind": "..", "id": "internal"}
+	});
+
+	let error = handler
+		.call_tool(
+			"get_doc",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
 }
 
 #[tokio::test]
