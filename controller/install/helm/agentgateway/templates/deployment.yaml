@@ -175,10 +175,8 @@ spec:
             - name: AGW_ENABLE_INFER_EXT
               value: "true"
             {{- end }}
-            {{- if .Values.agentgatewayModels.enabled }}
             - name: AGW_ENABLE_AGENTGATEWAY_MODELS
-              value: "true"
-            {{- end }}
+              value: {{ .Values.agentgatewayModels.enabled | quote }}
             {{- if .Values.xBackend.enabled }}
             - name: AGW_ENABLE_X_BACKEND
               value: "true"
