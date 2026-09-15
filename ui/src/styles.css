@@ -313,6 +313,116 @@ a {
 	gap: 8px;
 }
 
+.user-menu {
+	position: relative;
+}
+
+.user-menu-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 36px;
+	padding: 3px 8px 3px 4px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+}
+
+.user-menu-trigger:hover,
+.user-menu-trigger[aria-expanded='true'] {
+	border-color: var(--line);
+	background: var(--surface);
+}
+
+.user-menu-trigger:focus-visible,
+.user-menu-signout:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.user-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 28px;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: var(--accent-soft);
+	color: var(--primary);
+	font-size: 11px;
+	font-weight: 650;
+}
+
+.user-menu-name {
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.user-menu-panel {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 30;
+	width: min(280px, calc(100vw - 32px));
+	padding: 6px;
+	border: 1px solid var(--line-strong);
+	border-radius: 8px;
+	background: var(--surface);
+	box-shadow: var(--shadow-popover);
+}
+
+.user-menu-identity {
+	display: grid;
+	gap: 4px;
+	margin-bottom: 6px;
+	padding: 10px 10px 14px;
+	border-bottom: 1px solid var(--line);
+	color: var(--muted);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.user-menu-identity strong {
+	color: var(--text);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.user-menu-caption {
+	margin-bottom: 4px;
+}
+
+.user-menu-signout {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+}
+
+.user-menu-signout:hover {
+	background: var(--surface-2);
+}
+
+@media (max-width: 600px) {
+	.user-menu-name {
+		display: none;
+	}
+}
+
 .export-dropdown {
 	position: relative;
 	display: inline-flex;
@@ -6706,4 +6816,48 @@ details summary {
 }
 .link-button:hover {
 	opacity: 0.8;
+}
+
+.login-page {
+	min-height: 100svh;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+}
+
+.login-card {
+	width: min(400px, 100%);
+	padding: 32px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+
+.login-brand {
+	margin-bottom: 32px;
+}
+
+.login-brand .brand-logo {
+	width: 200px;
+	max-width: 100%;
+	height: auto;
+}
+
+.login-card h1 {
+	margin: 0 0 8px;
+	font-size: 24px;
+	font-weight: 600;
+	letter-spacing: -0.025em;
+}
+
+.login-card p {
+	margin: 0 0 24px;
+	color: var(--muted);
+	line-height: 1.6;
+}
+
+.login-card .button {
+	width: 100%;
+	justify-content: center;
 }

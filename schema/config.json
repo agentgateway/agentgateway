@@ -6547,6 +6547,30 @@
             "type": "string"
           },
           "default": []
+        },
+        "login": {
+          "description": "Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OidcLogin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "logout": {
+          "description": "Optional logout endpoint. Independent of login; omit to disable the logout endpoint.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OidcLogout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
@@ -6562,6 +6586,50 @@
       "enum": [
         "clientSecretBasic",
         "clientSecretPost"
+      ]
+    },
+    "OidcLogin": {
+      "description": "Optional browser login entry point and unauthenticated redirect destination.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in\nlink here, optionally with `?returnTo=/app` to choose the destination after login.\n`returnTo` must be a safe local path and defaults to `/`.\nThis endpoint is handled by the policy, not forwarded to your application.",
+          "type": "string"
+        },
+        "redirect": {
+          "description": "Local page to redirect unauthenticated browser navigations to, for example\n`/login`. This happens BEFORE authentication; it is not the OAuth callback or\nthe destination after successful login. The gateway appends `returnTo` so your\npage can preserve it in its sign-in link to `login.path`.\nServe this page and its assets on routes that bypass authentication, using a\nconditional policy or separate routes. This setting does not make them public.\nFetch requests receive 401 with this destination in the Location header.\nIf omitted, unauthenticated navigations start OAuth directly.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ]
+    },
+    "OidcLogout": {
+      "description": "Optional local-session logout endpoint and destination.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "Local endpoint that clears this policy's session and login transaction cookies,\nfor example `/auth/logout`. Submit a POST from the callback URI's origin;\nrequests without a matching Origin header are rejected. The policy handles\nthis endpoint even when there is no valid session. This does not log out of\nthe identity provider or revoke tokens.",
+          "type": "string"
+        },
+        "redirect": {
+          "description": "Local destination for the 303 redirect AFTER logout, for example `/signed-out`.\nDefaults to `login.redirect` if configured, otherwise `/`. Make the destination\npublic through routing or a conditional policy; a protected destination can\nimmediately start another OAuth login using the existing identity-provider session.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path"
       ]
     },
     "LocalBasicAuth": {

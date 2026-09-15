@@ -2976,8 +2976,12 @@ async fn make_backend_call(
 			.assert_size::<{ 2 * 1024 }>()
 			.await?;
 			(
-				// Clearing extensions is fine; the HTTP codepath doesn't require usage after this point.
-				req.take_and_snapshot_clearing_extensions(log.as_mut())?,
+				// Internal handlers consume request attributes such as validated JWT claims.
+				if matches!(backend, Backend::Internal(_, _)) {
+					req.take_and_snapshot_without_clearing_extensions(log.as_mut())?
+				} else {
+					req.take_and_snapshot_clearing_extensions(log.as_mut())?
+				},
 				LLMResponsePolicies::default(),
 				None,
 			)

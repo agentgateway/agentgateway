@@ -2097,6 +2097,7 @@ fn mcp_matches() -> Vec<RouteMatch> {
 fn ui_matches(oidc_redirect_path: Option<Strng>) -> Vec<RouteMatch> {
 	let mut paths = vec![
 		PathMatch::Exact("/".into()),
+		PathMatch::PathPrefix("/api/auth".into()),
 		PathMatch::PathPrefix("/ui".into()),
 		PathMatch::PathPrefix("/api/runtime".into()),
 		PathMatch::PathPrefix("/api/config".into()),
@@ -4027,11 +4028,33 @@ async fn convert_attached_ui(
 		resolve_gateway_references(gateway_refs, &ui_config.gateways, GatewayRouteKind::Http)?;
 	let route_key = strng::new("ui");
 	let route_matches = ui_matches(ui_oidc_redirect_path(ui_config.policies.as_ref())?);
-	let resolved_policies = if let Some(pol) = ui_config.policies {
+	let mut resolved_policies = if let Some(pol) = ui_config.policies {
 		split_policies(resources, pol.into(), config.as_policy_context(&route_key)).await?
 	} else {
 		ResolvedPolicies::default()
 	};
+	// The built-in UI has a public login page; regular OIDC routes retain automatic login.
+	for policy in &mut resolved_policies.route_policies {
+		if let TrafficPolicy::Oidc(oidc) = policy {
+			*oidc = RequestPolicy::from_policy_inners(
+				std::mem::take(oidc)
+					.into_policy_inners()
+					.into_iter()
+					.map(|mut entry| {
+						let policy = Arc::make_mut(&mut entry.pol);
+						policy.login = Some(crate::http::oidc::OidcLogin {
+							path: "/api/auth/login".into(),
+							redirect: Some("/login".into()),
+						});
+						policy.logout = Some(crate::http::oidc::OidcLogout {
+							path: "/api/auth/logout".into(),
+							redirect: Some("/login".into()),
+						});
+						entry
+					}),
+			);
+		}
+	}
 	if !resolved_policies.backend_policies.is_empty() {
 		bail!("ui.policies cannot contain backend policies");
 	}
@@ -4043,7 +4066,7 @@ async fn convert_attached_ui(
 			config.mcp.session_ttl,
 		)
 		.await?;
-	let routes = vec![Route {
+	let mut routes = vec![Route {
 		key: route_key,
 		service_key: None,
 		service_port: 0,
@@ -4063,6 +4086,26 @@ async fn convert_attached_ui(
 		llm_router: None,
 		inline_policies: resolved_policies.route_policies,
 	}];
+	// Login and bundled static assets contain no application data. They must be
+	// public so the login page can load without UI authentication or authorization.
+	let mut login_route = routes[0].clone();
+	login_route.key = strng::new("ui:login");
+	login_route.name.name = strng::new("ui-login");
+	login_route.matches = [
+		PathMatch::Exact("/login".into()),
+		PathMatch::PathPrefix("/ui/assets".into()),
+		PathMatch::Exact("/ui/favicon.svg".into()),
+	]
+	.into_iter()
+	.map(|path| RouteMatch {
+		path,
+		headers: vec![],
+		method: None,
+		query: vec![],
+	})
+	.collect();
+	login_route.inline_policies.clear();
+	routes.push(login_route);
 	for listener_key in listeners {
 		push_listener_routes(
 			all_listener_routes,

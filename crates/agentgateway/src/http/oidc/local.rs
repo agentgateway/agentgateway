@@ -11,7 +11,7 @@ use crate::http::oauth::{
 	TokenEndpointAuth, openid_configuration_metadata_url, parse_token_endpoint_auth_methods,
 };
 use crate::serdes::FileInlineOrRemote;
-use crate::{apply, schema_de};
+use crate::{apply, schema, schema_de};
 
 #[derive(Debug, serde::Deserialize)]
 struct OidcDiscoveryDocument {
@@ -37,6 +37,45 @@ struct PreparedOidcPolicy {
 	client_secret: SecretString,
 	redirect_uri: RedirectUri,
 	scopes: Vec<String>,
+	login: Option<OidcLogin>,
+	logout: Option<OidcLogout>,
+}
+
+/// Optional browser login entry point and unauthenticated redirect destination.
+#[apply(schema!)]
+pub struct OidcLogin {
+	/// Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in
+	/// link here, optionally with `?returnTo=/app` to choose the destination after login.
+	/// `returnTo` must be a safe local path and defaults to `/`.
+	/// This endpoint is handled by the policy, not forwarded to your application.
+	pub path: String,
+	/// Local page to redirect unauthenticated browser navigations to, for example
+	/// `/login`. This happens BEFORE authentication; it is not the OAuth callback or
+	/// the destination after successful login. The gateway appends `returnTo` so your
+	/// page can preserve it in its sign-in link to `login.path`.
+	/// Serve this page and its assets on routes that bypass authentication, using a
+	/// conditional policy or separate routes. This setting does not make them public.
+	/// Fetch requests receive 401 with this destination in the Location header.
+	/// If omitted, unauthenticated navigations start OAuth directly.
+	#[serde(default)]
+	pub redirect: Option<String>,
+}
+
+/// Optional local-session logout endpoint and destination.
+#[apply(schema!)]
+pub struct OidcLogout {
+	/// Local endpoint that clears this policy's session and login transaction cookies,
+	/// for example `/auth/logout`. Submit a POST from the callback URI's origin;
+	/// requests without a matching Origin header are rejected. The policy handles
+	/// this endpoint even when there is no valid session. This does not log out of
+	/// the identity provider or revoke tokens.
+	pub path: String,
+	/// Local destination for the 303 redirect AFTER logout, for example `/signed-out`.
+	/// Defaults to `login.redirect` if configured, otherwise `/`. Make the destination
+	/// public through routing or a conditional policy; a protected destination can
+	/// immediately start another OAuth login using the existing identity-provider session.
+	#[serde(default)]
+	pub redirect: Option<String>,
 }
 
 /// Browser-based OIDC authentication policy.
@@ -92,6 +131,14 @@ pub struct LocalOidcConfig {
 	/// Additional OAuth2 scopes to request. `openid` is always included.
 	#[serde(default)]
 	pub scopes: Vec<String>,
+
+	/// Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.
+	#[serde(default)]
+	pub login: Option<OidcLogin>,
+
+	/// Optional logout endpoint. Independent of login; omit to disable the logout endpoint.
+	#[serde(default)]
+	pub logout: Option<OidcLogout>,
 }
 
 struct DiscoveredProviderMetadata {
@@ -129,8 +176,47 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			login,
+			logout,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
+		let mut endpoints = vec![redirect_uri.callback_path.as_str()];
+		for (name, endpoint, destination) in [
+			(
+				"login",
+				login.as_ref().map(|v| &v.path),
+				login.as_ref().and_then(|v| v.redirect.as_ref()),
+			),
+			(
+				"logout",
+				logout.as_ref().map(|v| &v.path),
+				logout.as_ref().and_then(|v| v.redirect.as_ref()),
+			),
+		] {
+			if let Some(endpoint) = endpoint {
+				let parsed = endpoint.parse::<http::uri::PathAndQuery>().ok();
+				if session::normalize_original_uri(parsed.as_ref()) != *endpoint
+					|| parsed.as_ref().is_none_or(|v| v.query().is_some())
+					|| endpoint.contains('#')
+					|| endpoints.contains(&endpoint.as_str())
+				{
+					return Err(Error::Config(format!(
+						"{name}.path must be a distinct local path without a query"
+					)));
+				}
+				endpoints.push(endpoint);
+			}
+			if let Some(destination) = destination {
+				let parsed = destination.parse::<http::uri::PathAndQuery>().ok();
+				if session::normalize_original_uri(parsed.as_ref()) != *destination
+					|| destination.contains('#')
+				{
+					return Err(Error::Config(format!(
+						"{name}.redirect must be a safe local path"
+					)));
+				}
+			}
+		}
 		let explicit_field_count = usize::from(authorization_endpoint.is_some())
 			+ usize::from(token_endpoint.is_some())
 			+ usize::from(jwks.is_some());
@@ -188,6 +274,8 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			login,
+			logout,
 		})
 	}
 }
@@ -323,6 +411,8 @@ impl PreparedOidcPolicy {
 			client_secret,
 			redirect_uri,
 			scopes,
+			login,
+			logout,
 		} = self;
 		let scopes = dedupe_scopes(scopes);
 		let token_endpoint_auth = provider.token_endpoint_auth;
@@ -347,6 +437,8 @@ impl PreparedOidcPolicy {
 				encoder: oidc_cookie_encoder.clone(),
 			},
 			scopes,
+			login,
+			logout,
 		})
 	}
 }
