@@ -309,9 +309,11 @@ binds:
             #         resourceDocumentation: http://localhost:3000/authentik/docs
             #         resourcePolicyUri: http://localhost:3000/authentik/policies
             # Example configuration for Microsoft Entra ID (Azure AD):
-            # Note the pathPrefix match on the authorization-server path: the gateway serves
-            # /authorize, /token, and /client-registration endpoints beneath it to adapt
+            # The gateway serves /authorize, /token, and /client-registration endpoints
+            # under both the well-known AS metadata path and the issuer path to adapt
             # Entra (strip the RFC 8707 `resource` param, short-circuit DCR).
+            # Note: use pathPrefix on /entra/mcp to also match the issuer-path endpoints
+            # (e.g. /entra/mcp/authorize) advertised in AS metadata for RFC 8414 compliance.
             # - backends:
             #   - mcp:
             #       targets:
@@ -322,7 +324,7 @@ binds:
             #           cmd: npx
             #   matches:
             #   - path:
-            #       exact: /entra/mcp
+            #       pathPrefix: /entra/mcp
             #   - path:
             #       exact: /.well-known/oauth-protected-resource/entra/mcp
             #   - path:
