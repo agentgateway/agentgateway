@@ -1373,3 +1373,68 @@ function trafficBaseConfig() {
 	];
 	return config;
 }
+
+test('Bedrock endpoint defaults apply only to new setups and choices survive saving', async ({
+	page
+}) => {
+	const existing = {
+		name: 'existing-bedrock',
+		provider: 'bedrock',
+		params: { awsRegion: 'us-west-2' }
+	};
+	const config = emptyConfig();
+	config.llm = { providers: [existing], models: [] };
+	const gateway = await mockGateway(page, config);
+	await page.goto('/llm/providers');
+	await page.getByRole('button', { name: 'Edit provider', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Bedrock endpoint', exact: true })).toContainText(
+		'Prefer Runtime'
+	);
+	await page.getByRole('button', { name: 'Save provider', exact: true }).click();
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	expect(gateway.postedConfigs[0].llm).toMatchObject({ providers: [existing] });
+	expect(
+		(gateway.postedConfigs[0].llm as { providers: (typeof existing)[] }).providers[0].params
+	).not.toHaveProperty('bedrockEndpointPreference');
+
+	await page.getByRole('button', { name: 'Add provider', exact: true }).click();
+	await page.getByPlaceholder('openai-prod').fill('new-bedrock');
+	await page.getByRole('combobox', { name: 'Provider', exact: true }).click();
+	await page.getByRole('option', { name: 'Amazon Bedrock', exact: true }).click();
+	await expect(page.getByRole('combobox', { name: 'Bedrock endpoint', exact: true })).toContainText(
+		'Prefer Mantle'
+	);
+	await page.getByRole('button', { name: 'Save provider', exact: true }).click();
+	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
+	expect(gateway.postedConfigs[1].llm).toMatchObject({
+		providers: [
+			existing,
+			{ name: 'new-bedrock', params: { bedrockEndpointPreference: 'mantlePreferred' } }
+		]
+	});
+
+	await page
+		.getByRole('row')
+		.filter({ hasText: 'new-bedrock' })
+		.getByRole('button', { name: 'Edit provider', exact: true })
+		.click();
+	await page.getByRole('combobox', { name: 'Bedrock endpoint', exact: true }).click();
+	await page.getByRole('option', { name: /Runtime only \(advanced\)/ }).click();
+	await page.getByRole('button', { name: 'Save provider', exact: true }).click();
+	await expect.poll(() => gateway.postedConfigs.length).toBe(3);
+	expect(gateway.postedConfigs[2].llm).toMatchObject({
+		providers: [
+			existing,
+			{ name: 'new-bedrock', params: { bedrockEndpointPreference: 'runtimeOnly' } }
+		]
+	});
+	await page.reload();
+	await page
+		.getByRole('row')
+		.filter({ hasText: 'new-bedrock' })
+		.getByRole('button', { name: 'Edit provider', exact: true })
+		.click();
+	await expect(page.getByRole('combobox', { name: 'Bedrock endpoint', exact: true })).toContainText(
+		'Runtime only (advanced)'
+	);
+});
