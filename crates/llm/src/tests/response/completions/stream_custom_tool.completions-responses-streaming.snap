@@ -1,0 +1,77 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream_custom_tool.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"claude-fable-5.1","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"claude-fable-5.1","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":4,"output_index":1,"item":{"type":"custom_tool_call","call_id":"call_xxx","input":"","name":"exec","id":"ctc_xxx"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":5,"output_index":2,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"","id":"","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":6,"item_id":"","output_index":2,"delta":"{\"input\":\"patch\"}"}
+
+event: event
+data: {"type":"response.custom_tool_call_input.done","sequence_number":7,"output_index":1,"item_id":"ctc_xxx","input":"echo hello"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":8,"output_index":1,"item":{"type":"custom_tool_call","call_id":"call_xxx","input":"echo hello","name":"exec","id":"ctc_xxx"}}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"__agw_custom_apply_patch","sequence_number":9,"item_id":"","output_index":2,"arguments":"{\"input\":\"patch\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":10,"output_index":2,"item":{"type":"function_call","arguments":"{\"input\":\"patch\"}","call_id":"call_xxx","name":"__agw_custom_apply_patch","id":"","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":11,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":12,"response":{"created_at":123,"id":"","model":"claude-fable-5.1","object":"response","output":[{"type":"message","content":[],"id":"","role":"assistant","status":"completed"},{"type":"custom_tool_call","call_id":"call_xxx","input":"echo hello","name":"exec","id":"ctc_xxx"},{"type":"function_call","arguments":"{\"input\":\"patch\"}","call_id":"call_xxx","name":"__agw_custom_apply_patch","id":"","status":"completed"}],"status":"completed","usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":4,"cache_write_tokens":null},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":15}}}
+
+
+
+{
+  "input_tokens": 10,
+  "output_tokens": 5,
+  "total_tokens": 15,
+  "reasoning_tokens": 0,
+  "cached_input_tokens": 4,
+  "provider_model": "claude-fable-5.1",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_123",
+          "name": "__agw_custom_exec",
+          "arguments": {
+            "input": "echo hello"
+          }
+        },
+        {
+          "type": "tool_call",
+          "id": "call_late",
+          "name": "__agw_custom_apply_patch",
+          "arguments": {
+            "input": "patch"
+          }
+        }
+      ],
+      "finish_reason": "completed"
+    }
+  ]
+}

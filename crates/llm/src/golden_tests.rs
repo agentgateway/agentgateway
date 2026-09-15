@@ -802,6 +802,8 @@ mod responses {
 				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
 				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
 				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
+				(r#""id":"ctc_[0-9a-f]{16}""#, r#""id":"ctc_xxx""#),
+				(r#""item_id":"ctc_[0-9a-f]{16}""#, r#""item_id":"ctc_xxx""#),
 				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
 			],
 		}, {
@@ -953,6 +955,7 @@ mod responses {
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream", ALL_COMPLETIONS),
+		("stream_custom_tool", &[COMPLETIONS_TO_RESPONSES]),
 		(
 			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
