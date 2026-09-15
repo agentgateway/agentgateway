@@ -353,6 +353,22 @@ binds:
             #       # Required for confidential clients (Web platform app registrations);
             #       # injected into token requests the gateway proxies to Entra.
             #       clientSecret: <client-secret>
+            #       # Optional broker-callback mode. When enabled, the gateway presents Entra a
+            #       # single registered Web redirect (the served-metadata path above + /callback,
+            #       # already covered by the pathPrefix match) for every MCP client, then relays
+            #       # Entra's authorization code back to each client's own redirect URI. This
+            #       # removes per-client redirect-URI registration (Entra has no DCR) and keeps
+            #       # every sign-in browser-classified. Register that callback URL under the app
+            #       # registration's Web platform. Requires clientId (above) and signingKey (below).
+            #       brokerCallback: true
+            #       # Dedicated HMAC key that signs the stateless broker state token, bound to the
+            #       # issuer, clientId, and callback URL. Independent of clientSecret so it also
+            #       # works for public clients and rotates on its own; keep it stable across gateway
+            #       # replicas so any replica can verify a token another issued. The state token
+            #       # only routes the callback and carries no authority — the single-use code
+            #       # exchange with PKCE stays the replay boundary; its short TTL (10 minutes) just
+            #       # narrows the relay window.
+            #       signingKey: <random-high-entropy-secret>
             #       resourceMetadata:
             #         resource: http://localhost:3000/entra/mcp
             #         scopesSupported:
