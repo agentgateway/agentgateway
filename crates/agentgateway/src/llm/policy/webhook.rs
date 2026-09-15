@@ -254,7 +254,11 @@ pub(super) async fn send_request(
 	let res = Box::pin(
 		client
 			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-			.call_reference(whr, &webhook.target),
+			.call_reference_with_policies(
+				whr,
+				&webhook.target.target,
+				webhook.target.policies.as_slice(),
+			),
 	)
 	.await?;
 	let parsed = json::from_response_body(res).await?;
@@ -276,7 +280,11 @@ pub(super) async fn send_response(
 	)?);
 	let res = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_reference(whr, &webhook.target)
+		.call_reference_with_policies(
+			whr,
+			&webhook.target.target,
+			webhook.target.policies.as_slice(),
+		)
 		.await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
@@ -292,11 +300,14 @@ mod tests {
 	use crate::http::HeaderOrPseudo;
 	use crate::http::jwt::Claims;
 	use crate::llm::policy::{FailureMode, RejectAuditAction};
-	use crate::types::agent::SimpleBackendReference;
+	use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
 
 	fn webhook(headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)>) -> Webhook {
 		Webhook {
-			target: SimpleBackendReference::Invalid,
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(SimpleBackendReference::Invalid),
+				policies: vec![],
+			},
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: FailureMode::FailClosed,
@@ -485,5 +496,119 @@ mod tests {
 		assert_eq!(req.uri().path(), "/prefixed/request");
 		// ...but context-dependent ones are skipped.
 		assert!(req.headers().get("x-user").is_none());
+	}
+
+	/// `target` accepts the same `policies` slot extAuthz has: explicit
+	/// `backendTLS`, or an `https://` host that implies it. The historical
+	/// `{host}` form yields no policies, so existing configs are unchanged.
+	#[test]
+	fn target_policies_deserialize_and_https_scheme_implies_tls() {
+		use crate::types::agent::{BackendTrafficPolicy, Target};
+
+		let plain: Webhook = serde_json::from_value(serde_json::json!({
+			"target": {"host": "127.0.0.1:8000"}
+		}))
+		.unwrap();
+		assert!(plain.target.policies.is_empty());
+		let serialized = serde_json::to_value(&plain).unwrap();
+		assert!(serialized["target"].get("policies").is_none());
+
+		let explicit: Webhook = serde_json::from_value(serde_json::json!({
+			"target": {"host": "guard.example.com:8443", "policies": {"backendTLS": {}}}
+		}))
+		.unwrap();
+		assert!(matches!(
+			explicit.target.policies.as_slice(),
+			[BackendTrafficPolicy::BackendTLS(_)]
+		));
+
+		let scheme: Webhook = serde_json::from_value(serde_json::json!({
+			"target": {"host": "https://guard.example.com"}
+		}))
+		.unwrap();
+		assert!(matches!(
+			scheme.target.target.as_ref(),
+			SimpleBackendReference::InlineBackend(Target::Hostname(host, 443))
+				if host.as_str() == "guard.example.com"
+		));
+		assert!(matches!(
+			scheme.target.policies.as_slice(),
+			[BackendTrafficPolicy::BackendTLS(_)]
+		));
+	}
+
+	/// The policies are honored on the wire: an https webhook is reached with
+	/// the target's `backendTLS`, and the same target without it (plaintext to
+	/// a TLS listener) fails.
+	#[cfg(feature = "crypto-aws-lc")]
+	#[tokio::test]
+	async fn https_target_is_dialed_with_backend_tls() {
+		use wiremock::matchers::{method, path};
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		use crate::http::backendtls::{BackendTLS, ResolvedBackendTLS};
+		use crate::transport::tls;
+		use crate::types::agent::{BackendTrafficPolicy, Target};
+
+		let _ = rustls::crypto::CryptoProvider::install_default(Arc::unwrap_or_clone(tls::provider()));
+		let certs = wiremock::tls_certs::MockTlsCertificates::random();
+		let server = MockServer::builder()
+			.start_https(certs.get_server_config())
+			.await;
+		Mock::given(method("POST"))
+			.and(path("/request"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+				"action": {"body": "blocked by guard", "status_code": 403}
+			})))
+			.mount(&server)
+			.await;
+		let target = Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+			*server.address(),
+		)));
+		let tls: BackendTLS = ResolvedBackendTLS {
+			root: Some(certs.root_cert.pem().into_bytes()),
+			insecure_host: true,
+			..Default::default()
+		}
+		.try_into()
+		.unwrap();
+		let client = crate::test_helpers::policy_client();
+
+		let mut wh = webhook(vec![]);
+		wh.target = SimpleBackendReferenceWithPolicies {
+			target: target.clone(),
+			policies: vec![BackendTrafficPolicy::BackendTLS(tls)],
+		};
+		let verdict = send_request(
+			&client,
+			&wh,
+			EvaluationContext::new(None, None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.await
+		.expect("https webhook reachable with backendTLS");
+		assert!(matches!(
+			verdict.action,
+			RequestAction::Reject(RejectAction { ref body, status_code: 403, .. })
+				if body == "blocked by guard"
+		));
+
+		wh.target = SimpleBackendReferenceWithPolicies {
+			target,
+			policies: vec![],
+		};
+		let plaintext = send_request(
+			&client,
+			&wh,
+			EvaluationContext::new(None, None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.await;
+		assert!(
+			plaintext.is_err(),
+			"plaintext dial to a TLS webhook must fail"
+		);
 	}
 }

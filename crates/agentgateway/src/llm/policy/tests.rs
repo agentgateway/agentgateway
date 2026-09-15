@@ -8,7 +8,7 @@ use crate::types::agent::HeaderValueMatch;
 /// must not additionally record `Allow`.
 #[tokio::test]
 async fn webhook_fail_open_emits_single_metric() {
-	use crate::types::agent::SimpleBackendReference;
+	use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
 
 	let guard = PromptGuard {
 		streaming: Default::default(),
@@ -16,7 +16,10 @@ async fn webhook_fail_open_emits_single_metric() {
 			rejection: Default::default(),
 			scope: default_content_scope(),
 			kind: RequestGuardKind::Webhook(Webhook {
-				target: SimpleBackendReference::Invalid,
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(SimpleBackendReference::Invalid),
+					policies: vec![],
+				},
 				headers: Default::default(),
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,

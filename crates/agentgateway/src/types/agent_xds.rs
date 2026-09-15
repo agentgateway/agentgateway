@@ -4063,7 +4063,12 @@ fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
 ) -> Result<llm::policy::Webhook, ProtoError> {
-	let target = resolve_simple_reference(w.backend.as_ref());
+	// The xDS Webhook message carries no inline backend policies yet; a
+	// named Backend reference still brings its own policies with it.
+	let target = SimpleBackendReferenceWithPolicies {
+		target: Arc::new(resolve_simple_reference(w.backend.as_ref())),
+		policies: vec![],
+	};
 
 	let forward_header_matches = convert_header_match(
 		diagnostics,

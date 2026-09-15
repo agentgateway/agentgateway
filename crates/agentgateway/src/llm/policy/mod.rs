@@ -14,7 +14,7 @@ use crate::llm::{AIError, ContentScope, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{GuardrailLog, RequestLog};
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
-use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
+use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReferenceWithPolicies};
 use crate::*;
 
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
@@ -2137,8 +2137,10 @@ pub enum FailureMode {
 
 #[apply(schema!)]
 pub struct Webhook {
-	/// Backend that receives guardrail webhook requests.
-	pub target: SimpleBackendReference,
+	/// Backend that receives guardrail webhook requests, and the backend policies
+	/// (such as `backendTLS`) used when connecting to it. A `host` with an
+	/// `https://` scheme enables TLS with system roots automatically.
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Headers to set on the webhook request, computed from CEL expressions.
 	/// Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;
 	/// setting `:path` replaces the default `/request` / `/response` path.
