@@ -1562,8 +1562,6 @@ pub mod to_completions {
 	use std::time::Instant;
 
 	use agent_http::Body;
-	use futures_util::StreamExt;
-	use futures_util::stream::{self, BoxStream};
 	use serde_json::Value;
 
 	use super::*;
@@ -2093,35 +2091,13 @@ pub mod to_completions {
 			cache_creation_input_tokens: None,
 		}
 	}
-
-	pub(super) fn append_done_on_close<S>(stream: S) -> Body
-	where
-		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
-	{
-		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
-		let stream = stream::unfold(
-			(Some(stream.boxed()), Some(done)),
-			|(stream, done): (
-				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
-				Option<Bytes>,
-			)| async move {
-				let mut stream = stream?;
-				match stream.next().await {
-					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
-					Some(Err(err)) => Some((Err(err), (None, None))),
-					None => done.map(|done| (Ok(done), (None, None))),
-				}
-			},
-		);
-		Body::from_stream(stream)
-	}
 }
 
 pub mod to_messages {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 
 	use super::to_completions::decode_parts;
@@ -2291,6 +2267,7 @@ pub mod to_messages {
 		saw_tool_call: bool,
 		tool_call_index: u32,
 		saw_token: bool,
+		last_token_at: Option<Instant>,
 		// Accumulated for flush_message_end; populated when finish_reason arrives.
 		pending_stop_reason: Option<messages::StopReason>,
 		pending_input_tokens: usize,
@@ -2318,6 +2295,7 @@ pub mod to_messages {
 				saw_tool_call: false,
 				tool_call_index: 0,
 				saw_token: false,
+				last_token_at: None,
 				pending_stop_reason: None,
 				pending_input_tokens: 0,
 				pending_output_tokens: 0,
@@ -2328,10 +2306,18 @@ pub mod to_messages {
 			}
 		}
 
-		fn record_first_token(&mut self, log: &StreamingUsageGuard) {
+		/// Note that a token-bearing part arrived: the first one sets `first_token`, each later
+		/// one records the gap since the previous. Same accounting as every other streaming
+		/// translator, so inter-token latency is comparable across providers.
+		fn record_token(&mut self, log: &StreamingUsageGuard) {
+			let now = Instant::now();
 			if !self.saw_token {
 				self.saw_token = true;
-				log.update(|r| r.response.first_token = Some(Instant::now()));
+				self.last_token_at = Some(now);
+				log.update(|r| r.response.first_token = Some(now));
+			} else if let Some(prev) = self.last_token_at.replace(now) {
+				let gap = now.duration_since(prev);
+				log.update(|r| r.response.inter_chunk_latencies.record(gap));
 			}
 		}
 
@@ -2521,7 +2507,7 @@ pub mod to_messages {
 				for part in &content.parts {
 					match part {
 						vg::Part::Text(t) if t.thought == Some(true) => {
-							self.record_first_token(log);
+							self.record_token(log);
 							let idx = self.open_block(BlockKind::Thinking, &mut out);
 							out.push(
 								messages::MessagesStreamEvent::ContentBlockDelta {
@@ -2551,7 +2537,7 @@ pub mod to_messages {
 							}
 						},
 						vg::Part::Text(t) => {
-							self.record_first_token(log);
+							self.record_token(log);
 							let idx = self.open_block(BlockKind::Text, &mut out);
 							if let Some(c) = self.pending_completion.as_mut() {
 								c.push_str(&t.text);
@@ -2567,7 +2553,7 @@ pub mod to_messages {
 							);
 						},
 						vg::Part::FunctionCall(fc) => {
-							self.record_first_token(log);
+							self.record_token(log);
 							self.close_open_block(&mut out);
 							self.saw_tool_call = true;
 							let call_idx = self.tool_call_index;
@@ -2682,7 +2668,7 @@ pub mod to_messages {
 		let mut state = StreamState::new(log_content);
 		// Gemini ends without [DONE]; append one to the INPUT so json_transform_multi fires
 		// SseJsonEvent::Done on clean close, which lets on_done() emit message_stop.
-		let b = to_completions::append_done_on_close(b.into_data_stream());
+		let b = parse::sse::append_done_on_success(b);
 		parse::sse::json_transform_multi::<vg::GenerateContentResponse, messages::MessagesStreamEvent, _>(
 			b,
 			buffer_limit,
