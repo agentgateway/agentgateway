@@ -22,7 +22,9 @@ use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
-use crate::types::agent::{BackendTrafficPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
+use crate::types::agent::{
+	BackendTrafficPolicy, FrontendPolicy, McpServerOverrides, PolicyTarget, TargetedPolicy,
+};
 use crate::*;
 
 #[tokio::test]
@@ -6065,7 +6067,42 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 }
 
 #[test]
-fn test_merge_initialize_uses_server_name_override_when_multiplexing() {
+fn test_mcp_server_overrides_validate_requires_name_and_version_together() {
+	let name_only = McpServerOverrides {
+		name: Some("custom-gateway".into()),
+		version: None,
+		title: None,
+		instructions: None,
+	};
+	assert!(name_only.validate().is_err());
+
+	let version_only = McpServerOverrides {
+		name: None,
+		version: Some("9.9.9".into()),
+		title: None,
+		instructions: None,
+	};
+	assert!(version_only.validate().is_err());
+
+	let both_set = McpServerOverrides {
+		name: Some("custom-gateway".into()),
+		version: Some("9.9.9".into()),
+		title: None,
+		instructions: None,
+	};
+	assert!(both_set.validate().is_ok());
+
+	let both_unset = McpServerOverrides {
+		name: None,
+		version: None,
+		title: Some("Custom Title".into()),
+		instructions: Some("Custom gateway preamble.".into()),
+	};
+	assert!(both_unset.validate().is_ok());
+}
+
+#[test]
+fn test_merge_initialize_uses_title_override_when_multiplexing() {
 	use agent_core::version::BuildInfo;
 	use rmcp::model::{
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
@@ -6077,7 +6114,12 @@ fn test_merge_initialize_uses_server_name_override_when_multiplexing() {
 				"alpha",
 				SocketAddr::from(([127, 0, 0, 1], 30117)),
 			)],
-			server_name: Some("custom-gateway".into()),
+			server: Some(McpServerOverrides {
+				name: None,
+				version: None,
+				title: Some("Custom Title".into()),
+				instructions: None,
+			}),
 			..Default::default()
 		},
 		empty_mcp_policies(),
@@ -6102,11 +6144,16 @@ fn test_merge_initialize_uses_server_name_override_when_multiplexing() {
 		other => panic!("expected InitializeResult, got: {:?}", other),
 	};
 
-	// Name is overridden; version and instructions preamble keep their defaults.
-	assert_eq!(info.server_info.name, "custom-gateway");
+	// Title is overridden; name, version and instructions preamble keep their defaults.
+	assert_eq!(info.server_info.name, "agentgateway");
 	assert_eq!(
 		info.server_info.version,
 		BuildInfo::new().version.to_string()
+	);
+	assert_eq!(
+		info.server_info.title.as_deref(),
+		Some("Custom Title"),
+		"title override should be applied"
 	);
 	let instructions = info.instructions.expect("instructions should be present");
 	assert_eq!(
@@ -6128,9 +6175,12 @@ fn test_merge_initialize_uses_full_override_when_multiplexing() {
 				"alpha",
 				SocketAddr::from(([127, 0, 0, 1], 30118)),
 			)],
-			server_name: Some("custom-gateway".into()),
-			server_version: Some("9.9.9".into()),
-			instructions: Some("Custom gateway preamble.".into()),
+			server: Some(McpServerOverrides {
+				name: Some("custom-gateway".into()),
+				version: Some("9.9.9".into()),
+				title: Some("Custom Title".into()),
+				instructions: Some("Custom gateway preamble.".into()),
+			}),
 			..Default::default()
 		},
 		empty_mcp_policies(),
@@ -6158,6 +6208,7 @@ fn test_merge_initialize_uses_full_override_when_multiplexing() {
 
 	assert_eq!(info.server_info.name, "custom-gateway");
 	assert_eq!(info.server_info.version, "9.9.9");
+	assert_eq!(info.server_info.title.as_deref(), Some("Custom Title"));
 	let instructions = info.instructions.expect("instructions should be present");
 	assert!(instructions.starts_with("Custom gateway preamble."));
 	assert!(instructions.contains("Alpha server instructions."));
@@ -6179,9 +6230,12 @@ fn test_merge_discover_uses_full_override_when_multiplexing() {
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30119))),
 				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30120))),
 			],
-			server_name: Some("custom-gateway".into()),
-			server_version: Some("9.9.9".into()),
-			instructions: Some("Custom gateway preamble.".into()),
+			server: Some(McpServerOverrides {
+				name: Some("custom-gateway".into()),
+				version: Some("9.9.9".into()),
+				title: None,
+				instructions: Some("Custom gateway preamble.".into()),
+			}),
 			..Default::default()
 		},
 		empty_mcp_policies(),

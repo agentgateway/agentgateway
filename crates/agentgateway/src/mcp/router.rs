@@ -18,8 +18,8 @@ use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
-	BackendTargetRef, McpBackend, McpPrefixMode, McpTargetSpec, ResourceName, SimpleBackend,
-	SimpleBackendReference,
+	BackendTargetRef, McpBackend, McpPrefixMode, McpServerOverrides, McpTargetSpec, ResourceName,
+	SimpleBackend, SimpleBackendReference,
 };
 use crate::{ProxyInputs, cel, mcp};
 
@@ -113,9 +113,7 @@ impl App {
 				failure_mode: backend.failure_mode,
 				session_idle_ttl: backend.session_idle_ttl,
 				sse_keep_alive: backend.sse_keep_alive,
-				server_name: backend.server_name.clone(),
-				server_version: backend.server_version.clone(),
-				instructions: backend.instructions.clone(),
+				server: backend.server.clone(),
 			}
 		};
 		let sessions = self.session.clone();
@@ -243,9 +241,7 @@ pub struct McpBackendGroup {
 	pub failure_mode: FailureMode,
 	pub session_idle_ttl: Duration,
 	pub sse_keep_alive: Option<Duration>,
-	pub server_name: Option<Strng>,
-	pub server_version: Option<Strng>,
-	pub instructions: Option<Strng>,
+	pub server: Option<McpServerOverrides>,
 }
 
 impl Default for McpBackendGroup {
@@ -257,9 +253,7 @@ impl Default for McpBackendGroup {
 			failure_mode: crate::mcp::FailureMode::default(),
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
 			sse_keep_alive: None,
-			server_name: None,
-			server_version: None,
-			instructions: None,
+			server: None,
 		}
 	}
 }

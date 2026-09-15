@@ -2070,9 +2070,7 @@ pub(crate) fn backend_with_policies_from_proto(
 				dns_rebinding_protection: false,
 				// Not yet exposed over xDS; only the local/static config surface
 				// (`LocalMcpBackend`) supports these overrides today.
-				server_name: None,
-				server_version: None,
-				instructions: None,
+				server: None,
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {

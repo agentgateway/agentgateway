@@ -8242,25 +8242,15 @@
           "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
           "type": "boolean"
         },
-        "serverName": {
-          "description": "Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`\nwhen multiplexing multiple targets. Defaults to `agentgateway` when unset.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "serverVersion": {
-          "description": "Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`\nwhen multiplexing multiple targets. Defaults to the build version when unset.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "instructions": {
-          "description": "Overrides the gateway preamble prepended to merged upstream instructions when\nmultiplexing multiple targets. Defaults to a generic gateway description when unset.",
-          "type": [
-            "string",
-            "null"
+        "server": {
+          "description": "Overrides for the MCP `serverInfo` and gateway instructions reported to clients on\n`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall\nback to the normal defaults.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerOverrides"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -8581,6 +8571,41 @@
           "const": "failOpen"
         }
       ]
+    },
+    "McpServerOverrides": {
+      "description": "Overrides for the MCP `serverInfo` (`name`/`version`/`title`) and the gateway\ninstructions preamble, applied only when multiplexing multiple targets.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Overrides `serverInfo.name`. Must be set together with `version` — setting only one\nwould otherwise mix an overridden name with agentgateway's own version, or vice versa.\nDefaults to `agentgateway` when unset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "description": "Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.\nDefaults to the build version when unset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "description": "Overrides `serverInfo.title`. Unset by default.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "instructions": {
+          "description": "Overrides the gateway preamble prepended to merged upstream instructions.\nDefaults to a generic gateway description when unset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "LocalAIBackend": {
       "anyOf": [
@@ -12649,25 +12674,15 @@
           "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
           "type": "boolean"
         },
-        "serverName": {
-          "description": "Overrides the `serverInfo.name` reported to clients on `initialize`/`server/discover`\nwhen multiplexing multiple targets. Defaults to `agentgateway` when unset.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "serverVersion": {
-          "description": "Overrides the `serverInfo.version` reported to clients on `initialize`/`server/discover`\nwhen multiplexing multiple targets. Defaults to the build version when unset.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "instructions": {
-          "description": "Overrides the gateway preamble prepended to merged upstream instructions when\nmultiplexing multiple targets. Defaults to a generic gateway description when unset.",
-          "type": [
-            "string",
-            "null"
+        "server": {
+          "description": "Overrides for the MCP `serverInfo` and gateway instructions reported to clients on\n`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall\nback to the normal defaults.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpServerOverrides"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "policies": {
