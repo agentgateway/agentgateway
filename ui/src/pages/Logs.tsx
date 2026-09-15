@@ -36,6 +36,7 @@ import { MultiCheckboxDropdown } from '@/components/MultiCheckboxDropdown';
 import {
 	Drawer,
 	EmptyState,
+	Field,
 	FieldGroup,
 	formatDate,
 	formatNumber,
@@ -80,6 +81,7 @@ import type {
 	AnalyticsTimeBucket,
 	GatewayConfig,
 	LogEntry,
+	LogFilters,
 	SearchLogsResponse,
 	TimeRange
 } from '@/types';
@@ -114,6 +116,10 @@ export function LogsPage() {
 		emptyAnalyticsFilterOptions
 	);
 	const [status, setStatus] = useState('');
+	const [payload, setPayload] = useState('');
+	const [traceId, setTraceId] = useState('');
+	const [attributeKey, setAttributeKey] = useState('');
+	const [attributeValue, setAttributeValue] = useState('');
 	const [stream, setStream] = useState(false);
 	const [response, setResponse] = useState<SearchLogsResponse>({ logs: [] });
 	const [expanded, setExpanded] = useState<LogEntry | null>(null);
@@ -127,13 +133,21 @@ export function LogsPage() {
 	const detailLoadingTimerRef = useRef<number | null>(null);
 	const filterOptionsSeqRef = useRef(0);
 	const logFiltersKey = analyticsFiltersKey(logFilters);
-	const filters = useMemo(
-		() => ({
+	const filters = useMemo(() => {
+		const next: LogFilters = {
 			...analyticsLogFilters(logFilters),
 			httpStatus: status ? [Number(status)] : []
-		}),
-		[logFiltersKey, status]
-	);
+		};
+		if (payload) next.hasPayload = payload === 'recorded';
+		if (traceId.trim()) next.traceId = traceId.trim();
+		if (attributeKey.trim() && attributeValue.trim()) {
+			next.attributes = {
+				...(next.attributes ?? {}),
+				[attributeKey.trim()]: [attributeValue.trim()]
+			};
+		}
+		return next;
+	}, [logFiltersKey, status, payload, traceId, attributeKey, attributeValue]);
 	const visibleLogs = useMemo(() => {
 		if (!expanded || !expandedId || response.logs.some(entry => entry.id === expandedId))
 			return response.logs;
@@ -378,6 +392,36 @@ export function LogsPage() {
 						allLabel="Any status"
 						onChange={values => setStatus(values.at(-1) ?? '')}
 					/>
+					<MultiCheckboxDropdown
+						kind="filter"
+						label="Payload"
+						options={[
+							{ value: 'recorded', label: 'Recorded' },
+							{ value: 'not-recorded', label: 'Not recorded' }
+						]}
+						values={payload ? [payload] : []}
+						placeholder="Any payload"
+						allLabel="Any payload"
+						onChange={values => setPayload(values.at(-1) ?? '')}
+					/>
+					<CommittedInput
+						label="Trace ID"
+						placeholder="Any trace"
+						value={traceId}
+						onCommit={setTraceId}
+					/>
+					<CommittedInput
+						label="Attribute"
+						placeholder="key"
+						value={attributeKey}
+						onCommit={setAttributeKey}
+					/>
+					<CommittedInput
+						label="Attribute value"
+						placeholder="value"
+						value={attributeValue}
+						onCommit={setAttributeValue}
+					/>
 					<label className="toggle-row logs-stream-toggle">
 						<input
 							type="checkbox"
@@ -387,13 +431,22 @@ export function LogsPage() {
 						Stream
 						{stream ? <span className="stream-live-dot" aria-label="streaming" /> : null}
 					</label>
-					{hasAnalyticsFilters(logFilters) || status ? (
+					{hasAnalyticsFilters(logFilters) ||
+					status ||
+					payload ||
+					traceId ||
+					attributeKey ||
+					attributeValue ? (
 						<button
 							className="button"
 							type="button"
 							onClick={() => {
 								setLogFilters(emptyAnalyticsFilterOptions());
 								setStatus('');
+								setPayload('');
+								setTraceId('');
+								setAttributeKey('');
+								setAttributeValue('');
 							}}
 						>
 							Clear filters
@@ -484,6 +537,40 @@ export function LogsPage() {
 				/>
 			) : null}
 		</div>
+	);
+}
+
+function CommittedInput(props: {
+	label: string;
+	placeholder: string;
+	value: string;
+	onCommit: (value: string) => void;
+}) {
+	const [draft, setDraft] = useState(props.value);
+	useEffect(() => {
+		setDraft(props.value);
+	}, [props.value]);
+	// Committing on blur and on Enter keeps one query per value rather than one
+	// per keystroke, and leaves the field editable while a search is in flight.
+	const commit = () => {
+		if (draft.trim() !== props.value) props.onCommit(draft.trim());
+	};
+	return (
+		<Field label={props.label}>
+			<input
+				type="text"
+				value={draft}
+				placeholder={props.placeholder}
+				onChange={event => setDraft(event.target.value)}
+				onBlur={commit}
+				onKeyDown={event => {
+					if (event.key === 'Enter') {
+						event.preventDefault();
+						commit();
+					}
+				}}
+			/>
+		</Field>
 	);
 }
 
