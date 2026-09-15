@@ -81,9 +81,7 @@ impl NormalizedLocalConfig {
 		gateway_name: ListenerTarget,
 		s: &str,
 	) -> anyhow::Result<NormalizedLocalConfig> {
-		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
-		let s = s.replace("# yaml-language-server: $schema", "#");
-		let s = shellexpand::full(&s)?;
+		let s = crate::config::expand_yaml_environment_variables(s)?;
 		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
 		let mut registration_config = config.clone();
 		let registration_policy = Arc::new(config.budget_policy.registration_policy());

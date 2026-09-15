@@ -236,6 +236,29 @@ fn assert_hostname_target(target: &Target, expected_host: &str, expected_port: u
 }
 
 #[tokio::test]
+async fn test_local_config_ignores_environment_variables_in_full_line_comments() {
+	let _env_lock = crate::config::lock_env_for_tests_async().await;
+	unsafe {
+		std::env::remove_var("TEST_LOCAL_EXPAND_COMMENT_MISSING");
+	}
+
+	normalize_test_yaml(
+		r#"
+# ${TEST_LOCAL_EXPAND_COMMENT_MISSING}
+  # $TEST_LOCAL_EXPAND_COMMENT_MISSING
+binds:
+- port: 1080
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect("local config with environment variables in comments should normalize");
+}
+
+#[tokio::test]
 async fn test_local_dynamic_backend_reference_uses_generated_backend() {
 	let normalized = normalize_test_yaml(
 		r#"
