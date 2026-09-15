@@ -2264,12 +2264,37 @@ fn msg_stream_text_continues_across_chunks() {
 }
 
 // ---------- Streaming: translate_stream wire-level tests ----------
+/// Every other streaming translator records the gap between token-bearing chunks. This path
+/// recorded only `first_token`, so the Messages stream reported no inter-token latency where
+/// the completions stream over the same provider does.
+#[test]
+fn msg_stream_records_inter_chunk_latencies() {
+	let captured = passthrough::captured_info();
+	let guard = crate::StreamingUsageGuard::new(Box::new(passthrough::Capture(captured.clone())));
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
+
+	for text in ["one", "two", "three"] {
+		let chunk: vg::GenerateContentResponse = serde_json::from_value(json!({
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": text }] } }]
+		}))
+		.expect("valid gemini stream chunk");
+		let _ = s.translate(&chunk, &guard);
+	}
+
+	let info = captured.lock().unwrap();
+	assert!(info.response.first_token.is_some(), "first token recorded");
+	assert!(
+		!info.response.inter_chunk_latencies.is_empty(),
+		"a gap is recorded for every token-bearing chunk after the first"
+	);
+}
+
 // These drive `to_messages::translate_stream` end-to-end (real SSE bytes in, Anthropic
 // SSE events out) to catch wiring bugs that state-machine unit tests cannot reach.
 
 /// Collect all SSE events from a `translate_stream` Body into a Vec of deserialized
 /// Values, one per `data:` line that parses as JSON.
-async fn collect_stream_events(body: axum_core::body::Body) -> Vec<Value> {
+async fn collect_stream_events(body: agent_http::Body) -> Vec<Value> {
 	use http_body_util::BodyExt;
 	let bytes = body.collect().await.unwrap().to_bytes();
 	String::from_utf8(bytes.to_vec())
@@ -2281,9 +2306,9 @@ async fn collect_stream_events(body: axum_core::body::Body) -> Vec<Value> {
 }
 
 /// Build a one-chunk Gemini SSE stream followed by a clean close (no [DONE]).
-fn gemini_sse(chunk: Value) -> axum_core::body::Body {
+fn gemini_sse(chunk: Value) -> agent_http::Body {
 	let data = format!("data: {}\n\n", serde_json::to_string(&chunk).unwrap());
-	axum_core::body::Body::from(data)
+	agent_http::Body::from(data)
 }
 
 #[tokio::test]
@@ -2361,7 +2386,7 @@ async fn translate_stream_message_stop_on_truncated_stream_no_finish_reason() {
 async fn translate_stream_input_tokens_forwarded_to_client() {
 	// Gemini sends usageMetadata only on the final chunk (carrying finishReason).
 	// The client's message_delta must reflect the real input token count, not 0.
-	let body = axum_core::body::Body::from(format!(
+	let body = agent_http::Body::from(format!(
 		"data: {}\n\ndata: {}\n\n",
 		serde_json::to_string(&json!({
 			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] } }]
