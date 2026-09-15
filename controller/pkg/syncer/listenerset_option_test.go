@@ -24,15 +24,15 @@ var testGatewayParent = types.NamespacedName{Namespace: "default", Name: "exampl
 // Only "other" carries the label, so a selector policy distinguishes it from the Gateway's own
 // namespace.
 var testNamespaces = []*corev1.Namespace{
-	{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
-	{ObjectMeta: metav1.ObjectMeta{Name: "other", Labels: map[string]string{"team": "platform"}}},
+	{Name: "default"},
+	{Name: "other", Labels: map[string]string{"team": "platform"}},
 }
 
 // baseListenerSet is dotted so fixtures can exercise InternalGatewayName not being injective.
 var baseListenerSet = testListenerSet("default", "ls.one", "http")
 
 func testGateway(from *gwv1.FromNamespaces) *gwv1.Gateway {
-	gw := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "example"}}
+	gw := &gwv1.Gateway{Namespace: "default", Name: "example"}
 	if from != nil {
 		gw.Spec.AllowedListeners = &gwv1.AllowedListeners{
 			Namespaces: &gwv1.ListenerNamespaces{From: from},
@@ -147,7 +147,7 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 
 	// Does not collide by name, so only the parent-is-a-ListenerSet check catches it.
 	realListenerSets := []*gwv1.ListenerSet{
-		{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "real"}},
+		{Namespace: "default", Name: "real"},
 	}
 
 	cases := []struct {
