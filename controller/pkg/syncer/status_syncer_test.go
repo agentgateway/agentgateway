@@ -134,7 +134,6 @@ func TestStatusSyncerApplyStatus_MergesInferencePoolParents(t *testing.T) {
 
 	syncer.ApplyStatus(context.Background(), syncstatus.Resource{
 		Name: current.Name, Namespace: current.Namespace,
-		ResourceVersion: "1",
 	}, &statusAny)
 
 	require.NotNil(t, client.updated)
