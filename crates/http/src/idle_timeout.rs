@@ -1,64 +1,78 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::task::Context;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::Bytes;
-use http_body::Frame;
-use parking_lot::Mutex;
-use tokio::time::{Instant, Sleep};
+use http_body::{Frame, SizeHint};
+use tokio::time::Sleep;
 
-use crate::BodyTimeoutError;
+use crate::{BodyTimeoutError, RawBody};
 
-/// Extracted content shares progress with its owner, but has its own timer/waker.
+/// Bounds pending reads from the original stream, independently of downstream processing.
 #[derive(Debug)]
 pub(crate) struct IdleTimeout {
+	inner: RawBody,
 	duration: Duration,
-	expires_at: Arc<Mutex<Instant>>,
 	sleep: Option<Pin<Box<Sleep>>>,
-}
-
-impl Clone for IdleTimeout {
-	fn clone(&self) -> Self {
-		Self {
-			duration: self.duration,
-			expires_at: self.expires_at.clone(),
-			sleep: None,
-		}
-	}
+	done: bool,
 }
 
 impl IdleTimeout {
-	pub(crate) fn new(duration: Duration) -> Self {
+	pub(crate) fn new(inner: RawBody, duration: Duration) -> Self {
 		Self {
+			inner,
 			duration,
-			expires_at: Arc::new(Mutex::new(Instant::now() + duration)),
 			sleep: None,
+			done: false,
+		}
+	}
+}
+
+impl http_body::Body for IdleTimeout {
+	type Data = Bytes;
+	type Error = axum_core::Error;
+
+	fn poll_frame(
+		self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+	) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+		let this = self.get_mut();
+		if this.done {
+			return Poll::Ready(None);
+		}
+		// Check the upstream first: processing or backpressure may have delayed polling
+		// while a frame was already available. Only a pending read starts the window.
+		match Pin::new(&mut this.inner).poll_frame(cx) {
+			Poll::Ready(frame) => {
+				this.sleep = None;
+				this.done = matches!(&frame, None | Some(Err(_)));
+				Poll::Ready(frame)
+			},
+			Poll::Pending => {
+				let sleep = this
+					.sleep
+					.get_or_insert_with(|| Box::pin(tokio::time::sleep(this.duration)));
+				if sleep.as_mut().poll(cx).is_ready() {
+					this.done = true;
+					this.sleep = None;
+					Poll::Ready(Some(Err(axum_core::Error::new(BodyTimeoutError))))
+				} else {
+					Poll::Pending
+				}
+			},
 		}
 	}
 
-	pub(crate) fn check(&self) -> Result<(), axum_core::Error> {
-		if Instant::now() >= *self.expires_at.lock() {
-			return Err(axum_core::Error::new(BodyTimeoutError));
-		}
-		Ok(())
+	fn is_end_stream(&self) -> bool {
+		self.done || self.inner.is_end_stream()
 	}
 
-	pub(crate) fn poll_expired(&mut self, cx: &mut Context<'_>) -> bool {
-		let expires_at = *self.expires_at.lock();
-		if Instant::now() >= expires_at {
-			return true;
+	fn size_hint(&self) -> SizeHint {
+		if self.done {
+			SizeHint::with_exact(0)
+		} else {
+			self.inner.size_hint()
 		}
-		let sleep = self
-			.sleep
-			.get_or_insert_with(|| Box::pin(tokio::time::sleep_until(expires_at)));
-		sleep.as_mut().reset(expires_at);
-		sleep.as_mut().poll(cx).is_ready()
-	}
-
-	pub(crate) fn on_frame(&mut self, _frame: &Frame<Bytes>) {
-		// Any successfully received frame signals liveness, including empty DATA.
-		*self.expires_at.lock() = Instant::now() + self.duration;
 	}
 }

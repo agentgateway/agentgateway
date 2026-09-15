@@ -105,11 +105,7 @@ impl http_body::Body for FailedBody {
 /// On partial reads, `body` becomes prefix + overflow + remaining stream. On EOF,
 /// the caller must install the returned bytes/trailers as a buffered representation;
 /// `body` still contains the failure placeholder.
-pub async fn inspect_body(
-	body: &mut RawBody,
-	limit: usize,
-	mut idle_timeout: Option<&mut crate::idle_timeout::IdleTimeout>,
-) -> anyhow::Result<InspectedBody> {
+pub async fn inspect_body(body: &mut RawBody, limit: usize) -> anyhow::Result<InspectedBody> {
 	let mut orig = std::mem::replace(
 		body,
 		RawBody::new(FailedBody("body inspection failed or was cancelled")),
@@ -125,27 +121,13 @@ pub async fn inspect_body(
 			// frame exactly filled it, completion has not yet been established.
 			break;
 		}
-		let frame = std::future::poll_fn(|cx| {
-			if let Some(timeout) = idle_timeout.as_mut()
-				&& timeout.poll_expired(cx)
-			{
-				return Poll::Ready(Some(Err(axum_core::Error::new(crate::BodyTimeoutError))));
-			}
-			let frame = Pin::new(&mut orig).poll_frame(cx);
-			if let Poll::Ready(Some(Ok(frame))) = &frame
-				&& let Some(timeout) = idle_timeout.as_mut()
-			{
-				timeout.on_frame(frame);
-			}
-			frame
-		})
-		.await;
+		let frame = std::future::poll_fn(|cx| Pin::new(&mut orig).poll_frame(cx)).await;
 		match frame {
 			Some(Ok(frame)) => {
 				if let Some(data) = frame.data_ref() {
 					let want_this_read = cmp::min(data.len(), want);
 					if want_this_read == 0 {
-						// Empty frames count as timeout progress above, but use no byte
+						// Empty frames use no byte
 						// budget. Continue until data, EOF, an error, or an idle timeout.
 						continue;
 					}

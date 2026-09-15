@@ -3405,10 +3405,10 @@ type Timeouts struct {
 	// +optional
 	Request *Duration `json:"request,omitempty"`
 
-	// Maximum time the response body may go without producing data. The window restarts on every
-	// body frame, so this bounds the gap between frames rather than the total time a response may
-	// take. It is what terminates a backend that stops producing data mid-stream without capping
-	// how long a legitimately long response may run.
+	// Maximum time to wait for a frame from the upstream response body.
+	//
+	// Limits how long the gateway waits for more response data from the backend.
+	// Time spent processing the response or waiting for the client to receive it does not count.
 	//
 	// This complements Request rather than overlapping it: Request stops applying once the response
 	// headers arrive, so it places no bound on how long the response body may take, and it cannot

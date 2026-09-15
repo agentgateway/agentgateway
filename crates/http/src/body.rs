@@ -74,7 +74,6 @@ struct BodyInner {
 	extensions: ::http::Extensions,
 	recorded: Option<RecordedBodyHandle>,
 	observers: BodyObservers,
-	idle_timeout: Option<IdleTimeout>,
 }
 
 /// State shared across sequential delivery attempts of the same original content.
@@ -85,7 +84,6 @@ pub struct ReplayBodyState {
 	extensions: ::http::Extensions,
 	record_limit: Option<usize>,
 	observers: std::sync::Arc<parking_lot::Mutex<BodyObservers>>,
-	idle_timeout: Option<IdleTimeout>,
 }
 
 struct ReplayObservers(std::sync::Arc<parking_lot::Mutex<BodyObservers>>);
@@ -127,7 +125,6 @@ impl ReplayBodyState {
 			representation,
 			recorded: None,
 			observers: BodyObservers::default(),
-			idle_timeout: self.idle_timeout.clone(),
 		}));
 		if !self.observers.lock().0.is_empty() {
 			body = body.with_observer(ReplayObservers(self.observers.clone()));
@@ -208,7 +205,6 @@ impl Body {
 			observers: std::sync::Arc::new(parking_lot::Mutex::new(std::mem::take(
 				&mut self.0.observers,
 			))),
-			idle_timeout: self.0.idle_timeout.clone(),
 		};
 		self.0.recorded = None;
 		(self, state)
@@ -228,7 +224,6 @@ impl Body {
 			},
 			recorded: None,
 			observers: BodyObservers::default(),
-			idle_timeout: None,
 		}))
 	}
 
@@ -251,17 +246,18 @@ impl Body {
 		RawBody::new(self)
 	}
 
-	/// Start an idle timeout, including the wait for the first chunk.
-	/// Every successful frame resets it, including empty DATA; content replacement does not.
+	/// Bound pending reads from the current content, including the first chunk.
+	/// The timeout follows this stream through extraction and wrapping; replacing
+	/// the content discards it. Time before a read is first polled does not count.
 	pub fn set_idle_timeout(&mut self, duration: Duration) {
-		self.0.idle_timeout = Some(IdleTimeout::new(duration));
-	}
-
-	fn check_idle_timeout(&self) -> Result<(), axum_core::Error> {
-		if let Some(timeout) = &self.0.idle_timeout {
-			timeout.check()?;
+		if duration.is_zero() {
+			return;
 		}
-		Ok(())
+		let representation = std::mem::take(&mut self.0.representation);
+		self.0.representation = Representation::Streaming {
+			body: RawBody::new(IdleTimeout::new(representation.into_body(), duration)),
+			inspected_prefix: None,
+		};
 	}
 
 	/// with_observer adds an Observer that can see all body frames. Note: if the body is modified, the
@@ -306,7 +302,6 @@ impl Body {
 	/// Fresh buffered bodies can return their bytes without being boxed, polled,
 	/// and collected again.
 	pub async fn into_bytes(self, limit: usize) -> Result<Bytes, axum_core::Error> {
-		self.check_idle_timeout()?;
 		if let Representation::Buffered {
 			bytes,
 			emitted: false,
@@ -382,8 +377,6 @@ impl Body {
 			representation,
 			recorded: None,
 			observers: BodyObservers::default(),
-			// Reads by extracted content reset its owner's idle timer too.
-			idle_timeout: self.0.idle_timeout.clone(),
 		}))
 	}
 
@@ -410,7 +403,7 @@ impl Body {
 	}
 
 	/// Restore unmodified content previously extracted with `take_content`, including
-	/// its inspection and remaining delivery state. The owner's observers and timeout
+	/// its inspection and remaining delivery state. The owner's observers
 	/// remain attached. This is not a replacement API for unrelated request/response bodies.
 	pub fn restore_content(&mut self, mut content: Body) {
 		debug_assert!(content.0.recorded.is_none() && content.0.observers.0.is_empty());
@@ -425,7 +418,7 @@ impl Body {
 	}
 
 	/// Install new content, invalidating inspection, extensions, and recording while retaining
-	/// lifecycle observers and the idle timeout.
+	/// lifecycle observers.
 	pub fn replace_content(&mut self, replacement: BodyContent) {
 		self.0.extensions.clear();
 		// TODO: centralize fulfilling retained inspection requirements after streaming
@@ -519,7 +512,6 @@ impl Body {
 	}
 
 	pub async fn inspect(&mut self, limit: usize) -> anyhow::Result<BodyInspection> {
-		self.check_idle_timeout()?;
 		if let Some(inspection) = self.cached_inspection(limit) {
 			return Ok(inspection);
 		}
@@ -534,11 +526,7 @@ impl Body {
 		// A failed/cancelled read leaves a terminal error body. Clear the old
 		// prefix first so a later, smaller inspection cannot bypass that failure.
 		*inspected_prefix = None;
-		// Inspection bypasses managed polling, so enforce/reset idle timeout on
-		// each frame here without recording inspection reads as forwarded bytes.
-		let inspected =
-			crate::peekbody::inspect_body(body, limit.saturating_add(1), self.0.idle_timeout.as_mut())
-				.await?;
+		let inspected = crate::peekbody::inspect_body(body, limit.saturating_add(1)).await?;
 		let all_bytes = inspected.bytes;
 		let complete = inspected.complete;
 		let result = if complete && all_bytes.len() <= limit {
@@ -640,7 +628,6 @@ impl From<Bytes> for Body {
 			},
 			recorded: None,
 			observers: BodyObservers::default(),
-			idle_timeout: None,
 		}))
 	}
 }
@@ -666,15 +653,6 @@ impl http_body::Body for Body {
 		cx: &mut Context<'_>,
 	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
 		let this = &mut *self.get_mut().0;
-		if let Some(timeout) = &mut this.idle_timeout
-			&& timeout.poll_expired(cx)
-		{
-			let error = axum_core::Error::new(BodyTimeoutError);
-			for observer in &mut this.observers.0 {
-				observer.on_error(&error);
-			}
-			return Poll::Ready(Some(Err(error)));
-		}
 		let poll = Pin::new(&mut this.representation).poll_frame(cx);
 		if let Poll::Ready(frame) = &poll {
 			if let Some(Err(error)) = frame {
@@ -683,9 +661,6 @@ impl http_body::Body for Body {
 				}
 			}
 			if let Some(Ok(frame)) = frame {
-				if let Some(timeout) = &mut this.idle_timeout {
-					timeout.on_frame(frame);
-				}
 				for observer in &mut this.observers.0 {
 					observer.on_frame(frame);
 				}

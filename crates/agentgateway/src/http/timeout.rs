@@ -24,11 +24,10 @@ pub struct Policy {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub backend_request_timeout: Option<Duration>,
-	/// Maximum time the response body may go without producing data.
+	/// Maximum time to wait for a frame from the upstream response body.
 	///
-	/// The window restarts on every body frame, so this bounds the gap between frames rather than
-	/// the total time a response may take. It is what terminates a backend that stops producing
-	/// data mid-stream without capping how long a legitimately long response may run.
+	/// Limits how long the gateway waits for more response data from the backend.
+	/// Time spent processing the response or waiting for the client to receive it does not count.
 	///
 	/// This complements the other two rather than overlapping them: both `requestTimeout` and
 	/// `backendRequestTimeout` stop applying once the response headers arrive, so neither places
@@ -47,7 +46,7 @@ pub struct Policy {
 	pub response_idle_timeout: Option<Duration>,
 }
 
-/// Apply the response idle timeout without replacing managed body state.
+/// Attach the idle timeout to the upstream body before response processing.
 pub fn apply_response_idle_timeout(
 	mut response: crate::http::Response,
 	timeout: Duration,

@@ -251,34 +251,70 @@ async fn failed_or_cancelled_inspection_is_terminal() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn idle_timeout_survives_inspection_and_content_changes() {
+async fn idle_timeout_only_counts_pending_upstream_reads() {
 	use std::time::Duration;
 
-	use tokio::time::advance;
+	use tokio::time::{Instant, advance, sleep};
 
-	let mut body = Body::new(http_body_util::Full::new(Bytes::from_static(b"original")));
-	body.set_idle_timeout(Duration::from_secs(10));
-	assert!(matches!(
-		body.inspect(100).await.unwrap(),
-		crate::BodyInspection::Complete(_)
-	));
+	let stream = futures_util::stream::unfold(0, |n| async move {
+		if n == 3 {
+			std::future::pending::<()>().await;
+		}
+		sleep(Duration::from_millis(750)).await;
+		Some((Ok::<_, std::io::Error>(Bytes::from_static(b"x")), n + 1))
+	});
+	let mut body = Body::from_stream(stream);
+	body.set_idle_timeout(Duration::from_secs(1));
+	for _ in 0..2 {
+		// A processing pause before the next read must not consume its idle window.
+		advance(Duration::from_secs(10)).await;
+		let start = Instant::now();
+		assert!(body.frame().await.unwrap().is_ok());
+		assert_eq!(Instant::now() - start, Duration::from_millis(750));
+	}
+	// If a pending read is not polled again until after its deadline, accept data
+	// that became available meanwhile rather than blaming upstream for scheduling delay.
+	let mut read = Box::pin(body.frame());
+	assert!(futures_util::poll!(&mut read).is_pending());
+	advance(Duration::from_secs(10)).await;
+	assert!(read.await.unwrap().is_ok());
+	advance(Duration::from_secs(10)).await;
+	let start = Instant::now();
 	assert_eq!(
-		body.known_bytes().unwrap(),
-		&Bytes::from_static(b"original")
+		body.frame().await.unwrap().unwrap_err().to_string(),
+		"response idle timeout"
 	);
-	assert_eq!(body.size_hint().exact(), Some(8));
+	assert_eq!(Instant::now() - start, Duration::from_secs(1));
 
-	advance(Duration::from_secs(5)).await;
-	body.replace_bytes(Bytes::from_static(b"changed"));
-	body = body.transform_stream(|stream| stream);
-	// Safe: identity wrapper preserves the entire stream and its trailers.
-	body = body.dangerous_wrap_stream_preserving_content(|stream| stream);
+	// Replacing failed upstream content discards its timeout along with the stream.
 	body.replace_bytes(Bytes::from_static(b"replacement"));
-	// Content replacement must not restart the idle interval.
-	advance(Duration::from_secs(5)).await;
-	assert!(body.frame().await.unwrap().is_err());
-	assert!(body.inspect(100).await.is_err());
-	assert!(body.into_bytes(100).await.is_err());
+	assert_eq!(body.into_bytes(100).await.unwrap(), "replacement");
+}
+
+#[tokio::test(start_paused = true)]
+async fn idle_timeout_stays_inside_buffering_transforms() {
+	use std::time::Duration;
+
+	use tokio::time::sleep;
+
+	let stream = futures_util::stream::unfold(0, |n| async move {
+		if n == 3 {
+			return None;
+		}
+		sleep(Duration::from_millis(750)).await;
+		Some((Ok::<_, std::io::Error>(Bytes::from_static(b"x")), n + 1))
+	});
+	let mut body = Body::from_stream(stream);
+	body.set_idle_timeout(Duration::from_secs(1));
+	let body = body.transform_stream(|stream| {
+		crate::RawBody::from_stream(futures_util::stream::once(async move {
+			let bytes = stream.collect().await?.to_bytes();
+			// Model a guardrail that buffers the upstream, then evaluates before emitting.
+			sleep(Duration::from_secs(2)).await;
+			Ok::<_, crate::Error>(bytes)
+		}))
+	});
+	assert_eq!(body.into_bytes(100).await.unwrap(), "xxx");
 }
 
 #[tokio::test(start_paused = true)]
@@ -300,9 +336,9 @@ async fn extracted_content_times_out_during_reads() {
 			_ => unreachable!(),
 		}
 		assert_eq!(Instant::now(), deadline);
-		// Extraction also leaves the original owner's idle timeout intact.
+		// The timeout belongs to the extracted stream, not its original owner.
 		body.replace_bytes(Bytes::from_static(b"replacement"));
-		assert!(body.frame().await.unwrap().is_err());
+		assert_eq!(body.into_bytes(100).await.unwrap(), "replacement");
 	}
 }
 
@@ -332,7 +368,7 @@ async fn recording_completes_on_final_data_frame_without_polling_none() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn inspection_resets_idle_timeout_per_chunk_and_shares_progress_with_owner() {
+async fn inspection_reads_upstream_with_timeout_without_timing_buffered_content() {
 	use std::time::Duration;
 
 	use tokio::time::{Instant, advance, sleep};
@@ -354,11 +390,12 @@ async fn inspection_resets_idle_timeout_per_chunk_and_shares_progress_with_owner
 	));
 	assert_eq!(Instant::now() - start, Duration::from_millis(2250));
 	// Total reading time exceeded the interval, but no individual gap did.
-	// The original owner must see progress made by the extracted content.
+	// Buffered content and replacements no longer wait for the upstream.
 	body.replace_bytes(Bytes::from_static(b"replacement"));
 	assert!(body.inspect(100).await.is_ok());
-	advance(Duration::from_secs(1)).await;
-	assert!(body.frame().await.unwrap().is_err());
+	advance(Duration::from_secs(10)).await;
+	assert_eq!(content.into_bytes(100).await.unwrap(), "xxx");
+	assert_eq!(body.into_bytes(100).await.unwrap(), "replacement");
 }
 
 #[tokio::test]

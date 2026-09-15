@@ -751,12 +751,7 @@ impl HTTPProxy {
 			Ok(_) => ProxyResponseReason::Upstream,
 			Err(e) => e.as_reason(),
 		};
-		let mut is_upstream_response = reason == ProxyResponseReason::Upstream;
-		let response_idle_timeout = response_policies
-			.timeout
-			.as_ref()
-			.and_then(|t| t.response_idle_timeout)
-			.filter(|d| !d.is_zero());
+		let is_upstream_response = reason == ProxyResponseReason::Upstream;
 		let mut resp = ret.unwrap_or_else(|err| match err {
 			ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
 			ProxyResponse::DirectResponse(dr) => *dr,
@@ -780,12 +775,9 @@ impl HTTPProxy {
 			.await
 		{
 			Ok(_) => resp,
-			Err(e) => {
-				is_upstream_response = false;
-				match e {
-					ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
-					ProxyResponse::DirectResponse(dr) => *dr,
-				}
+			Err(e) => match e {
+				ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
+				ProxyResponse::DirectResponse(dr) => *dr,
 			},
 		};
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
@@ -816,9 +808,6 @@ impl HTTPProxy {
 				.await
 				.unwrap_or_else(|e| e.into_response_with_grpc(is_grpc_request))
 		} else {
-			if is_upstream_response && let Some(idle_timeout) = response_idle_timeout {
-				resp = http::timeout::apply_response_idle_timeout(resp, idle_timeout);
-			}
 			resp.map(move |body| body.with_observer(log))
 		}
 	}
@@ -3122,6 +3111,17 @@ async fn make_backend_call(
 		),
 	});
 	let mut resp = resp?;
+	// Protect reads from the actual upstream before any policy buffers, transforms,
+	// or replaces its body. CONNECT tunnels take a separate path above.
+	if resp.status() != StatusCode::SWITCHING_PROTOCOLS
+		&& let Some(timeout) = response_policies
+			.timeout
+			.as_ref()
+			.and_then(|t| t.response_idle_timeout)
+			.filter(|d| !d.is_zero())
+	{
+		resp = http::timeout::apply_response_idle_timeout(resp, timeout);
+	}
 	if let Some(log) = log.as_ref() {
 		resp
 			.extensions_mut()
