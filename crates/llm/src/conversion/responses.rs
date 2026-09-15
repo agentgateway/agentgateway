@@ -642,7 +642,7 @@ pub mod from_messages {
 			messages::ToolResultContent::Array(parts) => {
 				let mut text_parts = Vec::new();
 				let mut text_values = Vec::new();
-				let has_cache_control = cache_control.is_some();
+				let mut requires_array = cache_control.is_some();
 				for part in parts {
 					let (text, cache_control) = match part {
 						messages::ToolResultContentPart::Text {
@@ -654,10 +654,15 @@ pub mod from_messages {
 							tool_name,
 							cache_control,
 						} => (tool_name, cache_control),
-						messages::ToolResultContentPart::Image { .. } => {
-							return unsupported(
-								"messages non-text tool_result content cannot be represented by responses",
-							);
+						messages::ToolResultContentPart::Image {
+							source,
+							cache_control,
+						} => {
+							let mut value = translate_image_source(&source)?;
+							add_prompt_cache_breakpoint(&mut value, cache_control);
+							text_values.push(value);
+							requires_array = true;
+							continue;
 						},
 						messages::ToolResultContentPart::Unknown
 						| messages::ToolResultContentPart::Document { .. }
@@ -682,7 +687,7 @@ pub mod from_messages {
 						}));
 					}
 				}
-				if has_cache_control
+				if requires_array
 					|| text_values
 						.iter()
 						.any(|part| part.get("prompt_cache_breakpoint").is_some())
