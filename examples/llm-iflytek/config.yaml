@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+llm:
+  port: 3000
+  models:
+  - name: 4.0Ultra
+    provider: openAI
+    params:
+      model: 4.0Ultra
+      apiKey: $SPARK_API_PASSWORD
+      baseUrl: https://spark-api-open.xf-yun.com/v1
