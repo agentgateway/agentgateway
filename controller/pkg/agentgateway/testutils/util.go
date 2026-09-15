@@ -155,10 +155,20 @@ type testOutput[Status any, Output any] struct {
 }
 
 func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *syncer.Syncer) {
+	return SyncerWithOptions(t, ctx, includeStatusKinds)
+}
+
+// SyncerWithOptions is Syncer, with syncer options applied.
+func SyncerWithOptions(
+	t *testing.T,
+	ctx plugins.PolicyCtx,
+	includeStatusKinds []string,
+	opts ...syncer.AgentgatewaySyncerOption,
+) (*TestStatusQueue, *syncer.Syncer) {
 	fc := fake.NewClient(t)
 	stop := test.NewStop(t)
 	debugger := new(krt.DebugHandler)
-	opts := krtutil.NewKrtOptions(stop, debugger)
+	krtOpts := krtutil.NewKrtOptions(stop, debugger)
 	resolver := BuildRemoteHTTPResolver(ctx.Collections)
 	jwksLookup := BuildJWKSLookup(ctx.Collections)
 	t.Cleanup(func() {
@@ -174,8 +184,9 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 		ctx.Collections,
 		agwPluginFactory(ctx.Collections, resolver, jwksLookup),
 		nil,
-		opts,
+		krtOpts,
 		nil,
+		opts...,
 	)
 	fc.RunAndWait(stop)
 	sq := &TestStatusQueue{

@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/maps"
+	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
@@ -76,6 +77,8 @@ type Syncer struct {
 	customResourceCollections   func(cfg CustomResourceCollectionsConfig)
 	buildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
 	buildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
+	extraListenerSets           ExtraListenerSetsBuilderFunc
+	allowedListenersResolver    AllowedListenersResolver
 }
 
 func NewAgwSyncer(
@@ -103,6 +106,8 @@ func NewAgwSyncer(
 		customResourceCollections:   cfg.CustomResourceCollections,
 		buildAddressCollectionsFunc: cfg.BuildAddressCollectionsFunc,
 		buildReferenceTypesFunc:     cfg.BuildReferenceTypesFunc,
+		extraListenerSets:           cfg.ExtraListenerSets,
+		allowedListenersResolver:    cfg.AllowedListenersResolver,
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
@@ -118,6 +123,8 @@ type OutputCollections struct {
 	Resources  krt.Collection[agwir.AgwResource]
 	Addresses  krt.Collection[Address]
 	References plugins.ReferenceIndex
+	// RejectedListenerSets is empty unless WithExtraListenerSets is set.
+	RejectedListenerSets krt.Collection[RejectedListenerSet]
 }
 
 type CustomResourceCollectionsConfig struct {
@@ -147,6 +154,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 		krtopts,
 	))
 	listenerSetInitialStatus, listenerSets := s.buildListenerSetCollection(gatewayClasses, refGrants, krtopts)
+	listenerSets, rejectedListenerSets := s.joinExtraListenerSets(listenerSets, krtopts)
 	if s.customResourceCollections != nil {
 		s.customResourceCollections(CustomResourceCollectionsConfig{
 			ControllerName:    s.controllerName,
@@ -198,6 +206,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	s.Outputs.Resources = agwResources
 	s.Outputs.Addresses = addresses
 	s.Outputs.References = ancestorCollection
+	s.Outputs.RejectedListenerSets = rejectedListenerSets
 }
 
 func (s *Syncer) buildFinalGatewayStatus(
@@ -401,6 +410,151 @@ func (s *Syncer) buildListenerSetCollection(
 				s.agwCollections.Settings.EnableAgentgatewayModels,
 			)
 		}, krtopts.ToOptions("translator/ListenerSetListeners")...)
+}
+
+// RejectedListenerSet is a contributed listener set that failed admission. The syncer does not
+// write status for it: the contributor owns the resource it came from, so it owns the reporting.
+type RejectedListenerSet struct {
+	ListenerSet translator.ListenerSet
+	Reason      gwv1.ListenerSetConditionReason
+	Message     string
+}
+
+func (r RejectedListenerSet) ResourceName() string {
+	return r.ListenerSet.ResourceName()
+}
+
+func (r RejectedListenerSet) Equals(other RejectedListenerSet) bool {
+	return r.Reason == other.Reason && r.Message == other.Message && r.ListenerSet.Equals(other.ListenerSet)
+}
+
+type reviewedListenerSet struct {
+	ListenerSet translator.ListenerSet
+	Admitted    bool
+	// Nil for an admitted set, and for one dropped for a transient reason worth no report.
+	Rejection *RejectedListenerSet
+}
+
+func (r reviewedListenerSet) ResourceName() string {
+	return r.ListenerSet.ResourceName()
+}
+
+func (r reviewedListenerSet) Equals(other reviewedListenerSet) bool {
+	if (r.Rejection != nil) != (other.Rejection != nil) {
+		return false
+	}
+	if r.Rejection != nil && !r.Rejection.Equals(*other.Rejection) {
+		return false
+	}
+	return r.Admitted == other.Admitted && r.ListenerSet.Equals(other.ListenerSet)
+}
+
+// joinExtraListenerSets joins admissible contributed listener sets with those built from Gateway
+// API ListenerSets, returning the refused contributions alongside.
+func (s *Syncer) joinExtraListenerSets(
+	base krt.Collection[translator.ListenerSet],
+	krtopts krtutil.KrtOptions,
+) (krt.Collection[translator.ListenerSet], krt.Collection[RejectedListenerSet]) {
+	noRejections := func() krt.Collection[RejectedListenerSet] {
+		return krt.NewStaticCollection[RejectedListenerSet](nil, nil,
+			krtopts.ToOptions("translator/RejectedExtraListenerSets")...)
+	}
+	if s.extraListenerSets == nil {
+		return base, noRejections()
+	}
+	extra := s.extraListenerSets(s.agwCollections, krtopts)
+	if extra == nil {
+		return base, noRejections()
+	}
+
+	reviewed := krt.NewCollection(extra, func(ctx krt.HandlerContext, ls translator.ListenerSet) *reviewedListenerSet {
+		return s.reviewExtraListenerSet(ctx, base, ls)
+	}, krtopts.ToOptions("translator/ReviewedExtraListenerSets")...)
+
+	admitted := krt.NewCollection(reviewed, func(ctx krt.HandlerContext, r reviewedListenerSet) *translator.ListenerSet {
+		if !r.Admitted {
+			return nil
+		}
+		return &r.ListenerSet
+	}, krtopts.ToOptions("translator/AdmittedExtraListenerSets")...)
+
+	rejected := krt.NewCollection(reviewed, func(ctx krt.HandlerContext, r reviewedListenerSet) *RejectedListenerSet {
+		return r.Rejection
+	}, krtopts.ToOptions("translator/RejectedExtraListenerSets")...)
+
+	// JoinCollection would resolve a duplicate name in List and GetKey but not in its index, and
+	// the index is how GatewayTransformationFunc reads listener sets. Merging on first-wins keeps
+	// the CRD ListenerSet ahead of an already-admitted contribution it collides with.
+	return krt.JoinWithMergeCollection(
+		[]krt.Collection[translator.ListenerSet]{base, admitted},
+		func(ts []translator.ListenerSet) *translator.ListenerSet { return &ts[0] },
+		krtopts.ToOptions("translator/AllListenerSets")...,
+	), rejected
+}
+
+// reviewExtraListenerSet applies the allowedListeners gate a Gateway API ListenerSet gets, plus
+// the identity checks CRD schema validation would otherwise have covered.
+func (s *Syncer) reviewExtraListenerSet(
+	ctx krt.HandlerContext,
+	base krt.Collection[translator.ListenerSet],
+	ls translator.ListenerSet,
+) *reviewedListenerSet {
+	reject := func(reason gwv1.ListenerSetConditionReason, message string) *reviewedListenerSet {
+		return &reviewedListenerSet{
+			ListenerSet: ls,
+			Rejection:   &RejectedListenerSet{ListenerSet: ls, Reason: reason, Message: message},
+		}
+	}
+
+	// ListenerKey is what routes attach to; ParentInfo.ParentGateway is what binds group by.
+	if ls.ParentInfo.SectionName == "" {
+		return reject(gwv1.ListenerSetReasonInvalid, "section name is empty")
+	}
+	if want := utils.InternalGatewayName(ls.Parent.Namespace, ls.Parent.Name, string(ls.ParentInfo.SectionName)); ls.Name != want {
+		return reject(gwv1.ListenerSetReasonInvalid,
+			fmt.Sprintf("name %q is not derived from parent %v and section name %q", ls.Name, ls.Parent, ls.ParentInfo.SectionName))
+	}
+	if ls.ParentInfo.ListenerKey != ls.Name {
+		return reject(gwv1.ListenerSetReasonInvalid,
+			fmt.Sprintf("listener key %q does not match name %q", ls.ParentInfo.ListenerKey, ls.Name))
+	}
+	if ls.ParentInfo.ParentGateway != ls.GatewayParent {
+		return reject(gwv1.ListenerSetReasonInvalid,
+			fmt.Sprintf("parent gateway %v does not match %v", ls.ParentInfo.ParentGateway, ls.GatewayParent))
+	}
+
+	// Status, policy and listener keys are shared with Gateway API objects, and
+	// InternalGatewayName is not injective, so a contribution must not collide with one.
+	if krt.FetchOne(ctx, s.agwCollections.ListenerSets, krt.FilterObjectName(ls.Parent)) != nil {
+		return reject(gwv1.ListenerSetReasonInvalid, fmt.Sprintf("parent %v is a ListenerSet", ls.Parent))
+	}
+	if krt.FetchOne(ctx, s.agwCollections.Gateways, krt.FilterObjectName(ls.Parent)) != nil {
+		return reject(gwv1.ListenerSetReasonInvalid, fmt.Sprintf("parent %v is a Gateway", ls.Parent))
+	}
+	if krt.FetchOne(ctx, base, krt.FilterKey(ls.ResourceName())) != nil {
+		return reject(gwv1.ListenerSetReasonInvalid, fmt.Sprintf("name %q is already used by a ListenerSet listener", ls.Name))
+	}
+
+	parentGateway := ptr.Flatten(krt.FetchOne(ctx, s.agwCollections.Gateways, krt.FilterObjectName(ls.GatewayParent)))
+	if parentGateway == nil {
+		// Not admitted, and not reported: usually collection ordering, not a contributor error.
+		return &reviewedListenerSet{ListenerSet: ls}
+	}
+	allowed := parentGateway.Spec.AllowedListeners
+	if allowed == nil && s.allowedListenersResolver != nil {
+		allowed = s.allowedListenersResolver(parentGateway)
+	}
+	if !translator.AllowedListenersAcceptNamespace(
+		allowed,
+		ls.Parent.Namespace,
+		parentGateway.Namespace,
+		func(n string) *corev1.Namespace {
+			return ptr.Flatten(krt.FetchOne(ctx, s.agwCollections.Namespaces, krt.FilterKey(n)))
+		},
+	) {
+		return reject(gwv1.ListenerSetReasonNotAllowed, "Gateway does not allow listener set attachment")
+	}
+	return &reviewedListenerSet{ListenerSet: ls, Admitted: true}
 }
 
 func (s *Syncer) buildAgwResources(
