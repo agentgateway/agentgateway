@@ -1,0 +1,11 @@
+data: {"id":"chatcmpl-custom-tool","object":"chat.completion.chunk","created":1772656915,"model":"claude-fable-5.1","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"__agw_custom_exec","arguments":"{\"input\":\"echo "}},{"index":1,"id":"call_late","type":"function"}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-custom-tool","object":"chat.completion.chunk","created":1772656915,"model":"claude-fable-5.1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"hello\"}"}},{"index":1,"function":{"name":"__agw_custom_apply_patch","arguments":"{\"input\":\"patch\"}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-custom-tool","object":"chat.completion.chunk","created":1772656915,"model":"claude-fable-5.1","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":null}
+
+data: {"id":"chatcmpl-custom-tool","object":"chat.completion.chunk","created":1772656915,"model":"claude-fable-5.1","choices":[],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_tokens_details":{"cached_tokens":4},"completion_tokens_details":{"reasoning_tokens":0}}}
+
+data: [DONE]
+
+: eof

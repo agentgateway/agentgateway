@@ -2,11 +2,13 @@
 #[path = "openai_compat_tests.rs"]
 mod tests;
 
+const CUSTOM_TOOL_PREFIX: &str = "__agw_custom_";
+
 pub mod from_responses {
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
 
-	use crate::{AIError, json, types};
+	use crate::{AIError, types};
 
 	pub struct TranslatedRequest {
 		pub request: completions::Request,
@@ -20,14 +22,129 @@ pub mod from_responses {
 	}
 
 	pub fn translate_request(req: &types::responses::Request) -> Result<TranslatedRequest, AIError> {
-		let mut typed =
-			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
+		let mut value = serde_json::to_value(req).map_err(AIError::RequestMarshal)?;
+		let mut additional_tools = Vec::new();
+		if let Some(items) = value
+			.get_mut("input")
+			.and_then(serde_json::Value::as_array_mut)
+		{
+			items.retain_mut(|item| {
+				if item.get("type").and_then(serde_json::Value::as_str)
+					== Some(crate::types::responses::ADDITIONAL_TOOLS_TYPE)
+					&& let Some(tools) = item
+						.get_mut("tools")
+						.and_then(serde_json::Value::as_array_mut)
+				{
+					additional_tools.append(tools);
+					return false;
+				}
+				if item.get("type").and_then(serde_json::Value::as_str) == Some("custom_tool_call")
+					&& item.get("id").is_none()
+					&& let Some(call_id) = item.get("call_id").cloned()
+				{
+					item["id"] = call_id;
+				}
+				if item.get("role").and_then(serde_json::Value::as_str) != Some("assistant")
+					|| item.get("id").is_some() && item.get("status").is_some()
+				{
+					return true;
+				}
+				let Some(parts) = item.get("content").and_then(serde_json::Value::as_array) else {
+					return true;
+				};
+				if !parts.iter().any(|part| {
+					matches!(
+						part.get("type").and_then(serde_json::Value::as_str),
+						Some("output_text" | "refusal")
+					)
+				}) {
+					return true;
+				}
+				let text = parts
+					.iter()
+					.filter_map(|part| {
+						part
+							.get("text")
+							.or_else(|| part.get("refusal"))
+							.and_then(serde_json::Value::as_str)
+					})
+					.collect::<Vec<_>>()
+					.join("\n");
+				item["content"] = text.into();
+				true
+			});
+		}
+		if !additional_tools.is_empty() {
+			match value.get_mut("tools") {
+				Some(serde_json::Value::Array(tools)) => tools.extend(additional_tools),
+				_ => value["tools"] = additional_tools.into(),
+			}
+		}
+		let mut typed = serde_json::from_value::<responses::CreateResponse>(value)
+			.map_err(AIError::RequestMarshal)?;
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		Ok(TranslatedRequest {
 			request: translate_internal(typed),
 			namespaces,
 		})
+	}
+
+	fn push_assistant_content(
+		messages: &mut Vec<completions::RequestMessage>,
+		content: completions::RequestAssistantMessageContent,
+	) {
+		if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut() {
+			let text_part = |text| {
+				completions::RequestAssistantMessageContentPart::Text(
+					completions::RequestMessageContentPartText {
+						text,
+						prompt_cache_breakpoint: None,
+					},
+				)
+			};
+			message.content = Some(match (message.content.take(), content) {
+				(None, next) => next,
+				(
+					Some(completions::RequestAssistantMessageContent::Text(mut existing)),
+					completions::RequestAssistantMessageContent::Text(next),
+				) => {
+					if !existing.is_empty() && !next.is_empty() {
+						existing.push('\n');
+					}
+					existing.push_str(&next);
+					completions::RequestAssistantMessageContent::Text(existing)
+				},
+				(
+					Some(completions::RequestAssistantMessageContent::Array(mut existing)),
+					completions::RequestAssistantMessageContent::Array(mut next),
+				) => {
+					existing.append(&mut next);
+					completions::RequestAssistantMessageContent::Array(existing)
+				},
+				(
+					Some(completions::RequestAssistantMessageContent::Text(existing)),
+					completions::RequestAssistantMessageContent::Array(mut next),
+				) => {
+					next.insert(0, text_part(existing));
+					completions::RequestAssistantMessageContent::Array(next)
+				},
+				(
+					Some(completions::RequestAssistantMessageContent::Array(mut existing)),
+					completions::RequestAssistantMessageContent::Text(next),
+				) => {
+					existing.push(text_part(next));
+					completions::RequestAssistantMessageContent::Array(existing)
+				},
+			});
+			return;
+		}
+		messages.push(completions::RequestMessage::Assistant(
+			completions::RequestAssistantMessage {
+				content: Some(content),
+				..Default::default()
+			},
+		));
 	}
 
 	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
@@ -116,12 +233,7 @@ pub mod from_responses {
 								)
 							},
 						};
-						messages.push(completions::RequestMessage::Assistant(
-							completions::RequestAssistantMessage {
-								content: Some(content),
-								..Default::default()
-							},
-						));
+						push_assistant_content(&mut messages, content);
 					},
 					ResponsesRole::System | ResponsesRole::Developer => {
 						let content = match msg.content {
@@ -249,16 +361,12 @@ pub mod from_responses {
 								.collect::<Vec<_>>()
 								.join("\n");
 
-							messages.push(completions::RequestMessage::Assistant(
-								completions::RequestAssistantMessage {
-									content: if text.is_empty() {
-										None
-									} else {
-										Some(completions::RequestAssistantMessageContent::Text(text))
-									},
-									..Default::default()
-								},
-							));
+							if !text.is_empty() {
+								push_assistant_content(
+									&mut messages,
+									completions::RequestAssistantMessageContent::Text(text),
+								);
+							}
 						},
 					},
 					Item::FunctionCall(call) => {
@@ -269,10 +377,8 @@ pub mod from_responses {
 								arguments: call.arguments.clone(),
 							},
 						});
-						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
-							&& let Some(tool_calls) = &mut message.tool_calls
-						{
-							tool_calls.push(tool_call);
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut() {
+							message.tool_calls.get_or_insert_default().push(tool_call);
 						} else {
 							messages.push(completions::RequestMessage::Assistant(
 								completions::RequestAssistantMessage {
@@ -305,18 +411,15 @@ pub mod from_responses {
 						));
 					},
 					Item::CustomToolCall(call) => {
-						let arguments = serde_json::to_string(&call.input).unwrap_or_else(|_| "{}".to_string());
 						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
-							id: call.id.clone(),
+							id: call.call_id.clone(),
 							function: completions::FunctionCall {
-								name: call.name.clone(),
-								arguments,
+								name: format!("{}{name}", super::CUSTOM_TOOL_PREFIX, name = call.name),
+								arguments: serde_json::json!({"input": call.input}).to_string(),
 							},
 						});
-						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
-							&& let Some(tool_calls) = &mut message.tool_calls
-						{
-							tool_calls.push(tool_call);
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut() {
+							message.tool_calls.get_or_insert_default().push(tool_call);
 						} else {
 							messages.push(completions::RequestMessage::Assistant(
 								completions::RequestAssistantMessage {
@@ -329,12 +432,19 @@ pub mod from_responses {
 					Item::CustomToolCallOutput(output) => {
 						let text = match &output.output {
 							responses::CustomToolCallOutputOutput::Text(t) => t.clone(),
-							_ => continue,
+							responses::CustomToolCallOutputOutput::List(parts) => parts
+								.iter()
+								.filter_map(|part| match part {
+									InputContent::InputText(text) => Some(text.text.clone()),
+									_ => None,
+								})
+								.collect::<Vec<_>>()
+								.join("\n"),
 						};
 						messages.push(completions::RequestMessage::Tool(
 							completions::RequestToolMessage {
 								content: completions::RequestToolMessageContent::Text(text),
-								tool_call_id: output.id.clone().unwrap_or_default(),
+								tool_call_id: output.call_id.clone(),
 							},
 						));
 					},
@@ -344,22 +454,75 @@ pub mod from_responses {
 		}
 
 		let tools: Option<Vec<completions::Tool>> = req.tools.as_ref().map(|tools| {
-			tools
-				.iter()
-				.filter_map(|tool| match tool {
+			let custom_tool = |custom: &responses::CustomToolParam| {
+				let description = match &custom.format {
+					responses::CustomToolParamFormat::Text => custom.description.clone(),
+					responses::CustomToolParamFormat::Grammar(grammar) => {
+						let grammar = format!(
+							"Input must match this {:?} grammar:\n{}",
+							grammar.syntax, grammar.definition
+						);
+						Some(
+							custom
+								.description
+								.as_ref()
+								.map_or(grammar.clone(), |description| {
+									format!("{description}\n\n{grammar}")
+								}),
+						)
+					},
+				};
+				completions::Tool::Function(completions::FunctionTool {
+					function: completions::FunctionObject {
+						name: format!("{}{name}", super::CUSTOM_TOOL_PREFIX, name = custom.name),
+						description,
+						parameters: Some(serde_json::json!({
+							"type": "object",
+							"properties": {"input": {"type": "string"}},
+							"required": ["input"],
+							"additionalProperties": false
+						})),
+						strict: None,
+					},
+				})
+			};
+			let mut translated = Vec::new();
+			for tool in tools {
+				match tool {
 					responses::Tool::Function(func) => {
-						Some(completions::Tool::Function(completions::FunctionTool {
+						translated.push(completions::Tool::Function(completions::FunctionTool {
 							function: completions::FunctionObject {
 								name: func.name.clone(),
 								description: func.description.clone(),
 								parameters: func.parameters.clone(),
 								strict: func.strict,
 							},
-						}))
+						}));
 					},
-					_ => None,
-				})
-				.collect()
+					responses::Tool::Custom(custom) => translated.push(custom_tool(custom)),
+					responses::Tool::Namespace(namespace) => {
+						for tool in &namespace.tools {
+							match tool {
+								responses::NamespaceToolParamTool::Function(func) => {
+									translated.push(completions::Tool::Function(completions::FunctionTool {
+										function: completions::FunctionObject {
+											name: func.name.clone(),
+											description: func.description.clone(),
+											parameters: func.parameters.clone(),
+											strict: func.strict,
+										},
+									}))
+								},
+								responses::NamespaceToolParamTool::Custom(custom) => {
+									translated.push(custom_tool(custom))
+								},
+							}
+						}
+					},
+					_ => {},
+				}
+			}
+			translated
 		});
 
 		let tool_choice = req.tool_choice.as_ref().and_then(|tc| {
@@ -379,10 +542,16 @@ pub mod from_responses {
 						function: completions::FunctionName { name: name.clone() },
 					}),
 				),
+				ToolChoiceParam::Custom(custom) => Some(completions::ToolChoiceOption::Function(
+					completions::NamedToolChoice {
+						function: completions::FunctionName {
+							name: format!("{}{name}", super::CUSTOM_TOOL_PREFIX, name = custom.name),
+						},
+					},
+				)),
 				ToolChoiceParam::Hosted(_)
 				| ToolChoiceParam::AllowedTools(_)
 				| ToolChoiceParam::Mcp(_)
-				| ToolChoiceParam::Custom(_)
 				| ToolChoiceParam::ProgrammaticToolCalling(_)
 				| ToolChoiceParam::ApplyPatch
 				| ToolChoiceParam::Shell => {
@@ -488,6 +657,43 @@ pub mod to_responses {
 
 	type LoggedToolCall = (Option<String>, Option<String>, String);
 	type LoggedToolCalls = HashMap<u32, LoggedToolCall>;
+	struct StreamingToolCall {
+		item_id: String,
+		call_id: String,
+		name: String,
+		arguments: String,
+		output_index: u32,
+		custom: bool,
+	}
+
+	fn custom_name(name: &str) -> Option<&str> {
+		name.strip_prefix(super::CUSTOM_TOOL_PREFIX)
+	}
+
+	fn custom_input(arguments: &str) -> Option<String> {
+		serde_json::from_str::<serde_json::Value>(arguments)
+			.ok()?
+			.get("input")?
+			.as_str()
+			.map(str::to_owned)
+	}
+
+	fn custom_item(
+		item_id: String,
+		call_id: String,
+		name: String,
+		input: String,
+	) -> responses::OutputItem {
+		responses::OutputItem::CustomToolCall(
+			serde_json::from_value(serde_json::json!({
+				"call_id": call_id,
+				"input": input,
+				"name": name,
+				"id": item_id,
+			}))
+			.expect("compatibility custom tool call should map to Responses"),
+		)
+	}
 
 	/// Translate an OpenAI-compatible chat completions response into an OpenAI Responses response.
 	pub fn translate_response(
@@ -531,6 +737,16 @@ pub mod to_responses {
 				for tc in tcs {
 					match tc {
 						completions::MessageToolCalls::Function(f) => {
+							if let Some(name) = custom_name(&f.function.name) {
+								tool_calls.push(custom_item(
+									format!("ctc_{:016x}", rand::rng().random::<u64>()),
+									f.id.clone(),
+									name.to_string(),
+									custom_input(&f.function.arguments)
+										.unwrap_or_else(|| f.function.arguments.clone()),
+								));
+								continue;
+							}
 							tool_calls.push(responses::OutputItem::FunctionCall(
 								responses::FunctionToolCall {
 									arguments: f.function.arguments.clone(),
@@ -544,7 +760,14 @@ pub mod to_responses {
 								},
 							));
 						},
-						completions::MessageToolCalls::Custom(_) => {},
+						completions::MessageToolCalls::Custom(custom) => {
+							tool_calls.push(custom_item(
+								format!("ctc_{:016x}", rand::rng().random::<u64>()),
+								custom.id.clone(),
+								custom.custom_tool.name.clone(),
+								custom.custom_tool.input.clone(),
+							));
+						},
 					}
 				}
 			}
@@ -643,7 +866,7 @@ pub mod to_responses {
 		let mut response_builder: Option<types::responses::ResponseBuilder> = None;
 
 		let mut next_output_index: u32 = 1;
-		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
+		let mut tool_calls: HashMap<u32, StreamingToolCall> = HashMap::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let mut completion = log_content.completion.then(String::new);
 		// The full text, for `output_text.done` and the finished items: clients
@@ -817,21 +1040,55 @@ pub mod to_responses {
 									let is_new = !tool_calls.contains_key(&tool_index);
 
 									let entry = tool_calls.entry(tool_index).or_insert_with(|| {
-										let item_id = format!("call_{:016x}", rand::rng().random::<u64>());
+										let raw_name = tc
+											.function
+											.as_ref()
+											.and_then(|function| function.name.as_deref())
+											.unwrap_or_default();
+										let (custom, name) =
+											custom_name(raw_name).map_or((false, raw_name), |name| (true, name));
 										let output_index = next_output_index;
 										next_output_index += 1;
-										(item_id, String::new(), String::new(), output_index)
+										let item_id = format!(
+											"{}_{:016x}",
+											if custom { "ctc" } else { "call" },
+											rand::rng().random::<u64>()
+										);
+										let call_id = if custom {
+											tc.id.clone().unwrap_or_default()
+										} else {
+											item_id.clone()
+										};
+										StreamingToolCall {
+											item_id,
+											call_id,
+											name: name.to_string(),
+											arguments: String::new(),
+											output_index,
+											custom,
+										}
 									});
 
+									if entry.custom
+										&& let Some(id) = &tc.id
+									{
+										entry.call_id = id.clone();
+									}
 									if let Some(function) = &tc.function {
-										if let Some(name) = &function.name {
-											entry.1 = name.clone();
+										if entry.name.is_empty()
+											&& let Some(name) = &function.name
+										{
+											entry.name = if entry.custom {
+												custom_name(name).unwrap_or(name)
+											} else {
+												name
+											}
+											.to_string();
 										}
 										if let Some(args) = &function.arguments {
-											entry.2.push_str(args);
+											entry.arguments.push_str(args);
 										}
 									}
-
 									if is_new {
 										let now = Instant::now();
 										if !saw_token {
@@ -850,22 +1107,32 @@ pub mod to_responses {
 											"event",
 											ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
 												sequence_number,
-												output_index: entry.3,
-												item: OutputItem::FunctionCall(FunctionToolCall {
-													arguments: String::new(),
-													call_id: entry.0.clone(),
-													namespace: None,
-													name: entry.1.clone(),
-													caller: None,
-													id: Some(entry.0.clone()),
-													status: Some(OutputStatus::InProgress),
-													r#async: None,
-												}),
+												output_index: entry.output_index,
+												item: if entry.custom {
+													custom_item(
+														entry.item_id.clone(),
+														entry.call_id.clone(),
+														entry.name.clone(),
+														String::new(),
+													)
+												} else {
+													OutputItem::FunctionCall(FunctionToolCall {
+														arguments: String::new(),
+														call_id: entry.call_id.clone(),
+														namespace: None,
+														name: entry.name.clone(),
+														caller: None,
+														id: Some(entry.item_id.clone()),
+														status: Some(OutputStatus::InProgress),
+														r#async: None,
+													})
+												},
 											}),
 										));
 									}
 
-									if let Some(function) = &tc.function
+									if !entry.custom
+										&& let Some(function) = &tc.function
 										&& let Some(args) = &function.arguments
 										&& !args.is_empty()
 									{
@@ -875,8 +1142,8 @@ pub mod to_responses {
 											ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(
 												ResponseFunctionCallArgumentsDeltaEvent {
 													sequence_number,
-													item_id: entry.0.clone(),
-													output_index: entry.3,
+													item_id: entry.item_id.clone(),
+													output_index: entry.output_index,
 													delta: args.clone(),
 												},
 											),
@@ -934,7 +1201,7 @@ pub mod to_responses {
 	fn flush_end(
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
 		sequence_number: &mut u64,
-		tool_calls: &mut HashMap<u32, (String, String, String, u32)>,
+		tool_calls: &mut HashMap<u32, StreamingToolCall>,
 		pending_stop_reason: &mut Option<completions::FinishReason>,
 		pending_usage: &mut Option<completions::Usage>,
 		message_item_id: &str,
@@ -949,8 +1216,8 @@ pub mod to_responses {
 			AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
 			OutputContent, OutputItem, OutputMessage, OutputMessageContent, OutputStatus,
 			OutputTextContent, OutputTokenDetails, ResponseContentPartDoneEvent,
-			ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent, ResponseStreamEvent,
-			ResponseTextDoneEvent, ResponseUsage,
+			ResponseCustomToolCallInputDoneEvent, ResponseFunctionCallArgumentsDoneEvent,
+			ResponseOutputItemDoneEvent, ResponseStreamEvent, ResponseTextDoneEvent, ResponseUsage,
 		};
 
 		let stop_reason = pending_stop_reason.take();
@@ -988,33 +1255,50 @@ pub mod to_responses {
 		let mut output: Vec<OutputItem> = Vec::new();
 
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
-		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
+		sorted_tools.sort_by_key(|(_, call)| call.output_index);
 
-		for (_, (item_id, name, buffer, output_index)) in sorted_tools {
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
-					ResponseFunctionCallArgumentsDoneEvent {
-						sequence_number: *sequence_number,
-						output_index,
-						name: Some(name.clone()),
-						item_id: item_id.clone(),
-						arguments: buffer.clone(),
-					},
-				),
-			));
-
-			let item = OutputItem::FunctionCall(FunctionToolCall {
-				arguments: buffer,
-				call_id: item_id.clone(),
-				namespace: None,
-				name,
-				caller: None,
-				id: Some(item_id),
-				status: Some(OutputStatus::Completed),
-				r#async: None,
-			});
+		for (_, call) in sorted_tools {
+			let output_index = call.output_index;
+			let item = if call.custom {
+				let input = custom_input(&call.arguments).unwrap_or(call.arguments);
+				*sequence_number += 1;
+				events.push((
+					"event",
+					ResponseStreamEvent::ResponseCustomToolCallInputDone(
+						ResponseCustomToolCallInputDoneEvent {
+							sequence_number: *sequence_number,
+							output_index,
+							item_id: call.item_id.clone(),
+							input: input.clone(),
+						},
+					),
+				));
+				custom_item(call.item_id, call.call_id, call.name, input)
+			} else {
+				*sequence_number += 1;
+				events.push((
+					"event",
+					ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
+						ResponseFunctionCallArgumentsDoneEvent {
+							sequence_number: *sequence_number,
+							output_index,
+							name: Some(call.name.clone()),
+							item_id: call.item_id.clone(),
+							arguments: call.arguments.clone(),
+						},
+					),
+				));
+				OutputItem::FunctionCall(FunctionToolCall {
+					arguments: call.arguments,
+					call_id: call.call_id,
+					namespace: None,
+					name: call.name,
+					caller: None,
+					id: Some(call.item_id),
+					status: Some(OutputStatus::Completed),
+					r#async: None,
+				})
+			};
 			*sequence_number += 1;
 			events.push((
 				"event",
