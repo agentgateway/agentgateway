@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) const ADDITIONAL_TOOLS_TYPE: &str = "additional_tools";
+
 use self::typed::{
 	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputRole,
 	InputTextContent, OutputItem, OutputMessageContent as Content, OutputTextContent as OutputText,
@@ -181,7 +183,7 @@ fn visit_tool_item_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut 
 			visit_json_at(value, &["reason"], ContentScope::ToolInput, f);
 		},
 		// Client-authored tool definitions, unscanned like the request's `tools` field.
-		Some("additional_tools") => {},
+		Some(ADDITIONAL_TOOLS_TYPE) => {},
 		// No readable text: references, triggers, base64 image results.
 		Some("item_reference" | "compaction_trigger" | "image_generation_call") => {},
 		// `encrypted_content`/fingerprint the API verifies on replay; a mask would break the
@@ -942,19 +944,21 @@ pub mod typed {
 	use async_openai::types::responses as openai_responses;
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
-		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
-		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
-		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
+		AssistantRole, CreateResponse, CustomToolCall, CustomToolCallOutput,
+		CustomToolCallOutputOutput, CustomToolParam, CustomToolParamFormat, EasyInputContent,
+		EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall, IncompleteDetails,
+		InputContent, InputItem, InputMessage, InputParam, InputRole, InputTextContent,
+		InputTokenDetails, Item, MessageItem, NamespaceToolParamTool, OutputContent, OutputItem,
 		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
 		Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
 		Response, ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
-		ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
-		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
-		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		ResponseCreatedEvent, ResponseCustomToolCallInputDoneEvent, ResponseErrorEvent,
+		ResponseFailedEvent, ResponseFunctionCallArgumentsDeltaEvent,
+		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
+		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent,
+		ResponseRefusalDoneEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam,
+		ResponseUsage, Role, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -993,6 +997,10 @@ pub mod typed {
 		/// Emitted when function-call arguments are finalized.
 		#[serde(rename = "response.function_call_arguments.done")]
 		ResponseFunctionCallArgumentsDone(openai_responses::ResponseFunctionCallArgumentsDoneEvent),
+		/// Emitted when custom-tool input is finalized. Chat Completions arguments are JSON
+		/// fragments, so this compatibility path emits only the completed raw input.
+		#[serde(rename = "response.custom_tool_call_input.done")]
+		ResponseCustomToolCallInputDone(openai_responses::ResponseCustomToolCallInputDoneEvent),
 		/// Emitted when a content part is done.
 		#[serde(rename = "response.content_part.done")]
 		ResponseContentPartDone(openai_responses::ResponseContentPartDoneEvent),
