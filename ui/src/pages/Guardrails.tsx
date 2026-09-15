@@ -186,8 +186,7 @@ export function GuardrailsPage() {
 	const help = useSchemaHelp();
 	const guardrails = (policies.guardrails ?? null) as LlmGuardrail | null;
 	const fileOwned = Boolean(
-		rawConfig.data?.llm?.policies &&
-			Object.prototype.hasOwnProperty.call(rawConfig.data.llm.policies, 'guardrails')
+		rawConfig.data?.llm?.policies && Object.hasOwn(rawConfig.data.llm.policies, 'guardrails')
 	);
 	const saving = upsertPolicy.isPending || deleteResource.isPending;
 	const saveError = upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;
@@ -408,6 +407,7 @@ function GuardrailSection(props: {
 				{props.guards.length === 0 ? <p className="muted-copy">No guards configured.</p> : null}
 				{props.guards.map((guard, index) => (
 					<GuardCard
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						key={index}
 						phase={props.phase}
 						guard={guard}
@@ -1188,6 +1188,7 @@ function PatternList(props: {
 			tooltip={props.help.field<RegexRules>('RegexRules', 'rules')}
 		>
 			{props.patterns.map((pattern, index) => (
+				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				<div className="guardrail-pattern-row" key={index}>
 					<input
 						className="mono-input"

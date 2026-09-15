@@ -244,6 +244,7 @@ const queryClient = new QueryClient({
 	}
 });
 
+// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
 createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>
