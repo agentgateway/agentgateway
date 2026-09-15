@@ -30,12 +30,23 @@ info:
         - type: tool_result
           tool_use_id: toolu_01
           content:
+            - type: text
+              text: "Weather chart:"
             - type: image
               source:
                 type: url
                 url: "https://example.com/weather.png"
+              cache_control:
+                type: ephemeral
+            - type: image
+              source:
+                type: base64
+                media_type: image/png
+                data: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=
             - type: text
               text: Describe the weather chart.
+          cache_control:
+            type: ephemeral
 ---
 {
   "request": {
@@ -65,6 +76,10 @@ info:
       {
         "role": "tool",
         "content": [
+          {
+            "type": "text",
+            "text": "Weather chart:"
+          },
           {
             "type": "text",
             "text": "Describe the weather chart."

@@ -45,10 +45,22 @@
           "tool_use_id": "toolu_01",
           "content": [
             {
+              "type": "text",
+              "text": "Weather chart:"
+            },
+            {
               "type": "image",
               "source": {
                 "type": "url",
                 "url": "https://example.com/weather.png"
+              }
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII="
               }
             },
             {

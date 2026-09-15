@@ -30,15 +30,89 @@ info:
         - type: tool_result
           tool_use_id: toolu_01
           content:
+            - type: text
+              text: "Weather chart:"
             - type: image
               source:
                 type: url
                 url: "https://example.com/weather.png"
+            - type: image
+              source:
+                type: base64
+                media_type: image/png
+                data: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=
             - type: text
               text: Describe the weather chart.
 ---
 {
-  "error": "unsupported conversion: messages non-text tool_result content cannot be represented by responses",
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "What is the weather like in San Francisco?"
+          }
+        ]
+      },
+      {
+        "type": "function_call",
+        "call_id": "toolu_01",
+        "name": "get_weather",
+        "arguments": "{\"location\":\"San Francisco, CA\"}",
+        "status": "completed"
+      },
+      {
+        "type": "function_call_output",
+        "call_id": "toolu_01",
+        "output": [
+          {
+            "type": "input_text",
+            "text": "Weather chart:"
+          },
+          {
+            "type": "input_image",
+            "image_url": "https://example.com/weather.png",
+            "detail": "auto"
+          },
+          {
+            "type": "input_image",
+            "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=",
+            "detail": "auto"
+          },
+          {
+            "type": "input_text",
+            "text": "Describe the weather chart."
+          }
+        ],
+        "status": "completed"
+      }
+    ],
+    "model": "claude-opus-4-6",
+    "max_output_tokens": 1024,
+    "stream": false,
+    "tools": [
+      {
+        "type": "function",
+        "name": "get_weather",
+        "description": "Get the current weather in a given location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and state, e.g. San Francisco, CA"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        }
+      }
+    ]
+  },
   "parsed": {
     "input_format": "Messages",
     "cache_convention": "InputIncludesCache",
