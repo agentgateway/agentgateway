@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+mcp:
+  port: 3000
+  policies:
+    cors:
+      allowHeaders: [mcp-protocol-version, content-type]
+      allowOrigins: ['*']
+    # Validate the MCP session's bearer token
+    jwtAuth:
+      issuer: http://localhost:7080/realms/mcp
+      audiences: [mcp_proxy]
+      jwks:
+        url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
+    extAuthz:
+      conditional:
+      # `mcp.tool` is only set for a `tools/call` request, so `initialize`,
+      # `tools/list`, etc. skip the PDP call entirely.
+      - condition: has(mcp.tool)
+        host: localhost:7080
+        # Authenticate this call to AuthZEN endpoint.
+        # Keycloak-specific: use RFC 8693 token exchange to get a token issued for
+        # `mcp_proxy`; the inbound token is issued for `mcp-client`.
+        policies:
+          backendAuth:
+            oauthTokenExchange:
+              host: localhost:7080
+              path: /realms/mcp/protocol/openid-connect/token
+              subjectToken:
+                source:
+                  header:
+                    name: x-token-exchange-subject
+              audiences: [mcp_proxy]
+              clientAuth:
+                clientId: mcp_proxy
+                clientSecret: mcp-proxy-secret
+                method: clientSecretBasic
+        protocol:
+          http:
+            # AuthZEN Authorization API 1.0, using Keycloak's
+            # implementation: https://openid.net/specs/openid-authzen-authorization-api-1_0-ID1.html
+            path: '"/realms/mcp/authzen/access/v1/evaluation"'
+            addRequestHeaders:
+              content-type: '"application/json"'
+              :method: '"POST"'
+              # Only used to hand the validated token to the token-exchange
+              # step above; never forwarded to the real MCP backend.
+              x-token-exchange-subject: jwt.rawToken.unredacted()
+            # Default mapping from the AuthZEN CoAZ MCP binding
+            body: |
+              {
+                "subject": {"type": "user", "id": jwt.sub},
+                "resource": {"type": "tool", "id": mcp.tool.name},
+                "action": {"name": "tools/call"},
+                "context": {"agent": jwt.azp}
+              }
+            # AuthZEN endpoint answers 200 OK; the decision
+            # itself is in the body. Pull it into the `extauthz` variable so it
+            # can be enforced explicitly below.
+            metadata:
+              decision: json(response.body).decision
+    authorization:
+      rules:
+      - require: '!has(mcp.tool) || extauthz.decision == true'
+  targets:
+  - name: payments-mcp
+    mcp:
+      host: http://localhost:3001/mcp

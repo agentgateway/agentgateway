@@ -21,6 +21,7 @@ span more than one agentgateway traffic type.
 * [mcp-basic](mcp-basic/README.md): the simplest way to get started with agentgateway, exposing a single MCP server over Stdio.
 * [mcp-multiplex](mcp-multiplex/README.md): multiplex multiple MCP targets on a single listener.
 * [mcp-authorization](mcp-authorization/README.md): apply JWT authentication and MCP authorization policies to incoming requests.
+* [mcp-authzen](mcp-authzen/README.md): authorize MCP tool calls based OpenID [AuthZEN](https://openid.net/specs/openid-authzen-authorization-api-1_0-ID1.html) standard.
 * [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
 * [mcp-tls](mcp-tls/README.md): terminate TLS connections.
 * [mcp-openapi](mcp-openapi/README.md): serve an OpenAPI specification as MCP tools.
