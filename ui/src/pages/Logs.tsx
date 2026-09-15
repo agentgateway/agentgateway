@@ -36,6 +36,7 @@ import { MultiCheckboxDropdown } from '@/components/MultiCheckboxDropdown';
 import {
 	Drawer,
 	EmptyState,
+	Field,
 	FieldGroup,
 	formatDate,
 	formatNumber,
@@ -80,6 +81,7 @@ import type {
 	AnalyticsTimeBucket,
 	GatewayConfig,
 	LogEntry,
+	LogFilters,
 	SearchLogsResponse,
 	TimeRange
 } from '@/types';
@@ -114,6 +116,13 @@ export function LogsPage() {
 		emptyAnalyticsFilterOptions
 	);
 	const [status, setStatus] = useState('');
+	const [payload, setPayload] = useState('');
+	const [traceId, setTraceId] = useState('');
+	const [attributeKey, setAttributeKey] = useState('');
+	const [attributeValue, setAttributeValue] = useState('');
+	const [groupKey, setGroupKey] = useState('');
+	const [groups, setGroups] = useState<AnalyticsGroup[] | null>(null);
+	const [groupsLoading, setGroupsLoading] = useState(false);
 	const [stream, setStream] = useState(false);
 	const [response, setResponse] = useState<SearchLogsResponse>({ logs: [] });
 	const [expanded, setExpanded] = useState<LogEntry | null>(null);
@@ -127,13 +136,35 @@ export function LogsPage() {
 	const detailLoadingTimerRef = useRef<number | null>(null);
 	const filterOptionsSeqRef = useRef(0);
 	const logFiltersKey = analyticsFiltersKey(logFilters);
-	const filters = useMemo(
-		() => ({
+	const filters = useMemo(() => {
+		const next: LogFilters = {
 			...analyticsLogFilters(logFilters),
 			httpStatus: status ? [Number(status)] : []
-		}),
-		[logFiltersKey, status]
-	);
+		};
+		if (payload) next.hasPayload = payload === 'recorded';
+		if (traceId.trim()) next.traceId = traceId.trim();
+		if (attributeKey.trim() && attributeValue.trim()) {
+			next.attributes = {
+				...(next.attributes ?? {}),
+				[attributeKey.trim()]: [attributeValue.trim()]
+			};
+		}
+		return next;
+	}, [logFiltersKey, status, payload, traceId, attributeKey, attributeValue]);
+	// Attribute names are discoverable from the records already loaded, so the
+	// two attribute inputs can suggest what this deployment actually records
+	// instead of leaving the operator to guess a key.
+	const attributeNames = useMemo(() => {
+		const names = new Set<string>();
+		for (const entry of response.logs) {
+			const attributes = entry.attributes;
+			if (attributes && typeof attributes === 'object') {
+				for (const name of Object.keys(attributes)) names.add(name);
+			}
+		}
+		return [...names].sort();
+	}, [response.logs]);
+
 	const visibleLogs = useMemo(() => {
 		if (!expanded || !expandedId || response.logs.some(entry => entry.id === expandedId))
 			return response.logs;
@@ -164,6 +195,35 @@ export function LogsPage() {
 	useEffect(() => {
 		void load();
 	}, [filters]);
+
+	useEffect(() => {
+		const key = groupKey.trim();
+		if (!key) {
+			setGroups(null);
+			return;
+		}
+		let cancelled = false;
+		setGroupsLoading(true);
+		void (async () => {
+			try {
+				// The store already aggregates by an arbitrary attribute, so a rollup is
+				// one request rather than a second pass over the rows.
+				const summary = await analyticsSummary({
+					filters,
+					groupBy: [{ field: 'attributes', key }],
+					bucketCount: 1
+				});
+				if (!cancelled) setGroups(summary.groups);
+			} catch {
+				if (!cancelled) setGroups([]);
+			} finally {
+				if (!cancelled) setGroupsLoading(false);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [groupKey, filters]);
 
 	useEffect(() => {
 		const loadSeq = filterOptionsSeqRef.current + 1;
@@ -378,6 +438,44 @@ export function LogsPage() {
 						allLabel="Any status"
 						onChange={values => setStatus(values.at(-1) ?? '')}
 					/>
+					<MultiCheckboxDropdown
+						kind="filter"
+						label="Payload"
+						options={[
+							{ value: 'recorded', label: 'Recorded' },
+							{ value: 'not-recorded', label: 'Not recorded' }
+						]}
+						values={payload ? [payload] : []}
+						placeholder="Any payload"
+						allLabel="Any payload"
+						onChange={values => setPayload(values.at(-1) ?? '')}
+					/>
+					<CommittedInput
+						label="Trace ID"
+						placeholder="Any trace"
+						value={traceId}
+						onCommit={setTraceId}
+					/>
+					<CommittedInput
+						label="Attribute"
+						placeholder="key"
+						value={attributeKey}
+						suggestions={attributeNames}
+						onCommit={setAttributeKey}
+					/>
+					<CommittedInput
+						label="Attribute value"
+						placeholder="value"
+						value={attributeValue}
+						onCommit={setAttributeValue}
+					/>
+					<CommittedInput
+						label="Group by attribute"
+						placeholder="attribute"
+						value={groupKey}
+						suggestions={attributeNames}
+						onCommit={setGroupKey}
+					/>
 					<label className="toggle-row logs-stream-toggle">
 						<input
 							type="checkbox"
@@ -387,13 +485,24 @@ export function LogsPage() {
 						Stream
 						{stream ? <span className="stream-live-dot" aria-label="streaming" /> : null}
 					</label>
-					{hasAnalyticsFilters(logFilters) || status ? (
+					{hasAnalyticsFilters(logFilters) ||
+					status ||
+					payload ||
+					traceId ||
+					attributeKey ||
+					attributeValue ||
+					groupKey ? (
 						<button
 							className="button"
 							type="button"
 							onClick={() => {
 								setLogFilters(emptyAnalyticsFilterOptions());
 								setStatus('');
+								setPayload('');
+								setTraceId('');
+								setAttributeKey('');
+								setAttributeValue('');
+								setGroupKey('');
 							}}
 						>
 							Clear filters
@@ -403,7 +512,18 @@ export function LogsPage() {
 			</Panel>
 
 			<Panel className="logs-results-panel">
-				{visibleLogs.length === 0 ? (
+				{groups ? (
+					<LogGroupTable
+						attribute={groupKey.trim()}
+						groups={groups}
+						loading={groupsLoading}
+						onSelect={value => {
+							setAttributeKey(groupKey.trim());
+							setAttributeValue(value);
+							setGroupKey('');
+						}}
+					/>
+				) : visibleLogs.length === 0 ? (
 					<EmptyState
 						title={loading ? 'Loading logs' : 'No log entries'}
 						description={
@@ -484,6 +604,117 @@ export function LogsPage() {
 				/>
 			) : null}
 		</div>
+	);
+}
+
+function LogGroupTable(props: {
+	attribute: string;
+	groups: AnalyticsGroup[];
+	loading: boolean;
+	onSelect: (value: string) => void;
+}) {
+	const rows = props.groups
+		.map(entry => ({
+			value: String(entry.group[props.attribute] ?? ''),
+			requests: entry.requests,
+			totalTokens: entry.totalTokens,
+			cost: entry.cost ?? null
+		}))
+		// A row with no value is every request that does not carry the attribute.
+		// Counting them together would read as a group, which they are not.
+		.filter(row => row.value !== '' && row.value !== 'null')
+		.sort((a, b) => b.requests - a.requests);
+
+	if (!rows.length) {
+		return (
+			<EmptyState
+				title={props.loading ? 'Grouping' : 'Nothing carries that attribute'}
+				description={
+					props.loading
+						? `Rolling up by ${props.attribute}.`
+						: `No request in range records ${props.attribute}.`
+				}
+			/>
+		);
+	}
+
+	return (
+		<div className="log-table-wrap">
+			<table className="log-table log-group-table">
+				<thead>
+					<tr>
+						<th>{props.attribute}</th>
+						<th className="log-th-num">Requests</th>
+						<th className="log-th-num">Tokens</th>
+						<th className="log-th-num">Cost</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map(row => (
+						<tr key={row.value}>
+							<td>
+								<button
+									className="link-button"
+									type="button"
+									onClick={() => props.onSelect(row.value)}
+								>
+									{row.value}
+								</button>
+							</td>
+							<td className="log-td-num">{formatNumber(row.requests)}</td>
+							<td className="log-td-num">{formatNumber(row.totalTokens)}</td>
+							<td className="log-td-num">
+								{row.cost != null && row.cost > 0 ? formatCost(row.cost) : 'n/a'}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function CommittedInput(props: {
+	label: string;
+	placeholder: string;
+	value: string;
+	suggestions?: string[];
+	onCommit: (value: string) => void;
+}) {
+	const listId = `${props.label.replace(/\s+/g, '-').toLowerCase()}-suggestions`;
+	const [draft, setDraft] = useState(props.value);
+	useEffect(() => {
+		setDraft(props.value);
+	}, [props.value]);
+	// Committing on blur and on Enter keeps one query per value rather than one
+	// per keystroke, and leaves the field editable while a search is in flight.
+	const commit = () => {
+		if (draft.trim() !== props.value) props.onCommit(draft.trim());
+	};
+	return (
+		<Field label={props.label}>
+			<input
+				type="text"
+				value={draft}
+				placeholder={props.placeholder}
+				list={props.suggestions?.length ? listId : undefined}
+				onChange={event => setDraft(event.target.value)}
+				onBlur={commit}
+				onKeyDown={event => {
+					if (event.key === 'Enter') {
+						event.preventDefault();
+						commit();
+					}
+				}}
+			/>
+			{props.suggestions?.length ? (
+				<datalist id={listId}>
+					{props.suggestions.map(name => (
+						<option key={name} value={name} />
+					))}
+				</datalist>
+			) : null}
+		</Field>
 	);
 }
 
