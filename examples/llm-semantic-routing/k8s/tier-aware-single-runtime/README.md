@@ -135,7 +135,7 @@ Create the ConfigMap and install the vSR Deployment and Service:
 export EXAMPLE=examples/llm-semantic-routing/k8s/tier-aware-single-runtime
 
 kubectl -n agentgateway-system create configmap tier-aware-config \
-  --from-file="$EXAMPLE/config.yaml" --dry-run=client -o yaml | kubectl apply -f -
+  --from-file=config.yaml="$EXAMPLE/semantic-router-config.yaml" --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f "$EXAMPLE/semantic-router.yaml"
 
 kubectl -n agentgateway-system rollout status deployment/semantic-router \
