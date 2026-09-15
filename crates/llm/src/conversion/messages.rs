@@ -11,7 +11,10 @@ use crate::{AIError, StreamingUsageGuard, parse};
 
 const ANTHROPIC_MIN_THINKING_BUDGET_TOKENS: u64 = 1024;
 
-fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> Option<u64> {
+pub(crate) fn cap_thinking_budget_to_max_tokens(
+	budget_tokens: u64,
+	max_tokens: usize,
+) -> Option<u64> {
 	let max_tokens = u64::try_from(max_tokens).unwrap_or(u64::MAX);
 	if budget_tokens < ANTHROPIC_MIN_THINKING_BUDGET_TOKENS
 		|| max_tokens <= ANTHROPIC_MIN_THINKING_BUDGET_TOKENS
@@ -994,6 +997,23 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 		messages::StopReason::Refusal => completions::FinishReason::ContentFilter,
 		messages::StopReason::PauseTurn => completions::FinishReason::Stop,
 		messages::StopReason::ModelContextWindowExceeded => completions::FinishReason::Length,
+	}
+}
+
+/// Map a completions `FinishReason` to an Anthropic Messages `StopReason` for native Gemini on Vertex.
+/// `ContentFilter` maps to `Refusal` because Gemini's safety-block finish reasons are surfaced here.
+/// The completions-path translators (OpenAI and compat providers) keep their own mapping
+/// where `ContentFilter` maps to `EndTurn`.
+pub(crate) fn finish_reason_to_stop_reason(
+	reason: completions::FinishReason,
+) -> messages::StopReason {
+	match reason {
+		completions::FinishReason::Stop => messages::StopReason::EndTurn,
+		completions::FinishReason::Length => messages::StopReason::MaxTokens,
+		completions::FinishReason::ToolCalls | completions::FinishReason::FunctionCall => {
+			messages::StopReason::ToolUse
+		},
+		completions::FinishReason::ContentFilter => messages::StopReason::Refusal,
 	}
 }
 

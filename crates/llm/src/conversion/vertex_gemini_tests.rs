@@ -11,6 +11,15 @@ fn to_gemini(v: Value) -> Value {
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
+fn msg_req(v: Value) -> types::messages::Request {
+	serde_json::from_value(v).expect("valid messages request")
+}
+
+fn to_gemini_msg(v: Value) -> Value {
+	let bytes = from_messages::translate(&msg_req(v), None).expect("translate ok");
+	serde_json::from_slice(&bytes).expect("valid json")
+}
+
 fn gemini_response_bytes(v: Value) -> bytes::Bytes {
 	bytes::Bytes::from(serde_json::to_vec(&v).expect("serialize gemini response"))
 }
@@ -1488,7 +1497,7 @@ mod passthrough {
 		StreamingUsageGuard, StreamingUsageReporter,
 	};
 
-	struct Capture(Arc<Mutex<LLMInfo>>);
+	pub(super) struct Capture(pub(super) Arc<Mutex<LLMInfo>>);
 
 	impl StreamingUsageReporter for Capture {
 		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
@@ -1497,7 +1506,7 @@ mod passthrough {
 		fn report_usage(&mut self) {}
 	}
 
-	fn captured_info() -> Arc<Mutex<LLMInfo>> {
+	pub(super) fn captured_info() -> Arc<Mutex<LLMInfo>> {
 		Arc::new(Mutex::new(LLMInfo {
 			request: LLMRequest {
 				input_tokens: None,
@@ -1690,4 +1699,916 @@ mod passthrough {
 			assert_eq!(captured.lock().unwrap().response.total_tokens, None);
 		}
 	}
+}
+
+// ---------- Request: Anthropic Messages -> Gemini ----------
+//
+// These cover the behaviours the design pins as unambiguous. Thinking-config bucketing, the
+// streaming terminator and the `tool_result.is_error` envelope are deliberately NOT covered here:
+// they are open questions, and encoding a guess as a test would bake it in.
+
+#[test]
+fn msg_tool_result_recovers_function_name() {
+	// Gemini's functionResponse REQUIRES `name`, but Anthropic's tool_result carries only
+	// `tool_use_id`. So the translator must prepass the message list building id -> name from the
+	// tool_use blocks. Putting an id in `name` instead violates the Gemini contract and makes the
+	// model return EMPTY responses rather than erroring, so this fails silently if we get it wrong.
+	// No analogue on the completions path, where the `tool` message carries `name` directly.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "user", "content": "Weather in Berlin?" },
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1", "name": "get_weather",
+					"input": { "location": "Berlin" } }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1", "content": "{\"temp\":9}" }
+			]}
+		],
+		"tools": [{
+			"name": "get_weather",
+			"description": "Get the current weather in a location",
+			"input_schema": { "type": "object", "properties": { "location": { "type": "string" } } }
+		}]
+	}));
+
+	let fr = &g["contents"][2]["parts"][0]["functionResponse"];
+	assert_eq!(
+		fr["name"], "get_weather",
+		"functionResponse.name must be recovered from the matching tool_use, got: {g}"
+	);
+}
+
+#[test]
+fn msg_omits_id_on_function_parts() {
+	// Same Vertex constraint as the completions path: `id` on functionCall/functionResponse is a
+	// hard 400 ("Unknown name \"id\" ... Cannot find field"). Anthropic ids must be stripped, not
+	// forwarded.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {} }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1", "content": "ok" }
+			]}
+		]
+	}));
+
+	let fc = &g["contents"][0]["parts"][0]["functionCall"];
+	assert!(
+		fc.get("id").is_none(),
+		"functionCall must not carry `id`: Vertex rejects it, got: {fc}"
+	);
+	let fr = &g["contents"][1]["parts"][0]["functionResponse"];
+	assert!(
+		fr.get("id").is_none(),
+		"functionResponse must not carry `id`: Vertex rejects it, got: {fr}"
+	);
+}
+
+#[test]
+fn msg_out_of_order_tool_results_reorder_to_call_order() {
+	// Because `id` is stripped, Vertex correlates functionResponse to functionCall POSITIONALLY.
+	// Anthropic clients have no ordering obligation (linkage is tool_use_id), so results may arrive
+	// in any order and must be reordered to match the call order.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_a", "name": "get_weather", "input": {} },
+				{ "type": "tool_use", "id": "toolu_b", "name": "get_time", "input": {} }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_b", "content": "12:00" },
+				{ "type": "tool_result", "tool_use_id": "toolu_a", "content": "9C" }
+			]}
+		]
+	}));
+
+	let parts = &g["contents"][1]["parts"];
+	assert_eq!(
+		parts[0]["functionResponse"]["name"], "get_weather",
+		"first functionResponse must match the first functionCall, got: {parts}"
+	);
+	assert_eq!(
+		parts[1]["functionResponse"]["name"], "get_time",
+		"second functionResponse must match the second functionCall, got: {parts}"
+	);
+}
+
+#[test]
+fn msg_thought_signature_round_trips_through_tool_use_id() {
+	// Gemini 3 hard-400s on the next turn if a functionCall's thoughtSignature isn't echoed back.
+	// Anthropic's tool_use block has no signature field, so (as on the completions path) the
+	// signature rides inside the client-durable id and is recovered before the outbound request.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1__thought__SIG", "name": "get_weather",
+					"input": {} }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1__thought__SIG", "content": "ok" }
+			]}
+		]
+	}));
+
+	let part = &g["contents"][0]["parts"][0];
+	assert_eq!(
+		part["thoughtSignature"], "SIG",
+		"thoughtSignature must be recovered from the tool_use id, got: {part}"
+	);
+	assert!(
+		part["functionCall"].get("id").is_none(),
+		"the id carrying the signature must still be stripped, got: {part}"
+	);
+	// Name recovery must key on the BASE id, after the __thought__ suffix is split off.
+	assert_eq!(
+		g["contents"][1]["parts"][0]["functionResponse"]["name"], "get_weather",
+		"name recovery must use the base id, not the signature-suffixed one, got: {g}"
+	);
+}
+
+#[test]
+fn msg_thinking_block_becomes_thought_part_with_signature() {
+	// The Messages shape's one advantage over Completions: `thinking` has a first-class signature
+	// slot, so reasoning round-trips without the id-smuggling hack. Note `decode_parts` currently
+	// discards TextPart.thought_signature, so the response direction needs extending too.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "thinking", "thinking": "reasoning here", "signature": "SIG" },
+				{ "type": "text", "text": "answer" }
+			]}
+		]
+	}));
+
+	let parts = &g["contents"][0]["parts"];
+	assert_eq!(parts[0]["text"], "reasoning here");
+	assert_eq!(
+		parts[0]["thought"], true,
+		"a thinking block must become a thought part, got: {parts}"
+	);
+	assert_eq!(
+		parts[0]["thoughtSignature"], "SIG",
+		"the thinking block signature must be preserved, got: {parts}"
+	);
+	assert_eq!(
+		parts[1]["text"], "answer",
+		"thought and text ordering must be preserved, got: {parts}"
+	);
+}
+
+// ---------- Response: Messages (to_messages) ----------
+
+fn msg_resp(v: Value) -> Value {
+	let bytes = gemini_response_bytes(v);
+	let out = to_messages::translate_response(&bytes).expect("translate_response ok");
+	let serialized = out.serialize().expect("serialize");
+	serde_json::from_slice(&serialized).expect("valid json")
+}
+
+#[test]
+fn msg_resp_basic_text() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hello" }] },
+			"finishReason": "STOP"
+		}],
+		"usageMetadata": {
+			"promptTokenCount": 10,
+			"candidatesTokenCount": 5,
+			"totalTokenCount": 15
+		}
+	}));
+	assert_eq!(r["role"], "assistant");
+	assert_eq!(r["stop_reason"], "end_turn");
+	assert_eq!(r["content"][0]["type"], "text");
+	assert_eq!(r["content"][0]["text"], "hello");
+	assert_eq!(r["usage"]["input_tokens"], 10);
+	assert_eq!(r["usage"]["output_tokens"], 5);
+}
+
+#[test]
+fn msg_resp_tool_use_stop_reason() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } } }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+	assert_eq!(r["stop_reason"], "tool_use");
+	assert_eq!(r["content"][0]["type"], "tool_use");
+	assert_eq!(r["content"][0]["name"], "get_weather");
+	assert_eq!(r["content"][0]["input"]["city"], "Berlin");
+}
+
+#[test]
+fn msg_resp_max_tokens_stop_reason() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "..." }] },
+			"finishReason": "MAX_TOKENS"
+		}]
+	}));
+	assert_eq!(r["stop_reason"], "max_tokens");
+}
+
+#[test]
+fn msg_resp_safety_block_is_refusal() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "blocked" }] },
+			"finishReason": "SAFETY"
+		}]
+	}));
+	assert_eq!(r["stop_reason"], "refusal");
+}
+
+#[test]
+fn msg_resp_prompt_block_is_refusal_with_empty_content() {
+	let r = msg_resp(json!({
+		"candidates": [],
+		"promptFeedback": { "blockReason": "SAFETY" }
+	}));
+	assert_eq!(r["stop_reason"], "refusal");
+	assert_eq!(r["content"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn msg_resp_thinking_block_emission_order() {
+	// Thinking → Text → ToolUse
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "thought here", "thought": true, "thoughtSignature": "SIG" },
+				{ "text": "answer" },
+				{ "functionCall": { "name": "tool_a", "args": {} } }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+	let content = &r["content"];
+	assert_eq!(content[0]["type"], "thinking");
+	assert_eq!(content[0]["thinking"], "thought here");
+	assert_eq!(content[0]["signature"], "SIG");
+	assert_eq!(content[1]["type"], "text");
+	assert_eq!(content[1]["text"], "answer");
+	assert_eq!(content[2]["type"], "tool_use");
+}
+
+#[test]
+fn msg_resp_unsigned_thought_uses_empty_signature() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "thinking", "thought": true }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+	assert_eq!(r["content"][0]["type"], "thinking");
+	// unsigned (Gemini 2.5) thought has empty signature, not null
+	assert_eq!(r["content"][0]["signature"], "");
+}
+
+#[test]
+fn msg_resp_usage_subtracts_cached_tokens() {
+	let r = msg_resp(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"cachedContentTokenCount": 30
+		}
+	}));
+	// input_tokens should NOT double-count the cache: 100 - 30 = 70
+	assert_eq!(r["usage"]["input_tokens"], 70);
+	assert_eq!(r["usage"]["output_tokens"], 20);
+	assert_eq!(r["usage"]["cache_read_input_tokens"], 30);
+}
+
+#[test]
+fn msg_resp_llm_response_usage_matches_wire_usage() {
+	let r = to_messages::translate_response(&gemini_response_bytes(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"totalTokenCount": 120,
+			"cachedContentTokenCount": 30
+		}
+	})))
+	.expect("translate_response ok")
+	.to_llm_response(crate::LogContentFields::default());
+
+	assert_eq!(r.input_tokens, Some(70), "cache-excluded, matches the wire");
+	assert_eq!(r.output_tokens, Some(20));
+	assert_eq!(r.cached_input_tokens, Some(30));
+}
+
+/// Gemini reports `candidatesTokenCount` and `thoughtsTokenCount` disjointly, but Anthropic's
+/// `output_tokens` includes thinking. Reporting candidates alone under-reports the answer by the
+/// whole thinking budget, and `amend_tokens` bills off this number.
+#[test]
+fn msg_resp_output_tokens_include_thinking() {
+	let r = msg_resp(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"totalTokenCount": 145,
+			"thoughtsTokenCount": 25
+		}
+	}));
+	assert_eq!(r["usage"]["input_tokens"], 100);
+	assert_eq!(r["usage"]["output_tokens"], 45, "20 answer + 25 thinking");
+}
+
+/// One response, three readings of its usage: buffered Messages, streamed Messages, and the
+/// completions path over the same provider. They must agree. They did not: the Messages usage
+/// builder dropped thoughtsTokenCount while the streamed telemetry reached past it to
+/// `UsageMetadata::counts()`, so the same response billed differently depending only on whether
+/// the client streamed.
+#[test]
+fn msg_usage_agrees_across_buffered_streamed_and_completions() {
+	let body = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"totalTokenCount": 145,
+			"thoughtsTokenCount": 25
+		}
+	});
+	let bytes = gemini_response_bytes(body.clone());
+
+	let buffered = to_messages::translate_response(&bytes)
+		.expect("translate_response ok")
+		.to_llm_response(crate::LogContentFields::default());
+	let completions = to_completions::translate_response(&bytes)
+		.expect("translate_response ok")
+		.to_llm_response(crate::LogContentFields::default());
+
+	let captured = passthrough::captured_info();
+	let guard = crate::StreamingUsageGuard::new(Box::new(passthrough::Capture(captured.clone())));
+	let mut state = to_messages::StreamState::new(crate::LogContentFields::default());
+	let chunk: vg::GenerateContentResponse =
+		serde_json::from_value(body).expect("valid gemini stream chunk");
+	let events = state.translate(&chunk, &guard);
+	let streamed = captured.lock().unwrap();
+
+	assert_eq!(buffered.output_tokens, Some(45), "buffered log");
+	assert_eq!(
+		streamed.response.output_tokens, buffered.output_tokens,
+		"streamed and buffered logs must agree"
+	);
+	assert_eq!(
+		completions.output_tokens, buffered.output_tokens,
+		"the Messages path must use the same output convention as completions"
+	);
+	assert_eq!(streamed.response.total_tokens, buffered.total_tokens);
+
+	// The wire `message_delta.usage` a streaming client sees must match the buffered body too.
+	let wire_output = events
+		.iter()
+		.find_map(|(_, ev)| match ev {
+			crate::types::messages::typed::MessagesStreamEvent::MessageDelta { usage, .. } => {
+				usage.output_tokens
+			},
+			_ => None,
+		})
+		.expect("message_delta carries usage");
+	assert_eq!(wire_output, 45, "streamed wire output_tokens");
+}
+
+// ---------- Streaming: Messages (to_messages) ----------
+
+/// Feed one Gemini stream chunk through the Messages stream state and return all emitted
+/// events as JSON objects.
+fn msg_stream_chunk(state: &mut to_messages::StreamState, v: Value) -> Vec<Value> {
+	let chunk: vg::GenerateContentResponse =
+		serde_json::from_value(v).expect("valid gemini stream chunk");
+	let log = crate::StreamingUsageGuard::default();
+	state
+		.translate(&chunk, &log)
+		.into_iter()
+		.map(|(_, ev)| serde_json::to_value(ev).expect("serialize event"))
+		.collect()
+}
+
+#[test]
+fn msg_stream_text_emits_message_start_and_text_block() {
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
+	let events = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hello" }] },
+			"finishReason": "STOP"
+		}] }),
+	);
+	// message_start, content_block_start, content_block_delta, content_block_stop, message_delta
+	assert_eq!(events[0]["type"], "message_start");
+	assert_eq!(events[1]["type"], "content_block_start");
+	assert_eq!(events[1]["content_block"]["type"], "text");
+	assert_eq!(events[2]["type"], "content_block_delta");
+	assert_eq!(events[2]["delta"]["type"], "text_delta");
+	assert_eq!(events[2]["delta"]["text"], "hello");
+	assert_eq!(events[3]["type"], "content_block_stop");
+	assert_eq!(events[4]["type"], "message_delta");
+	assert_eq!(events[4]["delta"]["stop_reason"], "end_turn");
+}
+
+#[test]
+fn msg_stream_thinking_before_text() {
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
+	let events = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "thought", "thought": true, "thoughtSignature": "SIG" },
+				{ "text": "answer" }
+			]},
+			"finishReason": "STOP"
+		}] }),
+	);
+	// thinking block: start, thinking_delta, signature_delta, stop
+	assert_eq!(events[0]["type"], "message_start");
+	assert_eq!(events[1]["type"], "content_block_start");
+	assert_eq!(events[1]["content_block"]["type"], "thinking");
+	assert_eq!(events[2]["type"], "content_block_delta");
+	assert_eq!(events[2]["delta"]["type"], "thinking_delta");
+	assert_eq!(events[2]["delta"]["thinking"], "thought");
+	assert_eq!(events[3]["type"], "content_block_delta");
+	assert_eq!(events[3]["delta"]["type"], "signature_delta");
+	assert_eq!(events[3]["delta"]["signature"], "SIG");
+	// thinking block close
+	assert_eq!(events[4]["type"], "content_block_stop");
+	assert_eq!(events[4]["index"], 0);
+	// text block opens
+	assert_eq!(events[5]["type"], "content_block_start");
+	assert_eq!(events[5]["content_block"]["type"], "text");
+	assert_eq!(events[5]["index"], 1);
+}
+
+#[test]
+fn msg_stream_tool_call_block() {
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
+	let events = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "get_time", "args": { "tz": "UTC" } } }
+			]},
+			"finishReason": "STOP"
+		}] }),
+	);
+	assert_eq!(events[0]["type"], "message_start");
+	assert_eq!(events[1]["type"], "content_block_start");
+	assert_eq!(events[1]["content_block"]["type"], "tool_use");
+	assert_eq!(events[1]["content_block"]["name"], "get_time");
+	assert_eq!(events[2]["type"], "content_block_delta");
+	assert_eq!(events[2]["delta"]["type"], "input_json_delta");
+	// args must be JSON
+	let partial: Value =
+		serde_json::from_str(events[2]["delta"]["partial_json"].as_str().unwrap()).unwrap();
+	assert_eq!(partial["tz"], "UTC");
+	assert_eq!(events[3]["type"], "content_block_stop");
+	// stop_reason: tool_use (STOP + saw_tool_call)
+	assert_eq!(events[4]["type"], "message_delta");
+	assert_eq!(events[4]["delta"]["stop_reason"], "tool_use");
+}
+
+#[test]
+fn msg_stream_text_continues_across_chunks() {
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
+	// First chunk: text part, no finishReason
+	let e1 = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hel" }] }
+		}] }),
+	);
+	// Second chunk: continuation, with finishReason
+	let e2 = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "lo" }] },
+			"finishReason": "STOP"
+		}] }),
+	);
+	// First chunk: message_start, block_start, delta (no finish)
+	assert_eq!(e1[0]["type"], "message_start");
+	assert_eq!(e1[1]["type"], "content_block_start");
+	assert_eq!(e1[2]["type"], "content_block_delta");
+	assert_eq!(e1[2]["delta"]["text"], "hel");
+	assert_eq!(
+		e1.len(),
+		3,
+		"no block_stop or message_delta without finishReason"
+	);
+	// Second chunk: delta into same block (no new block_start), block_stop, message_delta
+	assert_eq!(e2[0]["type"], "content_block_delta");
+	assert_eq!(e2[0]["delta"]["text"], "lo");
+	assert_eq!(e2[0]["index"], 0, "same block index");
+	assert_eq!(e2[1]["type"], "content_block_stop");
+	assert_eq!(e2[2]["type"], "message_delta");
+	assert_eq!(e2[3]["type"], "message_stop");
+}
+
+// ---------- Streaming: translate_stream wire-level tests ----------
+/// Every other streaming translator records the gap between token-bearing chunks. This path
+/// recorded only `first_token`, so the Messages stream reported no inter-token latency where
+/// the completions stream over the same provider does.
+#[test]
+fn msg_stream_records_inter_chunk_latencies() {
+	let captured = passthrough::captured_info();
+	let guard = crate::StreamingUsageGuard::new(Box::new(passthrough::Capture(captured.clone())));
+	let mut s = to_messages::StreamState::new(crate::LogContentFields::default());
+
+	for text in ["one", "two", "three"] {
+		let chunk: vg::GenerateContentResponse = serde_json::from_value(json!({
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": text }] } }]
+		}))
+		.expect("valid gemini stream chunk");
+		let _ = s.translate(&chunk, &guard);
+	}
+
+	let info = captured.lock().unwrap();
+	assert!(info.response.first_token.is_some(), "first token recorded");
+	assert!(
+		!info.response.inter_chunk_latencies.is_empty(),
+		"a gap is recorded for every token-bearing chunk after the first"
+	);
+}
+
+// These drive `to_messages::translate_stream` end-to-end (real SSE bytes in, Anthropic
+// SSE events out) to catch wiring bugs that state-machine unit tests cannot reach.
+
+/// Collect all SSE events from a `translate_stream` Body into a Vec of deserialized
+/// Values, one per `data:` line that parses as JSON.
+async fn collect_stream_events(body: agent_http::Body) -> Vec<Value> {
+	use http_body_util::BodyExt;
+	let bytes = body.collect().await.unwrap().to_bytes();
+	String::from_utf8(bytes.to_vec())
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+		.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+		.collect()
+}
+
+/// Build a one-chunk Gemini SSE stream followed by a clean close (no [DONE]).
+fn gemini_sse(chunk: Value) -> agent_http::Body {
+	let data = format!("data: {}\n\n", serde_json::to_string(&chunk).unwrap());
+	agent_http::Body::from(data)
+}
+
+#[tokio::test]
+async fn translate_stream_emits_message_stop_on_clean_close() {
+	let body = gemini_sse(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hello" }] },
+			"finishReason": "STOP"
+		}]
+	}));
+	let log = crate::StreamingUsageGuard::default();
+	let out = to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-flash"),
+		log,
+		crate::LogContentFields::default(),
+	);
+	let events = collect_stream_events(out).await;
+
+	let types: Vec<&str> = events.iter().filter_map(|e| e["type"].as_str()).collect();
+	assert!(
+		types.contains(&"message_start"),
+		"expected message_start, got: {types:?}"
+	);
+	assert!(
+		types.contains(&"message_delta"),
+		"expected message_delta, got: {types:?}"
+	);
+	assert_eq!(
+		types.last().copied(),
+		Some("message_stop"),
+		"last event must be message_stop; got: {types:?}"
+	);
+}
+
+#[tokio::test]
+async fn translate_stream_message_stop_on_truncated_stream_no_finish_reason() {
+	// Gemini closes without ever sending a finishReason (truncated stream).
+	// Client must still receive a well-terminated message (message_delta + message_stop).
+	let body = gemini_sse(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "partial" }] }
+			// no finishReason
+		}]
+	}));
+	let log = crate::StreamingUsageGuard::default();
+	let out = to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-flash"),
+		log,
+		crate::LogContentFields::default(),
+	);
+	let events = collect_stream_events(out).await;
+
+	let types: Vec<&str> = events.iter().filter_map(|e| e["type"].as_str()).collect();
+	assert!(
+		types.contains(&"message_delta"),
+		"truncated stream must emit message_delta; got: {types:?}"
+	);
+	assert_eq!(
+		types.last().copied(),
+		Some("message_stop"),
+		"truncated stream must end with message_stop; got: {types:?}"
+	);
+	let delta = events
+		.iter()
+		.find(|e| e["type"] == "message_delta")
+		.unwrap();
+	assert_eq!(delta["delta"]["stop_reason"], "end_turn");
+}
+
+#[tokio::test]
+async fn translate_stream_input_tokens_forwarded_to_client() {
+	// Gemini sends usageMetadata only on the final chunk (carrying finishReason).
+	// The client's message_delta must reflect the real input token count, not 0.
+	let body = agent_http::Body::from(format!(
+		"data: {}\n\ndata: {}\n\n",
+		serde_json::to_string(&json!({
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] } }]
+		}))
+		.unwrap(),
+		serde_json::to_string(&json!({
+			"candidates": [{
+				"content": { "role": "model", "parts": [{ "text": "" }] },
+				"finishReason": "STOP"
+			}],
+			"usageMetadata": {
+				"promptTokenCount": 100,
+				"candidatesTokenCount": 5,
+				"totalTokenCount": 105,
+				"cachedContentTokenCount": 20
+			}
+		}))
+		.unwrap()
+	));
+	let log = crate::StreamingUsageGuard::default();
+	let out = to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-flash"),
+		log,
+		crate::LogContentFields::default(),
+	);
+	let events = collect_stream_events(out).await;
+
+	let delta = events
+		.iter()
+		.find(|e| e["type"] == "message_delta")
+		.unwrap();
+	// input_tokens = promptTokenCount(100) - cachedContentTokenCount(20) = 80
+	assert_eq!(
+		delta["usage"]["input_tokens"], 80,
+		"input_tokens must be prompt - cached"
+	);
+	assert_eq!(delta["usage"]["output_tokens"], 5);
+	assert_eq!(delta["usage"]["cache_read_input_tokens"], 20);
+}
+
+// ---------- Regression: Messages -> Gemini request shape ----------
+
+#[test]
+fn msg_tool_result_and_text_split_into_separate_contents() {
+	// Gemini 3 rejects a functionResponse that has sibling parts, and Anthropic clients routinely
+	// put a tool_result and a follow-up text block in the SAME user message. Collecting both into
+	// one entry produced a hard 400 on gemini-3; the completions path cannot hit this because
+	// OpenAI tool results arrive as their own `tool` message.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "user", "content": "Weather in Berlin?" },
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1", "name": "get_weather",
+					"input": { "location": "Berlin" } }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1", "content": "{\"temp\":9}" },
+				{ "type": "text", "text": "and in Paris?" }
+			]}
+		],
+		"tools": [{
+			"name": "get_weather",
+			"input_schema": { "type": "object", "properties": { "location": { "type": "string" } } }
+		}]
+	}));
+
+	let fn_entry = &g["contents"][2];
+	assert_eq!(fn_entry["parts"].as_array().unwrap().len(), 1, "got: {g}");
+	assert!(
+		fn_entry["parts"][0]["functionResponse"].is_object(),
+		"tool result must be alone in its entry, got: {g}"
+	);
+	assert_eq!(
+		g["contents"][3]["parts"][0]["text"], "and in Paris?",
+		"trailing text must become its own user entry, got: {g}"
+	);
+}
+
+#[test]
+fn msg_tool_result_with_image_is_rejected() {
+	// Gemini's functionResponse has no `parts`, so an image in a tool_result cannot be carried.
+	// Reject rather than drop it, matching conversion::responses: answering as if the model had
+	// seen a screenshot it never received is worse than a clear failure.
+	let err = from_messages::translate(
+		&msg_req(json!({
+			"model": "gemini-2.5-pro",
+			"max_tokens": 1024,
+			"messages": [
+				{ "role": "user", "content": "Screenshot?" },
+				{ "role": "assistant", "content": [
+					{ "type": "tool_use", "id": "toolu_1", "name": "grab", "input": {} }
+				]},
+				{ "role": "user", "content": [
+					{ "type": "tool_result", "tool_use_id": "toolu_1", "content": [
+						{ "type": "text", "text": "captured" },
+						{ "type": "image", "source": { "type": "base64", "media_type": "image/png",
+							"data": "iVBORw0KGgo=" } }
+					]}
+				]}
+			],
+			"tools": [{ "name": "grab", "input_schema": { "type": "object" } }]
+		})),
+		None,
+	);
+	let err = err.expect_err("image tool_result must be rejected");
+	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
+	assert!(
+		matches!(err, crate::AIError::UnsupportedConversion(_)),
+		"bad client input must be a request error, got {err:?}"
+	);
+}
+
+#[test]
+fn msg_empty_text_block_is_dropped() {
+	// Vertex rejects an empty text parameter. Anthropic clients send `{"type":"text","text":""}`
+	// as a placeholder; the assistant arm already guarded this, the user arm did not.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "user", "content": [
+				{ "type": "text", "text": "" },
+				{ "type": "text", "text": "real" }
+			]}
+		]
+	}));
+
+	let parts = g["contents"][0]["parts"].as_array().unwrap();
+	assert_eq!(parts.len(), 1, "empty text must not be emitted, got: {g}");
+	assert_eq!(parts[0]["text"], "real");
+}
+
+#[test]
+fn msg_thinking_budget_leaves_room_for_the_answer() {
+	// Gemini counts thought tokens against maxOutputTokens, so budget == maxOutputTokens leaves
+	// nothing for the answer and comes back empty with MAX_TOKENS.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 4096,
+		"thinking": { "type": "enabled", "budget_tokens": 4096 },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}));
+	let budget = g["generationConfig"]["thinkingConfig"]["thinkingBudget"]
+		.as_i64()
+		.expect("budget present");
+	assert!(
+		budget < 4096,
+		"budget must stay under maxOutputTokens, got: {g}"
+	);
+
+	// Too small to think within at all: omit thinkingConfig rather than send an unusable budget.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"thinking": { "type": "enabled", "budget_tokens": 4096 },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}));
+	assert!(
+		g["generationConfig"]["thinkingConfig"].is_null(),
+		"got: {g}"
+	);
+}
+
+#[test]
+fn msg_effort_uses_the_shared_budget_table() {
+	// xhigh/max used to collapse into high's 4096, so the same request got a 4x smaller budget
+	// depending only on whether the client spoke Messages or Completions.
+	let budget_for = |effort: &str| {
+		to_gemini_msg(json!({
+			"model": "gemini-2.5-pro",
+			"max_tokens": 32000,
+			"output_config": { "effort": effort },
+			"messages": [{ "role": "user", "content": "hi" }]
+		}))["generationConfig"]["thinkingConfig"]["thinkingBudget"]
+			.as_i64()
+			.expect("budget present")
+	};
+	assert_eq!(budget_for("high"), 4096);
+	assert_eq!(budget_for("xhigh"), 8192);
+	assert_eq!(budget_for("max"), 16384);
+}
+
+/// On Gemini 3 the budget becomes a coarse level. Effort and the equivalent explicit
+/// `budget_tokens` must land on the same level: they resolve through one table, so an
+/// `xhigh` request and a 8192-token request cannot disagree.
+#[test]
+fn msg_effort_and_budget_agree_on_thinking_level() {
+	let level_for_effort = |effort: &str| {
+		to_gemini_msg(json!({
+			"model": "gemini-3-pro",
+			"max_tokens": 32000,
+			"output_config": { "effort": effort },
+			"messages": [{ "role": "user", "content": "hi" }]
+		}))["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+			.as_str()
+			.expect("level present")
+			.to_string()
+	};
+	let level_for_budget = |budget: i64| {
+		to_gemini_msg(json!({
+			"model": "gemini-3-pro",
+			"max_tokens": 32000,
+			"thinking": { "type": "enabled", "budget_tokens": budget },
+			"messages": [{ "role": "user", "content": "hi" }]
+		}))["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+			.as_str()
+			.expect("level present")
+			.to_string()
+	};
+
+	for (effort, budget, expected) in [
+		("low", 1024, "low"),
+		("medium", 2048, "medium"),
+		("high", 4096, "high"),
+		("xhigh", 8192, "high"),
+		("max", 16384, "high"),
+	] {
+		assert_eq!(level_for_effort(effort), expected, "effort {effort}");
+		assert_eq!(level_for_budget(budget), expected, "budget {budget}");
+	}
+	// A level request must never also carry a numeric budget.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3-pro",
+		"max_tokens": 32000,
+		"output_config": { "effort": "high" },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}));
+	assert!(
+		g["generationConfig"]["thinkingConfig"]["thinkingBudget"].is_null(),
+		"got: {g}"
+	);
+}
+
+#[test]
+fn msg_resp_signed_thought_parts_become_separate_thinking_blocks() {
+	// A thoughtSignature attests only the thought text it arrives with. Merging several signed
+	// parts into one block kept just the last signature, so echoing the block back 400s.
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "first thought", "thought": true, "thoughtSignature": "sig-a" },
+				{ "text": "second thought", "thought": true, "thoughtSignature": "sig-b" },
+				{ "text": "answer" }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+
+	let blocks = r["content"].as_array().unwrap();
+	let thinking: Vec<_> = blocks.iter().filter(|b| b["type"] == "thinking").collect();
+	assert_eq!(thinking.len(), 2, "one block per signature, got: {r}");
+	assert_eq!(thinking[0]["thinking"], "first thought");
+	assert_eq!(thinking[0]["signature"], "sig-a");
+	assert_eq!(thinking[1]["thinking"], "second thought");
+	assert_eq!(thinking[1]["signature"], "sig-b");
 }
