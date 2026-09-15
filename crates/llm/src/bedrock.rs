@@ -279,7 +279,6 @@ mod tests {
 			("both.endpoints", &[tags::MANTLE, tags::RUNTIME][..]),
 		]);
 		let catalog: crate::model_catalog::Catalog = Some(&cat);
-		// Prefer Mantle: only a model tagged Runtime-but-not-Mantle falls back to Runtime.
 		assert_eq!(
 			p.resolve_endpoint(RouteType::Completions, Some("only.runtime"), catalog),
 			BedrockEndpoint::Runtime
@@ -292,7 +291,6 @@ mod tests {
 			p.resolve_endpoint(RouteType::Completions, Some("both.endpoints"), catalog),
 			BedrockEndpoint::Mantle
 		);
-		// Untagged / no-catalog models default to Mantle under MantlePreferred.
 		assert_eq!(
 			p.resolve_endpoint(RouteType::Completions, Some("untagged.model"), catalog),
 			BedrockEndpoint::Mantle
@@ -301,7 +299,6 @@ mod tests {
 			p.resolve_endpoint(RouteType::Completions, Some("untagged.model"), None),
 			BedrockEndpoint::Mantle
 		);
-		// Non-chat routes still resolve by route type regardless of the Mantle preference.
 		assert_eq!(
 			p.resolve_endpoint(RouteType::Embeddings, Some("only.mantle"), catalog),
 			BedrockEndpoint::Runtime
