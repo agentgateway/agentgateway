@@ -115,6 +115,9 @@ impl Serialize for Encoder {
 
 impl Encoder {
 	pub fn encrypt(&self, plaintext: &str) -> Result<String, Error> {
+		self.encrypt_bytes(plaintext.as_bytes())
+	}
+	pub fn encrypt_bytes(&self, plaintext: &[u8]) -> Result<String, Error> {
 		match self {
 			Encoder::Base64(e) => Ok(e.encrypt(plaintext)),
 			Encoder::Aes(e) => e.encrypt(plaintext).map_err(Into::into),
@@ -138,7 +141,7 @@ mod base64 {
 	pub struct Encoder;
 
 	impl Encoder {
-		pub fn encrypt(&self, plaintext: &str) -> String {
+		pub fn encrypt(&self, plaintext: &[u8]) -> String {
 			URL_SAFE_NO_PAD.encode(plaintext)
 		}
 		pub fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, base64::DecodeError> {
@@ -166,10 +169,10 @@ mod aes {
 		}
 
 		/// Encrypt and base64 encode
-		pub fn encrypt(&self, plaintext: &str) -> Result<String, Error> {
+		pub fn encrypt(&self, plaintext: &[u8]) -> Result<String, Error> {
 			let sealed = self
 				.key
-				.seal(plaintext.as_bytes())
+				.seal(plaintext)
 				.map_err(|_| Error::EncryptionFailed)?;
 			// Format: nonce || ciphertext+tag, base64 encoded
 			Ok(STANDARD.encode(&sealed))

@@ -261,6 +261,7 @@ dependencies = [
  "dashmap",
  "divan",
  "flagset",
+ "flate2",
  "frozen-collections",
  "fs-err",
  "futures",

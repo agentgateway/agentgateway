@@ -311,6 +311,72 @@ fn explicit_provider_config_rejects_relative_endpoints_during_deserialization() 
 	assert!(err.to_string().contains("must be an absolute http(s) URL"));
 }
 
+fn browser_session(raw_id_token: String) -> BrowserSession {
+	BrowserSession {
+		policy_id: PolicyId::policy("policy"),
+		raw_id_token: SecretString::new(raw_id_token.into()),
+		expires_at_unix: Some(now_unix() + 300),
+	}
+}
+
+fn group_claim_id_token(groups: usize) -> String {
+	let groups = (0..groups)
+		.map(|i| format!("\"/acme/engineering/platform-team-{i:03}\""))
+		.collect::<Vec<_>>()
+		.join(",");
+	format!("aGVhZGVy.{{\"sub\":\"user-1\",\"groups\":[{groups}]}}.c2lnbmF0dXJl")
+}
+
+fn incompressible_id_token(bytes: usize) -> String {
+	let mut random = vec![0u8; bytes];
+	crate::crypto::rand::fill(&mut random).expect("rng");
+	base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(random)
+}
+
+#[test]
+fn browser_session_compresses_group_heavy_id_token() {
+	let session = test_policy().session;
+	let id_token = group_claim_id_token(120);
+	assert!(id_token.len() > 3800);
+
+	let encoded = session
+		.encode_browser_session(&browser_session(id_token.clone()))
+		.expect("encode group-heavy session");
+	assert!(encoded.len() <= 3800, "encoded {} bytes", encoded.len());
+
+	let decoded = session
+		.decode_browser_session(&encoded)
+		.expect("decode group-heavy session");
+	assert_eq!(decoded.raw_id_token.expose_secret(), id_token);
+}
+
+#[test]
+fn browser_session_decodes_payload_written_before_compression() {
+	let session = test_policy().session;
+	let expected = browser_session(signed_id_token(TEST_NONCE));
+	let legacy = session
+		.encoder
+		.encrypt(&serde_json::to_string(&expected).expect("session json"))
+		.expect("encrypt legacy payload");
+
+	let decoded = session
+		.decode_browser_session(&legacy)
+		.expect("decode legacy payload");
+	assert_eq!(
+		decoded.raw_id_token.expose_secret(),
+		expected.raw_id_token.expose_secret()
+	);
+}
+
+#[test]
+fn browser_session_rejects_oversized_incompressible_id_token() {
+	let session = test_policy().session;
+	let err = session
+		.encode_browser_session(&browser_session(incompressible_id_token(4096)))
+		.expect_err("incompressible token should not fit");
+	assert!(matches!(err, Error::SessionCookieTooLarge));
+}
+
 #[tokio::test]
 async fn apply_derives_claims_from_stored_id_token() {
 	let policy = test_policy();

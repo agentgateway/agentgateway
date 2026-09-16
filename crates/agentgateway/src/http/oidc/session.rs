@@ -1,8 +1,12 @@
 use std::fmt::Write as _;
+use std::io::{Read as _, Write as _};
 use std::time::Duration;
 
 use base64::Engine;
 use cookie::{Cookie, SameSite};
+use flate2::Compression;
+use flate2::read::DeflateDecoder;
+use flate2::write::DeflateEncoder;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Serialize, Serializer};
 
@@ -15,6 +19,10 @@ pub const RESERVED_COOKIE_PREFIX: &str = "agw_oidc_";
 // silently dropped session cookies.
 const MAX_BROWSER_COOKIE_VALUE_SIZE: usize = 3800;
 const ORIGINAL_URI_LIMIT: usize = 2048;
+/// Marks a deflated payload. Sessions written before compression are bare JSON, which never starts
+/// with this byte, so untagged payloads still decode.
+const DEFLATE_TAG: u8 = 0x01;
+const MAX_INFLATED_PAYLOAD_SIZE: u64 = 64 * 1024;
 
 pub(super) fn default_session_ttl() -> Duration {
 	Duration::from_secs(60 * 60)
@@ -152,6 +160,7 @@ impl SessionConfig {
 			.encoder
 			.decrypt(cookie)
 			.map_err(|_| Error::InvalidSession)?;
+		let decoded = decode_session_payload(decoded)?;
 		let session: BrowserSession =
 			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
 		if session.is_expired() {
@@ -164,7 +173,7 @@ impl SessionConfig {
 		let json = serde_json::to_string(session).map_err(anyhow::Error::from)?;
 		let encoded = self
 			.encoder
-			.encrypt(&json)
+			.encrypt_bytes(&encode_session_payload(&json))
 			.map_err(|_| Error::InvalidSession)?;
 		if encoded.len() > MAX_BROWSER_COOKIE_VALUE_SIZE {
 			return Err(Error::SessionCookieTooLarge);
@@ -199,6 +208,31 @@ impl SessionConfig {
 	pub fn transaction_cookie_name(&self, transaction_id: &str) -> String {
 		format!("{}.{}", self.transaction_cookie_prefix, transaction_id)
 	}
+}
+
+fn deflate(json: &str) -> std::io::Result<Vec<u8>> {
+	let mut encoder = DeflateEncoder::new(vec![DEFLATE_TAG], Compression::default());
+	encoder.write_all(json.as_bytes())?;
+	encoder.finish()
+}
+
+fn encode_session_payload(json: &str) -> Vec<u8> {
+	match deflate(json) {
+		Ok(deflated) if deflated.len() < json.len() => deflated,
+		_ => json.as_bytes().to_vec(),
+	}
+}
+
+fn decode_session_payload(payload: Vec<u8>) -> Result<Vec<u8>, Error> {
+	let Some((&DEFLATE_TAG, deflated)) = payload.split_first() else {
+		return Ok(payload);
+	};
+	let mut json = Vec::new();
+	DeflateDecoder::new(deflated)
+		.take(MAX_INFLATED_PAYLOAD_SIZE)
+		.read_to_end(&mut json)
+		.map_err(|_| Error::InvalidSession)?;
+	Ok(json)
 }
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
