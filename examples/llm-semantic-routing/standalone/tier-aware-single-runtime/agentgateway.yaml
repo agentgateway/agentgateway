@@ -2,7 +2,7 @@
 config:
   readinessAddr: 0.0.0.0:15021
 llm:
-  port: 3000
+  port: 4000
   policies:
     authorization:
       rules:

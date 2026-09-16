@@ -7,7 +7,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env or your shell}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in .env or your shell}
     ports:
-      - "127.0.0.1:${PORT:-3000}:3000"
+      - "127.0.0.1:${PORT:-4000}:4000"
     volumes:
       - ./agentgateway.yaml:/etc/agentgateway/config.yaml:ro
     depends_on:

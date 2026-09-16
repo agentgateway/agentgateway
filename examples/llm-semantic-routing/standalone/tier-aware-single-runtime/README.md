@@ -37,7 +37,7 @@ Prerequisites:
 
 - Docker with Docker Compose v2, curl, and jq.
 - OpenAI and Anthropic API keys with access to the configured models.
-- A free local port, defaulting to 3000.
+- A free local port, defaulting to 4000.
 
 Compose uses agentgateway v1.5.0 and the `vllm-sr:latest` image for vSR.
 Only agentgateway's HTTP listener is published, on localhost. vSR's gRPC and
@@ -56,11 +56,11 @@ chmod 600 .env
 
 Set `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` in `.env`, or export them in your
 shell. `.env` is ignored by Git. Credentials are passed only to agentgateway.
-Set `PORT` in `.env` if 3000 is occupied.
+Set `PORT` in `.env` if 4000 is occupied.
 
 ```bash
 docker compose up -d --wait
-export ENDPOINT=http://127.0.0.1:3000
+export ENDPOINT=http://127.0.0.1:4000
 ```
 
 Adjust `ENDPOINT` if you changed `PORT`. Requests below make billable provider

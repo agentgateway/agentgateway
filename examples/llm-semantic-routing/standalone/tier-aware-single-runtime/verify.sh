@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENDPOINT=${ENDPOINT:-http://127.0.0.1:3000}
+ENDPOINT=${ENDPOINT:-http://127.0.0.1:4000}
 RUN_LIVE_PROVIDER_TESTS=${RUN_LIVE_PROVIDER_TESTS:-false}
 for tool in curl jq; do
   command -v "$tool" >/dev/null || { echo "Required command not found: $tool" >&2; exit 1; }
