@@ -67,7 +67,6 @@ core_affinity.workspace = true
 crossbeam.workspace = true
 dashmap.workspace = true
 divan = { workspace = true, optional = true }
-flate2.workspace = true
 frozen-collections.workspace = true
 fs-err = { workspace = true }
 futures-core.workspace = true
@@ -169,6 +168,7 @@ url.workspace = true
 uuid.workspace = true
 value-bag.workspace = true
 x509-parser.workspace = true
+zstd.workspace = true
 reqwest.workspace = true
 websocket-sans-io.workspace = true
 vector-map.workspace = true

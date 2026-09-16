@@ -1,12 +1,8 @@
 use std::fmt::Write as _;
-use std::io::{Read as _, Write as _};
 use std::time::Duration;
 
 use base64::Engine;
 use cookie::{Cookie, SameSite};
-use flate2::Compression;
-use flate2::read::DeflateDecoder;
-use flate2::write::DeflateEncoder;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Serialize, Serializer};
 
@@ -19,10 +15,11 @@ pub const RESERVED_COOKIE_PREFIX: &str = "agw_oidc_";
 // silently dropped session cookies.
 const MAX_BROWSER_COOKIE_VALUE_SIZE: usize = 3800;
 const ORIGINAL_URI_LIMIT: usize = 2048;
-/// Marks a deflated payload. Sessions written before compression are bare JSON, which never starts
-/// with this byte, so untagged payloads still decode.
-const DEFLATE_TAG: u8 = 0x01;
-const MAX_INFLATED_PAYLOAD_SIZE: u64 = 64 * 1024;
+/// Marks a compressed payload. Sessions written before compression are bare JSON, which never
+/// starts with this byte, so untagged payloads still decode.
+const COMPRESSED_TAG: u8 = 0x01;
+const COMPRESSION_LEVEL: i32 = 9;
+const MAX_DECOMPRESSED_PAYLOAD_SIZE: usize = 64 * 1024;
 
 pub(super) fn default_session_ttl() -> Duration {
 	Duration::from_secs(60 * 60)
@@ -210,29 +207,24 @@ impl SessionConfig {
 	}
 }
 
-fn deflate(json: &str) -> std::io::Result<Vec<u8>> {
-	let mut encoder = DeflateEncoder::new(vec![DEFLATE_TAG], Compression::default());
-	encoder.write_all(json.as_bytes())?;
-	encoder.finish()
-}
-
 fn encode_session_payload(json: &str) -> Vec<u8> {
-	match deflate(json) {
-		Ok(deflated) if deflated.len() < json.len() => deflated,
+	match zstd::bulk::compress(json.as_bytes(), COMPRESSION_LEVEL) {
+		Ok(compressed) if compressed.len() + 1 < json.len() => {
+			let mut payload = Vec::with_capacity(compressed.len() + 1);
+			payload.push(COMPRESSED_TAG);
+			payload.extend_from_slice(&compressed);
+			payload
+		},
 		_ => json.as_bytes().to_vec(),
 	}
 }
 
 fn decode_session_payload(payload: Vec<u8>) -> Result<Vec<u8>, Error> {
-	let Some((&DEFLATE_TAG, deflated)) = payload.split_first() else {
+	let Some((&COMPRESSED_TAG, compressed)) = payload.split_first() else {
 		return Ok(payload);
 	};
-	let mut json = Vec::new();
-	DeflateDecoder::new(deflated)
-		.take(MAX_INFLATED_PAYLOAD_SIZE)
-		.read_to_end(&mut json)
-		.map_err(|_| Error::InvalidSession)?;
-	Ok(json)
+	zstd::bulk::decompress(compressed, MAX_DECOMPRESSED_PAYLOAD_SIZE)
+		.map_err(|_| Error::InvalidSession)
 }
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

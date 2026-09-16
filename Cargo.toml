@@ -97,7 +97,6 @@ divan = "0.1"
 durationfmt = "0.1"
 go-parse-duration = "0.1"
 flurry = "0.5.2"
-flate2 = "1.1"
 fs-err = { version = "3.3", features = ["tokio"] }
 futures = "0.3"
 futures-channel = "0.3"
@@ -253,6 +252,7 @@ url = "2.5"
 uuid = { version = "1.23", features = ["v4", "v7"] }
 wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
+zstd = "0.13"
 which = "8.0"
 websocket-sans-io = '0.1'
 vector-map = "1.1.0"
