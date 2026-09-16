@@ -38,7 +38,7 @@ combined with other [vSR signals](https://vllm-sr.ai/docs/tutorials/signal/overv
 
 Prerequisites:
 
-- Docker with Docker Compose v2, curl, and jq.
+- Docker with Docker Compose v2 and curl.
 - OpenAI and Anthropic API keys with access to the configured models.
 - A free local port, defaulting to 4000.
 
@@ -97,42 +97,6 @@ Expect HTTP 200 with generated text and these debug response headers:
 Replace the prompt with `Say hello.` to check the GPT-4.1 fallback. Replace
 `auto` with `claude-sonnet-4-6` and use tier `basic` to check HTTP 403.
 
-## Verify
-
-Run the authorization and invalid-request checks:
-
-```bash
-./verify.sh
-```
-
-These checks cover models outside the caller's tier, missing or invalid headers,
-and unknown models. They should not reach a provider.
-
-To also test successful routing with billable provider calls, run:
-
-```bash
-RUN_LIVE_PROVIDER_TESTS=true ./verify.sh
-```
-
-The live tests check STEM routing and fallback for each tier, an allowed request
-for Haiku by name, and a streaming Sonnet response. They check for generated
-text as well as the expected selected-model headers.
-
-To verify failure behavior, stop vSR and send a valid request:
-
-```bash
-docker compose stop semantic-router
-curl -sS -i --max-time 30 "$ENDPOINT/v1/chat/completions" \
-  -H 'Content-Type: application/json' \
-  -H 'X-Authz-User-Id: demo-user' \
-  -H 'X-Entitlement-Tier: basic' \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Say hello."}]}'
-docker compose up -d --wait
-```
-
-Expect a gateway error rather than provider output. ExtProc is configured to
-fail closed, including for explicitly named models.
-
 ## Trusted tier context
 
 This example trusts the user ID and tier headers, so a caller can claim any tier.
@@ -158,8 +122,8 @@ Check the selected model to diagnose routing, and the response body for provider
 credential, quota, or model-access errors. Messages about disabled embedding or
 cache features are expected for this configuration.
 
-If you change model IDs, update `agentgateway.yaml`, `semantic-router-config.yaml`,
-and the expected models in `verify.sh`. Restart vSR after editing its configuration:
+If you change model IDs, update `agentgateway.yaml` and `semantic-router-config.yaml`.
+Restart vSR after editing its configuration:
 
 ```bash
 docker compose restart semantic-router
