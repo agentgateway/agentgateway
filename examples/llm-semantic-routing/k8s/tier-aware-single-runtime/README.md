@@ -155,7 +155,20 @@ kubectl describe agentgatewaypolicy tiered-semantic-routing \
   -n agentgateway-system
 ```
 
-Confirm the policy is accepted and attached.
+Wait for the policy's `Accepted` and `Attached` conditions to become `True`:
+
+```bash
+kubectl wait -n agentgateway-system agentgatewaypolicy/tiered-semantic-routing \
+  --for='jsonpath={.status.ancestors[0].conditions[?(@.type=="Accepted")].status}=True' \
+  --timeout=60s
+kubectl wait -n agentgateway-system agentgatewaypolicy/tiered-semantic-routing \
+  --for='jsonpath={.status.ancestors[0].conditions[?(@.type=="Attached")].status}=True' \
+  --timeout=60s
+```
+
+The policy targets one Gateway, so these commands check its first ancestor status.
+If either command times out, inspect the conditions with the `kubectl describe`
+command above.
 
 ## Run Requests
 
