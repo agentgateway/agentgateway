@@ -737,6 +737,9 @@ pub mod from_completions {
 
 	// Gemini's responseSchema / functionDeclarations[].parameters accept only a subset of JSON Schema.
 	// The normalization below is ported from litellm's `_build_vertex_schema` (BerriAI/litellm, MIT).
+	//
+	// Authoritative field list: google/ai/generativelanguage/v1beta/content.proto — Schema message.
+	// Cross-checked against litellm/types/llms/vertex_ai.py Schema TypedDict (both MIT-licensed).
 
 	/// Schema fields Gemini accepts. `format` is further pruned to enum/date-time and `enum` is
 	/// dropped on non-string types.
@@ -759,6 +762,11 @@ pub mod from_completions {
 		"maximum",
 		"exclusiveMinimum",
 		"exclusiveMaximum",
+		"minItems",
+		"maxItems",
+		"minProperties",
+		"maxProperties",
+		"example",
 		"propertyOrdering",
 	];
 

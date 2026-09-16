@@ -913,7 +913,59 @@ fn gemini_schema_array_without_items_gets_items() {
 	);
 }
 
-// Case 8: Dict[str, X] emits a typed `additionalProperties` schema. Gemini does not support it, so
+// Case 8: minItems/maxItems on array types must be preserved so callers can enforce response
+// length constraints (e.g. "return exactly 3 items"). They were previously stripped because they
+// were absent from ALLOWED_SCHEMA_FIELDS.
+#[test]
+fn gemini_schema_preserves_array_length_constraints() {
+	let s = response_schema(json!({
+		"type": "object",
+		"properties": {
+			"tags": {
+				"type": "array",
+				"items": { "type": "string" },
+				"minItems": 2,
+				"maxItems": 5
+			}
+		}
+	}));
+	assert_eq!(
+		s["properties"]["tags"]["minItems"],
+		2,
+		"minItems must be preserved: {s}"
+	);
+	assert_eq!(
+		s["properties"]["tags"]["maxItems"],
+		5,
+		"maxItems must be preserved: {s}"
+	);
+}
+
+// Case 9: minProperties/maxProperties constrain the number of keys on an object. Like minItems/
+// maxItems they were absent from ALLOWED_SCHEMA_FIELDS and were silently stripped.
+#[test]
+fn gemini_schema_preserves_object_property_count_constraints() {
+	let s = response_schema(json!({
+		"type": "object",
+		"minProperties": 1,
+		"maxProperties": 4,
+		"properties": { "a": { "type": "string" } }
+	}));
+	assert_eq!(s["minProperties"], 1, "minProperties must be preserved: {s}");
+	assert_eq!(s["maxProperties"], 4, "maxProperties must be preserved: {s}");
+}
+
+// Case 10: example provides a sample value for a schema node and is passed through to Gemini.
+#[test]
+fn gemini_schema_preserves_example() {
+	let s = response_schema(json!({
+		"type": "string",
+		"example": "hello"
+	}));
+	assert_eq!(s["example"], "hello", "example must be preserved: {s}");
+}
+
+// Case 11: Dict[str, X] emits a typed `additionalProperties` schema. Gemini does not support it, so
 // it must be dropped (the open value typing is lost; that is the documented trade-off).
 #[test]
 fn gemini_schema_drops_open_dict_additional_properties() {
