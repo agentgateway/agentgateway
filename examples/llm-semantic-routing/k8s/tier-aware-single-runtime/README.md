@@ -47,8 +47,7 @@ can replace or supplement the example's keyword condition.
 
 [AgentgatewayModel](https://agentgateway.dev/docs/kubernetes/main/reference/api/#agentgatewaymodel)
 authorization policies reject models outside the caller's tier, including models
-requested by name. Sharing a provider catalog does not give every tier access
-to every model.
+requested by name.
 
 **Note:** This example uses `AgentgatewayModel` because model routing runs after
 vSR selects a model and rewrites the request body. `HTTPRoute` matching occurs
@@ -59,7 +58,7 @@ vSR during PreRouting ExtProc processing.
 
 This example requires:
 
-- agentgateway v1.4.1 and its matching CRDs. Enable the experimental model API
+- agentgateway v1.5.0 and its matching CRDs. Enable the experimental model API
   with the Helm value `agentgatewayModels.enabled=true`.
 - A running `Gateway` named `agentgateway-proxy` in the
   `agentgateway-system` namespace.
@@ -80,7 +79,7 @@ For example, enable model routing on an existing agentgateway Helm installation 
 retaining its other values:
 
 ```bash
-export AGENTGATEWAY_VERSION=v1.4.1
+export AGENTGATEWAY_VERSION=v1.5.0
 
 helm upgrade agentgateway \
   oci://ghcr.io/agentgateway/charts/agentgateway \
