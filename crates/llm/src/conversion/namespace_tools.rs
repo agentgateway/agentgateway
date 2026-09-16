@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use agent_core::strng;
 use async_openai::types::responses::{FunctionTool, NamespaceToolParamTool};
@@ -12,6 +12,24 @@ pub(crate) const NAMESPACE_SEPARATOR: &str = "__";
 struct OriginalTool {
 	namespace: String,
 	name: String,
+	kind: ToolKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolKind {
+	Function,
+	Custom,
+}
+
+impl ToolKind {
+	/// Returns the Responses API discriminator used for this tool kind.
+	/// Mismatch errors use it to describe the client's original protocol shape.
+	fn name(self) -> &'static str {
+		match self {
+			Self::Function => "function",
+			Self::Custom => "custom",
+		}
+	}
 }
 
 /// Request-local aliases
@@ -21,22 +39,24 @@ pub struct NamespaceToolMap {
 }
 
 impl NamespaceToolMap {
-	/// Rewrite namespace definitions, forced function choices, and function-call history
+	/// Rewrite namespace definitions, forced tool choices, and tool-call history
 	/// for Chat Completions and Bedrock Converse. Returns aliases for response restoration.
-	/// Bare choices must identify a unique member; qualified `namespace__function` names
-	/// are also accepted. Custom namespace members and allowed-tool constraints are unsupported.
+	/// Bare choices must identify a unique member; qualified `namespace__tool` names
+	/// are also accepted. Allowed-tool constraints remain unsupported.
 	/// On error the request may be partially rewritten and must be discarded.
 	pub fn rewrite_request(req: &mut responses::CreateResponse) -> Result<Self, AIError> {
 		let mut map = Self::default();
 		map.flatten_tools(&mut req.tools)?;
-		let mut names = HashSet::new();
+		let mut names = HashMap::new();
 		for tool in req.tools.iter().flatten() {
-			if let responses::Tool::Function(function) = tool
-				&& !names.insert(function.name.as_str())
-			{
+			let (name, kind) = match tool {
+				responses::Tool::Function(tool) => (&tool.name, ToolKind::Function),
+				responses::Tool::Custom(tool) => (&tool.name, ToolKind::Custom),
+				_ => continue,
+			};
+			if names.insert(name.as_str(), kind).is_some() {
 				return Err(AIError::UnsupportedConversion(strng::format!(
-					"duplicate upstream tool name: {}",
-					function.name
+					"duplicate upstream tool name: {name}"
 				)));
 			}
 		}
@@ -53,22 +73,26 @@ impl NamespaceToolMap {
 					continue;
 				};
 				for member in namespace.tools {
-					let NamespaceToolParamTool::Function(function) = member else {
-						return Err(AIError::UnsupportedConversion(strng::literal!(
-							"namespaced custom tools cannot be converted to function tools"
-						)));
+					let (original_name, member_description, kind) = match &member {
+						NamespaceToolParamTool::Function(tool) => {
+							(&tool.name, &tool.description, ToolKind::Function)
+						},
+						NamespaceToolParamTool::Custom(tool) => {
+							(&tool.name, &tool.description, ToolKind::Custom)
+						},
 					};
-					let name = format!("{}{NAMESPACE_SEPARATOR}{}", namespace.name, function.name);
+					let name = format!("{}{NAMESPACE_SEPARATOR}{original_name}", namespace.name);
 
 					self.aliases.insert(
 						name.clone(),
 						OriginalTool {
 							namespace: namespace.name.clone(),
-							name: function.name,
+							name: original_name.clone(),
+							kind,
 						},
 					);
 					// Keep the namespace's instructions visible after removing its container.
-					let mut description = function.description;
+					let mut description = member_description.clone();
 					if !namespace.description.is_empty() {
 						let mut combined = namespace.description.clone();
 						if let Some(member) = description.as_ref().filter(|text| !text.is_empty()) {
@@ -77,16 +101,25 @@ impl NamespaceToolMap {
 						}
 						description = Some(combined);
 					}
-					tools.push(responses::Tool::Function(FunctionTool {
-						name,
-						description,
-						parameters: function.parameters,
-						strict: function.strict,
-						defer_loading: function.defer_loading,
-						allowed_callers: function.allowed_callers,
-						output_schema: function.output_schema,
-						r#async: function.r#async,
-					}));
+					match member {
+						NamespaceToolParamTool::Function(tool) => {
+							tools.push(responses::Tool::Function(FunctionTool {
+								name,
+								description,
+								parameters: tool.parameters,
+								strict: tool.strict,
+								defer_loading: tool.defer_loading,
+								allowed_callers: tool.allowed_callers,
+								output_schema: tool.output_schema,
+								r#async: tool.r#async,
+							}));
+						},
+						NamespaceToolParamTool::Custom(mut tool) => {
+							tool.name = name;
+							tool.description = description;
+							tools.push(responses::Tool::Custom(tool));
+						},
+					}
 				}
 			}
 		}
@@ -97,7 +130,7 @@ impl NamespaceToolMap {
 	fn rewrite_choice(
 		&self,
 		choice: &mut Option<responses::ToolChoiceParam>,
-		names: &HashSet<&str>,
+		names: &HashMap<&str, ToolKind>,
 	) -> Result<(), AIError> {
 		// Neither target conversion can enforce an allowed-tools constraint.
 		if matches!(choice, Some(responses::ToolChoiceParam::AllowedTools(_))) {
@@ -106,22 +139,44 @@ impl NamespaceToolMap {
 			)));
 		}
 
-		if let Some(responses::ToolChoiceParam::Function(choice)) = choice
-			&& !names.contains(choice.name.as_str())
+		let (name, kind) = match choice {
+			Some(responses::ToolChoiceParam::Function(choice)) => (&mut choice.name, ToolKind::Function),
+			Some(responses::ToolChoiceParam::Custom(choice)) => (&mut choice.name, ToolKind::Custom),
+			_ => return Ok(()),
+		};
+		if names.get(name.as_str()) == Some(&kind) {
+			return Ok(());
+		}
+
+		let original_name = name.clone();
 		{
 			let mut matches = self
 				.aliases
 				.iter()
-				.filter(|(_, original)| original.name == choice.name);
+				.filter(|(_, original)| original.name == original_name && original.kind == kind);
 			match (matches.next(), matches.next()) {
-				(Some((alias, _)), None) => choice.name = alias.clone(),
+				(Some((alias, _)), None) => *name = alias.clone(),
 				(Some(_), Some(_)) => {
 					return Err(AIError::UnsupportedConversion(strng::format!(
-						"ambiguous namespaced tool choice: {}; use namespace__function to select a member",
-						choice.name
+						"ambiguous namespaced tool choice: {name}; use namespace__tool to select a member"
 					)));
 				},
-				_ => {},
+				_ => {
+					let wrong_kind = names.get(original_name.as_str()).copied().or_else(|| {
+						self
+							.aliases
+							.values()
+							.find(|original| original.name == original_name)
+							.map(|original| original.kind)
+					});
+					if let Some(wrong_kind) = wrong_kind {
+						return Err(AIError::UnsupportedConversion(strng::format!(
+							"{} tool choice refers to a {} tool: {original_name}",
+							kind.name(),
+							wrong_kind.name()
+						)));
+					}
+				},
 			}
 		}
 
@@ -131,33 +186,42 @@ impl NamespaceToolMap {
 	fn rewrite_history(
 		&mut self,
 		input: &mut responses::InputParam,
-		names: &HashSet<&str>,
+		names: &HashMap<&str, ToolKind>,
 	) -> Result<(), AIError> {
 		if let responses::InputParam::Items(items) = input {
 			for item in items {
-				let responses::InputItem::Item(responses::Item::FunctionCall(call)) = item else {
+				let (namespace, name, kind) = match item {
+					responses::InputItem::Item(responses::Item::FunctionCall(call)) => {
+						(&mut call.namespace, &mut call.name, ToolKind::Function)
+					},
+					responses::InputItem::Item(responses::Item::CustomToolCall(call)) => {
+						(&mut call.namespace, &mut call.name, ToolKind::Custom)
+					},
+					_ => continue,
+				};
+				let Some(original_namespace) = namespace.as_ref().filter(|ns| !ns.is_empty()) else {
 					continue;
 				};
-				let Some(namespace) = call.namespace.as_ref().filter(|ns| !ns.is_empty()) else {
-					continue;
-				};
-				let alias = format!("{namespace}{NAMESPACE_SEPARATOR}{}", call.name);
+				let alias = format!("{original_namespace}{NAMESPACE_SEPARATOR}{name}");
 				let original = OriginalTool {
-					namespace: namespace.clone(),
-					name: call.name.clone(),
+					namespace: original_namespace.clone(),
+					name: name.clone(),
+					kind,
 				};
 				let collides = match self.aliases.get(&alias) {
-					Some(existing) => existing != &original,
-					None => names.contains(alias.as_str()),
+					Some(existing) => {
+						existing.namespace != original.namespace || existing.name != original.name
+					},
+					None => names.contains_key(alias.as_str()),
 				};
 				if collides {
 					return Err(AIError::UnsupportedConversion(strng::format!(
-						"history function call collides with another tool: {alias}"
+						"history tool call collides with another tool: {alias}"
 					)));
 				}
-				self.aliases.insert(alias.clone(), original);
-				call.name = alias;
-				call.namespace = None;
+				self.aliases.entry(alias.clone()).or_insert(original);
+				*name = alias;
+				*namespace = None;
 			}
 		}
 		Ok(())
@@ -168,11 +232,14 @@ impl NamespaceToolMap {
 	}
 
 	pub fn restore_item(&self, item: &mut responses::OutputItem) {
-		if let responses::OutputItem::FunctionCall(call) = item
-			&& let Some(original) = self.aliases.get(&call.name)
-		{
-			call.namespace = Some(original.namespace.clone());
-			call.name = original.name.clone();
+		let (namespace, name) = match item {
+			responses::OutputItem::FunctionCall(call) => (&mut call.namespace, &mut call.name),
+			responses::OutputItem::CustomToolCall(call) => (&mut call.namespace, &mut call.name),
+			_ => return,
+		};
+		if let Some(original) = self.aliases.get(name) {
+			*namespace = Some(original.namespace.clone());
+			name.clone_from(&original.name);
 		}
 	}
 
@@ -232,13 +299,25 @@ mod tests {
 				{"type": "namespace", "name": "one", "description": "", "tools": [{"type": "function", "name": "js"}]},
 				{"type": "namespace", "name": "two", "description": "", "tools": [{"type": "function", "name": "js"}]}
 			], "tool_choice": {"type": "function", "name": "js"}}),
-				"ambiguous namespaced tool choice: js; use namespace__function to select a member",
+				"ambiguous namespaced tool choice: js; use namespace__tool to select a member",
+			),
+			(
+				json!({"tools": [
+					{"type": "namespace", "name": "kernel", "description": "", "tools": [{"type": "function", "name": "js"}]}
+				], "tool_choice": {"type": "custom", "name": "js"}}),
+				"custom tool choice refers to a function tool: js",
+			),
+			(
+				json!({"tools": [
+					{"type": "namespace", "name": "kernel", "description": "", "tools": [{"type": "function", "name": "js"}]}
+				], "tool_choice": {"type": "custom", "name": "kernel__js"}}),
+				"custom tool choice refers to a function tool: kernel__js",
 			),
 			(
 				json!({"tools": [{"type": "function", "name": "kernel__js"}],
 					"input": [{"type": "function_call", "call_id": "call_1", "namespace": "kernel", "name": "js", "arguments": "{}"}]
 				}),
-				"history function call collides with another tool: kernel__js",
+				"history tool call collides with another tool: kernel__js",
 			),
 			(
 				json!({"tool_choice": {"type": "allowed_tools", "mode": "auto", "tools": [{"type": "function", "name": "js"}]}}),
@@ -271,5 +350,46 @@ mod tests {
 			assert_eq!(request["tool_choice"]["name"], "kernel__js");
 			assert_eq!(request["input"][0]["namespace"], "");
 		}
+	}
+
+	#[test]
+	fn custom_members_keep_namespace_identity() {
+		let mut request = serde_json::from_value(json!({
+			"input": [{"type": "custom_tool_call", "id": "ctc_1", "call_id": "call_1", "namespace": "shell", "name": "exec", "input": "pwd"}],
+			"tools": [
+				{"type": "namespace", "name": "shell", "description": "Read-only commands", "tools": [
+					{"type": "custom", "name": "exec", "description": "Run one command", "format": {"type": "text"}}
+				]},
+				{"type": "namespace", "name": "admin", "description": "Admin commands", "tools": [
+					{"type": "custom", "name": "exec", "format": {"type": "text"}}
+				]}
+			],
+			"tool_choice": {"type": "custom", "name": "shell__exec"}
+		}))
+		.unwrap();
+		let namespaces = NamespaceToolMap::rewrite_request(&mut request).unwrap();
+		let request = serde_json::to_value(request).unwrap();
+		assert_eq!(request["tools"][0]["name"], "shell__exec");
+		assert_eq!(
+			request["tools"][0]["description"],
+			"Read-only commands\n\nRun one command"
+		);
+		assert_eq!(request["tools"][1]["name"], "admin__exec");
+		assert_eq!(request["tool_choice"]["name"], "shell__exec");
+		assert_eq!(request["input"][0]["namespace"], serde_json::Value::Null);
+		assert_eq!(request["input"][0]["name"], "shell__exec");
+
+		let mut item = serde_json::from_value(json!({
+			"type": "custom_tool_call",
+			"call_id": "call_2",
+			"id": "ctc_2",
+			"name": "shell__exec",
+			"input": "ls"
+		}))
+		.unwrap();
+		namespaces.restore_item(&mut item);
+		let item = serde_json::to_value(item).unwrap();
+		assert_eq!(item["namespace"], "shell");
+		assert_eq!(item["name"], "exec");
 	}
 }

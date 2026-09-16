@@ -838,11 +838,12 @@ mod responses {
 			filters => vec![
 				(r#""created":[0-9]+"#, r#""created":123"#),
 				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
-				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
-				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
+				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"${1}_xxx""#),
+				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"${1}_xxx""#),
 				(r#""id":"ctc_[0-9a-f]{16}""#, r#""id":"ctc_xxx""#),
 				(r#""item_id":"ctc_[0-9a-f]{16}""#, r#""item_id":"ctc_xxx""#),
 				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
+				(r#""call_id":"ctc_[0-9a-f]{16}""#, r#""call_id":"ctc_xxx""#),
 			],
 		}, {
 			insta::assert_snapshot!(format!("{snapshot_name}-streaming"), report);
@@ -1077,6 +1078,7 @@ mod responses {
 					&bytes,
 					"input-model",
 					Some(&translated.namespaces),
+					Some(&translated.custom_tools),
 				)
 			},
 		);
@@ -1116,6 +1118,7 @@ mod responses {
 							tool_calls: true,
 						},
 						Some(Arc::new(translated.namespaces)),
+						Some(Arc::new(translated.custom_tools)),
 					)
 				})
 			},
@@ -1199,7 +1202,12 @@ mod responses {
 						conversion::completions::from_messages::translate_response(&i)
 					}),
 					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
-						conversion::openai_compat::to_responses::translate_response(&i, "input-model", None)
+						conversion::openai_compat::to_responses::translate_response(
+							&i,
+							"input-model",
+							None,
+							None,
+						)
 					}),
 					COMPLETIONS_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(
@@ -1465,6 +1473,17 @@ mod responses {
 
 		for (name, providers) in COMPLETIONS_STREAM_RESPONSES {
 			let path = format!("response/completions/{name}.json");
+			let custom_tools = (*name == "stream_custom_tool").then(|| {
+				Arc::new(
+					[
+						"exec".to_string(),
+						"apply_patch".to_string(),
+						"shell".to_string(),
+					]
+					.into_iter()
+					.collect(),
+				)
+			});
 			for provider in *providers {
 				test_streaming(provider, &path, |response, reporter| match *provider {
 					COMPLETIONS_TO_COMPLETIONS => {
@@ -1485,6 +1504,7 @@ mod responses {
 							reporter,
 							LOG_CONTENT,
 							None,
+							custom_tools.clone(),
 						)
 					}),
 					COMPLETIONS_TO_DETECT => types::detect::passthrough_stream(reporter, response),

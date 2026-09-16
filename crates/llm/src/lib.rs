@@ -267,6 +267,7 @@ pub enum ProviderState {
 	},
 	OpenAICompletions {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
+		custom_tools: Arc<conversion::openai_compat::CustomToolNames>,
 	},
 	VertexGemini,
 }

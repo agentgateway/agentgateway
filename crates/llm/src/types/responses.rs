@@ -760,6 +760,19 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
+	let namespaced_name = |namespace: Option<&str>, name: &str| {
+		namespace
+			.filter(|namespace| !namespace.is_empty())
+			.map_or_else(
+				|| name.to_string(),
+				|namespace| {
+					format!(
+						"{namespace}{}{name}",
+						crate::conversion::namespace_tools::NAMESPACE_SEPARATOR
+					)
+				},
+			)
+	};
 	let (id, name, arguments) = match item {
 		OutputItem::FunctionCall(call) => {
 			let arguments = match serde_json::from_str(&call.arguments) {
@@ -767,20 +780,7 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 				Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
 				Err(_) => serde_json::Value::String(call.arguments.clone()),
 			};
-			let name = call
-				.namespace
-				.as_ref()
-				.filter(|namespace| !namespace.is_empty())
-				.map_or_else(
-					|| call.name.clone(),
-					|namespace| {
-						format!(
-							"{namespace}{}{}",
-							crate::conversion::namespace_tools::NAMESPACE_SEPARATOR,
-							call.name
-						)
-					},
-				);
+			let name = namespaced_name(call.namespace.as_deref(), &call.name);
 			(&call.call_id, name, arguments)
 		},
 		OutputItem::CustomToolCall(call) => {
@@ -789,7 +789,11 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 				Err(_) if call.input.trim().is_empty() => serde_json::Value::Object(Default::default()),
 				Err(_) => serde_json::Value::String(call.input.clone()),
 			};
-			(&call.call_id, call.name.clone(), arguments)
+			(
+				&call.call_id,
+				namespaced_name(call.namespace.as_deref(), &call.name),
+				arguments,
+			)
 		},
 		_ => return None,
 	};
@@ -1117,6 +1121,40 @@ mod tests {
 			tool_calls[0].arguments,
 			serde_json::json!({"location":"San Francisco"})
 		);
+	}
+
+	#[test]
+	fn namespaced_custom_tool_calls_are_distinct_in_logs() {
+		let output = ["shell", "admin"]
+			.into_iter()
+			.map(|namespace| {
+				serde_json::from_value(serde_json::json!({
+					"type": "custom_tool_call",
+					"id": format!("ctc_{namespace}"),
+					"call_id": format!("call_{namespace}"),
+					"namespace": namespace,
+					"name": "exec",
+					"input": "pwd"
+				}))
+				.unwrap()
+			})
+			.collect();
+		let response = response_with_output(output);
+
+		let messages = response
+			.to_llm_response(crate::LogContentFields {
+				completion: true,
+				tool_calls: true,
+			})
+			.output_messages
+			.unwrap();
+		let names: Vec<_> = messages[0]
+			.tool_calls()
+			.into_iter()
+			.map(|call| call.name.to_string())
+			.collect();
+
+		assert_eq!(names, ["shell__exec", "admin__exec"]);
 	}
 
 	#[test]

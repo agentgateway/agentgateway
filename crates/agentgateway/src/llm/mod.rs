@@ -310,6 +310,7 @@ struct ChatResponseContext<'a> {
 	model: &'a str,
 	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
 	namespaces: Option<&'a conversion::namespace_tools::NamespaceToolMap>,
+	custom_tools: Option<&'a conversion::openai_compat::CustomToolNames>,
 }
 
 /// Log handles and content-capture flags threaded through response processing.
@@ -328,6 +329,7 @@ struct ChatStreamContext {
 	log_content: LogContentFields,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
 	namespaces: Option<Arc<conversion::namespace_tools::NamespaceToolMap>>,
+	custom_tools: Option<Arc<conversion::openai_compat::CustomToolNames>>,
 }
 
 /// Ordered chat conversion table.
@@ -385,9 +387,11 @@ fn render_openai_completions(
 			let translated = conversion::openai_compat::from_responses::translate_request(&req)?;
 			let mut request = translated.request;
 			let namespaces = translated.namespaces;
-			if !namespaces.is_empty() {
+			let custom_tools = translated.custom_tools;
+			if !namespaces.is_empty() || !custom_tools.is_empty() {
 				provider_state = Some(ProviderState::OpenAICompletions {
 					namespaces: Arc::new(namespaces),
+					custom_tools: Arc::new(custom_tools),
 				});
 			}
 			apply_openai_moderation(&mut request.moderation, ctx)?;
@@ -578,6 +582,7 @@ impl ChatTranslation {
 					bytes,
 					ctx.model,
 					ctx.namespaces,
+					ctx.custom_tools,
 				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
@@ -663,6 +668,7 @@ impl ChatTranslation {
 						ctx.logger,
 						ctx.log_content,
 						ctx.namespaces,
+						ctx.custom_tools,
 					)
 				}),
 				_ => resp,
@@ -2838,6 +2844,7 @@ impl AIProvider {
 				model: &req.request_model,
 				tool_name_map: bedrock_tool_name_map(req),
 				namespaces: namespace_tool_map(req).map(Arc::as_ref),
+				custom_tools: custom_tool_names(req).map(Arc::as_ref),
 			},
 		)
 	}
@@ -2862,6 +2869,7 @@ impl AIProvider {
 		let input_format = req.input_format;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
 		let namespaces = namespace_tool_map(&req).cloned();
+		let custom_tools = custom_tool_names(&req).cloned();
 		let chat_translation = if input_format.is_chat() {
 			Some(self.chat_translation(
 				input_format,
@@ -2955,6 +2963,7 @@ impl AIProvider {
 					log_content,
 					tool_name_map: bedrock_tool_name_map,
 					namespaces,
+					custom_tools,
 				},
 			)
 		} else {
@@ -3226,8 +3235,18 @@ fn namespace_tool_map(
 ) -> Option<&Arc<conversion::namespace_tools::NamespaceToolMap>> {
 	match &req.provider_state {
 		Some(
-			ProviderState::Bedrock { namespaces, .. } | ProviderState::OpenAICompletions { namespaces },
+			ProviderState::Bedrock { namespaces, .. }
+			| ProviderState::OpenAICompletions { namespaces, .. },
 		) => Some(namespaces),
+		_ => None,
+	}
+}
+
+/// Returns conversion metadata captured when a Responses request was lowered to Chat Completions.
+/// The response path uses it to restore custom calls without exposing gateway markers to providers.
+fn custom_tool_names(req: &LLMRequest) -> Option<&Arc<conversion::openai_compat::CustomToolNames>> {
+	match &req.provider_state {
+		Some(ProviderState::OpenAICompletions { custom_tools, .. }) => Some(custom_tools),
 		_ => None,
 	}
 }

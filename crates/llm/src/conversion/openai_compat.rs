@@ -2,7 +2,7 @@
 #[path = "openai_compat_tests.rs"]
 mod tests;
 
-const CUSTOM_TOOL_PREFIX: &str = "__agw_custom_";
+pub type CustomToolNames = std::collections::HashSet<String>;
 
 pub mod from_responses {
 	use types::completions::typed as completions;
@@ -13,6 +13,7 @@ pub mod from_responses {
 	pub struct TranslatedRequest {
 		pub request: completions::Request,
 		pub namespaces: crate::conversion::namespace_tools::NamespaceToolMap,
+		pub custom_tools: super::CustomToolNames,
 	}
 
 	/// Translate an OpenAI Responses request into an OpenAI-compatible chat completions request.
@@ -22,22 +23,14 @@ pub mod from_responses {
 	}
 
 	pub fn translate_request(req: &types::responses::Request) -> Result<TranslatedRequest, AIError> {
+		// Keep raw handling limited to replay shapes async-openai cannot deserialize; all
+		// representable request data is handled through CreateResponse below.
 		let mut value = serde_json::to_value(req).map_err(AIError::RequestMarshal)?;
-		let mut additional_tools = Vec::new();
 		if let Some(items) = value
 			.get_mut("input")
 			.and_then(serde_json::Value::as_array_mut)
 		{
 			items.retain_mut(|item| {
-				if item.get("type").and_then(serde_json::Value::as_str)
-					== Some(crate::types::responses::ADDITIONAL_TOOLS_TYPE)
-					&& let Some(tools) = item
-						.get_mut("tools")
-						.and_then(serde_json::Value::as_array_mut)
-				{
-					additional_tools.append(tools);
-					return false;
-				}
 				if item.get("type").and_then(serde_json::Value::as_str) == Some("custom_tool_call")
 					&& item.get("id").is_none()
 					&& let Some(call_id) = item.get("call_id").cloned()
@@ -74,22 +67,51 @@ pub mod from_responses {
 				true
 			});
 		}
-		if !additional_tools.is_empty() {
-			match value.get_mut("tools") {
-				Some(serde_json::Value::Array(tools)) => tools.extend(additional_tools),
-				_ => value["tools"] = additional_tools.into(),
-			}
-		}
 		let mut typed = serde_json::from_value::<responses::CreateResponse>(value)
 			.map_err(AIError::RequestMarshal)?;
+		let mut additional_tools = Vec::new();
+		if let responses::InputParam::Items(items) = &mut typed.input {
+			items.retain_mut(|item| {
+				let responses::InputItem::Item(responses::Item::AdditionalTools(additional)) = item else {
+					return true;
+				};
+				additional_tools.append(&mut additional.tools);
+				false
+			});
+		}
+		if !additional_tools.is_empty() {
+			typed
+				.tools
+				.get_or_insert_default()
+				.append(&mut additional_tools);
+		}
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
+		let custom_tools = collect_custom_tool_names(&typed);
 		Ok(TranslatedRequest {
 			request: translate_internal(typed),
 			namespaces,
+			custom_tools,
 		})
 	}
 
+	/// Collects the request-local custom names used to restore Chat Completions calls to Responses tool kinds.
+	/// Only current declarations and tool choice classify future calls; historical call shapes describe an earlier backend and may legitimately differ.
+	fn collect_custom_tool_names(req: &responses::CreateResponse) -> super::CustomToolNames {
+		let mut custom = super::CustomToolNames::new();
+		for tool in req.tools.iter().flatten() {
+			if let responses::Tool::Custom(tool) = tool {
+				custom.insert(tool.name.clone());
+			}
+		}
+		if let Some(responses::ToolChoiceParam::Custom(choice)) = &req.tool_choice {
+			custom.insert(choice.name.clone());
+		}
+		custom
+	}
+
+	/// Keeps adjacent assistant content on one message so later tool calls remain attached to their originating turn.
+	/// Mixed text and structured-part forms are normalized without discarding existing parts.
 	fn push_assistant_content(
 		messages: &mut Vec<completions::RequestMessage>,
 		content: completions::RequestAssistantMessageContent,
@@ -414,7 +436,7 @@ pub mod from_responses {
 						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
 							id: call.call_id.clone(),
 							function: completions::FunctionCall {
-								name: format!("{}{name}", super::CUSTOM_TOOL_PREFIX, name = call.name),
+								name: call.name,
 								arguments: serde_json::json!({"input": call.input}).to_string(),
 							},
 						});
@@ -474,7 +496,7 @@ pub mod from_responses {
 				};
 				completions::Tool::Function(completions::FunctionTool {
 					function: completions::FunctionObject {
-						name: format!("{}{name}", super::CUSTOM_TOOL_PREFIX, name = custom.name),
+						name: custom.name.clone(),
 						description,
 						parameters: Some(serde_json::json!({
 							"type": "object",
@@ -545,7 +567,7 @@ pub mod from_responses {
 				ToolChoiceParam::Custom(custom) => Some(completions::ToolChoiceOption::Function(
 					completions::NamedToolChoice {
 						function: completions::FunctionName {
-							name: format!("{}{name}", super::CUSTOM_TOOL_PREFIX, name = custom.name),
+							name: custom.name.clone(),
 						},
 					},
 				)),
@@ -664,12 +686,17 @@ pub mod to_responses {
 		arguments: String,
 		output_index: u32,
 		custom: bool,
+		added: bool,
 	}
 
-	fn custom_name(name: &str) -> Option<&str> {
-		name.strip_prefix(super::CUSTOM_TOOL_PREFIX)
+	/// Classifies a returned function call using metadata captured from the originating Responses request.
+	/// Missing metadata defaults to an ordinary function call for conversion paths that do not need restoration.
+	fn is_custom(name: &str, custom_tools: Option<&super::CustomToolNames>) -> bool {
+		custom_tools.is_some_and(|tools| tools.contains(name))
 	}
 
+	/// Unwraps the `{input: string}` argument envelope used to carry custom-tool input through Chat Completions.
+	/// Invalid or provider-rewritten envelopes return `None` so callers can preserve the raw arguments.
 	fn custom_input(arguments: &str) -> Option<String> {
 		serde_json::from_str::<serde_json::Value>(arguments)
 			.ok()?
@@ -678,6 +705,8 @@ pub mod to_responses {
 			.map(str::to_owned)
 	}
 
+	/// Constructs the Responses item shared by buffered and streaming custom-call reconstruction.
+	/// Keeping it here makes call identifiers and input representation consistent across both paths.
 	fn custom_item(
 		item_id: String,
 		call_id: String,
@@ -700,10 +729,11 @@ pub mod to_responses {
 		bytes: &Bytes,
 		model: &str,
 		namespaces: Option<&crate::conversion::namespace_tools::NamespaceToolMap>,
+		custom_tools: Option<&super::CustomToolNames>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let mut typed = translate_response_internal(resp, model);
+		let mut typed = translate_response_internal(resp, model, custom_tools);
 		if let Some(namespaces) = namespaces {
 			namespaces.restore_response(&mut typed);
 		}
@@ -712,7 +742,11 @@ pub mod to_responses {
 		Ok(Box::new(passthrough))
 	}
 
-	fn translate_response_internal(resp: completions::Response, model: &str) -> responses::Response {
+	fn translate_response_internal(
+		resp: completions::Response,
+		model: &str,
+		custom_tools: Option<&super::CustomToolNames>,
+	) -> responses::Response {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder = types::responses::ResponseBuilder::new(response_id, model.to_string());
 
@@ -737,11 +771,11 @@ pub mod to_responses {
 				for tc in tcs {
 					match tc {
 						completions::MessageToolCalls::Function(f) => {
-							if let Some(name) = custom_name(&f.function.name) {
+							if is_custom(&f.function.name, custom_tools) {
 								tool_calls.push(custom_item(
 									format!("ctc_{:016x}", rand::rng().random::<u64>()),
 									f.id.clone(),
-									name.to_string(),
+									f.function.name.clone(),
 									custom_input(&f.function.arguments)
 										.unwrap_or_else(|| f.function.arguments.clone()),
 								));
@@ -820,12 +854,13 @@ pub mod to_responses {
 					.as_ref()
 					.and_then(|d| d.cached_tokens)
 					.unwrap_or(0) as u32,
-				cache_write_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as u32),
+				cache_write_tokens: Some(
+					u.prompt_tokens_details
+						.as_ref()
+						.and_then(|d| d.cache_write_tokens)
+						.or(u.cache_creation_input_tokens)
+						.unwrap_or(0) as u32,
+				),
 			},
 			output_tokens_details: responses::OutputTokenDetails {
 				reasoning_tokens: u
@@ -847,6 +882,7 @@ pub mod to_responses {
 		log: StreamingUsageGuard,
 		log_content: crate::LogContentFields,
 		namespaces: Option<std::sync::Arc<crate::conversion::namespace_tools::NamespaceToolMap>>,
+		custom_tools: Option<std::sync::Arc<super::CustomToolNames>>,
 	) -> Body {
 		use responses::{
 			AssistantRole, FunctionToolCall, OutputContent, OutputItem, OutputMessage, OutputStatus,
@@ -1037,39 +1073,19 @@ pub mod to_responses {
 										}
 									}
 
-									let is_new = !tool_calls.contains_key(&tool_index);
-
-									let entry = tool_calls.entry(tool_index).or_insert_with(|| {
-										let raw_name = tc
-											.function
-											.as_ref()
-											.and_then(|function| function.name.as_deref())
-											.unwrap_or_default();
-										let (custom, name) =
-											custom_name(raw_name).map_or((false, raw_name), |name| (true, name));
-										let output_index = next_output_index;
-										next_output_index += 1;
-										let item_id = format!(
-											"{}_{:016x}",
-											if custom { "ctc" } else { "call" },
-											rand::rng().random::<u64>()
-										);
-										let call_id = if custom {
-											tc.id.clone().unwrap_or_default()
-										} else {
-											item_id.clone()
-										};
-										StreamingToolCall {
-											item_id,
-											call_id,
-											name: name.to_string(),
+									let entry = tool_calls
+										.entry(tool_index)
+										.or_insert_with(|| StreamingToolCall {
+											item_id: String::new(),
+											call_id: tc.id.clone().unwrap_or_default(),
+											name: String::new(),
 											arguments: String::new(),
-											output_index,
-											custom,
-										}
-									});
+											output_index: 0,
+											custom: false,
+											added: false,
+										});
 
-									if entry.custom
+									if !entry.added
 										&& let Some(id) = &tc.id
 									{
 										entry.call_id = id.clone();
@@ -1078,18 +1094,26 @@ pub mod to_responses {
 										if entry.name.is_empty()
 											&& let Some(name) = &function.name
 										{
-											entry.name = if entry.custom {
-												custom_name(name).unwrap_or(name)
-											} else {
-												name
+											entry.name = name.to_string();
+											entry.custom = is_custom(name, custom_tools.as_deref());
+											entry.item_id = format!(
+												"{}_{:016x}",
+												if entry.custom { "ctc" } else { "call" },
+												rand::rng().random::<u64>()
+											);
+											if !entry.custom || entry.call_id.is_empty() {
+												entry.call_id.clone_from(&entry.item_id);
 											}
-											.to_string();
 										}
 										if let Some(args) = &function.arguments {
 											entry.arguments.push_str(args);
 										}
 									}
-									if is_new {
+									let added_now = !entry.added && !entry.name.is_empty();
+									if added_now {
+										entry.output_index = next_output_index;
+										next_output_index += 1;
+										entry.added = true;
 										let now = Instant::now();
 										if !saw_token {
 											saw_token = true;
@@ -1131,11 +1155,19 @@ pub mod to_responses {
 										));
 									}
 
-									if !entry.custom
-										&& let Some(function) = &tc.function
-										&& let Some(args) = &function.arguments
-										&& !args.is_empty()
-									{
+									let argument_delta = (!entry.custom && entry.added)
+										.then(|| {
+											if added_now {
+												entry.arguments.clone()
+											} else {
+												tc.function
+													.as_ref()
+													.and_then(|function| function.arguments.clone())
+													.unwrap_or_default()
+											}
+										})
+										.filter(|args| !args.is_empty());
+									if let Some(delta) = argument_delta {
 										sequence_number += 1;
 										events.push((
 											"event",
@@ -1144,7 +1176,7 @@ pub mod to_responses {
 													sequence_number,
 													item_id: entry.item_id.clone(),
 													output_index: entry.output_index,
-													delta: args.clone(),
+													delta,
 												},
 											),
 										));
@@ -1258,6 +1290,13 @@ pub mod to_responses {
 		sorted_tools.sort_by_key(|(_, call)| call.output_index);
 
 		for (_, call) in sorted_tools {
+			if !call.added {
+				tracing::warn!(
+					output_index = call.output_index,
+					"Ignoring streamed tool call without a name"
+				);
+				continue;
+			}
 			let output_index = call.output_index;
 			let item = if call.custom {
 				let input = custom_input(&call.arguments).unwrap_or(call.arguments);
@@ -1396,12 +1435,13 @@ pub mod to_responses {
 					.as_ref()
 					.and_then(|d| d.cached_tokens)
 					.unwrap_or(0) as u32,
-				cache_write_tokens: u
-					.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cache_write_tokens)
-					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as u32),
+				cache_write_tokens: Some(
+					u.prompt_tokens_details
+						.as_ref()
+						.and_then(|d| d.cache_write_tokens)
+						.or(u.cache_creation_input_tokens)
+						.unwrap_or(0) as u32,
+				),
 			},
 			output_tokens_details: OutputTokenDetails {
 				reasoning_tokens: u

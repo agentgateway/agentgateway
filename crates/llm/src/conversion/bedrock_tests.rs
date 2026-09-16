@@ -1000,6 +1000,31 @@ fn test_responses_request_metadata_only_uses_bedrock_header() {
 }
 
 #[test]
+fn test_responses_custom_tool_is_rejected() {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"input": "Hello",
+		"tools": [{"type": "namespace", "name": "shell", "description": "Shell tools", "tools": [{
+			"type": "custom", "name": "exec", "format": {"type": "text"}
+		}]}]
+	}))
+	.unwrap();
+
+	let error = super::from_responses::translate(&req, &provider, None, None, None).unwrap_err();
+	assert_eq!(
+		error.to_string(),
+		"unsupported conversion: custom tools cannot be converted to Bedrock Converse"
+	);
+}
+
+#[test]
 fn test_responses_reasoning_effort_maps_to_enabled_thinking_budget() {
 	let provider = Provider {
 		model_override: None,
