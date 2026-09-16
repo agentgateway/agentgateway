@@ -1021,6 +1021,7 @@ mod responses {
 			],
 		),
 		("stream-refusal", &[RESPONSES_TO_MESSAGES]),
+		("stream-refusal-final-only", &[RESPONSES_TO_MESSAGES]),
 		("stream-error", &[RESPONSES_TO_MESSAGES]),
 		("stream-max_tokens", &[RESPONSES_TO_MESSAGES]),
 		("stream-incomplete_no_details", &[RESPONSES_TO_MESSAGES]),

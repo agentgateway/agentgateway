@@ -848,6 +848,7 @@ pub mod from_messages {
 			model: Option<String>,
 			text_blocks: HashMap<(u32, u32), usize>,
 			open_text_blocks: HashSet<(u32, u32)>,
+			emitted_refusals: HashSet<(u32, u32)>,
 			tool_blocks: HashMap<u32, ToolBlock>,
 			pending_usage: Option<responses::ResponseUsage>,
 			pending_stop_reason: Option<messages::StopReason>,
@@ -929,6 +930,35 @@ pub mod from_messages {
 					messages::MessagesStreamEvent::ContentBlockStop { index: *index },
 				);
 			}
+		}
+
+		fn finish_refusal(
+			state: &mut StreamState,
+			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+			log: &StreamingUsageGuard,
+			completion: &mut Option<String>,
+			key: (u32, u32),
+			text: String,
+		) {
+			state.saw_refusal = true;
+			state.pending_stop_reason = Some(messages::StopReason::Refusal);
+			// Final events repeat the full refusal; only emit it when no delta was sent.
+			if !text.is_empty() && state.emitted_refusals.insert(key) {
+				ensure_message_start(state, events, log);
+				let index = open_text_block(state, events, key);
+				maybe_set_first_token(state, log);
+				if let Some(c) = completion.as_mut() {
+					c.push_str(&text);
+				}
+				push_event(
+					events,
+					messages::MessagesStreamEvent::ContentBlockDelta {
+						index,
+						delta: messages::ContentBlockDelta::TextDelta { text },
+					},
+				);
+			}
+			close_text_block(state, events, key);
 		}
 
 		fn close_text_blocks_for_output(
@@ -1319,6 +1349,7 @@ pub mod from_messages {
 						let key = (delta.output_index, delta.content_index);
 						let index = open_text_block(&mut state, &mut events, key);
 						if !delta.delta.is_empty() {
+							state.emitted_refusals.insert(key);
 							maybe_set_first_token(&mut state, &log);
 							if let Some(c) = completion.as_mut() {
 								c.push_str(&delta.delta);
@@ -1333,41 +1364,29 @@ pub mod from_messages {
 						}
 					},
 					responses::ResponseStreamEvent::ResponseRefusalDone(done) => {
-						state.saw_refusal = true;
-						state.pending_stop_reason = Some(messages::StopReason::Refusal);
-						close_text_block(
+						finish_refusal(
 							&mut state,
 							&mut events,
+							&log,
+							&mut completion,
 							(done.output_index, done.content_index),
+							done.refusal,
 						);
 					},
 					responses::ResponseStreamEvent::ResponseContentPartDone(done) => {
+						let key = (done.output_index, done.content_index);
 						if let responses::OutputContent::Refusal(refusal) = done.part {
-							state.saw_refusal = true;
-							state.pending_stop_reason = Some(messages::StopReason::Refusal);
-							let key = (done.output_index, done.content_index);
-							let index = open_text_block(&mut state, &mut events, key);
-							if !refusal.refusal.is_empty() {
-								maybe_set_first_token(&mut state, &log);
-								if let Some(c) = completion.as_mut() {
-									c.push_str(&refusal.refusal);
-								}
-								push_event(
-									&mut events,
-									messages::MessagesStreamEvent::ContentBlockDelta {
-										index,
-										delta: messages::ContentBlockDelta::TextDelta {
-											text: refusal.refusal,
-										},
-									},
-								);
-							}
+							finish_refusal(
+								&mut state,
+								&mut events,
+								&log,
+								&mut completion,
+								key,
+								refusal.refusal,
+							);
+						} else {
+							close_text_block(&mut state, &mut events, key);
 						}
-						close_text_block(
-							&mut state,
-							&mut events,
-							(done.output_index, done.content_index),
-						);
 					},
 					responses::ResponseStreamEvent::ResponseOutputItemDone(done) => match done.item {
 						responses::OutputItem::FunctionCall(call) => {

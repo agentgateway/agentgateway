@@ -1,6 +1,6 @@
 ---
 source: crates/llm/src/golden_tests.rs
-description: src/tests/response/responses/stream-refusal.json
+description: src/tests/response/responses/stream-refusal-final-only.json
 ---
 event: message_start
 data: {"type":"message_start","message":{"id":"","type":"message","role":"assistant","content":[],"model":"gpt-4.1-mini","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
@@ -9,10 +9,7 @@ event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
 
 event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"I can"}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"not help with that."}}
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"I cannot help with that."}}
 
 event: content_block_stop
 data: {"type":"content_block_stop","index":0}
