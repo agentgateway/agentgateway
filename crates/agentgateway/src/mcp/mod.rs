@@ -22,8 +22,8 @@ use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{
-	CallToolRequestMethod, CancelTaskMethod, CompleteRequestMethod, ConstString,
-	DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
+	CallToolRequestMethod, CallToolResult, CancelTaskMethod, CompleteRequestMethod, ConstString,
+	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
 	InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
 	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListToolsRequestMethod,
 	PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
@@ -166,15 +166,29 @@ pub enum Error {
 	// Intentionally do NOT say its not authorized; we hide the existence of the tool
 	#[error("Unknown {1}: {2}")]
 	Authorization(RequestId, String, String),
-	#[error("mcpGuardrails rejected: {}", .1.message)]
-	McpGuardrails(RequestId, rmcp::ErrorData),
-	// rate limit denial with a request id; renders as HTTP 200 + JSON-RPC error
+	// A guardrail rejection with a request id, rendered as HTTP 200. A rejected tools/call carries it as
+	// a tool-execution error (isError: true); other methods carry the guardrail's JSON-RPC error.
+	#[error("mcpGuardrails rejected: {}", .rejection.message)]
+	McpGuardrails {
+		request_id: RequestId,
+		rejection: rmcp::ErrorData,
+		/// The rejected request was a tools/call, so report it as a tool-execution error.
+		tool_call: bool,
+	},
+	// Rate limit denial with a request id, rendered as HTTP 200. A denied tools/call carries the
+	// denial as a tool-execution error (isError: true); any other method carries a JSON-RPC error.
 	#[error("{}", .message.as_deref().unwrap_or("rate limit exceeded"))]
 	RateLimited {
 		request_id: RequestId,
 		status: Option<crate::http::localratelimit::RateLimitStatus>,
 		message: Option<String>,
 		headers: Box<crate::http::HeaderMap>,
+		tool_call: bool,
+	},
+	#[error("{message}")]
+	ToolCallDenied {
+		request_id: RequestId,
+		message: String,
 	},
 	#[error("failed to process session_id query parameter")]
 	InvalidSessionIdQuery,
@@ -190,10 +204,50 @@ pub enum Error {
 	NoBackends,
 }
 
+fn tool_error_body(request_id: &RequestId, text: String) -> Option<String> {
+	let mut result = CallToolResult::error(vec![ContentBlock::text(text)]);
+	// An absent resultType is read as "complete" by every protocol version; matches the plain
+	// JSON-RPC denial bodies, which also carry no resultType.
+	result.result_type = None;
+	serde_json::to_string(&serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": request_id,
+		"result": result,
+	}))
+	.ok()
+}
+
 impl Error {
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
+		// special tool caller errors to include mcp specific error logic for protocol versus tool call errors.
+		match self {
+			Error::RateLimited {
+				request_id,
+				tool_call: true,
+				..
+			} => return tool_error_body(request_id, self.rate_limited_text()),
+			Error::ToolCallDenied {
+				request_id,
+				message,
+			} => return tool_error_body(request_id, message.clone()),
+			// A content/policy rejection of a tools/call is actionable, so surface it as isError. An
+			// infrastructure or protocol failure (fail-closed on a guardrail error, contract violation)
+			// uses INTERNAL_ERROR and stays a JSON-RPC error: the model cannot self-correct it.
+			Error::McpGuardrails {
+				request_id,
+				rejection,
+				tool_call: true,
+			} if rejection.code != ErrorCode::INTERNAL_ERROR => {
+				return tool_error_body(request_id, rejection.message.to_string());
+			},
+			_ => {},
+		}
 		let (id, error) = match self {
-			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
+			Error::McpGuardrails {
+				request_id,
+				rejection,
+				..
+			} => (request_id.clone(), rejection.clone()),
 			Error::RateLimited {
 				request_id: id,
 				status,
@@ -263,43 +317,85 @@ impl Error {
 		})
 		.ok()
 	}
+
+	/// Model-readable text for a rate-limit tool-execution error, including the retry hint the model
+	/// needs to back off. Machine-readable limits also travel in the response's `x-ratelimit-*` headers.
+	fn rate_limited_text(&self) -> String {
+		let mut text = self.to_string();
+		if let Error::RateLimited {
+			status: Some(status),
+			..
+		} = self
+		{
+			let _ = write!(
+				text,
+				" (retry after {}s; limit {}, remaining {})",
+				status.reset_seconds, status.limit, status.remaining
+			);
+		}
+		text
+	}
 }
 
-// convert policy errors on MCP POSTs into JSON-RPC errors, rendered as HTTP 200 like
-// guardrail rejections. anything we can't extract a request id for keeps the plain error.
+// Re-render a denied MCP POST as a JSON-RPC response (HTTP 200), like guardrail rejections. A denied
+// tools/call becomes a tool-execution error (isError: true) the model can act on; any other method
+// keeps its JSON-RPC error or native status. Covers rate-limit denials (always), the authorization
+// policy, and ext_authz (whose denial is an Envoy-style direct-response passthrough). Deliberately
+// left alone: authN failures (their 401 challenge must still reach the client for the MCP OAuth flow)
+// and any request we can't extract a request id for.
 pub(crate) async fn maybe_convert_mcp_error<T>(
 	res: Result<T, crate::proxy::ProxyResponse>,
 	request_protocol: crate::proxy::httpproxy::RequestProtocol,
 	req: &mut crate::http::Request,
 ) -> Result<T, crate::proxy::ProxyResponse> {
 	use crate::proxy::ProxyResponse;
-	let err = match res {
-		Err(ProxyResponse::Error(err)) => err,
-		other => return other,
+	let response = match res {
+		Ok(v) => return Ok(v),
+		Err(r) => r,
 	};
-	// currently only rate limit denials have a JSON-RPC shape.
-	if !matches!(
-		err,
-		ProxyError::RateLimitExceeded { .. } | ProxyError::RemoteRateLimitExceeded { .. }
-	) {
-		return Err(ProxyResponse::Error(err));
-	}
 	if request_protocol != crate::proxy::httpproxy::RequestProtocol::Mcp {
-		return Err(ProxyResponse::Error(err));
+		return Err(response);
 	}
+	Err(match response {
+		ProxyResponse::Error(err) => convert_policy_error(err, req).await,
+		ProxyResponse::DirectResponse(resp) => convert_ext_authz_denial(resp, req).await,
+	})
+}
+
+/// The JSON-RPC request id and whether it is a tools/call, parsed from the (buffered) MCP request
+/// body. The body is left intact for the caller's later error snapshot.
+async fn mcp_request_id_and_tool_call(req: &mut crate::http::Request) -> Option<(RequestId, bool)> {
 	let limit = crate::http::buffer_limit(req);
-	// Keep the body available for the caller's subsequent error snapshot.
-	let id = match req.body_mut().inspect(limit).await {
+	let parsed = match req.body_mut().inspect(limit).await {
 		Ok(crate::http::BodyInspection::Complete(bytes)) => {
-			serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&bytes)
-				.ok()
-				.as_ref()
-				.and_then(streamablehttp::request_id)
+			serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&bytes).ok()
 		},
 		Ok(crate::http::BodyInspection::Partial(_)) | Err(_) => None,
 	};
-	let Some(request_id) = id else {
-		return Err(ProxyResponse::Error(err));
+	let request_id = parsed.as_ref().and_then(streamablehttp::request_id)?;
+	let tool_call =
+		parsed.as_ref().and_then(streamablehttp::message_method) == Some(CallToolRequestMethod::VALUE);
+	Some((request_id, tool_call))
+}
+
+async fn convert_policy_error(
+	err: ProxyError,
+	req: &mut crate::http::Request,
+) -> crate::proxy::ProxyResponse {
+	use crate::proxy::ProxyResponse;
+	// Rate-limit denials always take a JSON-RPC shape (isError for a tools/call, otherwise a JSON-RPC
+	// error). An authorization-policy denial only converts for a tools/call, gated in the match below.
+	if !matches!(
+		err,
+		ProxyError::RateLimitExceeded { .. }
+			| ProxyError::RemoteRateLimitExceeded { .. }
+			| ProxyError::AuthorizationFailed
+			| ProxyError::ExternalAuthorizationFailed(_)
+	) {
+		return ProxyResponse::Error(err);
+	}
+	let Some((request_id, tool_call)) = mcp_request_id_and_tool_call(req).await else {
+		return ProxyResponse::Error(err);
 	};
 	let converted = match err {
 		ProxyError::RateLimitExceeded {
@@ -317,6 +413,7 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 				status: Some(status),
 				message: None,
 				headers: Box::new(status.to_headers()),
+				tool_call,
 			}
 			.into()
 		},
@@ -329,11 +426,61 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 			status,
 			message: (!raw_body.is_empty()).then(|| String::from_utf8_lossy(&raw_body).into_owned()),
 			headers: response_headers,
+			tool_call,
 		}
 		.into(),
+		// A tools/call denied by the authorization policy becomes a tool-execution error the model can
+		// surface, rather than an opaque 403. Non-tools/call methods keep their native status because
+		// they have no tool result to carry isError, and the message stays generic to avoid leaking why.
+		ProxyError::AuthorizationFailed if tool_call => Error::ToolCallDenied {
+			request_id,
+			message: "authorization denied".to_string(),
+		}
+		.into(),
+		// The HTTP ext_authz path and bodyless gRPC denials surface as this error rather than a direct
+		// response. Convert them for a tools/call too, but never a 401 (its challenge must reach the
+		// client for the MCP OAuth flow).
+		ProxyError::ExternalAuthorizationFailed(status)
+			if tool_call && status != Some(crate::http::StatusCode::UNAUTHORIZED) =>
+		{
+			Error::ToolCallDenied {
+				request_id,
+				message: "authorization denied".to_string(),
+			}
+			.into()
+		},
 		e => e,
 	};
-	Err(ProxyResponse::Error(converted))
+	ProxyResponse::Error(converted)
+}
+
+/// ext_authz denies with an Envoy-style direct response (its own status + body). For a tools/call we
+/// re-render that as a tool-execution error so the model sees it instead of an opaque status; every
+/// other case (non-ext_authz direct responses, non-tools/call methods, and 401s whose challenge must
+/// reach the client) passes the original response through unchanged.
+async fn convert_ext_authz_denial(
+	resp: Box<crate::http::Response>,
+	req: &mut crate::http::Request,
+) -> crate::proxy::ProxyResponse {
+	use crate::proxy::ProxyResponse;
+	let convertible = resp
+		.extensions()
+		.get::<crate::proxy::ExtAuthzDenied>()
+		.is_some()
+		&& resp.status() != crate::http::StatusCode::UNAUTHORIZED;
+	if !convertible {
+		return ProxyResponse::DirectResponse(resp);
+	}
+	let Some((request_id, true)) = mcp_request_id_and_tool_call(req).await else {
+		return ProxyResponse::DirectResponse(resp);
+	};
+	ProxyResponse::Error(
+		Error::ToolCallDenied {
+			request_id,
+			message: "authorization denied".to_string(),
+		}
+		.into(),
+	)
 }
 
 impl From<Error> for ProxyError {

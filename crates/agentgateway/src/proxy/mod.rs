@@ -86,6 +86,7 @@ impl ProxyError {
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
 			ProxyError::MCP(mcp::Error::RateLimited { .. }) => ProxyResponseReason::RateLimit,
+			ProxyError::MCP(mcp::Error::ToolCallDenied { .. }) => ProxyResponseReason::Authorization,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
 			ProxyError::AuthorizationFailed
 			| ProxyError::SubstrateEgressDenied(_)
@@ -172,6 +173,11 @@ impl Display for ProxyResponseReason {
 /// Marks responses whose rate-limit headers come from a denying policy.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct RateLimitDenied;
+
+/// Marks an ext_authz denial's direct response so the MCP layer can re-render it as a tool-execution
+/// error for a tools/call. ext_authz otherwise passes the auth server's response through verbatim.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ExtAuthzDenied;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyError {
@@ -504,8 +510,9 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::Unavailable(_, _)) => StatusCode::SERVICE_UNAVAILABLE,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
-			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::OK,
+			ProxyError::MCP(mcp::Error::McpGuardrails { .. }) => StatusCode::OK,
 			ProxyError::MCP(mcp::Error::RateLimited { .. }) => StatusCode::OK,
+			ProxyError::MCP(mcp::Error::ToolCallDenied { .. }) => StatusCode::OK,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);
@@ -612,6 +619,8 @@ fn proxy_error_to_grpc_status(error: &ProxyError, http_status: StatusCode) -> Co
 		ProxyError::NoValidBackends => Code::Unavailable,
 		// HTTP 200 with JSON-RPC error -> gRPC 503
 		ProxyError::MCP(mcp::Error::RateLimited { .. }) => Code::Unavailable,
+		// HTTP 200 carrying an authorization denial as a tool result -> gRPC permission denied, never OK.
+		ProxyError::MCP(mcp::Error::ToolCallDenied { .. }) => Code::PermissionDenied,
 		_ => http_status_to_grpc_status(http_status),
 	}
 }

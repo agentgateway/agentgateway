@@ -6631,24 +6631,31 @@ async fn mcp_local_ratelimit() {
 		.await;
 	assert!(result2.is_ok(), "Second request should succeed");
 
-	// Third call should be rate limited
+	// The third call is rate limited
 	let result3 = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo")
 				.with_arguments(serde_json::json!({"n": 3}).as_object().cloned().unwrap()),
 		)
-		.await;
-	let err = result3.expect_err("Third request should be rate limited");
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
+		.await
+		.expect("a rate-limited tool call returns an errored result, not a protocol error");
 	assert_eq!(
-		e.code.0, -32003,
-		"rate limit should map to RESOURCE_EXHAUSTED"
+		result3.is_error,
+		Some(true),
+		"rate-limited tool call should be a tool-execution error"
 	);
-	let data = e.data.as_ref().expect("error should carry retry data");
-	assert_eq!(data["limit"], 2);
-	assert!(data.get("retryAfterSeconds").is_some());
+	let text = &result3.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
+	assert!(
+		text.contains("rate limit"),
+		"denial text should name the rate limit: {text}"
+	);
+	assert!(
+		text.contains("retry after"),
+		"denial text should tell the model when to retry: {text}"
+	);
 }
 
 #[tokio::test]
@@ -6746,6 +6753,107 @@ async fn mcp_extauth_deny() {
 	assert!(
 		err_msg.contains("403") && err_msg.contains("denied by mock ext_authz"),
 		"Expected 403 denial from ext_authz, got: {err_msg}"
+	);
+}
+
+/// Attach an ext_authz policy that denies every request with `status`, then return a live listener.
+/// The returned `MockInstance` must be kept alive for the ext_authz server to stay reachable.
+async fn extauth_denying_proxy(
+	status: crate::http::ext_authz::proto::StatusCode,
+) -> (
+	MockServer,
+	TestBind,
+	crate::test_helpers::MockInstance,
+	SocketAddr,
+) {
+	struct DenyAll(crate::http::ext_authz::proto::StatusCode);
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extauthmock::Handler for DenyAll {
+		async fn check(
+			&mut self,
+			_request: &crate::http::ext_authz::proto::CheckRequest,
+		) -> Result<crate::http::ext_authz::proto::CheckResponse, tonic::Status> {
+			deny_response(self.0, "denied by mock ext_authz")
+		}
+	}
+
+	let authz = ExtAuthMock::new(move || DenyAll(status)).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"extAuthz": {
+			"host": authz.address.to_string(),
+			"protocol": { "grpc": {} }
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+	(mock, t, authz, io)
+}
+
+#[tokio::test]
+async fn mcp_extauth_tool_call_is_error() {
+	// An ext_authz denial of a tools/call is re-rendered as a tool-execution error (isError: true)
+	// instead of the opaque 403 the auth server returns, so the model can surface it.
+	let (_mock, _t, _authz, io) =
+		extauth_denying_proxy(crate::http::ext_authz::proto::StatusCode::Forbidden).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 13,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 13);
+	assert!(
+		body.get("error").is_none(),
+		"a denied tool call must not be a JSON-RPC error: {body}"
+	);
+	assert_eq!(body["result"]["isError"], true);
+	// The message stays generic rather than echoing the auth server's body.
+	assert_eq!(body["result"]["content"][0]["text"], "authorization denied");
+}
+
+#[tokio::test]
+async fn mcp_extauth_tool_call_401_preserved() {
+	// A 401 must reach the client unchanged even for a tools/call, so the MCP OAuth challenge/flow
+	// still works; it is not swallowed into an HTTP 200 tool result.
+	let (_mock, _t, _authz, io) =
+		extauth_denying_proxy(crate::http::ext_authz::proto::StatusCode::Unauthorized).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 14,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(
+		resp.status(),
+		reqwest::StatusCode::UNAUTHORIZED,
+		"a 401 challenge must pass through unchanged for the MCP OAuth flow"
 	);
 }
 
@@ -6872,6 +6980,58 @@ async fn mcp_ratelimit_jsonrpc_error() {
 	assert_eq!(body["error"]["data"]["limit"], 1);
 	assert_eq!(body["error"]["data"]["remaining"], 0);
 	assert!(body["error"]["data"].get("retryAfterSeconds").is_some());
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_tool_call_is_error() {
+	// A rate-limited tools/call is answered with HTTP 200 and a tool-execution error
+	// (isError: true), not a JSON-RPC protocol error, so the model gets actionable feedback.
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	// The initialize consumes the single token, so the following tool call is over limit.
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 7,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert_eq!(
+		resp.headers().get("content-type").unwrap(),
+		"application/json"
+	);
+	// Machine-readable limits still ride along on the standard headers.
+	assert_eq!(resp.headers().get("x-ratelimit-limit").unwrap(), "1");
+	assert!(resp.headers().get("x-ratelimit-reset").is_some());
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 7);
+	assert!(
+		body.get("error").is_none(),
+		"a denied tool call must not be a JSON-RPC error: {body}"
+	);
+	assert_eq!(body["result"]["isError"], true);
+	let text = body["result"]["content"][0]["text"].as_str().unwrap();
+	assert!(
+		text.contains("rate limit"),
+		"unexpected denial text: {text}"
+	);
+	assert!(
+		text.contains("retry after"),
+		"denial text should tell the model when to retry: {text}"
+	);
 }
 
 #[tokio::test]
@@ -7124,6 +7284,74 @@ async fn mcp_remote_ratelimit_retry_data() {
 	assert_eq!(body["error"]["data"]["retryAfterSeconds"], 7);
 }
 
+#[tokio::test]
+async fn mcp_remote_ratelimit_tool_call_is_error() {
+	// A globally (remotely) rate-limited tools/call is normalized to the same tool-execution error
+	// (isError: true) as the local limiter, and the RLS's own body reaches the model as the text.
+	struct DenyAllRateLimit;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for DenyAllRateLimit {
+		async fn should_rate_limit(
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			over_limit_response(b"denied by mock rls".to_vec())
+		}
+	}
+
+	let ratelimit = RateLimitMock::new(|| DenyAllRateLimit).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"remoteRateLimit": {
+			"host": ratelimit.address.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 9,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 9);
+	assert!(
+		body.get("error").is_none(),
+		"a denied tool call must not be a JSON-RPC error: {body}"
+	);
+	assert_eq!(body["result"]["isError"], true);
+	let text = body["result"]["content"][0]["text"].as_str().unwrap();
+	assert!(
+		text.contains("denied by mock rls"),
+		"the RLS body should reach the model: {text}"
+	);
+}
+
 // =========================== mcpGuardrails test helpers ============================
 
 mod guardrails_test_support {
@@ -7239,11 +7467,13 @@ async fn mcp_guardrails_pass_through() {
 }
 
 #[tokio::test]
-async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
+async fn mcp_guardrails_tool_call_reject_is_error() {
 	use protos::ext_mcp::authorization_error::Code;
 
 	use crate::test_helpers::extmcpmock::{closure_mock, pass_response, reject_request};
 
+	// A content rejection of a tools/call is a tool-execution error (isError: true) the model can act
+	// on, carrying the guardrail's message as the tool result text.
 	let extmcp_mock = closure_mock(
 		|_| reject_request(Code::PermissionDenied, "denied by mock mcpGuardrails"),
 		|_| pass_response(),
@@ -7260,7 +7490,7 @@ async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
 	)
 	.await;
 	let client = mcp_streamable_client(io).await;
-	let err = client
+	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
 				serde_json::json!({"hi": "world"})
@@ -7270,13 +7500,14 @@ async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
 			),
 		)
 		.await
-		.expect_err("tool call should fail when mcpGuardrails rejects");
+		.expect("guardrail rejection returns a result, not a protocol error");
 
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
-	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
-	assert_eq!(e.message.as_ref(), "denied by mock mcpGuardrails");
+	assert_eq!(result.is_error, Some(true));
+	let text = &result.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
+	assert_eq!(text, "denied by mock mcpGuardrails");
 }
 
 #[tokio::test]
@@ -7316,22 +7547,27 @@ async fn mcp_guardrails_denies_tool_by_name() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 
-	// Forbidden tool is rejected at the request phase, before reaching upstream.
-	let err = client
+	// Forbidden tool is rejected at the request phase, before reaching upstream. A tools/call denial is
+	// a tool-execution error (isError: true) the model can act on, not a JSON-RPC protocol error.
+	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("forbidden-tool")
 				.with_arguments(serde_json::Map::new()),
 		)
 		.await
-		.expect_err("forbidden tool call should be denied by mcpGuardrails");
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
-	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+		.expect("guardrail rejection returns a result, not a protocol error");
+	assert_eq!(
+		result.is_error,
+		Some(true),
+		"forbidden tool call should be a tool-execution error"
+	);
+	let text = &result.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
 	assert!(
-		e.message.contains("forbidden-tool"),
-		"deny message should name the tool: {}",
-		e.message
+		text.contains("forbidden-tool"),
+		"deny message should name the tool: {text}"
 	);
 
 	// An allowed tool passes the request phase through to the upstream.

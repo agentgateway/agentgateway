@@ -1329,6 +1329,7 @@ impl CachedGrpcPolicyResponse {
 					.body(http::Body::from(body))
 					.map_err(|e| ProxyError::Processing(e.into()))?;
 				*resp.headers_mut() = headers;
+				resp.extensions_mut().insert(crate::proxy::ExtAuthzDenied);
 				Ok(PolicyResponse {
 					direct_response: Some(resp),
 					response_headers: None,
