@@ -144,7 +144,7 @@ The Deployment uses `ghcr.io/vllm-project/semantic-router/vllm-sr:latest` with
 `imagePullPolicy: Always` and passes `/app/config/config.yaml` to the image's
 startup script. No vSR Helm release, operator, or CRDs are required.
 
-## Configure Agentgateway
+## Configure agentgateway
 
 Apply the provider models and PreRouting ExtProc policy:
 
