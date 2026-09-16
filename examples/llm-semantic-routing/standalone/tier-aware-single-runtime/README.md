@@ -6,8 +6,7 @@ operator, CRDs, classifier downloads, or GPU are required.
 
 This is the standalone counterpart of the
 [Kubernetes single-runtime example](../../k8s/tier-aware-single-runtime/).
-Both examples use the same vSR configuration. Keep their routing rules and model
-catalogs aligned when updating either example.
+Both examples use the same vSR configuration.
 
 ```text
 Client: model=auto + user ID + tier
@@ -17,7 +16,7 @@ Client: model=auto + user ID + tier
   -> OpenAI or Anthropic
 ```
 
-vSR selects a model; agentgateway makes the provider request. The standalone
+vSR selects a model while agentgateway makes the provider request. The standalone
 `llm.policies` configuration runs before model selection, and each model's
 `authorization` rules enforce entitlements after selection. Explicit model
 requests are subject to the same authorization rules.
@@ -29,7 +28,7 @@ requests are subject to the same authorization rules.
 | Pro | Standard models and Claude Sonnet 4.6 | Claude Sonnet 4.6 |
 
 Requests using `auto` without a matching STEM keyword fall back to GPT-4.1 in
-all tiers. Keywords keep this example deterministic; they can be replaced or
+all tiers. Keywords keep this example deterministic and can be replaced or
 combined with other [vSR signals](https://vllm-sr.ai/docs/tutorials/signal/overview).
 
 ## Start
