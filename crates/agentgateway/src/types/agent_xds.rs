@@ -685,6 +685,11 @@ fn build_mcp_authentication(
 		mode,
 		client_id,
 		client_secret,
+		// Broker-callback mode is not yet plumbed through the xDS/control-plane API; it is
+		// currently configurable only via local (standalone) config. The proto fields and
+		// controller wiring are a follow-up.
+		broker_callback: false,
+		signing_key: None,
 	}
 }
 
