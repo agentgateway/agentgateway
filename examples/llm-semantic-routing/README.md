@@ -17,7 +17,7 @@ LLM provider(s)
 
 Each example focuses on a different production use case.
 
-| Agentgateway mode | Example | Demonstrates | Best for |
+| agentgateway mode | Example | Demonstrates | Best for |
 | --- | --- | --- | --- |
 | Kubernetes | [Cost-based routing](k8s/cost-based/) | Route requests to lower-cost or higher-capability models based on semantic classification. | Cost optimization while maintaining response quality. |
 | Kubernetes | [Tier-aware routing with CRDs](k8s/tier-aware/) | Select a tier-specific vSR runtime configured by `IntelligentPool` and `IntelligentRoute`. | Kubernetes-native pool/route management and separate runtimes per tier. |

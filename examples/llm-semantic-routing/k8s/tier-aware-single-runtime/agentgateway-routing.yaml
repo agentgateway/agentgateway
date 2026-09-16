@@ -1,4 +1,4 @@
-# Tier-aware Agentgateway models and authz ExtProc policy.
+# Tier-aware agentgateway models and authz ExtProc policy.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
