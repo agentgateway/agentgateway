@@ -39,9 +39,10 @@ Prerequisites:
 - OpenAI and Anthropic API keys with access to the configured models.
 - A free local port, defaulting to 3000.
 
-Compose pins agentgateway v1.5.0 and a vSR multi-platform image digest supporting
-Linux AMD64 and ARM64. Only agentgateway's HTTP listener is published, on
-localhost. vSR's gRPC and management ports remain inside the Compose network.
+Compose uses agentgateway v1.5.0 and
+`ghcr.io/vllm-project/semantic-router/vllm-sr:latest` for vSR.
+Only agentgateway's HTTP listener is published, on localhost. vSR's gRPC and
+management ports remain inside the Compose network.
 The TCP health check waits for vSR's ExtProc listener before starting agentgateway;
 use the requests below to verify routing readiness.
 

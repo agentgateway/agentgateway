@@ -14,7 +14,7 @@ services:
       semantic-router:
         condition: service_healthy
   semantic-router:
-    image: ghcr.io/vllm-project/semantic-router/vllm-sr@sha256:55808e218153b35aacd8a25953473b99f1edbb5afee559234daaf1880334263b
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
     command: ["/app/config/config.yaml"]
     volumes:
       - ./semantic-router-config.yaml:/app/config/config.yaml:ro
