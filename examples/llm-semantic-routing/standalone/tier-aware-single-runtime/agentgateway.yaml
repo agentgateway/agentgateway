@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 0.0.0.0:15021
+llm:
+  port: 3000
+  policies:
+    authorization:
+      rules:
+      - >-
+        "x-entitlement-tier" in request.headers &&
+        request.headers["x-entitlement-tier"] in ["basic", "standard", "pro"] &&
+        "x-authz-user-id" in request.headers &&
+        request.headers["x-authz-user-id"] != "" &&
+        !("x-vsr-skip-processing" in request.headers)
+    extProc:
+      host: semantic-router:50051
+      failureMode: failClosed
+      processingOptions:
+        requestHeaderMode: send
+        requestBodyMode: fullDuplexStreamed
+        responseHeaderMode: send
+        responseBodyMode: none
+        requestTrailerMode: send
+        responseTrailerMode: send
+        allowModeOverride: false
+  models:
+  - name: gpt-4.1
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+  - name: gpt-5.4
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+  - name: claude-haiku-4-5-20251001
+    provider: anthropic
+    params:
+      apiKey: $ANTHROPIC_API_KEY
+    authorization:
+      rules:
+      - 'request.headers["x-entitlement-tier"] in ["standard", "pro"]'
+  - name: claude-sonnet-4-6
+    provider: anthropic
+    params:
+      apiKey: $ANTHROPIC_API_KEY
+    authorization:
+      rules:
+      - 'request.headers["x-entitlement-tier"] == "pro"'
