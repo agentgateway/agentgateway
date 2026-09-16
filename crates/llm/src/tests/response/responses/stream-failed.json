@@ -1,8 +1,23 @@
 event: response.created
 data: {"type":"response.created","sequence_number":1,"response":{"id":"resp_terminal","object":"response","created_at":123,"model":"gpt-5.6-luna","status":"in_progress","output":[]}}
 
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_partial","output_index":0,"content_index":0,"delta":"Let me check.","sequence_number":2}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","id":"fc_partial","call_id":"call_partial","name":"weather","arguments":"","status":"in_progress"},"sequence_number":3}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","item_id":"fc_partial","output_index":1,"delta":"{\"city\":","sequence_number":4}
+
 event: response.failed
-data: {"type":"response.failed","sequence_number":2,"response":{"id":"resp_terminal","object":"response","created_at":123,"model":"gpt-5.6-luna","status":"failed","output":[],"usage":{"input_tokens":100,"output_tokens":5,"total_tokens":105,"input_tokens_details":{"cached_tokens":20,"cache_write_tokens":30},"output_tokens_details":{"reasoning_tokens":3}},"error":{"code":"server_error","message":"provider failed"}}}
+data: {"type":"response.failed","sequence_number":5,"response":{"id":"resp_terminal","object":"response","created_at":123,"model":"gpt-5.6-luna","status":"failed","output":[],"usage":{"input_tokens":100,"output_tokens":5,"total_tokens":105,"input_tokens_details":{"cached_tokens":20,"cache_write_tokens":30},"output_tokens_details":{"reasoning_tokens":3}},"error":{"code":"server_error","message":"provider failed"}}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_partial","output_index":0,"content_index":0,"delta":"This must not appear.","sequence_number":6}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_terminal","object":"response","created_at":123,"model":"gpt-5.6-luna","status":"completed","output":[],"usage":{"input_tokens":100,"output_tokens":5,"total_tokens":105,"input_tokens_details":{"cached_tokens":20,"cache_write_tokens":30},"output_tokens_details":{"reasoning_tokens":3}},"error":null},"sequence_number":7}
 
 data: [DONE]
 

@@ -842,6 +842,7 @@ pub mod from_messages {
 		struct StreamState {
 			sent_message_start: bool,
 			sent_message_stop: bool,
+			failed: bool,
 			sent_first_token: bool,
 			next_block_index: usize,
 			response_id: Option<String>,
@@ -1213,6 +1214,9 @@ pub mod from_messages {
 			_,
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
+			if state.failed {
+				return events;
+			}
 			match evt {
 				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 				SseJsonEvent::Done => {
@@ -1476,20 +1480,17 @@ pub mod from_messages {
 						tracing::warn!(
 							"Responses stream failed during messages translation; emitting error event"
 						);
-						flush_message_end(
-							&mut state,
-							&mut events,
-							&log,
-							&mut completion,
-							&mut tool_calls,
-							true,
-						);
+						state.failed = true;
 						push_event(
 							&mut events,
 							messages::MessagesStreamEvent::Error {
 								error: messages::MessagesError {
 									r#type: "api_error".to_string(),
-									message: "responses stream failed".to_string(),
+									message: failed
+										.response
+										.error
+										.map(|error| error.message)
+										.unwrap_or_else(|| "responses stream failed".to_string()),
 								},
 							},
 						);
@@ -1499,22 +1500,12 @@ pub mod from_messages {
 							"Responses stream error during messages translation: {}",
 							error.message
 						);
-						flush_message_end(
-							&mut state,
-							&mut events,
-							&log,
-							&mut completion,
-							&mut tool_calls,
-							true,
-						);
+						state.failed = true;
 						push_event(
 							&mut events,
 							messages::MessagesStreamEvent::Error {
 								error: messages::MessagesError {
-									r#type: error
-										.code
-										.clone()
-										.unwrap_or_else(|| "api_error".to_string()),
+									r#type: "api_error".to_string(),
 									message: error.message,
 								},
 							},
@@ -1525,6 +1516,15 @@ pub mod from_messages {
 					// Text finalization is handled by ResponseContentPartDone.
 					responses::ResponseStreamEvent::ResponseOutputTextDone(_) => {},
 				},
+			}
+			if state.failed {
+				// Retain partial output for logging without claiming a successful finish.
+				log.update(|r| {
+					if let Some(c) = completion.take() {
+						r.response.completion = Some(vec![c]);
+					}
+					r.response.output_messages = super::take_output_messages(&mut tool_calls, None);
+				});
 			}
 			events
 		})
