@@ -42,8 +42,9 @@ Prerequisites:
 Compose uses agentgateway v1.5.0 and the `vllm-sr:latest` image for vSR.
 Only agentgateway's HTTP listener is published, on localhost. vSR's gRPC and
 management ports remain inside the Compose network.
-The TCP health check waits for vSR's ExtProc listener before starting agentgateway;
-use the requests below to verify routing readiness.
+The TCP health check waits for vSR's ExtProc listener before starting agentgateway.
+
+Use the requests below to verify routing readiness.
 
 From the repository root:
 
