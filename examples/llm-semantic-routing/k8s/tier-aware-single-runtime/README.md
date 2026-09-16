@@ -197,47 +197,28 @@ Use `model: auto` to trigger semantic routing. For each request, verify the
 selected-model header to confirm routing and check for HTTP 200 with generated
 text to confirm the provider successfully processed the request.
 
-### Basic STEM Request
+### STEM Requests
+
+Send the same prompt with each tier:
 
 ```bash
-curl --fail-with-body -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
-  -H 'Content-Type: application/json' \
-  -H 'X-Authz-User-Id: demo-user' \
-  -H 'X-Entitlement-Tier: basic' \
-  -H 'X-VSR-Debug: true' \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Define quantum physics in one sentence."}],"max_tokens":64}'
+for tier in basic standard pro; do
+  curl --fail-with-body -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
+    -H 'Content-Type: application/json' \
+    -H 'X-Authz-User-Id: demo-user' \
+    -H "X-Entitlement-Tier: $tier" \
+    -H 'X-VSR-Debug: true' \
+    -d '{"model":"auto","messages":[{"role":"user","content":"Define quantum physics in one sentence."}],"max_tokens":64}'
+done
 ```
 
-Expected: `x-vsr-selected-model: gpt-5.4` and
-`x-vsr-selected-decision: basic_stem`.
+Expect HTTP 200 with generated text and these debug response headers:
 
-### Standard STEM Request
-
-```bash
-curl --fail-with-body -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
-  -H 'Content-Type: application/json' \
-  -H 'X-Authz-User-Id: demo-user' \
-  -H 'X-Entitlement-Tier: standard' \
-  -H 'X-VSR-Debug: true' \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Define quantum physics in one sentence."}],"max_tokens":64}'
-```
-
-Expected: `x-vsr-selected-model: claude-haiku-4-5-20251001` and
-`x-vsr-selected-decision: standard_stem`.
-
-### Pro STEM Request
-
-```bash
-curl --fail-with-body -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
-  -H 'Content-Type: application/json' \
-  -H 'X-Authz-User-Id: demo-user' \
-  -H 'X-Entitlement-Tier: pro' \
-  -H 'X-VSR-Debug: true' \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Define quantum physics in one sentence."}],"max_tokens":64}'
-```
-
-Expected: `x-vsr-selected-model: claude-sonnet-4-6` and
-`x-vsr-selected-decision: pro_stem`.
+| Tier | `x-vsr-selected-model` | `x-vsr-selected-decision` |
+| --- | --- | --- |
+| Basic | `gpt-5.4` | `basic_stem` |
+| Standard | `claude-haiku-4-5-20251001` | `standard_stem` |
+| Pro | `claude-sonnet-4-6` | `pro_stem` |
 
 ### Fallback in Every Tier
 
