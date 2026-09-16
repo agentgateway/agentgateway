@@ -930,13 +930,11 @@ fn gemini_schema_preserves_array_length_constraints() {
 		}
 	}));
 	assert_eq!(
-		s["properties"]["tags"]["minItems"],
-		2,
+		s["properties"]["tags"]["minItems"], 2,
 		"minItems must be preserved: {s}"
 	);
 	assert_eq!(
-		s["properties"]["tags"]["maxItems"],
-		5,
+		s["properties"]["tags"]["maxItems"], 5,
 		"maxItems must be preserved: {s}"
 	);
 }
@@ -951,8 +949,14 @@ fn gemini_schema_preserves_object_property_count_constraints() {
 		"maxProperties": 4,
 		"properties": { "a": { "type": "string" } }
 	}));
-	assert_eq!(s["minProperties"], 1, "minProperties must be preserved: {s}");
-	assert_eq!(s["maxProperties"], 4, "maxProperties must be preserved: {s}");
+	assert_eq!(
+		s["minProperties"], 1,
+		"minProperties must be preserved: {s}"
+	);
+	assert_eq!(
+		s["maxProperties"], 4,
+		"maxProperties must be preserved: {s}"
+	);
 }
 
 // Case 10: example provides a sample value for a schema node and is passed through to Gemini.
