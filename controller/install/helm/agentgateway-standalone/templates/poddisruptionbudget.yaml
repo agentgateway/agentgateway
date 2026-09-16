@@ -1,0 +1,26 @@
+
+{{- $replicas := .Values.replicaCount }}
+{{- if .Values.podDisruptionBudget.enabled -}}
+{{- if gt ($replicas | int) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}
+  namespace: {{ include "agentgateway-standalone.namespace" . }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  {{- if not (eq .Values.podDisruptionBudget.unhealthyPodEvictionPolicy "") }}
+  unhealthyPodEvictionPolicy: {{ .Values.podDisruptionBudget.unhealthyPodEvictionPolicy }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "agentgateway-standalone.selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}

@@ -177,3 +177,11 @@ extraVolumes: []
 
 # -- Additional volume mounts to add to the agentgateway proxy container.
 extraVolumeMounts: []
+
+# -- (object) podDisruptionBudget allows you to define minimum and maximum available pods during voluntary disruptions
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: ""
+  # -- UnhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction
+  unhealthyPodEvictionPolicy: ""
