@@ -1,13 +1,12 @@
 # Tier-Aware Routing with One vLLM Semantic Router Runtime
 
 This example combines agentgateway and [vLLM Semantic Router (vSR)](https://vllm-sr.ai/)
-to select a different model for the same [semantic signal](https://vllm-sr.ai/docs/tutorials/signal/overview)
-based on the request's access tier.
+to select a model based on the caller's access tier and STEM keywords in the prompt.
 
-It's an alternative to the [CRD-based tier-aware example](../tier-aware/) by using
-one vSR Deployment that reads a [canonical YAML configuration](https://vllm-sr.ai/docs/installation/configuration/)
-from a ConfigMap instead of running one router per access tier defined by
-`IntelligentPool` and `IntelligentRoute` custom resources.
+One vSR Deployment serves all tiers and reads a
+[canonical YAML configuration](https://vllm-sr.ai/docs/installation/configuration/)
+from a ConfigMap. The [CRD-based tier-aware example](../tier-aware/) runs a separate
+router for each tier using `IntelligentPool` and `IntelligentRoute` custom resources.
 
 The example defines these model entitlements:
 
@@ -29,7 +28,8 @@ and the prompt's content:
 - vSR writes the selected model into the request body's `model` field.
 - `AgentgatewayModel` routing sends the request to the OpenAI or Anthropic provider.
 
-The following diagram summarizes the request flow from tier validation to the selected model provider:
+The request passes through two authorization checks: one before vSR and one
+after model selection:
 
 ```text
 request identity + tier
@@ -41,16 +41,14 @@ request identity + tier
   -> OpenAI or Anthropic
 ```
 
-Keyword matching is used in the example to keep STEM detection predictable and
-requires no classifier model. Other vSR [signals](https://vllm-sr.ai/docs/tutorials/signal/overview)
+Keyword matching keeps STEM detection predictable without a classifier model.
+Other vSR [signals](https://vllm-sr.ai/docs/tutorials/signal/overview)
 can replace or supplement the example's keyword condition.
 
-After vSR writes the selected model into the request body, agentgateway uses
 [AgentgatewayModel](https://agentgateway.dev/docs/kubernetes/main/reference/api/#agentgatewaymodel)
-resources to route the request to the appropriate provider.
-These resources also enforce tier access through authorization policies,
-rejecting requests for models outside the caller's tier even though they appear
-in the shared provider catalog.
+authorization policies reject models outside the caller's tier, including models
+requested by name. Sharing a provider catalog does not give every tier access
+to every model.
 
 **Note:** This example uses `AgentgatewayModel` because model routing runs after
 vSR selects a model and rewrites the request body. `HTTPRoute` matching occurs
@@ -72,9 +70,9 @@ Follow the agentgateway guides to
 [install agentgateway](https://agentgateway.dev/docs/kubernetes/main/documentation/install/helm/)
 and
 [set up a Gateway](https://agentgateway.dev/docs/kubernetes/main/documentation/setup/gateway/).
-Run commands from the agentgateway repository root. Run the two tier-aware
-examples separately because they reuse Gateway policy and provider resource
-names.
+Run commands from the agentgateway repository root. Run this example and the
+CRD-based example separately because they reuse Gateway policy and provider
+resource names.
 
 **Note:** Requests make billable calls to OpenAI/Anthropic providers.
 
@@ -270,9 +268,9 @@ Additional checks (keep other headers valid):
 
 ## Secure the Tier Context
 
-The headers in these curl requests demonstrate routing and not caller
-authentication. To add authentication and secure the tier context, follow the
-agentgateway guides:
+This example trusts the user ID and tier headers, so a caller can claim any tier.
+Before exposing it to users, authenticate callers and verify their tier before
+vSR processes the request. The agentgateway guides describe these options:
 
 - [JWT authentication](https://agentgateway.dev/docs/kubernetes/latest/documentation/security/jwt/setup/)
   validates tokens from an identity provider. Combine it with
@@ -288,10 +286,6 @@ agentgateway guides:
   delegates access decisions to your own service, where you can look up the
   caller's entitlement and reject a mismatched tier.
 
-Validate the user ID and access tier headers against trusted identity information
-before vSR processes the request. For example, use JWT authentication with
-authorization rules that require these headers to match the token’s claims.
-
 Keep `x-vsr-skip-processing` reserved for agentgateway's internal processing.
 The example rejects requests when clients supply [this header](https://vllm-sr.ai/docs/troubleshooting/vsr-headers/).
 
@@ -300,16 +294,18 @@ if you need to manage each tier's runtime separately.
 
 ## Troubleshooting
 
+Check policy status and recent logs:
+
 ```bash
 kubectl -n agentgateway-system describe agentgatewaypolicy tiered-semantic-routing
 kubectl -n agentgateway-system logs deployment/semantic-router --since=5m
 kubectl -n agentgateway-system logs deployment/agentgateway-proxy --since=5m
 ```
 
-Inspect the response body for provider credential, quota, or model-access errors.
-A provider error is distinct from an incorrect routing decision. Confirm the
-model IDs are available to your accounts, and inspect policy status
-if requests do not reach a provider.
+Check the selected-model header to diagnose routing, and the response body for
+provider credential, quota, or model-access errors. Confirm your provider accounts
+have access to the configured models. If requests do not reach a provider, check
+that the policy is accepted and attached.
 
 **Note:** The example AgentgatewayPolicy fails closed when vSR is unavailable.
 
