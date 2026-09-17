@@ -26,6 +26,7 @@ use crate::*;
 // https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#responses
 const GRPC_MESSAGE_ENCODE_SET: &AsciiSet = &CONTROLS.add(b' ').add(b'%');
 
+#[allow(clippy::result_large_err)]
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyResponse {
 	#[error("{0}")]

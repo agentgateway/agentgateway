@@ -362,6 +362,7 @@ async fn apply_request_policies(
 	Ok(route_retry)
 }
 
+#[allow(clippy::result_large_err)]
 async fn apply_backend_policies(
 	backend_info: auth::BackendInfo,
 	client: PolicyClient,
@@ -462,6 +463,7 @@ async fn apply_backend_policies(
 	Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 async fn apply_gateway_policies(
 	policies: &GatewayPolicies,
 	client: PolicyClient,
@@ -549,6 +551,7 @@ async fn apply_gateway_policies(
 	Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 async fn apply_llm_request_policies(
 	policies: &store::LLMRequestPolicies,
 	client: PolicyClient,
@@ -648,11 +651,13 @@ trait ResultWithSnapshot<T, E>
 where
 	E: Into<ProxyResponse>,
 {
+	#[allow(clippy::result_large_err)]
 	fn snapshot_on_err(
 		self,
 		log: &mut RequestLog,
 		req: &mut Request,
 	) -> Result<T, SnapshottedProxyResponse>;
+	#[allow(clippy::result_large_err)]
 	fn maybe_snapshot_on_err(
 		self,
 		log: &mut RequestLog,
@@ -665,6 +670,7 @@ impl<T, E> ResultWithSnapshot<T, E> for Result<T, E>
 where
 	E: Into<ProxyResponse>,
 {
+	#[allow(clippy::result_large_err)]
 	fn snapshot_on_err(
 		self,
 		log: &mut RequestLog,
@@ -679,6 +685,7 @@ where
 			SnapshottedProxyResponse(e.into())
 		})
 	}
+	#[allow(clippy::result_large_err)]
 	fn maybe_snapshot_on_err(
 		self,
 		log: &mut RequestLog,
@@ -695,6 +702,7 @@ where
 			SnapshottedProxyResponse(e.into())
 		})
 	}
+	#[allow(clippy::result_large_err)]
 	fn explicitly_skip_snapshot(self) -> Result<T, SnapshottedProxyResponse> {
 		self.map_err(|e| SnapshottedProxyResponse(e.into()))
 	}
@@ -812,6 +820,7 @@ impl HTTPProxy {
 		}
 	}
 
+	#[allow(clippy::result_large_err)]
 	async fn proxy_internal(
 		&self,
 		mut req: Request,
@@ -1297,6 +1306,7 @@ impl HTTPProxy {
 		unreachable!()
 	}
 
+	#[allow(clippy::result_large_err)]
 	fn connect_tunnel<'a>(
 		&'a self,
 		log: &'a mut RequestLog,
@@ -1318,6 +1328,7 @@ impl HTTPProxy {
 			.boxed()
 	}
 
+	#[allow(clippy::result_large_err)]
 	async fn connect_tunnel_inner(
 		&self,
 		log: &mut RequestLog,
@@ -1538,6 +1549,8 @@ impl HTTPProxy {
 	}
 
 	#[allow(clippy::too_many_arguments)]
+	#[allow(clippy::large_enum_variant)]
+	#[allow(clippy::result_large_err)]
 	async fn attempt_upstream(
 		&self,
 		log: &mut RequestLog,
@@ -2358,6 +2371,7 @@ async fn build_simple_backend_call(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::result_large_err)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
 	mut route_policies: Arc<store::LLMRequestPolicies>,
@@ -3185,6 +3199,7 @@ async fn make_backend_call(
 }
 
 /// Resolves a Substrate actor assignment into an in-process dynamic backend result.
+#[allow(clippy::result_large_err)]
 async fn handle_substrate_backend_selection(
 	req: &mut Request,
 	backend: &Backend,
@@ -4746,6 +4761,7 @@ impl ResponsePolicies {
 		None
 	}
 
+	#[allow(clippy::result_large_err)]
 	pub async fn apply(
 		&mut self,
 		resp: &mut Response,
