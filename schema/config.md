@@ -6220,7 +6220,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`binds[].listeners[].routes[].policies.substrateEgress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in a `substrate-secret://` URI.|
+|`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -27947,7 +27947,7 @@
 |`policies[].policy.substrateEgress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.substrateEgress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`policies[].policy.substrateEgress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`policies[].policy.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in a `substrate-secret://` URI.|
+|`policies[].policy.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`policies[].policy.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`policies[].policy.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.substrateEgress.credentialProviders[].target.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -46532,7 +46532,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routeGroups[].routes[].policies.substrateEgress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`routeGroups[].routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in a `substrate-secret://` URI.|
+|`routeGroups[].routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -67788,7 +67788,7 @@
 |`routes[].policies.substrateEgress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.substrateEgress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`routes[].policies.substrateEgress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in a `substrate-secret://` URI.|
+|`routes[].policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`routes[].policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`routes[].policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
 |`routes[].policies.substrateEgress.credentialProviders[].target.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -95234,7 +95234,7 @@
 |`mcp.policies.substrateEgress.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.substrateEgress.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`mcp.policies.substrateEgress.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
-|`mcp.policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in a `substrate-secret://` URI.|
+|`mcp.policies.substrateEgress.credentialProviders`|[]object|Credential providers available to secret-backed egress effects, keyed by<br>the authority in an `ate-secret://` URI.|
 |`mcp.policies.substrateEgress.credentialProviders[].uriAuthority`|string|Exact credential URI authority handled by this provider, such as `kubernetes.io`.|
 |`mcp.policies.substrateEgress.credentialProviders[].target`|object|Backend that resolves credentials and policies used when connecting to it.<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.substrateEgress.credentialProviders[].target.service`|object|Service reference. Service must be defined in the top level services list.|

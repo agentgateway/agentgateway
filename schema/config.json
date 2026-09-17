@@ -7891,7 +7891,7 @@
           ]
         },
         "credentialProviders": {
-          "description": "Credential providers available to secret-backed egress effects, keyed by\nthe authority in a `substrate-secret://` URI.",
+          "description": "Credential providers available to secret-backed egress effects, keyed by\nthe authority in an `ate-secret://` URI.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CredentialProvider"

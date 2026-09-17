@@ -4,16 +4,16 @@ use async_trait::async_trait;
 use protos::credprovider::credential_provider_server::{
 	CredentialProvider, CredentialProviderServer,
 };
-use protos::credprovider::{RequestSecretRequest, RequestSecretResponse};
+use protos::credprovider::{FetchSecretRequest, FetchSecretResponse};
 use tonic::{Request, Response, Status};
 
 #[async_trait]
 pub trait Handler {
-	async fn request_secret(
+	async fn fetch_secret(
 		&mut self,
-		_request: &RequestSecretRequest,
-	) -> Result<RequestSecretResponse, Status> {
-		Err(Status::unimplemented("RequestSecret is not implemented"))
+		_request: &FetchSecretRequest,
+	) -> Result<FetchSecretResponse, Status> {
+		Err(Status::unimplemented("FetchSecret is not implemented"))
 	}
 }
 
@@ -50,13 +50,13 @@ impl<T> CredentialProvider for CredentialProviderMock<T>
 where
 	T: Handler + Send + Sync + 'static,
 {
-	async fn request_secret(
+	async fn fetch_secret(
 		&self,
-		request: Request<RequestSecretRequest>,
-	) -> Result<Response<RequestSecretResponse>, Status> {
+		request: Request<FetchSecretRequest>,
+	) -> Result<Response<FetchSecretResponse>, Status> {
 		let mut handler = (self.handler)();
 		Ok(Response::new(
-			handler.request_secret(request.get_ref()).await?,
+			handler.fetch_secret(request.get_ref()).await?,
 		))
 	}
 }

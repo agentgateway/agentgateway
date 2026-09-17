@@ -5,19 +5,16 @@ package credprovider;
 // CredentialProvider resolves an external credential reference. The provider
 // owns authorization and secret storage; AgentGateway only brokers a request.
 service CredentialProvider {
-  rpc RequestSecret(RequestSecretRequest) returns (RequestSecretResponse) {}
+  rpc FetchSecret(FetchSecretRequest) returns (FetchSecretResponse) {}
 }
 
-message SecretRequestContext {
-  // The verified actor identity on whose behalf the credential is requested.
-  string actor_identity = 1;
-}
-
-message RequestSecretRequest {
+message FetchSecretRequest {
+  // Credential URI of the form ate-secret://<provider name>/<provider tail>.
   string uri = 1;
-  SecretRequestContext context = 2;
+  // The verified SPIFFE ID of the actor on whose behalf the secret is fetched.
+  string actor_spiffe_id = 2;
 }
 
-message RequestSecretResponse {
-  bytes secret = 1;
+message FetchSecretResponse {
+  bytes opaque_bytes = 1;
 }

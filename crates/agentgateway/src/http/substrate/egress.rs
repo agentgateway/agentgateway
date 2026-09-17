@@ -27,7 +27,7 @@ pub struct SubstrateEgress {
 	#[serde(flatten)]
 	pub target: SimpleBackendReferenceWithPolicies,
 	/// Credential providers available to secret-backed egress effects, keyed by
-	/// the authority in a `substrate-secret://` URI.
+	/// the authority in an `ate-secret://` URI.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub credential_providers: Vec<CredentialProvider>,
 	#[serde(skip, default = "default_credential_cache")]
@@ -209,14 +209,14 @@ impl SubstrateEgress {
 		let mut provider =
 			protos::credprovider::credential_provider_client::CredentialProviderClient::new(channel);
 		let response = provider
-			.request_secret(protos::credprovider::RequestSecretRequest {
+			.fetch_secret(protos::credprovider::FetchSecretRequest {
 				uri: uri.to_owned(),
-				context: Some(protos::credprovider::SecretRequestContext { actor_identity }),
+				actor_spiffe_id: actor_identity,
 			})
 			.await
 			.map_err(|status| credential_provider_error(uri, status))?
 			.into_inner();
-		let secret = credential_secret(response.secret)?;
+		let secret = credential_secret(response.opaque_bytes)?;
 		self
 			.credential_cache
 			.insert(key, secret.clone(), Instant::now());
@@ -238,7 +238,7 @@ impl SubstrateEgress {
 }
 
 fn provider_name(uri: &str) -> Option<&str> {
-	let authority = uri.strip_prefix("substrate-secret://")?.split('/').next()?;
+	let authority = uri.strip_prefix("ate-secret://")?.split('/').next()?;
 	(!authority.is_empty() && !authority.contains(['?', '#', '@', ':'])).then_some(authority)
 }
 
@@ -439,7 +439,7 @@ mod tests {
 							inject_static_headers: vec![protos::ateapi::CredentialHeaderInjection {
 								header: "Authorization".to_owned(),
 								prefix: "Bearer ".to_owned(),
-								credential_uri: "substrate-secret://example/first/token".to_owned(),
+								credential_uri: "ate-secret://example/first/token".to_owned(),
 							}],
 						}),
 					}),
@@ -452,7 +452,7 @@ mod tests {
 							inject_static_headers: vec![protos::ateapi::CredentialHeaderInjection {
 								header: "Authorization".to_owned(),
 								prefix: "Bearer ".to_owned(),
-								credential_uri: "substrate-secret://example/second/token".to_owned(),
+								credential_uri: "ate-secret://example/second/token".to_owned(),
 							}],
 						}),
 					}),
@@ -473,7 +473,7 @@ mod tests {
 				.unwrap()
 				.inject_static_headers[0]
 				.credential_uri,
-			"substrate-secret://example/first/token"
+			"ate-secret://example/first/token"
 		);
 	}
 
@@ -556,15 +556,16 @@ mod tests {
 	#[test]
 	fn credential_uri_uses_the_exact_authority_as_provider_name() {
 		assert_eq!(
-			provider_name("substrate-secret://kubernetes.io/default/token"),
+			provider_name("ate-secret://kubernetes.io/default/token"),
 			Some("kubernetes.io")
 		);
 		assert_eq!(provider_name("https://kubernetes.io/default/token"), None);
-		assert_eq!(provider_name("substrate-secret:///default/token"), None);
 		assert_eq!(
-			provider_name("substrate-secret://kubernetes.io:443/token"),
+			provider_name("substrate-secret://kubernetes.io/default/token"),
 			None
 		);
+		assert_eq!(provider_name("ate-secret:///default/token"), None);
+		assert_eq!(provider_name("ate-secret://kubernetes.io:443/token"), None);
 	}
 
 	#[test]
@@ -573,7 +574,7 @@ mod tests {
 			&protos::ateapi::CredentialHeaderInjection {
 				header: "authorization".to_owned(),
 				prefix: "Bearer ".to_owned(),
-				credential_uri: "substrate-secret://kubernetes.io/default/token".to_owned(),
+				credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 			},
 			b"token\n".to_vec(),
 		)
@@ -600,7 +601,7 @@ mod tests {
 			let injection = protos::ateapi::CredentialHeaderInjection {
 				header: header.to_owned(),
 				prefix: String::new(),
-				credential_uri: "substrate-secret://kubernetes.io/default/token".to_owned(),
+				credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 			};
 			assert!(credential_header(&injection, b"token".to_vec()).is_err());
 		}
@@ -610,7 +611,7 @@ mod tests {
 	fn credential_provider_errors_preserve_availability_semantics() {
 		for code in [Code::Unavailable, Code::DeadlineExceeded] {
 			let response = credential_provider_error(
-				"substrate-secret://kubernetes.io/default/token",
+				"ate-secret://kubernetes.io/default/token",
 				tonic::Status::new(code, "provider failed"),
 			)
 			.into_response_with_grpc(false);
@@ -618,7 +619,7 @@ mod tests {
 		}
 
 		let response = credential_provider_error(
-			"substrate-secret://kubernetes.io/default/token",
+			"ate-secret://kubernetes.io/default/token",
 			tonic::Status::permission_denied("not allowed"),
 		)
 		.into_response_with_grpc(false);
@@ -630,7 +631,7 @@ mod tests {
 		let injection = protos::ateapi::CredentialHeaderInjection {
 			header: "authorization".to_owned(),
 			prefix: "Bearer ".to_owned(),
-			credential_uri: "substrate-secret://kubernetes.io/default/token".to_owned(),
+			credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		assert!(credential_header(&injection, Vec::new()).is_err());
 		assert!(credential_header(&injection, b"bad\nsecret".to_vec()).is_err());
@@ -641,7 +642,7 @@ mod tests {
 		let cache = CredentialCache::new(16);
 		let key = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/example".to_owned(),
-			uri: "substrate-secret://kubernetes.io/default/token".to_owned(),
+			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		let now = Instant::now();
 		cache.insert(key.clone(), b"token".to_vec(), now);
@@ -661,7 +662,7 @@ mod tests {
 		let now = Instant::now();
 		let key = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/one".to_owned(),
-			uri: "substrate-secret://kubernetes.io/default/token".to_owned(),
+			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		cache.insert(key.clone(), b"one".to_vec(), now);
 
@@ -671,7 +672,7 @@ mod tests {
 		};
 		let another_uri = CredentialCacheKey {
 			actor_identity: key.actor_identity.clone(),
-			uri: "substrate-secret://kubernetes.io/default/other".to_owned(),
+			uri: "ate-secret://kubernetes.io/default/other".to_owned(),
 		};
 		assert_eq!(
 			cache.get(&another_actor, now, DEFAULT_CREDENTIAL_CACHE_TTL),

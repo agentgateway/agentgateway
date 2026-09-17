@@ -96,21 +96,21 @@ struct CredentialHandler {
 
 #[async_trait::async_trait]
 impl credprovidermock::Handler for CredentialHandler {
-	async fn request_secret(
+	async fn fetch_secret(
 		&mut self,
-		request: &protos::credprovider::RequestSecretRequest,
-	) -> Result<protos::credprovider::RequestSecretResponse, tonic::Status> {
+		request: &protos::credprovider::FetchSecretRequest,
+	) -> Result<protos::credprovider::FetchSecretResponse, tonic::Status> {
 		assert_eq!(
 			request.uri,
-			"substrate-secret://kubernetes.io/default/upstream-token"
+			"ate-secret://kubernetes.io/default/upstream-token"
 		);
 		assert_eq!(
-			request.context.as_ref().unwrap().actor_identity,
+			request.actor_spiffe_id,
 			"spiffe://substrate-actor.local/atespace/demo/actor/my-actor"
 		);
 		self.calls.fetch_add(1, Ordering::Relaxed);
-		Ok(protos::credprovider::RequestSecretResponse {
-			secret: b"injected-token".to_vec(),
+		Ok(protos::credprovider::FetchSecretResponse {
+			opaque_bytes: b"injected-token".to_vec(),
 		})
 	}
 }
@@ -1391,7 +1391,7 @@ async fn substrate_egress_injects_provider_credentials_into_the_upstream_request
 					inject_static_headers: vec![protos::ateapi::CredentialHeaderInjection {
 						header: "authorization".to_owned(),
 						prefix: "Bearer ".to_owned(),
-						credential_uri: "substrate-secret://kubernetes.io/default/upstream-token".to_owned(),
+						credential_uri: "ate-secret://kubernetes.io/default/upstream-token".to_owned(),
 					}],
 				}),
 			}),
@@ -1465,7 +1465,7 @@ async fn substrate_egress_injects_provider_credentials_into_the_upstream_request
 		String::from_utf8_lossy(&connect_response[..response_len]).starts_with("HTTP/1.1 200 OK\r\n")
 	);
 
-	io.write_all(b"GET / HTTP/1.1\r\nHost: allowed.example\r\nConnection: close\r\n\r\n")
+	io.write_all(b"GET / HTTP/1.1\r\nHost: allowed.example\r\nAuthorization: Bearer actor-supplied\r\nConnection: close\r\n\r\n")
 		.await
 		.unwrap();
 	let mut response = Vec::new();
