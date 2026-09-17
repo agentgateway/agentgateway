@@ -618,9 +618,8 @@ llm:
 
 #[tokio::test]
 async fn llm_model_router_prices_mistral_ocr_pages() {
-	// Mistral Document AI returns no token usage at all, only `usage_info.pages_processed
-	// /v1/ocr must therefore resolve to the detect route 
-	// so usage extraction and catalog pricing run.
+	// Mistral Document AI returns no token usage at all, /v1/ocr must resolve
+	// to the detect route so usage extraction and catalog pricing run.
 	let ocr_response = br#"{
 		"pages": [
 			{"index": 0, "markdown": "Title", "images": [], "dimensions": {"dpi": 200}},
