@@ -774,6 +774,7 @@ impl Store {
 			"/v1/images/edits",
 			"/v1/images/variations",
 			"/v1/audio/transcriptions",
+			"/v1/ocr",
 			"/v1/embeddings",
 			"/v1/rerank",
 			"/v2/rerank",

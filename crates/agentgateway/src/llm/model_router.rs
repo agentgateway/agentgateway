@@ -84,6 +84,7 @@ pub fn default_route_types() -> Arc<llm::Policy> {
 				(strng::new("/v1/images/edits"), llm::RouteType::Detect),
 				(strng::new("/v1/images/variations"), llm::RouteType::Detect),
 				(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
+				(strng::new("/v1/ocr"), llm::RouteType::Detect),
 				(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
 				(strng::new("/v1/rerank"), llm::RouteType::Rerank),
 				(strng::new("/v2/rerank"), llm::RouteType::Rerank),
@@ -1586,6 +1587,16 @@ mod tests {
 				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-pro:generateContent"
 			),
 			llm::RouteType::GenerateContent
+		);
+	}
+
+	#[test]
+	fn default_routes_send_ocr_through_detect() {
+		// Without an explicit entry, `/v1/ocr` falls to the `*` passthrough route,
+		// skips usage extraction entirely and leaves per-page OCR requests unpriced.
+		assert_eq!(
+			default_route_types().resolve_route("/v1/ocr"),
+			llm::RouteType::Detect
 		);
 	}
 
