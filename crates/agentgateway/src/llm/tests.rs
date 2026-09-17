@@ -286,7 +286,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 fn vertex_gemini_messages_error_uses_anthropic_shape() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
-		model: None,
+		model_override: None,
 		region: None,
 	});
 	let mut req = llm_request_with_tokens(None);
@@ -4265,11 +4265,13 @@ fn vertex_non_anthropic_model_uses_inclusive_convention() {
 fn messages_to_vertex_gemini_uses_exclusive_convention() {
 	for provider in [
 		vertex_provider("gemini-2.0-flash"),
-		AIProvider::Gemini(gemini::Provider { model: None }),
+		AIProvider::Gemini(gemini::Provider {
+			model_override: None,
+		}),
 		custom_provider(custom::ProviderFormat::GenerateContent),
 	] {
 		let translation = provider
-			.chat_translation(InputFormat::Messages, Some("gemini-2.5-flash"), None)
+			.chat_translation(InputFormat::Messages, "gemini-2.5-flash", None)
 			.expect("messages routes to native gemini");
 		assert_eq!(translation.output, ChatFormat::VertexGemini);
 		assert_eq!(
@@ -4287,7 +4289,7 @@ fn messages_to_vertex_gemini_uses_exclusive_convention() {
 fn completions_to_vertex_gemini_keeps_provider_convention() {
 	let provider = vertex_provider("gemini-2.0-flash");
 	let translation = provider
-		.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
+		.chat_translation(InputFormat::Completions, "gemini-2.5-flash", None)
 		.expect("completions routes to native gemini");
 	assert_eq!(translation.output, ChatFormat::VertexGemini);
 	assert_eq!(translation.cache_convention(), None);
@@ -4376,7 +4378,7 @@ async fn vertex_gemini_messages_routes_natively_with_gemini_body() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::Vertex(vertex::Provider {
-		model: None,
+		model_override: None,
 		region: Some(strng::new("us-central1")),
 		project_id: strng::new("test-project"),
 	});
@@ -4449,7 +4451,7 @@ async fn vertex_gemini_messages_routes_natively_with_gemini_body() {
 #[test]
 fn vertex_gemini_messages_streaming_setup_request_adds_alt_sse() {
 	let provider = AIProvider::Vertex(vertex::Provider {
-		model: None,
+		model_override: None,
 		region: Some(strng::new("us-central1")),
 		project_id: strng::new("test-project"),
 	});
@@ -4478,6 +4480,8 @@ fn vertex_gemini_messages_streaming_setup_request_adds_alt_sse() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 

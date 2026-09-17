@@ -464,7 +464,7 @@ fn render_anthropic_messages(
 
 fn render_vertex_gemini(
 	req: types::ChatRequest,
-	_ctx: &ChatRequestContext<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
 		// Native Gemini inbound is a passthrough, so unlike the completions conversion it does
