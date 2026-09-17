@@ -429,6 +429,29 @@ mod tests {
 		assert_eq!(llm_response.output_tokens, Some(3));
 		assert_eq!(llm_response.total_tokens, Some(30550));
 	}
+
+	#[test]
+	fn to_llm_response_extracts_mistral_ocr_page_count() {
+		// Mistral Document AI bills pages, not tokens
+		let resp = Response::Json(serde_json::json!({
+			"pages": [
+				{"index": 0, "markdown": "# Title", "images": [], "dimensions": {"dpi": 200}},
+				{"index": 1, "markdown": "body", "images": [], "dimensions": {"dpi": 200}}
+			],
+			"model": "mistral-ocr-latest",
+			"usage_info": {
+				"pages_processed": 2,
+				"doc_size_bytes": 145349
+			}
+		}));
+
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
+
+		assert_eq!(llm_response.pages, Some(2));
+		assert_eq!(llm_response.input_tokens, None);
+		assert_eq!(llm_response.output_tokens, None);
+		assert_eq!(llm_response.total_tokens, None);
+	}
 }
 
 #[derive(Debug, Clone)]

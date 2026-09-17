@@ -344,12 +344,13 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		reasoning: dec("0"),
 		input_audio: dec("0"),
 		output_audio: dec("0"),
-		pages: dec("0"),
+		pages: dec("0.02"),
 	});
 	let executor = Executor::new_request(&req);
 
-	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.525").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.545").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.input == 0.5").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.pages == 0.02").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.cacheRead == 0.0").unwrap()));
 }
 

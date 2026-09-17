@@ -307,7 +307,7 @@ impl Model {
 	}
 }
 
-// Count = Tokens / Pages
+// count: [tokens|pages] and rate: [per n tokens|per page].
 fn line(count: u64, rate: Option<&Money>) -> Decimal {
 	match rate {
 		Some(Money(r)) => Decimal::from(count) * *r,
