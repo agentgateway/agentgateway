@@ -251,6 +251,11 @@ impl AIProvider {
 /// Classify how the upstream reports cached tokens, from the source wire format the
 /// gateway is about to parse — not the provider name, which can carry another
 /// provider's native semantics (e.g. Vertex serving Anthropic models).
+/// The convention the upstream itself reports on, before any conversion of ours.
+///
+/// This is a property of the provider and model alone. When one of our conversions re-renders
+/// the usage and changes the convention, that belongs on
+/// [`ChatTranslation::cache_convention`], which takes precedence over this.
 fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
@@ -349,6 +354,7 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// generateContent) takes it in preference to the compat shim.
 		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
+		chat(InputFormat::Messages, ChatFormat::VertexGemini),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		// Missing: Bedrock --> Bedrock
 		//
@@ -458,7 +464,7 @@ fn render_anthropic_messages(
 
 fn render_vertex_gemini(
 	req: types::ChatRequest,
-	_ctx: &ChatRequestContext<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
 		// Native Gemini inbound is a passthrough, so unlike the completions conversion it does
@@ -467,8 +473,13 @@ fn render_vertex_gemini(
 		types::ChatRequest::Completions(req) => {
 			conversion::vertex_gemini::from_completions::translate(&req)
 		},
+		types::ChatRequest::Messages(req) => {
+			// Same backend-pinned model resolution as the completions arm above.
+			let override_model = ctx.provider.override_model();
+			conversion::vertex_gemini::from_messages::translate(&req, override_model.as_deref())
+		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
-			"vertex gemini only supports completions or native gemini input"
+			"vertex gemini only supports completions, messages, or native gemini input"
 		))),
 	}
 }
@@ -519,6 +530,22 @@ fn render_bedrock_converse(
 }
 
 impl ChatTranslation {
+	/// Convention override owed to the conversion this translation performs, if any.
+	///
+	/// The convention describes the numbers the *client* is handed, so when a conversion
+	/// re-renders usage it, not the upstream, decides. `vertex_gemini::to_messages` subtracts
+	/// cached content from `input_tokens` to match Anthropic semantics, so every upstream that
+	/// reaches it excludes cache: Vertex, the Gemini API, and custom generateContent backends
+	/// alike. Keyed on the pair because it is the pair that selects the conversion.
+	fn cache_convention(&self) -> Option<CacheTokenConvention> {
+		match (self.input, self.output) {
+			(InputFormat::Messages, ChatFormat::VertexGemini) => {
+				Some(CacheTokenConvention::InputExcludesCache)
+			},
+			_ => None,
+		}
+	}
+
 	fn provider_format(&self) -> custom::ProviderFormat {
 		match self.output {
 			ChatFormat::OpenAICompletions => custom::ProviderFormat::Completions,
@@ -633,6 +660,7 @@ impl ChatTranslation {
 				InputFormat::Completions => {
 					conversion::vertex_gemini::to_completions::translate_response(bytes)
 				},
+				InputFormat::Messages => conversion::vertex_gemini::to_messages::translate_response(bytes),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -771,6 +799,15 @@ impl ChatTranslation {
 						ctx.log_content,
 					)
 				}),
+				InputFormat::Messages => resp.map(|b| {
+					conversion::vertex_gemini::to_messages::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
 				_ => resp,
 			},
 		}
@@ -856,7 +893,10 @@ impl ChatTranslation {
 			ChatFormat::VertexGemini => match format {
 				// Native Gemini clients expect the Google error shape; pass it through unchanged.
 				ChatErrorFormat::Google if self.input == InputFormat::Gemini => Ok(bytes.clone()),
-				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
+				ChatErrorFormat::Google => match self.input {
+					InputFormat::Messages => conversion::messages::translate_google_error(bytes),
+					_ => conversion::completions::translate_google_error(bytes),
+				},
 				_ => unsupported(),
 			},
 		}
@@ -2127,6 +2167,7 @@ impl AIProvider {
 		req: &mut impl RequestType,
 		parts: &mut Parts,
 		provider_format: Option<custom::ProviderFormat>,
+		cache_convention: Option<CacheTokenConvention>,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<PreparedRequest, AIError> {
@@ -2166,8 +2207,9 @@ impl AIProvider {
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
-		llm_info.cache_convention =
-			cache_convention_for(self, provider_format, &llm_info.request_model);
+		// A conversion that re-renders usage overrides the upstream's own convention.
+		llm_info.cache_convention = cache_convention
+			.unwrap_or_else(|| cache_convention_for(self, provider_format, &llm_info.request_model));
 		if let Some(log) = log
 			&& original_format.supports_prompt_guard()
 		{
@@ -2214,6 +2256,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				Some(provider_format),
+				chat_translation.cache_convention(),
 				tokenize,
 				log,
 			)
@@ -2301,6 +2344,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				provider_format,
+				None,
 				tokenize,
 				log,
 			)
@@ -3266,7 +3310,13 @@ fn response_prompt_guard_headers(
 	headers
 }
 
-fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
+/// Tokens to subtract from the rate-limit bucket now that the real usage is known.
+///
+/// The request was already charged `request.input_tokens`, our own tokenizer count over the whole
+/// prompt, which always includes cached content. `normalized_input_tokens` puts the provider's
+/// count on that same footing, so the two are comparable and a cached prompt does not read as a
+/// refund.
+fn tokens_to_amend(llm_resp: &LLMInfo) -> i64 {
 	let input_mismatch = match (
 		llm_resp.request.input_tokens,
 		llm_resp.normalized_input_tokens(),
@@ -3279,7 +3329,11 @@ fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec
 		(_, Some(resp)) => resp as i64,
 	};
 	let response = llm_resp.response.output_tokens.unwrap_or_default();
-	let tokens_to_remove = input_mismatch + (response as i64);
+	input_mismatch + (response as i64)
+}
+
+fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
+	let tokens_to_remove = tokens_to_amend(llm_resp);
 
 	for lrl in &rate_limit.local_rate_limit {
 		lrl.amend_tokens(tokens_to_remove)

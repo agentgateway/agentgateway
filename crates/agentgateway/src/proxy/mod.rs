@@ -298,6 +298,7 @@ fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::UnsupportedModel
 		| llm::AIError::UnsupportedContent
 		| llm::AIError::UnsupportedConversion(_)
+		| llm::AIError::BadRequest(_)
 		| llm::AIError::RequestParsing(_) => AIErrorClassification {
 			status: StatusCode::BAD_REQUEST,
 			reason: ProxyResponseReason::InvalidRequest,
@@ -353,6 +354,7 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::StreamingUnsupported
 		| llm::AIError::UnsupportedModel
 		| llm::AIError::RequestTooLarge
+		| llm::AIError::BadRequest(_)
 		| llm::AIError::RequestParsing(_)
 		| llm::AIError::RequestMarshal(_)
 		| llm::AIError::ResponseMarshal(_)
@@ -866,6 +868,19 @@ mod tests {
 		);
 		assert_ai_error_mapping(
 			|| ProxyError::AIResponse(llm::AIError::MessageNotFound),
+			StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyResponseReason::Internal,
+		);
+		// A client mistake surfaced by the translation layer (an unknown tool_use_id, say) must
+		// answer 400 here. It used to be converted to a rejection at the call site to dodge a
+		// retryable 503; classifying the variant is what makes that unnecessary.
+		assert_ai_error_mapping(
+			|| ProxyError::AIRequest(llm::AIError::BadRequest("unknown tool_use_id".into())),
+			StatusCode::BAD_REQUEST,
+			ProxyResponseReason::InvalidRequest,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIResponse(llm::AIError::BadRequest("unknown tool_use_id".into())),
 			StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyResponseReason::Internal,
 		);

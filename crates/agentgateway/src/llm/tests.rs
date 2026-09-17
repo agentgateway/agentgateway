@@ -79,7 +79,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 }
 
 #[test]
-fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
+fn vertex_gemini_uses_native_for_completions_and_messages_compat_for_responses() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
 		model_override: None,
@@ -94,15 +94,25 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 			.output,
 		ChatFormat::VertexGemini
 	);
-	for input in [InputFormat::Messages, InputFormat::Responses] {
-		assert_eq!(
-			provider
-				.chat_translation(input, model, None)
-				.unwrap()
-				.output,
-			ChatFormat::OpenAICompletions
-		);
-	}
+	// Anthropic Messages input also translates natively: we do a better job than Google's
+	// OpenAI-compatible endpoint, and the double hop (Anthropic -> OpenAI -> compat shim) drops
+	// thinking signatures, cache_control and tool_result.is_error.
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Messages, model, None)
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+
+	// Responses input has no native translator yet and stays on the compat shim.
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Responses, model, None)
+			.unwrap()
+			.output,
+		ChatFormat::OpenAICompletions
+	);
 }
 
 #[test]
@@ -251,17 +261,57 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 			.output,
 		ChatFormat::VertexGemini
 	);
-	// Messages and Responses clients still ride the compat shim: there is no conversion from
-	// those formats to native Gemini.
-	for input in [InputFormat::Messages, InputFormat::Responses] {
-		assert_eq!(
-			gemini
-				.chat_translation(input, "gemini-2.5-flash", None)
-				.unwrap()
-				.output,
-			ChatFormat::OpenAICompletions
-		);
-	}
+	// Messages now has a native translator too, so it follows Completions onto the native path
+	// for any Gemini-speaking upstream, not just Vertex.
+	assert_eq!(
+		gemini
+			.chat_translation(InputFormat::Messages, "gemini-2.5-flash", None)
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+	// Responses still rides the compat shim: no Responses -> native Gemini conversion exists.
+	assert_eq!(
+		gemini
+			.chat_translation(InputFormat::Responses, "gemini-2.5-flash", None)
+			.unwrap()
+			.output,
+		ChatFormat::OpenAICompletions
+	);
+}
+
+/// Messages input now selects `ChatFormat::VertexGemini`, so the Google -> Anthropic error
+/// translation has to come from that arm rather than the OpenAI compat shim it used to ride.
+#[test]
+fn vertex_gemini_messages_error_uses_anthropic_shape() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model_override: None,
+		region: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Messages;
+	req.request_model = "gemini-2.5-flash".into();
+
+	let error = Bytes::from_static(
+		br#"{"error":{"code":400,"message":"bad request","status":"INVALID_ARGUMENT"}}"#,
+	);
+	let translated = provider
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
+		.expect("Google error should translate for a messages client");
+	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
+
+	// The Anthropic envelope has a top-level "type":"error"; the OpenAI one does not.
+	assert_eq!(
+		body["type"],
+		json!("error"),
+		"messages client must get an Anthropic-shaped error, got: {body}"
+	);
+	assert_eq!(body["error"]["message"], json!("bad request"));
+	assert!(
+		body["error"]["type"].is_string(),
+		"Anthropic errors carry an error.type string, got: {body}"
+	);
 }
 
 #[test]
@@ -3780,6 +3830,265 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	);
 }
 
+/// Build a Gemini SSE stream body from a list of `GenerateContentResponse` chunks.
+fn gemini_sse_body(chunks: &[serde_json::Value]) -> Body {
+	let mut data = String::new();
+	for c in chunks {
+		data.push_str(&format!("data: {}\n\n", serde_json::to_string(c).unwrap()));
+	}
+	Body::from(data)
+}
+
+fn vertex_gemini_stream_log() -> (AsyncLog<LLMInfo>, AsyncLog<LLMInfo>) {
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	log.store(Some(LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "gemini-2.5-pro".into(),
+			provider: "vertex".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	}));
+	(log, log2)
+}
+
+#[tokio::test]
+async fn vertex_gemini_to_messages_stream_captures_completion_and_tool_calls() {
+	let body = gemini_sse_body(&[
+		serde_json::json!({
+			"responseId": "resp-1",
+			"modelVersion": "gemini-2.5-pro",
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "Let me check." }] } }]
+		}),
+		serde_json::json!({
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } },
+					"thoughtSignature": "SIGNATURE_BLOB_THAT_MUST_NOT_BE_LOGGED" }
+			]}, "finishReason": "STOP" }],
+			"usageMetadata": { "promptTokenCount": 1000, "cachedContentTokenCount": 800,
+				"candidatesTokenCount": 50, "totalTokenCount": 1050 }
+		}),
+	]);
+	let (log, log2) = vertex_gemini_stream_log();
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::vertex_gemini::to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-pro"),
+		logger,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be captured for streaming gemini messages");
+	assert_eq!(completion.join(""), "Let me check.");
+
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be captured for streaming gemini tool calls");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+	assert_eq!(
+		tool_calls[0].arguments,
+		serde_json::json!({"city": "Berlin"})
+	);
+	// The thoughtSignature rides in the client-facing tool_use id, but must not reach the log.
+	assert!(
+		!tool_calls[0].id.as_str().contains("SIGNATURE_BLOB"),
+		"logged tool call id must not embed the thoughtSignature, got {:?}",
+		tool_calls[0].id
+	);
+
+	// Usage is reported on the Anthropic convention: input excludes cached, total is input+output.
+	assert_eq!(info.response.input_tokens, Some(200));
+	assert_eq!(info.response.output_tokens, Some(50));
+	assert_eq!(info.response.total_tokens, Some(250));
+	assert_eq!(info.response.cached_input_tokens, Some(800));
+}
+
+#[tokio::test]
+async fn vertex_gemini_to_messages_stream_skips_telemetry_when_disabled() {
+	let body = gemini_sse_body(&[serde_json::json!({
+		"responseId": "resp-1",
+		"candidates": [{ "content": { "role": "model", "parts": [
+			{ "text": "hi" },
+			{ "functionCall": { "name": "f", "args": {} } }
+		]}, "finishReason": "STOP" }]
+	})]);
+	let (log, log2) = vertex_gemini_stream_log();
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::vertex_gemini::to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-pro"),
+		logger,
+		llm::LogContentFields::default(),
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion must stay unset when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages must stay unset when log_content.tool_calls is false"
+	);
+}
+
+#[tokio::test]
+async fn vertex_gemini_to_messages_stream_captures_tool_call_after_finish_reason() {
+	// A functionCall can arrive in a chunk after the one carrying finishReason; it is emitted to
+	// the client, so it must reach the logged output messages too.
+	let body = gemini_sse_body(&[
+		serde_json::json!({
+			"responseId": "resp-1",
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "ok" }] },
+				"finishReason": "STOP" }]
+		}),
+		serde_json::json!({
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "late_tool", "args": { "a": 1 } } }
+			]}}]
+		}),
+	]);
+	let (log, log2) = vertex_gemini_stream_log();
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::vertex_gemini::to_messages::translate_stream(
+		body,
+		1024 * 1024,
+		strng::new("gemini-2.5-pro"),
+		logger,
+		llm::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		},
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("a tool call after finishReason must still be logged");
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].name.as_str(), "late_tool");
+}
+
+fn amend_info(
+	convention: CacheTokenConvention,
+	request_input: Option<u64>,
+	response_input: Option<u64>,
+	cached: Option<u64>,
+	output: Option<u64>,
+) -> LLMInfo {
+	LLMInfo {
+		request: LLMRequest {
+			input_tokens: request_input,
+			input_format: InputFormat::Messages,
+			cache_convention: convention,
+			request_model: "gemini-2.5-pro".into(),
+			provider: "vertex".into(),
+			streaming: false,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse {
+			input_tokens: response_input,
+			cached_input_tokens: cached,
+			output_tokens: output,
+			..Default::default()
+		},
+	}
+}
+
+#[test]
+fn amend_tokens_does_not_refund_cache_reads_on_exclusive_convention() {
+	// The request was charged our tokenizer count over the whole prompt (20000). The provider
+	// reports input_tokens excluding the 19000 cached tokens, so they must be added back before
+	// the counts are compared, or the difference becomes a large negative refund.
+	let info = amend_info(
+		CacheTokenConvention::InputExcludesCache,
+		Some(20000),
+		Some(1000),
+		Some(19000),
+		Some(500),
+	);
+	assert_eq!(
+		tokens_to_amend(&info),
+		500,
+		"only the output tokens are still uncharged"
+	);
+}
+
+#[test]
+fn amend_tokens_uses_response_input_directly_on_inclusive_convention() {
+	let info = amend_info(
+		CacheTokenConvention::InputIncludesCache,
+		Some(20000),
+		Some(20000),
+		Some(19000),
+		Some(500),
+	);
+	assert_eq!(tokens_to_amend(&info), 500);
+}
+
+#[test]
+fn amend_tokens_still_charges_underestimated_prompts() {
+	// A genuine under-count of the prompt must still be charged the difference.
+	let info = amend_info(
+		CacheTokenConvention::InputExcludesCache,
+		Some(1000),
+		Some(1200),
+		None,
+		Some(50),
+	);
+	assert_eq!(tokens_to_amend(&info), 250);
+}
+
+#[test]
+fn amend_tokens_counts_full_response_when_request_was_not_counted() {
+	let info = amend_info(
+		CacheTokenConvention::InputExcludesCache,
+		None,
+		Some(200),
+		Some(800),
+		Some(50),
+	);
+	assert_eq!(
+		tokens_to_amend(&info),
+		1050,
+		"uncounted request charges the full cache-inclusive input plus output"
+	);
+}
+
 fn vertex_provider(model: &str) -> AIProvider {
 	AIProvider::Vertex(vertex::Provider {
 		model_override: Some(strng::new(model)),
@@ -3949,6 +4258,47 @@ fn vertex_non_anthropic_model_uses_inclusive_convention() {
 	);
 }
 
+/// The Messages -> native Gemini conversion subtracts cached content from `input_tokens`, so
+/// the convention follows the conversion, not the upstream. Every provider that can reach that
+/// conversion must agree, or a cached prompt reads as a refund in rate-limit amendment.
+#[test]
+fn messages_to_vertex_gemini_uses_exclusive_convention() {
+	for provider in [
+		vertex_provider("gemini-2.0-flash"),
+		AIProvider::Gemini(gemini::Provider {
+			model_override: None,
+		}),
+		custom_provider(custom::ProviderFormat::GenerateContent),
+	] {
+		let translation = provider
+			.chat_translation(InputFormat::Messages, "gemini-2.5-flash", None)
+			.expect("messages routes to native gemini");
+		assert_eq!(translation.output, ChatFormat::VertexGemini);
+		assert_eq!(
+			translation.cache_convention(),
+			Some(CacheTokenConvention::InputExcludesCache),
+			"provider {} must exclude cache for Messages -> native Gemini",
+			provider.provider(),
+		);
+	}
+}
+
+/// Completions inbound renders through `to_completions`, which passes Gemini's
+/// `promptTokenCount` through unchanged, so it keeps the upstream's inclusive convention.
+#[test]
+fn completions_to_vertex_gemini_keeps_provider_convention() {
+	let provider = vertex_provider("gemini-2.0-flash");
+	let translation = provider
+		.chat_translation(InputFormat::Completions, "gemini-2.5-flash", None)
+		.expect("completions routes to native gemini");
+	assert_eq!(translation.output, ChatFormat::VertexGemini);
+	assert_eq!(translation.cache_convention(), None);
+	assert_eq!(
+		cache_convention_for(&provider, None, "gemini-2.0-flash"),
+		CacheTokenConvention::InputIncludesCache,
+	);
+}
+
 #[test]
 fn custom_messages_backend_uses_exclusive_convention() {
 	let provider = custom_provider(custom::ProviderFormat::Messages);
@@ -4018,4 +4368,131 @@ fn query_requests_sse_matches_alt_query_parameter() {
 	assert!(!query_requests_sse(&uri(
 		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?halt=sse"
 	)));
+}
+
+// T7.1: Messages input on Vertex + Gemini model routes natively (generateContent, Gemini body shape).
+#[tokio::test]
+async fn vertex_gemini_messages_routes_natively_with_gemini_body() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model_override: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project"),
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("us-central1-aiplatform.googleapis.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "google/gemini-2.5-flash-lite",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "say hi"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		llm_request,
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
+		.await
+		.expect("Vertex Gemini Messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	// ChatFormat::VertexGemini maps to ProviderFormat::GenerateContent, so the request goes to
+	// models/{model}:generateContent rather than the OpenAI-compat completions route.
+	assert_eq!(upstream_route_type, RouteType::GenerateContent);
+	// The provider_state must be VertexGemini so setup_request adds ?alt=sse.
+	assert!(
+		matches!(
+			llm_request.provider_state,
+			Some(ProviderState::VertexGemini)
+		),
+		"provider_state must be VertexGemini for native path, got {:?}",
+		llm_request.provider_state
+	);
+	// The translation's convention override must actually reach the request, not just exist:
+	// to_messages reports input_tokens with cached content already subtracted.
+	assert_eq!(
+		llm_request.cache_convention,
+		CacheTokenConvention::InputExcludesCache,
+	);
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	// Body must be Gemini-shaped, not the Anthropic Vertex envelope.
+	assert!(
+		forwarded_json.get("anthropic_version").is_none(),
+		"Gemini native body must not have anthropic_version, got: {forwarded_json}"
+	);
+	assert!(
+		forwarded_json.get("contents").is_some(),
+		"Gemini native body must have 'contents' field, got: {forwarded_json}"
+	);
+}
+
+// T7.2: setup_request appends ?alt=sse when streaming + ProviderState::VertexGemini.
+#[test]
+fn vertex_gemini_messages_streaming_setup_request_adds_alt_sse() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model_override: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project"),
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "google/gemini-2.5-flash-lite".into(),
+		provider: Default::default(),
+		streaming: true,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::VertexGemini),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://us-central1-aiplatform.googleapis.com/v1/messages",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	let query = req.uri().query().unwrap_or("");
+	assert!(
+		query.contains("alt=sse"),
+		"streaming Vertex Gemini path must include ?alt=sse, got query: {query:?}"
+	);
+	assert!(
+		req.uri().path().contains(":streamGenerateContent"),
+		"streaming path must end in :streamGenerateContent, got: {}",
+		req.uri().path()
+	);
 }

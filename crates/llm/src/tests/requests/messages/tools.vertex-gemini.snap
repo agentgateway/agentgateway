@@ -1,0 +1,131 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/tools.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  tools:
+    - name: get_weather
+      description: Get the current weather in a given location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+            description: "The city and state, e.g. San Francisco, CA"
+          unit:
+            type: string
+            description: Optional temperature unit
+        required:
+          - location
+    - name: get_time
+      strict: true
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+        additionalProperties: false
+    - name: get_forecast
+      strict: false
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+        additionalProperties: false
+  messages:
+    - role: user
+      content: What is the weather like in San Francisco?
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the weather like in San Francisco?"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "get_weather",
+            "description": "Get the current weather in a given location",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "description": "The city and state, e.g. San Francisco, CA"
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "Optional temperature unit"
+                }
+              },
+              "required": [
+                "location"
+              ]
+            }
+          },
+          {
+            "name": "get_time",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "location"
+              ]
+            }
+          },
+          {
+            "name": "get_forecast",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "location"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 1024
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is the weather like in San Francisco?"
+      }
+    ]
+  }
+}
