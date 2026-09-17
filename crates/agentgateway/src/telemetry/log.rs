@@ -3297,7 +3297,7 @@ mod tests {
 		let catalog_file = tempfile::NamedTempFile::new().unwrap();
 		fs_err::write(
 			catalog_file.path(),
-			r#"{"providers":{"openai":{"models":{"my-model":{"rates":{"input":"1","output":"2"}}}}}}"#,
+			r#"{"providers":{"openai":{"models":{"my-model":{"rates":{"input":"1","output":"2","perPage":"0.005"}}}}}}"#,
 		)
 		.unwrap();
 		let catalog = ModelCatalog::new(vec![crate::ModelCatalogSource::File {
@@ -3319,6 +3319,7 @@ mod tests {
 		let response = llm::LLMResponse {
 			input_tokens: Some(1_000_000),
 			output_tokens: Some(0),
+			pages: Some(4),
 			..Default::default()
 		};
 		for _ in 0..20 {
@@ -3356,6 +3357,16 @@ mod tests {
 		] {
 			assert!(has(expected), "expected {expected} span attribute");
 		}
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| attr.value.to_string())
+		};
+		// 1M input tokens at $1/1M plus 4 pages at $0.005/page: the page line is priced per page.
+		assert_eq!(value("agw.ai.usage.cost.pages").as_deref(), Some("0.020"));
+		assert_eq!(value("agw.ai.usage.cost.total").as_deref(), Some("1.020"));
 		assert!(
 			span
 				.attributes

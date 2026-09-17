@@ -346,12 +346,24 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		output_audio: dec("0"),
 		pages: dec("0.02"),
 	});
+	// Cost per page
+	req
+		.extensions_mut()
+		.get_mut::<LLMContext>()
+		.unwrap()
+		.cost_rates = Some(llm::catalog::CostRates {
+		input: Some(3.0),
+		per_page: Some(0.005),
+		..Default::default()
+	});
 	let executor = Executor::new_request(&req);
 
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.545").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.input == 0.5").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.pages == 0.02").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.cacheRead == 0.0").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.input == 3.0").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.perPage == 0.005").unwrap()));
 }
 
 #[test]
