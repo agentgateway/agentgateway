@@ -252,7 +252,7 @@ url = "2.5"
 uuid = { version = "1.23", features = ["v4", "v7"] }
 wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
-zstd = "0.13"
+zstd = "0.14"
 which = "8.0"
 websocket-sans-io = '0.1'
 vector-map = "1.1.0"
