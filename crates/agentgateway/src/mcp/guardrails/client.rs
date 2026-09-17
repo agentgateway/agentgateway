@@ -363,7 +363,7 @@ fn on_grpc_error<T>(
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
-			format!("mcpGuardrails {rpc} failed: {}", status.message()),
+			"guardrail check failed",
 			None,
 		)),
 	}
@@ -385,7 +385,7 @@ fn on_protocol_violation<T>(
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
-			format!("mcpGuardrails protocol violation: {reason}"),
+			"guardrail check failed",
 			None,
 		)),
 	}

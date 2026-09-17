@@ -265,11 +265,7 @@ mod body_modes {
 		let res = send_request_body(io, Method::POST, "http://lo", b"request body").await;
 		assert_eq!(res.status(), 500);
 		let body = read_body_raw(res.into_body()).await;
-		assert!(
-			body
-				.as_ref()
-				.starts_with(b"ext_proc failed: invalid body mutation:")
-		);
+		assert_eq!(body.as_ref(), b"external processing failed");
 	}
 
 	#[tokio::test]
@@ -598,11 +594,7 @@ mod body_modes {
 		let res = send_request(io, Method::GET, "http://lo").await;
 		assert_eq!(res.status(), 500);
 		let body = read_body_raw(res.into_body()).await;
-		assert!(
-			body
-				.as_ref()
-				.starts_with(b"ext_proc failed: invalid body mutation:")
-		);
+		assert_eq!(body.as_ref(), b"external processing failed");
 	}
 
 	#[tokio::test]
@@ -1664,7 +1656,7 @@ mod immediate_and_failure {
 		let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
 		assert_eq!(res.status(), 500);
 		let body = read_body_raw(res.into_body()).await;
-		assert!(body.as_ref().starts_with(b"ext_proc failed:"));
+		assert_eq!(body.as_ref(), b"external processing failed");
 	}
 
 	#[tokio::test]
@@ -1749,7 +1741,7 @@ mod immediate_and_failure {
 		let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
 		assert_eq!(res.status(), 500);
 		let body = read_body_raw(res.into_body()).await;
-		assert!(body.as_ref().starts_with(b"ext_proc failed:"));
+		assert_eq!(body.as_ref(), b"external processing failed");
 	}
 
 	#[tokio::test]
@@ -2119,11 +2111,7 @@ mod dynamic_backend_target {
 		.unwrap();
 		assert_eq!(res.status(), 503);
 		let body = read_body_raw(res.into_body()).await;
-		assert!(
-			body
-				.as_ref()
-				.starts_with(b"processing failed: dynamic backend target expression must evaluate")
-		);
+		assert_eq!(body.as_ref(), b"internal error");
 	}
 
 	#[tokio::test]
@@ -2150,9 +2138,7 @@ mod dynamic_backend_target {
 		.unwrap();
 		assert_eq!(res.status(), 503);
 		let body = read_body_raw(res.into_body()).await;
-		assert!(body.as_ref().starts_with(
-			b"processing failed: dynamic backend target \"not-a-hostport\": invalid host:port"
-		));
+		assert_eq!(body.as_ref(), b"internal error");
 	}
 }
 

@@ -623,13 +623,11 @@ mod tests {
 			"the ack must echo the granted filter"
 		);
 		assert_eq!(frames[1]["method"], "notifications/tools/list_changed");
-		assert!(
-			frames[2]["error"]["message"]
-				.as_str()
-				.unwrap()
-				.contains("ended"),
+		assert_eq!(
+			frames[2]["error"]["message"], "upstream stream failed",
 			"a premature EOF under FailClosed must send a terminal error"
 		);
+		assert_eq!(frames[2]["error"]["code"], -32603);
 	}
 
 	#[tokio::test]

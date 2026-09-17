@@ -1775,6 +1775,7 @@ fn into_sse_stream(
 						Some(rpc)
 					},
 					Err(e) => {
+						warn!(error = %e, "upstream MCP stream failed");
 						*errored = true;
 						if *terminal_seen {
 							None
@@ -1784,7 +1785,11 @@ fn into_sse_stream(
 								Some(request_id.clone()),
 							);
 							*terminal_seen = capture_terminal_mcp_payload(mcp_log.as_ref(), &request_id, &msg);
-							Some(msg)
+							// Capture the diagnostic detail before building the client response.
+							Some(ServerJsonRpcMessage::error(
+								ErrorData::internal_error("upstream stream failed", None),
+								Some(request_id.clone()),
+							))
 						}
 					},
 				};
@@ -1962,7 +1967,7 @@ async fn apply_guardrails_response_intercept(
 			// matching the request side's handling of serialize failures.
 			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection");
 			return Some(ServerJsonRpcMessage::error(
-				ErrorData::internal_error(format!("mcpGuardrails: serialize result: {e}"), None),
+				ErrorData::internal_error("guardrail check failed", None),
 				Some(resp.id.clone()),
 			));
 		},
@@ -2300,7 +2305,9 @@ mod tests {
 		assert_eq!(messages.len(), 1, "the transport error must end the stream");
 		assert!(matches!(
 			messages[0].message.as_ref(),
-			ServerJsonRpcMessage::Error(error) if error.id == Some(RequestId::Number(7))
+			ServerJsonRpcMessage::Error(error)
+				if error.id == Some(RequestId::Number(7))
+					&& error.error.message == "upstream stream failed"
 		));
 
 		let info = log.take().unwrap();
