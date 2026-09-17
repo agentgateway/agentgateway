@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-16T08:36:18Z"
+    "generatedAt": "2026-09-17T08:35:47Z"
   },
   "providers": {
     "anthropic": {
@@ -4190,46 +4190,11 @@
     },
     "fireworks": {
       "models": {
-        "accounts/fireworks/models/deepseek-v4-flash-0731": {
-          "rates": {
-            "input": "0.22",
-            "output": "0.66",
-            "cacheRead": "0.007"
-          }
-        },
-        "accounts/fireworks/models/deepseek-v4-flash-vision-exp": {
-          "rates": {
-            "input": "0.22",
-            "output": "0.66",
-            "cacheRead": "0.007"
-          }
-        },
-        "accounts/fireworks/models/deepseek-v4-pro": {
-          "rates": {
-            "input": "1.2",
-            "output": "1.2",
-            "cacheRead": "0.6"
-          }
-        },
-        "accounts/fireworks/models/deepseek-v4-pro-0813": {
-          "rates": {
-            "input": "1.32",
-            "output": "3.96",
-            "cacheRead": "0.044"
-          }
-        },
         "accounts/fireworks/models/deepseek-v4p1-flash": {
           "rates": {
             "input": "0.22",
             "output": "0.66",
             "cacheRead": "0.007"
-          }
-        },
-        "accounts/fireworks/models/glm-5p2": {
-          "rates": {
-            "input": "1.4",
-            "output": "4.4",
-            "cacheRead": "0.14"
           }
         },
         "accounts/fireworks/models/glm-5p3": {
@@ -4260,20 +4225,6 @@
             "cacheRead": "0.17"
           }
         },
-        "accounts/fireworks/models/kimi-k2p6": {
-          "rates": {
-            "input": "0.95",
-            "output": "4",
-            "cacheRead": "0.16"
-          }
-        },
-        "accounts/fireworks/models/kimi-k2p7-code": {
-          "rates": {
-            "input": "0.95",
-            "output": "4",
-            "cacheRead": "0.19"
-          }
-        },
         "accounts/fireworks/models/kimi-k3": {
           "rates": {
             "input": "3",
@@ -4281,25 +4232,11 @@
             "cacheRead": "0.3"
           }
         },
-        "accounts/fireworks/models/minimax-m2p7": {
-          "rates": {
-            "input": "1.2",
-            "output": "1.2",
-            "cacheRead": "0.6"
-          }
-        },
         "accounts/fireworks/models/minimax-m3": {
           "rates": {
             "input": "0.3",
             "output": "1.2",
             "cacheRead": "0.06"
-          }
-        },
-        "accounts/fireworks/models/muse-glimmer-30b": {
-          "rates": {
-            "input": "0.35",
-            "output": "1.5",
-            "cacheRead": "0.04"
           }
         },
         "accounts/fireworks/models/nemotron-3-ultra-nvfp4": {
@@ -5139,6 +5076,13 @@
               }
             }
           ]
+        },
+        "zai-org/glm-5.2-maas": {
+          "rates": {
+            "input": "1.4",
+            "output": "4.4",
+            "cacheRead": "0.14"
+          }
         }
       }
     },
