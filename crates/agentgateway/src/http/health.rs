@@ -15,8 +15,9 @@ use crate::{serde_dur_option, *};
 #[apply(schema_ser!)]
 #[derive(Default)]
 pub struct Eviction {
-	/// Base ejection time. When absent, uses the longer of `Retry-After` and the retry
-	/// backoff plus the default eviction duration, or just the default if neither is set.
+	/// Base duration to remove an unhealthy backend from the active set, scaled by the number of
+	/// prior ejections. When absent, it is derived from the response's `Retry-After`, else from the
+	/// retry backoff plus a fixed margin, else from a short default.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",

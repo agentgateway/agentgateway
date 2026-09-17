@@ -878,27 +878,24 @@ impl DropOnLog {
 			let health = !unhealthy;
 			return (health, None, None);
 		};
-		let fallback_duration = retry_after.max(retry_backoff);
 		let (health, eviction_duration, restore_health) = policy.eviction_decision(
 			current_health,
 			consecutive_failure_count,
 			times_ejected,
 			unhealthy,
-			fallback_duration,
+			retry_after.or(retry_backoff),
 		);
-		// Evict for the longer of Retry-After and the scaled backoff plus a fixed margin
+
+		// A backoff only says when to retry, not when the backend recovers, so evicting for exactly that long
+		// can race the retry. `Retry-After` is the backend's own estimate of when it is ready, so it needs no margin.
 		let eviction_duration = eviction_duration.map(|duration| {
-			if policy.eviction_duration().is_some() {
-				return duration;
-			}
-			let multiplier = times_ejected.saturating_add(1) as u32;
-			let backoff_duration = retry_backoff.map(|backoff| {
-				backoff
-					.saturating_mul(multiplier)
-					.saturating_add(health::DEFAULT_EVICTION_DURATION)
-			});
-			backoff_duration.map_or(duration, |backoff| duration.max(backoff))
+			retry_backoff
+				.filter(|_| policy.eviction_duration().is_none() && retry_after.is_none())
+				.map_or(duration, |_| {
+					duration.saturating_add(health::DEFAULT_EVICTION_DURATION)
+				})
 		});
+
 		(health, eviction_duration, restore_health)
 	}
 
@@ -3086,19 +3083,19 @@ mod tests {
 	#[case::short_backoff(None, Duration::from_millis(10), 0, Duration::from_millis(3_010))]
 	#[case::long_backoff(None, Duration::from_secs(5), 0, Duration::from_secs(8))]
 	#[case::repeated_eviction(None, Duration::from_millis(10), 10, Duration::from_millis(3_110))]
-	#[case::short_retry_after(
+	#[case::retry_after_precedes_longer_backoff(
 		Some(Duration::from_secs(1)),
-		Duration::from_millis(10),
+		Duration::from_secs(5),
 		0,
-		Duration::from_millis(3_010)
+		Duration::from_secs(1)
 	)]
-	#[case::long_retry_after(
+	#[case::retry_after_precedes_shorter_backoff(
 		Some(Duration::from_secs(30)),
 		Duration::from_secs(5),
 		0,
 		Duration::from_secs(30)
 	)]
-	fn backoff_derived_eviction_adds_default_margin(
+	fn fallback_eviction_duration(
 		#[case] retry_after: Option<Duration>,
 		#[case] retry_backoff: Duration,
 		#[case] times_ejected: u64,
