@@ -15,8 +15,9 @@ use crate::{serde_dur_option, *};
 #[apply(schema_ser!)]
 #[derive(Default)]
 pub struct Eviction {
-	/// Base ejection time. When absent, uses the longer of `Retry-After` and the retry
-	/// backoff plus the default eviction duration, or just the default if neither is set.
+	/// Base eviction duration, increased after repeated ejections.
+	/// When unset, uses `Retry-After` as-is, retry backoff plus a fixed margin, or a short
+	/// default, in that order.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -60,7 +61,13 @@ pub struct Policy {
 	pub eviction: Option<Eviction>,
 }
 
-pub(crate) const DEFAULT_EVICTION_DURATION: Duration = Duration::from_secs(3);
+const DEFAULT_EVICTION_DURATION: Duration = Duration::from_secs(3);
+
+#[derive(Clone, Copy)]
+pub(crate) enum EvictionFallback {
+	RetryAfter(Duration),
+	RetryBackoff(Duration),
+}
 
 impl Policy {
 	pub fn register_expressions(&self, ctx: &mut ContextBuilder) {
@@ -77,8 +84,7 @@ impl Policy {
 	/// Computes the eviction decision for a single request.
 	///
 	/// `current_health` and `consecutive_failure_count` reflect state **before** this request
-	/// is recorded. `fallback_duration` is used when no explicit eviction duration is configured
-	/// (e.g. from `Retry-After` headers or retry backoff).
+	/// is recorded. `fallback` is used when no explicit eviction duration is configured.
 	///
 	/// Returns `(is_healthy, eviction_duration, restore_health)`.
 	pub(crate) fn eviction_decision(
@@ -87,22 +93,11 @@ impl Policy {
 		consecutive_failure_count: u64,
 		times_ejected: u64,
 		unhealthy: bool,
-		fallback_duration: Option<Duration>,
+		fallback: Option<EvictionFallback>,
 	) -> (bool, Option<Duration>, Option<f64>) {
 		let health = !unhealthy;
 		let ev = self.eviction.as_ref();
 		let eviction_duration = if unhealthy {
-			let base_duration =
-				self
-					.eviction_duration()
-					.or(fallback_duration)
-					.or(if self.eviction.is_some() {
-						// If we have eviction, but no duration set, use the default
-						Some(DEFAULT_EVICTION_DURATION)
-					} else {
-						// Else there is no eviction
-						None
-					});
 			let health_threshold = ev.and_then(|e| e.health_threshold);
 			let consecutive_failures = ev.and_then(|e| e.consecutive_failures);
 			// +1 because the current failure hasn't been recorded yet.
@@ -116,12 +111,31 @@ impl Policy {
 				true
 			};
 			if below_threshold {
-				// Multiplicative backoff: base_duration * (times_ejected + 1).
+				// Multiplicative backoff: base duration * (times_ejected + 1).
 				// No cap -- if all endpoints are evicted the loadbalancer falls back
 				// to returning evicted endpoints, which is better than an arbitrary
 				// max that unevenly distributes load across equally-degraded backends.
 				let multiplier = times_ejected.saturating_add(1);
-				base_duration.map(|d| d.saturating_mul(multiplier as u32))
+				let scaled = |duration: Duration| {
+					let duration = duration.saturating_mul(multiplier as u32);
+					(!duration.is_zero()).then_some(duration)
+				};
+				match (
+					ev.and_then(|eviction| eviction.duration),
+					ev.is_some(),
+					fallback,
+				) {
+					(Some(duration), _, _) => scaled(duration),
+					(None, _, Some(EvictionFallback::RetryAfter(duration))) => {
+						(!duration.is_zero()).then_some(duration)
+					},
+					(None, true, Some(EvictionFallback::RetryBackoff(duration))) => {
+						scaled(duration.saturating_add(DEFAULT_EVICTION_DURATION))
+					},
+					(None, false, Some(EvictionFallback::RetryBackoff(duration))) => scaled(duration),
+					(None, true, None) => scaled(DEFAULT_EVICTION_DURATION),
+					(None, false, None) => None,
+				}
 			} else {
 				None
 			}
@@ -273,10 +287,20 @@ mod tests {
 	}
 
 	#[test]
-	fn unhealthy_default_eviction_duration() {
+	fn unhealthy_without_eviction_does_not_evict() {
 		let policy = Policy::default();
 		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, None);
 		assert_eq!(eviction, None);
+	}
+
+	#[test]
+	fn unhealthy_uses_default_eviction_duration() {
+		let policy = Policy {
+			eviction: Some(Default::default()),
+			..Default::default()
+		};
+		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, None);
+		assert_eq!(eviction, Some(DEFAULT_EVICTION_DURATION));
 	}
 
 	// --- health_threshold only ---
@@ -418,8 +442,19 @@ mod tests {
 
 	#[test]
 	fn fallback_duration_used_when_no_explicit() {
+		let policy = Policy {
+			eviction: Some(Default::default()),
+			..Default::default()
+		};
+		let fallback = Some(EvictionFallback::RetryAfter(Duration::from_secs(45)));
+		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, fallback);
+		assert_eq!(eviction, Some(Duration::from_secs(45)));
+	}
+
+	#[test]
+	fn fallback_used_without_eviction_settings() {
 		let policy = Policy::default();
-		let fallback = Some(Duration::from_secs(45));
+		let fallback = Some(EvictionFallback::RetryBackoff(Duration::from_secs(45)));
 		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, fallback);
 		assert_eq!(eviction, Some(Duration::from_secs(45)));
 	}
@@ -427,9 +462,16 @@ mod tests {
 	#[test]
 	fn explicit_duration_preferred_over_fallback() {
 		let policy = policy_with_eviction_duration(10);
-		let fallback = Some(Duration::from_secs(45));
+		let fallback = Some(EvictionFallback::RetryAfter(Duration::from_secs(45)));
 		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, fallback);
 		assert_eq!(eviction, Some(Duration::from_secs(10)));
+	}
+
+	#[test]
+	fn zero_explicit_duration_does_not_evict() {
+		let policy = policy_with_eviction_duration(0);
+		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, None);
+		assert_eq!(eviction, None);
 	}
 
 	#[test]

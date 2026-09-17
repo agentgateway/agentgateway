@@ -1052,10 +1052,7 @@ impl HTTPProxy {
 				.extensions()
 				.get::<http::substrate::SubstrateRequestState>()
 				.is_some();
-		log.retry_backoff = route_retry
-			.as_ref()
-			.and_then(|retry| retry.backoff)
-			.or_else(|| substrate_default_retry.then_some(Duration::from_millis(100)));
+		log.retry_backoff = route_retry.as_ref().and_then(|retry| retry.backoff);
 
 		// No policy terminated the request, so forwarding now requires a valid backend.
 		let selected_backend = selected_backend
@@ -1150,7 +1147,9 @@ impl HTTPProxy {
 		} else {
 			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
 		};
-		let retry_backoff = log.retry_backoff;
+		let retry_backoff = log
+			.retry_backoff
+			.or_else(|| substrate_default_retry.then_some(Duration::from_millis(100)));
 		let request_timeout = response_policies
 			.timeout
 			.as_ref()

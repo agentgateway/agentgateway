@@ -878,28 +878,16 @@ impl DropOnLog {
 			let health = !unhealthy;
 			return (health, None, None);
 		};
-		let fallback_duration = retry_after.max(retry_backoff);
-		let (health, eviction_duration, restore_health) = policy.eviction_decision(
+		let fallback = retry_after
+			.map(health::EvictionFallback::RetryAfter)
+			.or_else(|| retry_backoff.map(health::EvictionFallback::RetryBackoff));
+		policy.eviction_decision(
 			current_health,
 			consecutive_failure_count,
 			times_ejected,
 			unhealthy,
-			fallback_duration,
-		);
-		// Evict for the longer of Retry-After and the scaled backoff plus a fixed margin
-		let eviction_duration = eviction_duration.map(|duration| {
-			if policy.eviction_duration().is_some() {
-				return duration;
-			}
-			let multiplier = times_ejected.saturating_add(1) as u32;
-			let backoff_duration = retry_backoff.map(|backoff| {
-				backoff
-					.saturating_mul(multiplier)
-					.saturating_add(health::DEFAULT_EVICTION_DURATION)
-			});
-			backoff_duration.map_or(duration, |backoff| duration.max(backoff))
-		});
-		(health, eviction_duration, restore_health)
+			fallback,
+		)
 	}
 
 	fn add_llm_metrics(
@@ -3083,26 +3071,43 @@ mod tests {
 	}
 
 	#[rstest::rstest]
-	#[case::short_backoff(None, Duration::from_millis(10), 0, Duration::from_millis(3_010))]
-	#[case::long_backoff(None, Duration::from_secs(5), 0, Duration::from_secs(8))]
-	#[case::repeated_eviction(None, Duration::from_millis(10), 10, Duration::from_millis(3_110))]
-	#[case::short_retry_after(
-		Some(Duration::from_secs(1)),
+	#[case::short_backoff(None, Duration::from_millis(10), 0, Some(Duration::from_millis(3_010)))]
+	#[case::long_backoff(None, Duration::from_secs(5), 0, Some(Duration::from_secs(8)))]
+	#[case::repeated_eviction(
+		None,
 		Duration::from_millis(10),
-		0,
-		Duration::from_millis(3_010)
+		10,
+		Some(Duration::from_millis(33_110))
 	)]
-	#[case::long_retry_after(
+	#[case::retry_after_precedes_longer_backoff(
+		Some(Duration::from_secs(1)),
+		Duration::from_secs(5),
+		0,
+		Some(Duration::from_secs(1))
+	)]
+	#[case::retry_after_precedes_shorter_backoff(
 		Some(Duration::from_secs(30)),
 		Duration::from_secs(5),
 		0,
-		Duration::from_secs(30)
+		Some(Duration::from_secs(30))
 	)]
-	fn backoff_derived_eviction_adds_default_margin(
+	#[case::retry_after_remains_exact_after_repeated_evictions(
+		Some(Duration::from_secs(30)),
+		Duration::from_secs(5),
+		10,
+		Some(Duration::from_secs(30))
+	)]
+	#[case::zero_retry_after_disables_eviction(
+		Some(Duration::ZERO),
+		Duration::from_secs(5),
+		10,
+		None
+	)]
+	fn fallback_eviction_duration(
 		#[case] retry_after: Option<Duration>,
 		#[case] retry_backoff: Duration,
 		#[case] times_ejected: u64,
-		#[case] expected: Duration,
+		#[case] expected: Option<Duration>,
 	) {
 		let policy = Some(health::Policy {
 			eviction: Some(Default::default()),
@@ -3117,7 +3122,7 @@ mod tests {
 			times_ejected,
 			true,
 		);
-		assert_eq!(eviction, Some(expected));
+		assert_eq!(eviction, expected);
 	}
 
 	#[test]
