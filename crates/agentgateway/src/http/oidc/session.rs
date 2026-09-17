@@ -1,4 +1,6 @@
+use std::borrow::Cow;
 use std::fmt::Write as _;
+use std::io::{Cursor, Write as _};
 use std::time::Duration;
 
 use base64::Engine;
@@ -167,7 +169,7 @@ impl SessionConfig {
 	}
 
 	pub fn encode_browser_session(&self, session: &BrowserSession) -> Result<String, Error> {
-		let json = serde_json::to_string(session).map_err(anyhow::Error::from)?;
+		let json = serde_json::to_vec(session).map_err(anyhow::Error::from)?;
 		let encoded = self
 			.encoder
 			.encrypt_bytes(&encode_session_payload(&json))
@@ -207,16 +209,18 @@ impl SessionConfig {
 	}
 }
 
-fn encode_session_payload(json: &str) -> Vec<u8> {
-	match zstd::bulk::compress(json.as_bytes(), COMPRESSION_LEVEL) {
-		Ok(compressed) if compressed.len() + 1 < json.len() => {
-			let mut payload = Vec::with_capacity(compressed.len() + 1);
-			payload.push(COMPRESSED_TAG);
-			payload.extend_from_slice(&compressed);
-			payload
-		},
-		_ => json.as_bytes().to_vec(),
+fn encode_session_payload(json: &[u8]) -> Cow<'_, [u8]> {
+	let mut payload = Cursor::new(Vec::with_capacity(json.len()));
+	let compressed = zstd::bulk::Compressor::new(COMPRESSION_LEVEL).and_then(|mut c| {
+		payload.write_all(&[COMPRESSED_TAG])?;
+		c.include_checksum(false)?;
+		c.include_contentsize(false)?;
+		c.compress_to_buffer(json, &mut payload)
+	});
+	if compressed.is_ok() && payload.get_ref().len() < json.len() {
+		return Cow::Owned(payload.into_inner());
 	}
+	Cow::Borrowed(json)
 }
 
 fn decode_session_payload(payload: Vec<u8>) -> Result<Vec<u8>, Error> {
