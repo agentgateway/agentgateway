@@ -25,9 +25,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
-|`config.modelCatalog[].inline.providers.*.models.*.rates.perUnit`|object|Cost for a non-token billing unit, such as a page for document OCR models.|
-|`config.modelCatalog[].inline.providers.*.models.*.rates.perUnit.unit`|enum|The unit this price applies to.<br>Possible values: `page`.|
-|`config.modelCatalog[].inline.providers.*.models.*.rates.perUnit.price`|string|Cost of a single unit.|
+|`config.modelCatalog[].inline.providers.*.models.*.rates.perPage`|string|Cost per page, for document/OCR model.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers`|[]object|Context-length pricing tiers that override the base rates.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].contextOver`|integer|Context-token threshold above which this tier's rates apply.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates`|object|Pricing rates for this tier, overlaid on the base model rates.|
@@ -38,9 +36,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.perUnit`|object|Cost for a non-token billing unit, such as a page for document OCR models.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.perUnit.unit`|enum|The unit this price applies to.<br>Possible values: `page`.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.perUnit.price`|string|Cost of a single unit.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.perPage`|string|Cost per page, for document/OCR models. Unlike the token rates, this is the cost of a single<br>page, not of 1M pages.|
 |`config.modelCatalog[].inline.providers.*.models.*.tags`|[]string|Freeform capability/routing tags for this model.|
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|

@@ -694,7 +694,7 @@
               "type": "number",
               "format": "double"
             },
-            "units": {
+            "pages": {
               "type": "number",
               "format": "double"
             }
@@ -709,7 +709,7 @@
             "reasoning",
             "inputAudio",
             "outputAudio",
-            "units"
+            "pages"
           ]
         },
         "costRates": {
@@ -768,7 +768,7 @@
               ],
               "format": "double"
             },
-            "perUnit": {
+            "perPage": {
               "type": [
                 "number",
                 "null"

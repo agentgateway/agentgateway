@@ -701,11 +701,11 @@
             }
           ]
         },
-        "perUnit": {
-          "description": "Cost for a non-token billing unit, such as a page for document OCR models.",
+        "perPage": {
+          "description": "Cost per page, for document/OCR models.",
           "anyOf": [
             {
-              "$ref": "#/$defs/UnitRate"
+              "$ref": "#/$defs/Money"
             },
             {
               "type": "null"
@@ -717,35 +717,6 @@
     },
     "Money": {
       "type": "string"
-    },
-    "UnitRate": {
-      "description": "A price attached to the unit it applies to.",
-      "type": "object",
-      "properties": {
-        "unit": {
-          "description": "The unit this price applies to.",
-          "$ref": "#/$defs/BillingUnit"
-        },
-        "price": {
-          "description": "Cost of a single unit.",
-          "$ref": "#/$defs/Money"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "unit",
-        "price"
-      ]
-    },
-    "BillingUnit": {
-      "description": "Providers that do not bill by token report their own unit in the response",
-      "oneOf": [
-        {
-          "description": "A page of a document, as reported by document/OCR models.",
-          "type": "string",
-          "const": "page"
-        }
-      ]
     },
     "Tier": {
       "type": "object",

@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use arc_swap::ArcSwap;
-use model::{BillingUnit, Catalog as CatalogData, Rates, UnitUsage, Usage};
 pub use model::{Breakdown, Catalog, CatalogMetadata};
+use model::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -449,8 +449,8 @@ pub struct CostRates {
 	#[dynamic(rename = "outputAudio")]
 	pub output_audio: Option<f64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	#[dynamic(rename = "perUnit")]
-	pub per_unit: Option<f64>,
+	#[dynamic(rename = "perPage")]
+	pub per_page: Option<f64>,
 }
 
 impl From<&Rates> for CostRates {
@@ -464,7 +464,7 @@ impl From<&Rates> for CostRates {
 			reasoning: f(&r.reasoning),
 			input_audio: f(&r.input_audio),
 			output_audio: f(&r.output_audio),
-			per_unit: r.per_unit.as_ref().and_then(|u| u.price.0.to_f64()),
+			per_page: f(&r.per_page),
 		}
 	}
 }
@@ -485,7 +485,7 @@ impl Breakdown {
 			("reasoning", self.reasoning),
 			("inputAudio", self.input_audio),
 			("outputAudio", self.output_audio),
-			("units", self.units),
+			("pages", self.pages),
 		]
 	}
 }
@@ -505,7 +505,7 @@ pub struct CostBreakdown {
 	pub input_audio: f64,
 	#[dynamic(rename = "outputAudio")]
 	pub output_audio: f64,
-	pub units: f64,
+	pub pages: f64,
 }
 
 impl From<&Breakdown> for CostBreakdown {
@@ -519,7 +519,7 @@ impl From<&Breakdown> for CostBreakdown {
 			reasoning: breakdown_f64(b.reasoning),
 			input_audio: breakdown_f64(b.input_audio),
 			output_audio: breakdown_f64(b.output_audio),
-			units: breakdown_f64(b.units),
+			pages: breakdown_f64(b.pages),
 		}
 	}
 }
@@ -535,7 +535,7 @@ impl From<CostBreakdown> for Breakdown {
 			reasoning: d(b.reasoning),
 			input_audio: d(b.input_audio),
 			output_audio: d(b.output_audio),
-			units: d(b.units),
+			pages: d(b.pages),
 		}
 	}
 }
@@ -748,11 +748,8 @@ fn usage_for(
 		reasoning,
 		input_audio,
 		output_audio,
-		// Pages are not tokens: never used cache-convention arithmetic above.
-		units: resp.pages.map(|count| UnitUsage {
-			unit: BillingUnit::Page,
-			count,
-		}),
+		// Pages are billed as pages, so they skip the cache-convention token arithmetic above.
+		pages: resp.pages.unwrap_or(0),
 	}
 }
 
@@ -1090,11 +1087,11 @@ mod tests {
 	}
 
 	#[test]
-	fn prices_a_unit_billed_model_with_no_token_rates() {
-		// Document OCR: the entry carries only `perUnit`, priced per single page
+	fn prices_a_page_billed_model_with_no_token_rates() {
+		// Document OCR: the entry carries only `perPage`, priced per single page
 		let snap = CatalogSnapshot::parse(
 			r#"{"providers":{"mistral":{"models":{
-				"my-model":{"rates":{"perUnit":{"unit":"page","price":"0.005"}}}
+				"my-model":{"rates":{"perPage":"0.005"}}
 			}}}}"#,
 		)
 		.unwrap();
