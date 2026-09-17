@@ -401,9 +401,19 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
-			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
-				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
-			},
+			Err(UpstreamError::McpGuardrails {
+				rej,
+				was_tool_call,
+				downstream_modern: modern,
+			}) if req_id.is_some() => Err(
+				mcp::Error::McpGuardrails {
+					request_id: req_id.unwrap(),
+					rej,
+					was_tool_call,
+					downstream_modern: modern,
+				}
+				.into(),
+			),
 			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() && downstream_modern => {
 				Err(mcp::Error::InvalidParams(req_id, message).into())
 			},

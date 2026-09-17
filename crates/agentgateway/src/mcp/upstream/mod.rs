@@ -158,8 +158,12 @@ pub enum UpstreamError {
 		resource_type: String,
 		resource_name: String,
 	},
-	#[error("mcpGuardrails rejected: {}", .0.message)]
-	McpGuardrails(rmcp::ErrorData),
+	#[error("mcpGuardrails rejected: {}", .rej.message)]
+	McpGuardrails {
+		rej: rmcp::ErrorData,
+		was_tool_call: bool,
+		downstream_modern: bool,
+	},
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	/// A server-side availability/capability gap. Distinct from `InvalidRequest`,
