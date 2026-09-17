@@ -878,7 +878,9 @@ impl DropOnLog {
 			let health = !unhealthy;
 			return (health, None, None);
 		};
-		let fallback_duration = retry_after.or(retry_backoff);
+		// Add the default eviction window as a margin beyond the retry backoff
+		let fallback_duration = retry_after
+			.max(retry_backoff.map(|backoff| backoff.saturating_add(health::DEFAULT_EVICTION_DURATION)));
 		policy.eviction_decision(
 			current_health,
 			consecutive_failure_count,
@@ -3066,6 +3068,33 @@ mod tests {
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));
+	}
+
+	#[rstest::rstest]
+	#[case::short_backoff(None, Duration::from_millis(10), Duration::from_millis(3_010))]
+	#[case::long_backoff(None, Duration::from_secs(5), Duration::from_secs(8))]
+	#[case::short_retry_after(
+		Some(Duration::from_secs(1)),
+		Duration::from_millis(10),
+		Duration::from_millis(3_010)
+	)]
+	#[case::long_retry_after(
+		Some(Duration::from_secs(30)),
+		Duration::from_secs(5),
+		Duration::from_secs(30)
+	)]
+	fn backoff_derived_eviction_uses_default_floor_and_margin(
+		#[case] retry_after: Option<Duration>,
+		#[case] retry_backoff: Duration,
+		#[case] expected: Duration,
+	) {
+		let policy = Some(health::Policy {
+			eviction: Some(Default::default()),
+			..Default::default()
+		});
+		let (_, eviction, _) =
+			DropOnLog::eviction_decision(&policy, Some(retry_backoff), retry_after, 1.0, 0, 0, true);
+		assert_eq!(eviction, Some(expected));
 	}
 
 	#[test]
