@@ -274,8 +274,6 @@ async fn apply_request_policies(
 			route_retry = None;
 		}
 	}
-	l.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
-
 	rp.llm_request_policies.local_rate_limit = pol
 		.local_rate_limit
 		.apply_selected("local rate limit", c, l, req, &mut rp.rate_limit_headers)
@@ -1054,6 +1052,10 @@ impl HTTPProxy {
 				.extensions()
 				.get::<http::substrate::SubstrateRequestState>()
 				.is_some();
+		log.retry_backoff = route_retry
+			.as_ref()
+			.and_then(|retry| retry.backoff)
+			.or_else(|| substrate_default_retry.then_some(Duration::from_millis(100)));
 
 		// No policy terminated the request, so forwarding now requires a valid backend.
 		let selected_backend = selected_backend
@@ -1148,10 +1150,7 @@ impl HTTPProxy {
 		} else {
 			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
 		};
-		let retry_backoff = retries
-			.as_ref()
-			.and_then(|r| r.backoff)
-			.or_else(|| substrate_default_retry.then_some(std::time::Duration::from_millis(100)));
+		let retry_backoff = log.retry_backoff;
 		let request_timeout = response_policies
 			.timeout
 			.as_ref()

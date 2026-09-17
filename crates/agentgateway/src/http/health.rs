@@ -15,8 +15,8 @@ use crate::{serde_dur_option, *};
 #[apply(schema_ser!)]
 #[derive(Default)]
 pub struct Eviction {
-	/// Base ejection time. When absent, falls back to `Retry-After` header (e.g. 429)
-	/// or retry policy backoff, then a default (e.g. 3s).
+	/// Base ejection time. When absent, uses the longer of `Retry-After` and the retry
+	/// backoff plus the default eviction duration, or just the default if neither is set.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
