@@ -11832,6 +11832,11 @@
     "LocalLLMConfig": {
       "type": "object",
       "properties": {
+        "pathPrefix": {
+          "description": "pathPrefix mounts the standard LLM endpoints under this path, for example /foo/v1/messages.\nDefaults to the root. A non-empty prefix must start with `/`. Trailing slashes are ignored.\nThe prefix is removed before model routing.",
+          "type": "string",
+          "default": ""
+        },
         "gateways": {
           "description": "gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.",
           "$ref": "#/$defs/LocalGatewayRefs",

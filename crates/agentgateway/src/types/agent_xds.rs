@@ -1654,16 +1654,9 @@ impl ModelRoute {
 		let llm_policy = s
 			.ai_policy
 			.as_ref()
-			.map(|policy| {
-				let mut policy = convert_backend_ai_policy(policy, diagnostics)?;
-				// Preserve default model endpoint formats when the policy does not specify routes.
-				if policy.routes.is_empty() {
-					policy.routes = llm::model_router::default_route_types().routes.clone();
-				}
-				Ok::<_, ProtoError>(Arc::new(policy))
-			})
+			.map(|policy| convert_backend_ai_policy(policy, diagnostics).map(Arc::new))
 			.transpose()?
-			.unwrap_or_else(llm::model_router::default_route_types);
+			.unwrap_or_default();
 		let authorization = s
 			.authorization
 			.as_ref()
@@ -1695,6 +1688,7 @@ impl ModelRoute {
 					header_matches: vec![],
 					backend,
 					policies: llm::model_router::ModelRoutePolicies {
+						passthrough: None,
 						llm: llm_policy.clone(),
 						authorization,
 					},
@@ -5379,18 +5373,12 @@ mod tests {
 			model.visibility,
 			llm::model_router::ModelVisibility::Internal
 		);
-		assert!(
-			model
-				.policies
-				.llm
-				.routes
-				.contains_key("/v1/chat/completions")
-		);
+		assert!(model.policies.llm.routes.is_empty());
 		assert!(model.policies.authorization.is_some());
 		assert!(model.policies.llm.transformations.is_some());
 		assert_eq!(
-			model.policies.llm.resolve_route("/v1/messages"),
-			llm::RouteType::Messages
+			llm::model_router::classify_route("/v1/messages"),
+			Some(llm::RouteType::Messages)
 		);
 		assert_eq!(model.backend.weight, 1);
 		match model.backend.target {
@@ -5465,7 +5453,7 @@ mod tests {
 		};
 		assert_eq!(model.name, "fast");
 		assert_eq!(model.created, 1_704_153_600);
-		assert!(model.llm_policy.routes.contains_key("/v1/chat/completions"));
+		assert!(model.llm_policy.routes.is_empty());
 		let llm::model_router::VirtualModelRouting::Weighted(targets) = model.routing else {
 			panic!("expected weighted routing");
 		};

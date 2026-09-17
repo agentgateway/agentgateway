@@ -426,6 +426,11 @@ pub struct LocalConfig {
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
+	/// pathPrefix mounts the standard LLM endpoints under this path, for example /foo/v1/messages.
+	/// Defaults to the root. A non-empty prefix must start with `/`. Trailing slashes are ignored.
+	/// The prefix is removed before model routing.
+	#[serde(default)]
+	path_prefix: String,
 	/// gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.
 	/// When omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
@@ -4316,24 +4321,6 @@ impl ResolvedLLMModelRegistry {
 	}
 }
 
-fn llm_route_types(
-	passthrough: Option<&LocalLLMPassthrough>,
-) -> Vec<(Strng, crate::llm::RouteType)> {
-	let mut routes = crate::llm::model_router::default_route_types()
-		.routes
-		.iter()
-		.map(|(path, route_type)| (path.clone(), *route_type))
-		.collect::<Vec<_>>();
-	if let Some(passthrough) = passthrough {
-		if let Some((_, route_type)) = routes.iter_mut().find(|(path, _)| path.as_str() == "*") {
-			*route_type = passthrough.route_type();
-		} else {
-			routes.push((strng::new("*"), passthrough.route_type()));
-		}
-	}
-	routes
-}
-
 fn ensure_ai_provider_model(provider: &mut AIProvider, model: &str) {
 	let model = || Some(strng::new(model));
 	match provider {
@@ -4362,6 +4349,7 @@ async fn convert_llm_config(
 	Vec<BackendWithPolicies>,
 )> {
 	let LocalLLMConfig {
+		path_prefix,
 		gateways: _,
 		port,
 		tls,
@@ -4370,6 +4358,14 @@ async fn convert_llm_config(
 		virtual_models,
 		policies,
 	} = llm_config;
+	let path_prefix = path_prefix.trim_end_matches('/');
+	if !path_prefix.is_empty()
+		&& (!path_prefix.starts_with('/')
+			|| path_prefix.contains(['?', '#'])
+			|| path_prefix.parse::<::http::uri::PathAndQuery>().is_err())
+	{
+		bail!("llm.pathPrefix must be an absolute URL path without a query or fragment");
+	}
 	let port = port.unwrap_or(DEFAULT_LLM_PORT);
 	let tls = match tls {
 		Some(tls) => Some(
@@ -4479,7 +4475,6 @@ async fn convert_llm_config(
 		};
 		let p = model_config.params.clone();
 		let model = p.model;
-		let llm_routes = llm_route_types(model_config.passthrough.as_ref());
 
 		// Use provider from config and set the model name
 		let provider = match &model_config.provider {
@@ -4659,10 +4654,11 @@ async fn convert_llm_config(
 				inline_policies: vec![],
 			},
 			policies: llm::model_router::ModelRoutePolicies {
-				llm: Arc::new(crate::llm::Policy {
-					routes: llm_routes.into_iter().collect(),
-					..Default::default()
-				}),
+				llm: Arc::default(),
+				passthrough: model_config
+					.passthrough
+					.as_ref()
+					.map(LocalLLMPassthrough::route_type),
 				authorization: model_config.authorization.clone(),
 			},
 			backend_policies: vec![],
@@ -4672,10 +4668,7 @@ async fn convert_llm_config(
 	let virtual_models = llm_registry.into_virtual_models();
 	let mut router_virtual_models = Vec::new();
 	for (idx, virtual_model) in virtual_models.into_iter().enumerate() {
-		let llm_policy = Arc::new(crate::llm::Policy {
-			routes: llm_route_types(None).into_iter().collect(),
-			..Default::default()
-		});
+		let llm_policy = Arc::default();
 		let routing = match virtual_model.routing_strategy()? {
 			LocalLLMVirtualRoutingStrategy::Conditional(conditional) => {
 				for target in &conditional.targets {
@@ -4758,15 +4751,11 @@ async fn convert_llm_config(
 		});
 	}
 
+	let router = llm::model_router::ModelRouter::new(router_models, router_virtual_models)
+		.with_path_prefix(path_prefix.to_string());
 	let router_backend_key = strng::new("llm:router");
 	all_backends.push(BackendWithPolicies {
-		backend: Backend::LLMRouter(
-			local_name(router_backend_key.clone()),
-			Arc::new(llm::model_router::ModelRouter::new(
-				router_models,
-				router_virtual_models,
-			)),
-		),
+		backend: Backend::LLMRouter(local_name(router_backend_key.clone()), Arc::new(router)),
 		inline_policies: vec![],
 	});
 
@@ -4782,7 +4771,11 @@ async fn convert_llm_config(
 		},
 		hostnames: vec![],
 		matches: vec![RouteMatch {
-			path: PathMatch::PathPrefix(strng::new("/")),
+			path: PathMatch::PathPrefix(strng::new(if path_prefix.is_empty() {
+				"/"
+			} else {
+				path_prefix
+			})),
 			method: None,
 			headers: vec![],
 			query: vec![],

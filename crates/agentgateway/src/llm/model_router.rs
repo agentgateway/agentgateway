@@ -32,6 +32,8 @@ pub struct ModelRoute {
 
 #[apply(schema_ser_schema!)]
 pub struct ModelRoutePolicies {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub passthrough: Option<llm::RouteType>,
 	pub llm: Arc<llm::Policy>,
 	pub authorization: Option<Authorization>,
 }
@@ -52,49 +54,84 @@ impl ModelVisibility {
 	}
 }
 
-pub fn default_route_types() -> Arc<llm::Policy> {
-	static DEFAULT: LazyLock<Arc<llm::Policy>> = LazyLock::new(|| {
-		Arc::new(llm::Policy {
-			routes: [
-				(
-					strng::new("/v1/chat/completions"),
-					llm::RouteType::Completions,
-				),
-				(strng::new("/v1/messages"), llm::RouteType::Messages),
-				(
-					strng::new("/v1/messages/count_tokens"),
-					llm::RouteType::AnthropicTokenCount,
-				),
-				(strng::new(":rawPredict"), llm::RouteType::Messages),
-				(strng::new(":streamRawPredict"), llm::RouteType::Messages),
-				(
-					strng::new(":generateContent"),
-					llm::RouteType::GenerateContent,
-				),
-				(
-					strng::new(":streamGenerateContent"),
-					llm::RouteType::GenerateContent,
-				),
-				(
-					strng::new(":countTokens"),
-					llm::RouteType::GeminiCountTokens,
-				),
-				(strng::new("/v1/responses"), llm::RouteType::Responses),
-				(strng::new("/v1/images/generations"), llm::RouteType::Detect),
-				(strng::new("/v1/images/edits"), llm::RouteType::Detect),
-				(strng::new("/v1/images/variations"), llm::RouteType::Detect),
-				(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
-				(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
-				(strng::new("/v1/rerank"), llm::RouteType::Rerank),
-				(strng::new("/v2/rerank"), llm::RouteType::Rerank),
-				(strng::new("*"), llm::RouteType::Passthrough),
-			]
-			.into_iter()
-			.collect(),
-			..Default::default()
-		})
+enum EndpointMatch {
+	Exact(strng::Strng),
+	Regex(regex::Regex),
+}
+
+// Model serving has its own endpoint recognition. Backend policy `routes` retain suffix matching.
+static SERVING_ENDPOINTS: LazyLock<Vec<(EndpointMatch, Option<llm::RouteType>, &'static str)>> =
+	LazyLock::new(|| {
+		use llm::RouteType::*;
+		let mut endpoints = [
+			("/v1/models", Some(Models)),
+			("/models", Some(Models)),
+			("/v1/messages/count_tokens", Some(AnthropicTokenCount)),
+			("/v1/chat/completions", Some(Completions)),
+			("/v1/messages", Some(Messages)),
+			("/v1/responses", Some(Responses)),
+			("/v1/responses/compact", Some(Detect)),
+			("/v1/images/generations", Some(Detect)),
+			("/v1/images/edits", Some(Detect)),
+			("/v1/images/variations", Some(Detect)),
+			("/v1/audio/transcriptions", None),
+			("/v1/embeddings", Some(Embeddings)),
+			("/v1/rerank", Some(Rerank)),
+			("/v2/rerank", Some(Rerank)),
+		]
+		.into_iter()
+		.map(|(path, kind)| (EndpointMatch::Exact(strng::new(path)), kind, path))
+		.collect::<Vec<_>>();
+		for (suffix, kind, gemini) in [
+			("rawPredict|streamRawPredict", Messages, false),
+			(
+				"generateContent|streamGenerateContent",
+				GenerateContent,
+				true,
+			),
+			("countTokens", GeminiCountTokens, true),
+		] {
+			endpoints.push((EndpointMatch::Regex(regex::Regex::new(&format!(
+			r"^/(?P<version>v(?:[0-9]+|[0-9]+beta[0-9]+))/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?P<operation>{suffix})$"
+		)).expect("valid Vertex model route regex")), Some(kind), "/${version}/projects/{project}/locations/{location}/publishers/{publisher}/models/{model}:${operation}"));
+			if gemini {
+				endpoints.push((
+					EndpointMatch::Regex(
+						regex::Regex::new(&format!(
+							r"^/(?P<version>v[0-9]+(?:(?:alpha|beta)[0-9]*)?)/models/[^/]+:(?P<operation>{suffix})$"
+						))
+						.expect("valid Gemini model route regex"),
+					),
+					Some(kind),
+					"/${version}/models/{model}:${operation}",
+				));
+			}
+		}
+		endpoints.push((
+			EndpointMatch::Regex(
+				regex::Regex::new(
+					r"^/model/[^/]+/(?P<operation>invoke-with-response-stream|invoke|converse-stream|converse)$",
+				)
+				.expect("valid Bedrock model route regex"),
+			),
+			None,
+			"/model/{model}/${operation}",
+		));
+		endpoints
 	});
-	DEFAULT.clone()
+
+pub fn classify_route(path: &str) -> Option<llm::RouteType> {
+	for (matcher, kind, _) in SERVING_ENDPOINTS.iter() {
+		let matched = match matcher {
+			EndpointMatch::Exact(expected) => expected.as_str() == path,
+			EndpointMatch::Regex(regex) => regex.is_match(path),
+		};
+		if matched {
+			// Audio and Bedrock endpoints deliberately select the model's passthrough mode.
+			return *kind;
+		}
+	}
+	None
 }
 
 #[apply(schema_ser_schema!)]
@@ -134,12 +171,15 @@ pub struct ConditionalTarget {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRouter {
+	#[serde(skip_serializing_if = "String::is_empty")]
+	path_prefix: String,
 	models: Vec<ModelRoute>,
 	virtual_models: Vec<VirtualModelRoute>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ResolvedBackend {
+	pub route_type: llm::RouteType,
 	pub backend: RouteBackendReference,
 	pub llm_policy: Arc<llm::Policy>,
 }
@@ -174,12 +214,70 @@ impl RequestedModelLocation {
 impl ModelRouter {
 	pub fn new(models: Vec<ModelRoute>, virtual_models: Vec<VirtualModelRoute>) -> Self {
 		Self {
+			path_prefix: String::new(),
 			models,
 			virtual_models,
 		}
 	}
 
+	pub fn with_path_prefix(mut self, path_prefix: String) -> Self {
+		self.path_prefix = path_prefix;
+		self
+	}
+
+	/// Describe the public serving path before model selection or provider rewrites.
+	pub fn trace_path(&self, req: &Request) -> Option<agent_core::strng::Strng> {
+		let path = req
+			.uri()
+			.path()
+			.strip_prefix(&self.path_prefix)
+			.filter(|path| path.starts_with('/'))?;
+		let original_path = req
+			.extensions()
+			.get::<crate::http::filters::OriginalUrl>()
+			.map(|original| original.0.path())
+			.unwrap_or(req.uri().path());
+		// HTTPRoute prefix rewrites remove the serving prefix before reaching the router.
+		// If another rewrite changed the endpoint itself, retain the HTTP route's trace match.
+		let prefix = original_path.strip_suffix(path)?;
+		let template = SERVING_ENDPOINTS
+			.iter()
+			.find_map(|(matcher, _, template)| match matcher {
+				EndpointMatch::Exact(expected) if expected.as_str() == path => Some((*template).into()),
+				EndpointMatch::Regex(regex) if regex.is_match(path) => Some(regex.replace(path, *template)),
+				_ => None,
+			})
+			.unwrap_or(std::borrow::Cow::Borrowed("/*"));
+		Some(strng::format!("{prefix}{template}"))
+	}
+
 	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
+		if !self.path_prefix.is_empty() {
+			let original = req.uri().clone();
+			let rewritten = http::modify_req_uri(req, |uri| {
+				let path = uri
+					.path_and_query
+					.as_ref()
+					.ok_or_else(|| anyhow::anyhow!("request URI has no path"))?
+					.as_str();
+				let path = path
+					.strip_prefix(&self.path_prefix)
+					.filter(|path| path.starts_with('/'))
+					.ok_or_else(|| anyhow::anyhow!("request does not match llm.pathPrefix"))?;
+				uri.path_and_query = Some(path.parse()?);
+				Ok(())
+			});
+			if rewritten.is_err() {
+				return ResolveResult::DirectResponse(llm_error_response(
+					::http::StatusCode::NOT_FOUND,
+					"Request does not match llm.pathPrefix",
+					"not_found",
+				));
+			}
+			req
+				.extensions_mut()
+				.get_or_insert(crate::http::filters::OriginalUrl(original));
+		}
 		if is_responses_websocket(req) {
 			let mut response = llm_error_response(
 				::http::StatusCode::METHOD_NOT_ALLOWED,
@@ -295,6 +393,7 @@ impl ModelRouter {
 				}
 				return ResolveResult::Backend(ResolvedBackend {
 					backend: backend.clone(),
+					route_type: classify_route(req.uri().path()).unwrap_or(llm::RouteType::Passthrough),
 					llm_policy: virtual_model.llm_policy.clone(),
 				});
 			},
@@ -389,6 +488,12 @@ impl ModelRouter {
 		};
 		Ok(Some(ResolvedBackend {
 			backend: model.backend.clone(),
+			route_type: classify_route(req.uri().path()).unwrap_or(
+				model
+					.policies
+					.passthrough
+					.unwrap_or(llm::RouteType::Passthrough),
+			),
 			llm_policy: model.policies.llm.clone(),
 		}))
 	}
@@ -512,7 +617,7 @@ fn is_responses_websocket(req: &Request) -> bool {
 					.split(',')
 					.any(|protocol| protocol.trim().eq_ignore_ascii_case("websocket"))
 			})
-		&& default_route_types().resolve_route(req.uri().path()) == llm::RouteType::Responses
+		&& classify_route(req.uri().path()) == Some(llm::RouteType::Responses)
 }
 
 fn is_model_list_request(req: &Request) -> bool {
@@ -946,7 +1051,8 @@ mod tests {
 				inline_policies: vec![],
 			},
 			policies: ModelRoutePolicies {
-				llm: default_route_types(),
+				passthrough: None,
+				llm: Arc::default(),
 				authorization: None,
 			},
 			backend_policies: vec![],
@@ -956,7 +1062,7 @@ mod tests {
 			vec![VirtualModelRoute {
 				name: "smart-model".to_string(),
 				created: 0,
-				llm_policy: default_route_types(),
+				llm_policy: Arc::default(),
 				routing: VirtualModelRouting::Conditional(vec![
 					ConditionalTarget {
 						model: "economy-model".to_string(),
@@ -999,6 +1105,75 @@ mod tests {
 		assert_eq!(cached, body);
 	}
 
+	#[test]
+	fn trace_templates_preserve_prefix_and_operation() {
+		let router = ModelRouter::new(vec![], vec![]).with_path_prefix("/foo".to_string());
+		for (path, template) in [
+			(
+				"/v1alpha/models/gemini:streamGenerateContent",
+				"/v1alpha/models/{model}:streamGenerateContent",
+			),
+			(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini:countTokens",
+				"/v1/projects/{project}/locations/{location}/publishers/{publisher}/models/{model}:countTokens",
+			),
+			(
+				"/model/arn:aws:bedrock:us-east-1:123:application-inference-profile%2Ftest/invoke-with-response-stream",
+				"/model/{model}/invoke-with-response-stream",
+			),
+		] {
+			let req = ::http::Request::builder()
+				.uri(format!("/foo{path}?trace=1"))
+				.body(http::Body::empty())
+				.unwrap();
+			assert_eq!(
+				router.trace_path(&req).as_deref(),
+				Some(format!("/foo{template}").as_str())
+			);
+		}
+	}
+
+	#[tokio::test]
+	async fn prefix_rewrite_preserves_original_uri_and_rejects_partial_segment() {
+		let router = ModelRouter::new(vec![], vec![]).with_path_prefix("/foo".to_string());
+		let original: ::http::Uri = "/public/foo/v1/models?trace=1".parse().unwrap();
+		let mut req = ::http::Request::builder()
+			.uri("/foo/v1/models?trace=1")
+			.body(http::Body::empty())
+			.unwrap();
+		req
+			.extensions_mut()
+			.insert(crate::http::filters::OriginalUrl(original.clone()));
+		assert_eq!(
+			router.trace_path(&req).as_deref(),
+			Some("/public/foo/v1/models")
+		);
+		let ResolveResult::DirectResponse(response) = router.resolve(&mut req).await else {
+			panic!("expected discovery")
+		};
+		assert_eq!(response.status(), ::http::StatusCode::OK);
+		assert_eq!(req.uri(), "/v1/models?trace=1");
+		assert_eq!(
+			req
+				.extensions()
+				.get::<crate::http::filters::OriginalUrl>()
+				.unwrap()
+				.0,
+			original
+		);
+		for uri in ["/foobar/v1/models", "/foo", "example.com:443"] {
+			let mut req = ::http::Request::builder()
+				.uri(uri)
+				.body(http::Body::empty())
+				.unwrap();
+			assert!(router.trace_path(&req).is_none());
+			let ResolveResult::DirectResponse(response) = router.resolve(&mut req).await else {
+				panic!("expected rejection")
+			};
+			assert_eq!(response.status(), ::http::StatusCode::NOT_FOUND);
+		}
+	}
+
 	#[tokio::test]
 	async fn weighted_virtual_model_invalid_target_fails_when_selected() {
 		let router = ModelRouter::new(
@@ -1006,7 +1181,7 @@ mod tests {
 			vec![VirtualModelRoute {
 				name: "weighted-model".to_string(),
 				created: 0,
-				llm_policy: default_route_types(),
+				llm_policy: Arc::default(),
 				routing: VirtualModelRouting::Weighted(vec![WeightedTarget {
 					model: "missing-model".to_string(),
 					weight: 1,
@@ -1037,7 +1212,7 @@ mod tests {
 			vec![VirtualModelRoute {
 				name: "conditional-model".to_string(),
 				created: 0,
-				llm_policy: default_route_types(),
+				llm_policy: Arc::default(),
 				routing: VirtualModelRouting::Conditional(vec![
 					ConditionalTarget {
 						model: "missing-model".to_string(),
@@ -1096,7 +1271,8 @@ mod tests {
 				inline_policies: vec![],
 			},
 			policies: ModelRoutePolicies {
-				llm: default_route_types(),
+				passthrough: None,
+				llm: Arc::default(),
 				authorization: Some(authorization),
 			},
 			backend_policies: vec![],
@@ -1567,22 +1743,22 @@ mod tests {
 	}
 
 	#[test]
-	fn default_routes_resolve_gemini_suffixes() {
-		let policy = default_route_types();
+	fn native_routes_recognize_gemini_endpoints() {
+		let classify = |path: &str| classify_route(path).unwrap_or(llm::RouteType::Passthrough);
 		assert_eq!(
-			policy.resolve_route("/v1beta/models/gemini-2.5-flash:generateContent"),
+			classify("/v1beta/models/gemini-2.5-flash:generateContent"),
 			llm::RouteType::GenerateContent
 		);
 		assert_eq!(
-			policy.resolve_route("/v1beta/models/gemini-2.5-flash:streamGenerateContent"),
+			classify("/v1beta/models/gemini-2.5-flash:streamGenerateContent"),
 			llm::RouteType::GenerateContent
 		);
 		assert_eq!(
-			policy.resolve_route("/v1beta/models/gemini-2.5-flash:countTokens"),
+			classify("/v1beta/models/gemini-2.5-flash:countTokens"),
 			llm::RouteType::GeminiCountTokens
 		);
 		assert_eq!(
-			policy.resolve_route(
+			classify(
 				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-pro:generateContent"
 			),
 			llm::RouteType::GenerateContent
@@ -1590,14 +1766,14 @@ mod tests {
 	}
 
 	#[test]
-	fn default_routes_resolve_gemini_stream_ignoring_query() {
+	fn native_routes_recognize_gemini_stream_ignoring_query() {
 		// The dispatcher matches on `uri.path()`, so the `?alt=sse` the Gemini SDKs append to the
-		// streaming endpoint never reaches the suffix matcher.
+		// streaming endpoint never reaches the endpoint classifier.
 		let uri: ::http::Uri = "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
 			.parse()
 			.expect("valid uri");
 		assert_eq!(
-			default_route_types().resolve_route(uri.path()),
+			classify_route(uri.path()).unwrap(),
 			llm::RouteType::GenerateContent
 		);
 	}
@@ -1630,29 +1806,29 @@ mod tests {
 	}
 
 	#[test]
-	fn default_routes_preserve_existing_suffixes() {
-		let policy = default_route_types();
+	fn native_routes_require_standard_paths() {
+		let classify = |path: &str| classify_route(path).unwrap_or(llm::RouteType::Passthrough);
 		assert_eq!(
-			policy.resolve_route("/v1/projects/p/locations/us/publishers/anthropic/models/m:rawPredict"),
+			classify("/v1/projects/p/locations/us/publishers/anthropic/models/m:rawPredict"),
 			llm::RouteType::Messages
 		);
 		assert_eq!(
-			policy.resolve_route(
-				"/v1/projects/p/locations/us/publishers/anthropic/models/m:streamRawPredict"
-			),
+			classify("/v1/projects/p/locations/us/publishers/anthropic/models/m:streamRawPredict"),
 			llm::RouteType::Messages
 		);
+		assert_eq!(classify("/v1/messages"), llm::RouteType::Messages);
 		assert_eq!(
-			policy.resolve_route("/v1/messages"),
-			llm::RouteType::Messages
-		);
-		assert_eq!(
-			policy.resolve_route("/v1/chat/completions"),
+			classify("/v1/chat/completions"),
 			llm::RouteType::Completions
 		);
-		assert_eq!(
-			policy.resolve_route("/v1/anything/else"),
-			llm::RouteType::Passthrough
-		);
+		assert_eq!(classify("/v1/anything/else"), llm::RouteType::Passthrough);
+		for path in [
+			"/other/v1/messages",
+			"/other/v1/chat/completions",
+			"/other/v1beta/models/gemini:generateContent",
+			"/custom:generateContent",
+		] {
+			assert_eq!(classify_route(path), None, "{path}");
+		}
 	}
 }

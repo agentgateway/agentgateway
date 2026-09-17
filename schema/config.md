@@ -80599,6 +80599,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`llm`|object|llm defines a set of LLM models to be exposed by the proxy. When configured, LLM models will be<br>served under the attached `gateways` using the standard serving paths (`/v1/models`, `/v1/chat/completions`, etc).|
+|`llm.pathPrefix`|string|pathPrefix mounts the standard LLM endpoints under this path, for example /foo/v1/messages.<br>Defaults to the root. A non-empty prefix must start with `/`. Trailing slashes are ignored.<br>The prefix is removed before model routing.|
 |`llm.gateways`|string|gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>When omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.|
 |`llm.port`|integer|port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.|
 |`llm.tls`|object|tls defines the TLS settings to serve the LLM routes under when using `port`. Deprecated; use `gateways` instead.|

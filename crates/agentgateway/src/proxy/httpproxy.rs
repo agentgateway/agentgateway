@@ -2357,6 +2357,21 @@ async fn build_simple_backend_call(
 	Ok((backend_call, maybe_inference))
 }
 
+// Explicit policy routes retain their suffix semantics and override native model classification.
+fn resolve_llm_route_type(
+	policy: Option<&llm::Policy>,
+	model_route_type: Option<RouteType>,
+	path: &str,
+) -> RouteType {
+	if let Some(policy) = policy
+		&& !policy.routes.is_empty()
+	{
+		return policy.resolve_route(path);
+	}
+
+	model_route_type.unwrap_or(RouteType::Completions)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
@@ -2370,15 +2385,20 @@ async fn make_backend_call(
 	substrate_state: &mut Option<http::substrate::SubstrateRequestState>,
 ) -> Result<Response, ProxyResponse> {
 	let resolved_backend;
+	let mut model_route_type = None;
 	let backend = if let Backend::LLMRouter(_, router) = backend {
 		// Model routing parses the LLM body before provider request processing.
 		req
 			.extensions_mut()
 			.get_or_insert_with(|| crate::transport::BufferLimit::new(llm::DEFAULT_BUFFER_LIMIT));
+		if let Some(path_match) = router.trace_path(&req) {
+			log.add(|log| log.path_match = Some(path_match));
+		}
 		let resolved = match router.resolve(&mut req).await {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
 		};
+		model_route_type = Some(resolved.route_type);
 		let selected_backend = resolve_backend(resolved.backend, inputs.as_ref())?;
 		let concrete_policies = get_backend_policies(
 			inputs.as_ref(),
@@ -2530,13 +2550,15 @@ async fn make_backend_call(
 				);
 				// Resolve the LLM route before picking the connection target: some providers serve
 				// routes from different hosts (e.g. Bedrock rerank uses bedrock-agent-runtime).
-				let route_type = route_policies
-					.clone()
-					.merge_backend_policies(effective_policies.llm.clone())
-					.llm
-					.as_ref()
-					.map(|policy| policy.resolve_route(req.uri().path()))
-					.unwrap_or(llm::RouteType::Completions);
+				let route_type = resolve_llm_route_type(
+					route_policies
+						.clone()
+						.merge_backend_policies(effective_policies.llm.clone())
+						.llm
+						.as_deref(),
+					model_route_type,
+					req.uri().path(),
+				);
 				let target = match &provider.host_override {
 					Some(target) => target.clone(),
 					None => provider
@@ -2705,11 +2727,11 @@ async fn make_backend_call(
 				.get_or_insert_with(|| crate::transport::BufferLimit::new(llm::DEFAULT_BUFFER_LIMIT));
 			// LLM requires CEL execution after the snapshot so we do not clear extensions
 			let mut req = req.take_and_snapshot_without_clearing_extensions(log.as_mut())?;
-			let route_type = llm_request_policies
-				.llm
-				.as_ref()
-				.map(|policy| policy.resolve_route(req.uri().path()))
-				.unwrap_or(llm::RouteType::Completions);
+			let route_type = resolve_llm_route_type(
+				llm_request_policies.llm.as_deref(),
+				model_route_type,
+				req.uri().path(),
+			);
 			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
 				&& let Some(provider_model) = llm.provider.override_model()
 			{

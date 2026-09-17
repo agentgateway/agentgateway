@@ -325,6 +325,173 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 	t
 }
 
+#[rstest::rstest]
+#[case::root_default("", "", false)]
+#[case::prefixed_default("/foo/", "", false)]
+#[case::prefixed_detect("/foo/", "passthrough: detect", false)]
+#[case::prefixed_opaque("/foo/", "passthrough: opaque", false)]
+#[case::httproute_root("", "", true)]
+#[case::httproute_prefix("/foo/", "", true)]
+#[tokio::test]
+async fn llm_model_router_endpoint_classification_and_trace_names(
+	#[case] prefix: &str,
+	#[case] passthrough: &str,
+	#[case] http_route: bool,
+) {
+	use agentgateway::test_helpers::oteltracemock;
+	struct TraceHandler(mpsc::UnboundedSender<String>);
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for TraceHandler {
+		async fn export(
+			&mut self,
+			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+		) -> Result<
+			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+			tonic::Status,
+		> {
+			for span in request
+				.resource_spans
+				.iter()
+				.flat_map(|r| &r.scope_spans)
+				.flat_map(|s| &s.spans)
+			{
+				if span.kind == opentelemetry_proto::tonic::trace::v1::span::SpanKind::Server as i32 {
+					let _ = self.0.send(span.name.clone());
+				}
+			}
+			oteltracemock::ok_response()
+		}
+	}
+	let (tx, mut rx) = mpsc::unbounded_channel();
+	let otel = oteltracemock::OtelTraceMock::new(move || TraceHandler(tx.clone()))
+		.spawn()
+		.await;
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let serving_prefix = if http_route { "" } else { prefix };
+	let config = format!(
+		r#"
+frontendPolicies:
+  tracing:
+    host: {}
+    randomSampling: true
+llm:
+  port: 0
+  pathPrefix: "{serving_prefix}"
+  models:
+  - name: real-model
+    provider: openAI
+    {passthrough}
+    params:
+      baseUrl: http://{}/v1
+"#,
+		otel.address,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let prefix = prefix.trim_end_matches('/');
+	let t = if http_route {
+		// The controller emits this prefix match and rewrite for a model-serving HTTPRoute.
+		let mut route = basic_named_route(strng::literal!("/llm:router"));
+		route.key = strng::literal!("llm:request");
+		route.matches[0].path =
+			PathMatch::PathPrefix(strng::new(if prefix.is_empty() { "/" } else { prefix }));
+		route.inline_policies.push(TrafficPolicy::UrlRewrite(
+			agentgateway::store::RequestPolicy::single(agentgateway::http::filters::UrlRewrite {
+				authority: None,
+				path: Some(agentgateway::types::agent::PathRedirect::Prefix(
+					strng::EMPTY,
+				)),
+			}),
+		));
+		t.with_route_for_listener(strng::literal!("llm"), route)
+	} else {
+		t
+	};
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let body =
+		br#"{"model":"real-model","max_tokens":32,"messages":[{"role":"user","content":"hello"}]}"#;
+	for path in ["/v1/messages", "/other/v1/messages", "/custom"] {
+		let response = send_request_body(
+			io.clone(),
+			Method::POST,
+			&format!("http://lo{prefix}{path}?trace=1"),
+			body,
+		)
+		.await;
+		assert_eq!(response.status(), StatusCode::OK, "{path}");
+		let _ = read_body_raw(response.into_body()).await;
+	}
+	let requests = mock.received_requests().await.unwrap();
+	assert_eq!(requests.len(), 3);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		"/v1/chat/completions?trace=1"
+	);
+	assert_eq!(
+		&requests[1].url[Position::BeforePath..Position::AfterQuery],
+		"/v1/other/v1/messages?trace=1"
+	);
+	assert_eq!(
+		&requests[2].url[Position::BeforePath..Position::AfterQuery],
+		"/v1/custom?trace=1"
+	);
+	for request in &requests[1..] {
+		assert_eq!(
+			serde_json::from_slice::<Value>(&request.body).unwrap(),
+			serde_json::from_slice::<Value>(body).unwrap()
+		);
+	}
+	for (method, path, status) in [
+		(Method::GET, "/v1/models", StatusCode::OK),
+		(Method::POST, "/v1/messages", StatusCode::BAD_REQUEST),
+		(
+			Method::POST,
+			"/v1beta/models/missing:generateContent",
+			StatusCode::NOT_FOUND,
+		),
+		(
+			Method::POST,
+			"/model/missing/converse",
+			StatusCode::NOT_FOUND,
+		),
+	] {
+		let response = send_request_body(
+			io.clone(),
+			method,
+			&format!("http://lo{prefix}{path}"),
+			b"{}",
+		)
+		.await;
+		assert_eq!(response.status(), status, "{path}");
+		let _ = read_body_raw(response.into_body()).await;
+	}
+	let mut names = tokio::time::timeout(Duration::from_secs(10), async {
+		let mut names = Vec::new();
+		for _ in 0..7 {
+			names.push(rx.recv().await.unwrap());
+		}
+		names
+	})
+	.await
+	.expect("request spans exported");
+	names.sort();
+	let mut expected = vec![
+		format!("GET {prefix}/v1/models"),
+		format!("POST {prefix}/v1/messages"),
+		format!("POST {prefix}/v1beta/models/{{model}}:generateContent"),
+		format!("POST {prefix}/model/{{model}}/converse"),
+		format!("POST {prefix}/v1/messages"),
+		format!("POST {prefix}/*"),
+		format!("POST {prefix}/*"),
+	];
+	expected.sort();
+	assert_eq!(names, expected);
+	if !prefix.is_empty() {
+		let response = send_request_body(io, Method::POST, "http://lo/v1/messages", body).await;
+		assert_eq!(response.status(), StatusCode::NOT_FOUND);
+	}
+}
+
 #[tokio::test]
 async fn llm_api_key_allowed_models_filters_discovery_and_requests() {
 	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
@@ -849,9 +1016,23 @@ fn setup_custom_llm_provider_backend_mock_with_formats(
 			formats,
 		));
 	let mut route = basic_named_route(strng::format!("/{backend_name}"));
-	route.inline_policies.push(TrafficPolicy::AI(
-		agentgateway::llm::model_router::default_route_types(),
-	));
+	route
+		.inline_policies
+		.push(TrafficPolicy::AI(Arc::new(agentgateway::llm::Policy {
+			routes: [
+				(
+					strng::new("/v1/messages"),
+					agentgateway::llm::RouteType::Messages,
+				),
+				(
+					strng::new("/v1/chat/completions"),
+					agentgateway::llm::RouteType::Completions,
+				),
+			]
+			.into_iter()
+			.collect(),
+			..Default::default()
+		})));
 	let t = t.with_route(route);
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)

@@ -29,8 +29,8 @@ use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
 	Bind, BindKey, BindSnapshot, FrontendPolicy, JwtAuthentication, Listener, ListenerKey,
 	ListenerName, ListenerSet, McpAuthentication, PolicyInheritance, PolicyKey, PolicyTarget, Route,
-	RouteBackendReference, RouteGroupKey, RouteKey, RouteMatch, RouteName, RouteSet, TCPRoute,
-	TCPRouteSet, TargetedPolicy, TrafficPolicy,
+	RouteBackendReference, RouteGroupKey, RouteKey, RouteName, RouteSet, TCPRoute, TCPRouteSet,
+	TargetedPolicy, TrafficPolicy,
 };
 use crate::types::agent_xds::Diagnostics;
 use crate::types::discovery::NamespacedHostname;
@@ -761,8 +761,10 @@ impl Store {
 		strng::format!("llm:request:{listener}")
 	}
 
-	fn model_router_matches() -> Vec<RouteMatch> {
-		let mut matches = [
+	// Listener-attached models only claim the supported serving endpoints. HTTPRoute
+	// attachment owns its own matches and must not inherit this implicit allowlist.
+	fn model_router_matches() -> Vec<agent::RouteMatch> {
+		[
 			"/v1/models",
 			"/models",
 			"/v1/messages/count_tokens",
@@ -779,34 +781,13 @@ impl Store {
 			"/v2/rerank",
 		]
 		.into_iter()
-		.map(|path| RouteMatch {
+		.map(|path| agent::RouteMatch {
 			path: agent::PathMatch::Exact(strng::new(path)),
 			method: None,
 			headers: vec![],
 			query: vec![],
 		})
-		.collect::<Vec<_>>();
-		matches.push(RouteMatch {
-			path: agent::PathMatch::Regex(
-				regex::Regex::new(r"^/v(?:[0-9]+|[0-9]+beta[0-9]+)/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?:rawPredict|streamRawPredict|generateContent|streamGenerateContent|countTokens)$")
-					.expect("valid Vertex model route regex"),
-			),
-			method: None,
-			headers: vec![],
-			query: vec![],
-		});
-		matches.push(RouteMatch {
-			path: agent::PathMatch::Regex(
-				// Gemini API shape has no publisher segment and uses versions like v1beta;
-				// v1alpha is what the SDKs emit for preview features.
-				regex::Regex::new(r"^/v[0-9]+(?:(?:alpha|beta)[0-9]*)?/models/[^/]+:(?:generateContent|streamGenerateContent|countTokens)$")
-					.expect("valid Gemini model route regex"),
-			),
-			method: None,
-			headers: vec![],
-			query: vec![],
-		});
-		matches
+		.collect::<Vec<_>>()
 	}
 
 	fn rebuild_model_router(&mut self, listener: &ListenerKey, router_key: &str) {
@@ -2747,55 +2728,6 @@ mod tests {
 	}
 
 	#[test]
-	fn model_router_matches_only_standard_endpoints() {
-		let matches = Store::model_router_matches();
-		assert!(matches.iter().any(|route_match| {
-			matches!(
-				route_match.path,
-				agent::PathMatch::Exact(ref path) if path == "/v1/chat/completions"
-			)
-		}));
-		assert!(
-			matches
-				.iter()
-				.all(|route_match| { !matches!(route_match.path, agent::PathMatch::PathPrefix(_)) })
-		);
-		let regexes = matches
-			.iter()
-			.filter_map(|route_match| match &route_match.path {
-				agent::PathMatch::Regex(regex) => Some(regex),
-				_ => None,
-			})
-			.collect::<Vec<_>>();
-		let matches_any = |path: &str| regexes.iter().any(|regex| regex.is_match(path));
-		assert!(matches_any(
-			"/v1/projects/project/locations/us-central1/publishers/google/models/gemini:rawPredict"
-		));
-		assert!(matches_any(
-			"/v1/projects/project/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
-		));
-		assert!(matches_any(
-			"/v1/projects/project/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent"
-		));
-		assert!(matches_any(
-			"/v1/projects/project/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
-		));
-		assert!(matches_any(
-			"/v1beta/models/gemini-2.5-flash:generateContent"
-		));
-		assert!(matches_any(
-			"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
-		));
-		assert!(matches_any("/v1beta/models/gemini-2.5-flash:countTokens"));
-		assert!(matches_any(
-			"/v1alpha/models/gemini-2.5-flash:generateContent"
-		));
-		assert!(matches_any("/v1/models/gemini-2.5-flash:generateContent"));
-		assert!(!matches_any("/v1beta/models/gemini-2.5-flash:rawPredict"));
-		assert!(!matches_any("/arbitrary/v1/chat/completions"));
-	}
-
-	#[test]
 	fn declared_model_router_exists_without_models() {
 		let mut store = Store::with_ipv6_enabled(true);
 		let listener = strng::literal!("default/gw.http");
@@ -2864,6 +2796,30 @@ mod tests {
 			.get_listener_routes(&listener_key)
 			.expect("listener should have model router route");
 		assert!(routes.contains(&route_key));
+		let route = routes.iter().find(|route| route.key == route_key).unwrap();
+		let matches_path = |path: &str| {
+			route.matches.iter().any(|m| match &m.path {
+				agent::PathMatch::Exact(expected) => expected.as_str() == path,
+				_ => panic!("implicit model routes must use exact matches"),
+			})
+		};
+		for path in ["/v1/messages", "/v1/models", "/v1/audio/transcriptions"] {
+			assert!(matches_path(path), "{path}");
+		}
+		for path in [
+			"/",
+			"/custom",
+			"/other/v1/messages",
+			"/foo/v1/models",
+			"/model/claude/converse",
+			"/model/claude/invoke",
+			"/v1beta/models/gemini:generateContent",
+			"/v1/projects/p/locations/global/publishers/google/models/gemini:countTokens",
+			"/other/v1beta/models/gemini:generateContent",
+		] {
+			assert!(!matches_path(path), "{path}");
+		}
+
 		let backend = store
 			.backends
 			.get(&backend_key)
