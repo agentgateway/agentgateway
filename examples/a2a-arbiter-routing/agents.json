@@ -1,0 +1,38 @@
+[
+  {
+    "name": "deployment-agent",
+    "description": "Inspects deployment revisions, rollout state, canaries, and rollback options.",
+    "url": "http://deployment-agent.example/a2a",
+    "skills": [
+      {
+        "id": "deployment-diagnosis",
+        "name": "Deployment diagnosis",
+        "description": "Diagnose rollout failures and compare current and stable revisions."
+      }
+    ]
+  },
+  {
+    "name": "billing-agent",
+    "description": "Handles invoices, subscriptions, and account billing.",
+    "url": "http://billing-agent.example/a2a",
+    "skills": [
+      {
+        "id": "billing-support",
+        "name": "Billing support",
+        "description": "Resolve billing and subscription problems."
+      }
+    ]
+  },
+  {
+    "name": "capacity-agent",
+    "description": "Analyzes service saturation, infrastructure capacity, and scaling options.",
+    "url": "http://capacity-agent.example/a2a",
+    "skills": [
+      {
+        "id": "capacity-analysis",
+        "name": "Capacity analysis",
+        "description": "Inspect saturation and scaling constraints."
+      }
+    ]
+  }
+]
