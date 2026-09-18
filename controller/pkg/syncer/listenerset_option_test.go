@@ -41,11 +41,11 @@ func testGateway(from *gwv1.FromNamespaces) *gwv1.Gateway {
 	return gw
 }
 
-func testListenerSet(namespace, name, section string) translator.ListenerSet {
-	return translator.ListenerSet{
+func testListenerSet(namespace, name, section string) *translator.ListenerSet {
+	return &translator.ListenerSet{
 		Name:          utils.InternalGatewayName(namespace, name, section),
-		Parent:        types.NamespacedName{Namespace: namespace, Name: name},
-		GatewayParent: testGatewayParent,
+		ParentObject:  utils.TypedNamespacedName{Kind: "ListenerSet", NamespacedName: types.NamespacedName{Namespace: namespace, Name: name}},
+		ParentGateway: testGatewayParent,
 		Valid:         true,
 		ParentInfo: plugins.ParentInfo{
 			ParentGateway: testGatewayParent,
@@ -57,16 +57,16 @@ func testListenerSet(namespace, name, section string) translator.ListenerSet {
 	}
 }
 
-func staticExtra(sets ...translator.ListenerSet) AgentgatewaySyncerOption {
-	return WithExtraListenerSets(func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[translator.ListenerSet] {
+func staticExtra(sets ...*translator.ListenerSet) AgentgatewaySyncerOption {
+	return WithExtraListenerSets(func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet] {
 		return krt.NewStaticCollection(nil, sets, krtopts.ToOptions("Extra")...)
 	})
 }
 
 type joinFixture struct {
-	admitted krt.Collection[translator.ListenerSet]
+	admitted krt.Collection[*translator.ListenerSet]
 	rejected krt.Collection[RejectedListenerSet]
-	base     krt.Collection[translator.ListenerSet]
+	base     krt.Collection[*translator.ListenerSet]
 }
 
 func newJoinFixture(
@@ -91,7 +91,7 @@ func newJoinFixture(
 			Namespaces:   krt.NewStaticCollection(nil, testNamespaces, krtopts.ToOptions("Namespaces")...),
 		},
 	}
-	base := krt.NewStaticCollection(nil, []translator.ListenerSet{baseListenerSet}, krtopts.ToOptions("Base")...)
+	base := krt.NewStaticCollection(nil, []*translator.ListenerSet{baseListenerSet}, krtopts.ToOptions("Base")...)
 	admitted, rejected := s.joinExtraListenerSets(base, krtopts)
 	admitted.WaitUntilSynced(krtopts.Stop)
 	rejected.WaitUntilSynced(krtopts.Stop)
@@ -99,7 +99,7 @@ func newJoinFixture(
 }
 
 func (f joinFixture) names() []string {
-	return slices.Map(f.admitted.List(), translator.ListenerSet.ResourceName)
+	return slices.Map(f.admitted.List(), (*translator.ListenerSet).ResourceName)
 }
 
 func TestJoinExtraListenerSetsNoOpWhenUnset(t *testing.T) {
@@ -111,7 +111,7 @@ func TestJoinExtraListenerSetsNoOpWhenUnset(t *testing.T) {
 
 	t.Run("builder returns nil", func(t *testing.T) {
 		f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil,
-			WithExtraListenerSets(func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[translator.ListenerSet] {
+			WithExtraListenerSets(func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet] {
 				return nil
 			}))
 		assert.True(t, f.base == f.admitted)
@@ -154,7 +154,7 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 		name         string
 		gateway      *gwv1.Gateway
 		listenerSets []*gwv1.ListenerSet
-		extra        translator.ListenerSet
+		extra        *translator.ListenerSet
 		reason       gwv1.ListenerSetConditionReason
 	}{
 		{
@@ -208,8 +208,8 @@ func TestJoinExtraListenerSetsRejects(t *testing.T) {
 // No parent Gateway means the gate cannot be evaluated: not admitted, not reported.
 func TestJoinExtraListenerSetsDropsUnparentedContributions(t *testing.T) {
 	orphan := testListenerSet("other", "b", "http")
-	orphan.GatewayParent = types.NamespacedName{Namespace: "default", Name: "missing"}
-	orphan.ParentInfo.ParentGateway = orphan.GatewayParent
+	orphan.ParentGateway = types.NamespacedName{Namespace: "default", Name: "missing"}
+	orphan.ParentInfo.ParentGateway = orphan.ParentGateway
 
 	f := newJoinFixture(t, testGateway(ptr.Of(gwv1.NamespacesFromAll)), nil, staticExtra(orphan))
 	assert.Equal(t, []string{baseListenerSet.Name}, f.names())

@@ -210,7 +210,7 @@ func (g *GatewayListener) Equals(other *GatewayListener) bool {
 type GatewayCollectionConfig struct {
 	ControllerName           string
 	Gateways                 krt.Collection[*gwv1.Gateway]
-	ListenerSets             krt.Collection[ListenerSet]
+	ListenerSets             krt.Collection[*ListenerSet]
 	GatewayClasses           krt.Collection[GatewayClass]
 	Namespaces               krt.Collection[*corev1.Namespace]
 	Grants                   ReferenceGrants
@@ -219,7 +219,7 @@ type GatewayCollectionConfig struct {
 	KrtOpts                  krtutil.KrtOptions
 	EnableAgentgatewayModels bool
 
-	listenerIndex      krt.Index[types.NamespacedName, ListenerSet]
+	listenerIndex      krt.Index[types.NamespacedName, *ListenerSet]
 	transformationFunc GatewayTransformationFunction
 }
 
@@ -252,7 +252,6 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 		gwReporter := statusReporter.Gateway(obj)
 		logger.Debug("translating Gateway", "gw_name", obj.GetName(), "resource_version", obj.GetResourceVersion())
 
-		var result []*GatewayListener
 		kgw := obj.Spec
 		status := obj.Status.DeepCopy()
 
@@ -269,6 +268,9 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			})
 			return rm.BuildGWStatus(context.Background(), *obj, 0), nil
 		}
+
+		listenersFromSets := krt.Fetch(ctx, cfg.ListenerSets, krt.FilterIndex(cfg.listenerIndex, config.NamespacedName(obj)))
+		result := make([]*GatewayListener, 0, len(kgw.Listeners)+len(listenersFromSets))
 
 		// Ports whose bind should be internal, from the gateway's internal-ports annotation.
 		// May only reference this gateway's own listener ports.
@@ -353,53 +355,43 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Message: "invalid " + annotations.InternalPorts + " annotation: " + strings.Join(internalErrs, "; "),
 			})
 		}
-		listenersFromSets := krt.Fetch(ctx, cfg.ListenerSets, krt.FilterIndex(cfg.listenerIndex, config.NamespacedName(obj)))
 		// Sort by listener precedence
 		// Ref: https://gateway-api.sigs.k8s.io/geps/gep-1713/#listener-precedence
 		// - ListenerSet ordered by creation time (oldest first)
 		// - ListenerSet ordered alphabetically by “{namespace}/{name}”
-		slices.SortStableFunc(listenersFromSets, func(a, b ListenerSet) int {
+		slices.SortStableFunc(listenersFromSets, func(a, b *ListenerSet) int {
 			// primary sort: creation timestamp (oldest first)
 			if r := a.ParentInfo.CreationTimestamp.Compare(b.ParentInfo.CreationTimestamp.Time); r != 0 {
 				return r
 			}
 			// secondary sort: alphabetically by "{namespace}/{name}"
-			if r := cmp.Compare(a.Parent.Namespace, b.Parent.Namespace); r != 0 {
+			if r := cmp.Compare(a.ParentObject.Namespace, b.ParentObject.Namespace); r != 0 {
 				return r
 			}
-			if r := cmp.Compare(a.Parent.Name, b.Parent.Name); r != 0 {
+			if r := cmp.Compare(a.ParentObject.Name, b.ParentObject.Name); r != 0 {
 				return r
 			}
 			return cmp.Compare(a.ListenerIndex, b.ListenerIndex)
 		})
 
 		for _, ls := range listenersFromSets {
-			result = append(result, &GatewayListener{
-				Name:          ls.Name,
-				ParentGateway: config.NamespacedName(obj),
-				ParentObject: utils.TypedNamespacedName{
-					Kind: wellknown.ListenerSetGVK.Kind,
-					NamespacedName: types.NamespacedName{
-						Name:      ls.Parent.Name,
-						Namespace: ls.Parent.Namespace,
-					},
-				},
-				TLSInfo:    ls.TLSInfo,
-				ParentInfo: ls.ParentInfo,
-				Valid:      ls.Valid,
-			})
+			result = append(result, &ls.GatewayListener)
 		}
 		validateListenerConflicts(result)
-		uniqueListenerSets := sets.New[utils.TypedNamespacedName]()
+		// Precedence sorting groups listeners from each ListenerSet together. Count
+		// a parent once when its first valid, non-conflicting listener is encountered.
+		var attachedListenerSets int32
+		var lastParent utils.TypedNamespacedName
 		for _, ls := range result {
 			if !(ls.Valid && ls.Conflict == "" && ls.ParentObject.Kind == wellknown.ListenerSetGVK.Kind) {
 				continue
 			}
-
-			uniqueListenerSets.Insert(ls.ParentObject)
+			if ls.ParentObject != lastParent {
+				attachedListenerSets++
+				lastParent = ls.ParentObject
+			}
 		}
-		//nolint:gosec // G115: this will not overflow
-		gws := rm.BuildGWStatus(context.Background(), *obj, int32(uniqueListenerSets.Len()))
+		gws := rm.BuildGWStatus(context.Background(), *obj, attachedListenerSets)
 		return gws, result
 	}
 }
@@ -420,20 +412,21 @@ const (
 
 func validateListenerConflicts(listeners []*GatewayListener) {
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
-	for _, listener := range listeners {
+	for i, listener := range listeners {
+		var conflict ListenerConflict
 		if p, ok := portMap[listener.ParentInfo.Port]; ok {
 			if p.internal != listener.ParentInfo.Internal {
 				// Listeners are ordered by Gateway API precedence before validation.
 				// Preserve the winning bind mode and reject only the later listener.
-				listener.Conflict = ListenerConflictBindMode
+				conflict = ListenerConflictBindMode
 			} else if p.protocol == listener.ParentInfo.Protocol {
 				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
-					listener.Conflict = ListenerConflictHostname
+					conflict = ListenerConflictHostname
 				} else {
 					p.hostnames.InsertAll(listener.ParentInfo.Hostnames...)
 				}
 			} else {
-				listener.Conflict = ListenerConflictProtocol
+				conflict = ListenerConflictProtocol
 			}
 		} else {
 			portMap[listener.ParentInfo.Port] = &portProtocol{
@@ -442,45 +435,30 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 				internal:  listener.ParentInfo.Internal,
 			}
 		}
+		if conflict != listener.Conflict {
+			// Candidates belong to the ListenerSet collection. Copy only the
+			// conflict field's containing value so subsequent reconciliations
+			// start from the original candidate and can recover from conflicts.
+			cloned := *listener
+			cloned.Conflict = conflict
+			listeners[i] = &cloned //nolint:gosec // G602: i comes from ranging over listeners, whose length is unchanged.
+		}
 	}
 }
 
+// ListenerSet owns a prebuilt, immutable listener candidate. Embedding the value
+// keeps both in one allocation; Gateway aggregation shares its address.
 type ListenerSet struct {
-	Name          string               `json:"name"`
-	Parent        types.NamespacedName `json:"parent"`
-	ListenerIndex int                  `json:"listenerIndex"`
-	ParentInfo    ParentInfo           `json:"parentInfo"`
-	TLSInfo       *TLSInfo             `json:"tlsInfo"`
-	GatewayParent types.NamespacedName `json:"gatewayParent"`
-	Valid         bool                 `json:"valid"`
+	GatewayListener
+	ListenerIndex int `json:"listenerIndex"`
 }
 
-func (g ListenerSet) ResourceName() string {
+func (g *ListenerSet) ResourceName() string {
 	return g.Name
 }
 
-func (g ListenerSet) Equals(other ListenerSet) bool {
-	if (g.TLSInfo != nil) != (other.TLSInfo != nil) {
-		return false
-	}
-	if g.TLSInfo != nil {
-		if !bytes.Equal(g.TLSInfo.Cert, other.TLSInfo.Cert) ||
-			!bytes.Equal(g.TLSInfo.Key, other.TLSInfo.Key) ||
-			!bytes.Equal(g.TLSInfo.CaCert, other.TLSInfo.CaCert) ||
-			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled ||
-			g.TLSInfo.IstioWorkloadCert != other.TLSInfo.IstioWorkloadCert ||
-			g.TLSInfo.IstioMutual != other.TLSInfo.IstioMutual ||
-			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA ||
-			g.TLSInfo.Spiffe != other.TLSInfo.Spiffe {
-			return false
-		}
-	}
-	return g.Valid == other.Valid &&
-		g.Name == other.Name &&
-		g.GatewayParent == other.GatewayParent &&
-		g.Parent == other.Parent &&
-		g.ListenerIndex == other.ListenerIndex &&
-		g.ParentInfo.Equals(other.ParentInfo)
+func (g *ListenerSet) Equals(other *ListenerSet) bool {
+	return g.ListenerIndex == other.ListenerIndex && g.GatewayListener.Equals(&other.GatewayListener)
 }
 
 func ListenerSetBuilder(
@@ -493,8 +471,8 @@ func ListenerSetBuilder(
 	secrets krt.Collection[*corev1.Secret],
 	configMaps krt.Collection[*corev1.ConfigMap],
 	enableAgentgatewayModels bool,
-) (*gwv1.ListenerSetStatus, []ListenerSet) {
-	result := []ListenerSet{}
+) (*gwv1.ListenerSetStatus, []*ListenerSet) {
+	result := []*ListenerSet{}
 	ls := obj.Spec
 	status := obj.Status.DeepCopy()
 
@@ -575,14 +553,14 @@ func ListenerSetBuilder(
 			CreationTimestamp: obj.CreationTimestamp,
 		}
 
-		res := ListenerSet{
+		res := &ListenerSet{
 			Name:          name,
 			Valid:         programmed,
 			TLSInfo:       tlsInfo,
-			Parent:        config.NamespacedName(obj),
-			GatewayParent: parentGwObj.NamespacedName,
-			ListenerIndex: i,
+			ParentObject:  utils.TypedNamespacedName{Kind: wellknown.ListenerSetGVK.Kind, NamespacedName: config.NamespacedName(obj)},
+			ParentGateway: parentGwObj.NamespacedName,
 			ParentInfo:    pri,
+			ListenerIndex: i,
 		}
 		result = append(result, res)
 	}

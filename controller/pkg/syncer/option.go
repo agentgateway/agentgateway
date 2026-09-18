@@ -66,7 +66,7 @@ func WithBuildReferenceTypes(f func(agw *plugins.AgwCollections, base plugins.Re
 	}
 }
 
-type ExtraListenerSetsBuilderFunc func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[translator.ListenerSet]
+type ExtraListenerSetsBuilderFunc func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet]
 
 // WithExtraListenerSets contributes listener sets from a source other than the Gateway API
 // ListenerSet CRD. Once admitted they are indistinguishable from CRD-derived ones: conflict
@@ -77,6 +77,9 @@ type ExtraListenerSetsBuilderFunc func(agw *plugins.AgwCollections, krtopts krtu
 // Syncer.Outputs.RejectedListenerSets for the contributor to report; HasSynced does not cover
 // that collection. Nothing else is checked: TLSInfo skips ReferenceGrant, and a zero
 // ParentInfo.CreationTimestamp outranks every CRD ListenerSet in precedence.
+// Contributions are immutable, conflict-free candidates with ParentObject.Kind
+// set to ListenerSet. All listeners from one parent must share its creation timestamp,
+// so precedence sorting keeps them together for attached ListenerSet counting.
 func WithExtraListenerSets(f ExtraListenerSetsBuilderFunc) AgentgatewaySyncerOption {
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {
