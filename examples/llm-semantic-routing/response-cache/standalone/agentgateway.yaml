@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 0.0.0.0:15021
+llm:
+  port: 3000
+  policies:
+    extProc:
+      host: semantic-router:50051
+      failureMode: failClosed
+      processingOptions:
+        requestHeaderMode: send
+        # HomeHub uses complete JSON requests and non-streaming responses.
+        requestBodyMode: buffered
+        responseHeaderMode: send
+        # vSR needs the complete response to populate Redis on a miss.
+        responseBodyMode: buffered
+        requestTrailerMode: send
+        responseTrailerMode: send
+        allowModeOverride: true
+  models:
+  - name: homehub-support
+    provider: openAI
+    params:
+      baseUrl: http://support-backend:8080/v1
