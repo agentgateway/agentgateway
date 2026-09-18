@@ -1,0 +1,24 @@
+- key: test-ns/a2a-mixed/legacy
+  name:
+    name: a2a-mixed
+    namespace: test-ns
+  static:
+    host: legacy-agent.external.com
+    port: 9090
+- a2a:
+    targets:
+    - backend:
+        port: 8080
+        service:
+          hostname: agent-auto.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: agent-auto-a2a
+      namespace: test-ns
+    - backend:
+        backend: test-ns/a2a-mixed/legacy
+      name: legacy
+      namespace: test-ns
+  key: test-ns/a2a-mixed
+  name:
+    name: a2a-mixed
+    namespace: test-ns

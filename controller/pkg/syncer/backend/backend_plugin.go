@@ -176,22 +176,29 @@ func BuildAgwBackend(
 		}}, errors.Join(errs...)
 	}
 	if b := backend.Spec.A2A; b != nil {
-		sb := &api.StaticBackend{}
-		sb.Host = b.Host
-		sb.Port = b.Port
-		a2aPolicy := &api.BackendPolicySpec{
-			Kind: &api.BackendPolicySpec_A2A_{
-				A2A: &api.BackendPolicySpec_A2A{},
-			},
+		// Legacy mode: host + port with no targets → Static + A2a{} policy
+		if len(b.Targets) == 0 {
+			if b.Host != "" {
+				sb := &api.StaticBackend{Host: b.Host, Port: b.Port}
+				a2aPolicy := &api.BackendPolicySpec{
+					Kind: &api.BackendPolicySpec_A2A_{
+						A2A: &api.BackendPolicySpec_A2A{},
+					},
+				}
+				return []*api.Backend{{
+					Key:            backend.Namespace + "/" + backend.Name,
+					Name:           plugins.ResourceName(backend),
+					Kind:           &api.Backend_Static{Static: sb},
+					InlinePolicies: append([]*api.BackendPolicySpec{a2aPolicy}, pols...),
+				}}, errors.Join(errs...)
+			}
+			// No host and no targets → empty backend (no-op)
+			return nil, errors.Join(errs...)
 		}
-		return []*api.Backend{{
-			Key:  backend.Namespace + "/" + backend.Name,
-			Name: plugins.ResourceName(backend),
-			Kind: &api.Backend_Static{
-				Static: sb,
-			},
-			InlinePolicies: append([]*api.BackendPolicySpec{a2aPolicy}, pols...),
-		}}, errors.Join(errs...)
+
+		// New mode: targets-based → Backend_A2A
+		be, err := translateA2ABackends(ctx, backend, b, pols)
+		return be, errors.Join(append(errs, err)...)
 	}
 	if b := backend.Spec.DynamicForwardProxy; b != nil {
 		return []*api.Backend{{

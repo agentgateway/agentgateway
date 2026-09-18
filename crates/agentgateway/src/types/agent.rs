@@ -1373,6 +1373,8 @@ pub enum Backend {
 	Opaque(ResourceName, Target), // Hostname or IP
 	#[serde(rename = "mcp", serialize_with = "serialize_backend_tuple")]
 	MCP(ResourceName, McpBackend),
+	#[serde(rename = "a2a", serialize_with = "serialize_backend_tuple")]
+	A2A(ResourceName, A2aBackend),
 	#[serde(rename = "ai", serialize_with = "serialize_backend_tuple")]
 	AI(ResourceName, crate::llm::AIBackend),
 	#[serde(rename = "llmRouter", serialize_with = "serialize_backend_tuple")]
@@ -1717,6 +1719,7 @@ impl Backend {
 			},
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
+			| Backend::A2A(name, _)
 			| Backend::AI(name, _)
 			| Backend::LLMRouter(name, _)
 			| Backend::Aws(name, _)
@@ -1739,6 +1742,7 @@ impl Backend {
 			},
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
+			| Backend::A2A(name, _)
 			| Backend::AI(name, _)
 			| Backend::LLMRouter(name, _)
 			| Backend::Aws(name, _)
@@ -1757,6 +1761,7 @@ impl Backend {
 			Backend::Service(svc, port) => strng::format!("{}:{}", svc.hostname.clone(), port),
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
+			| Backend::A2A(name, _)
 			| Backend::AI(name, _)
 			| Backend::LLMRouter(name, _)
 			| Backend::Aws(name, _)
@@ -1777,6 +1782,7 @@ impl Backend {
 			Backend::Service(_, _) => cel::BackendType::Service,
 			Backend::Opaque(_, _) => cel::BackendType::Static,
 			Backend::MCP(_, _) => cel::BackendType::MCP,
+			Backend::A2A(_, _) => cel::BackendType::Unknown,
 			Backend::AI(_, _) | Backend::LLMRouter(_, _) => cel::BackendType::AI,
 			Backend::Aws(_, _) => cel::BackendType::Unknown,
 			Backend::Dynamic(_, _) => cel::BackendType::Dynamic,
@@ -2911,6 +2917,27 @@ impl BackendTrafficPolicy {
 
 #[apply(schema!)]
 pub struct A2aPolicy {}
+
+/// Multi-target A2A backend. Routes requests by path prefix: /a2a/{target_name}/*
+#[apply(schema_ser_schema!)]
+pub struct A2aBackend {
+	pub targets: Vec<Arc<A2aTarget>>,
+}
+
+impl A2aBackend {
+	/// Find a target by name.
+	pub fn find(&self, name: &str) -> Option<&A2aTarget> {
+		self.targets.iter().find(|t| t.name == name).map(|v| &**v)
+	}
+}
+
+#[apply(schema_ser_schema!)]
+pub struct A2aTarget {
+	pub name: String,
+	pub backend: SimpleBackendReference,
+	pub path: String,
+	pub namespace: String,
+}
 
 #[apply(schema!)]
 pub struct Authorization(pub Arc<RuleSet>);

@@ -3226,6 +3226,7 @@ async fn convert(
 		if let Some(primary_bw) = bws.iter_mut().find(|bw| match &bw.backend {
 			Backend::Opaque(n, _)
 			| Backend::MCP(n, _)
+			| Backend::A2A(n, _)
 			| Backend::AI(n, _)
 			| Backend::LLMRouter(n, _)
 			| Backend::Aws(n, _)

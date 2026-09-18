@@ -192,6 +192,7 @@ message Backend {
     // Not yet implemented. Reserved for a future release.
     GuardrailBackend guardrail = 9;
     ModelRouterBackend model_router = 10;
+    A2ABackend a2a = 11;
   }
   repeated BackendPolicySpec inline_policies = 7;
 }
@@ -2035,6 +2036,24 @@ message MCPTarget {
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+}
+
+// A2ABackend routes A2A (Agent-to-Agent) protocol requests to one or more
+// agent targets via path-based routing: /a2a/{target_name}/* -> target backend.
+message A2ABackend {
+  repeated A2ATarget targets = 1;
+}
+
+// A2ATarget represents a single A2A agent destination.
+message A2ATarget {
+  // Human-readable target name, used in the routing path prefix.
+  string name = 1;
+  // Backend reference (Service or sub-backend key).
+  BackendReference backend = 2;
+  // Path prefix to strip before forwarding (default "/").
+  string path = 3;
+  // Namespace of the discovered Service (for diagnostics).
+  string namespace = 4;
 }
 
 message BackendReference {

@@ -716,9 +716,11 @@ pub fn resolve_tunnel_backend(
 		| Backend::Aws(_, _)
 		| Backend::Dynamic(_, _)
 		| Backend::Invalid => Ok(backend),
-		Backend::MCP(_, _) | Backend::AI(_, _) | Backend::LLMRouter(_, _) | Backend::Internal(_, _) => {
-			Err(ProxyError::InvalidBackendType)
-		},
+		Backend::MCP(_, _)
+		| Backend::A2A(_, _)
+		| Backend::AI(_, _)
+		| Backend::LLMRouter(_, _)
+		| Backend::Internal(_, _) => Err(ProxyError::InvalidBackendType),
 	}
 }
 

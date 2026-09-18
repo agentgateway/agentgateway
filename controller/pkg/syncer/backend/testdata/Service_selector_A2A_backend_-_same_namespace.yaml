@@ -1,0 +1,20 @@
+- a2a:
+    targets:
+    - backend:
+        port: 8080
+        service:
+          hostname: agent-a.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: agent-a-a2a
+      namespace: test-ns
+    - backend:
+        port: 8080
+        service:
+          hostname: agent-b.test-ns.svc.cluster.local
+          namespace: test-ns
+      name: agent-b-a2a
+      namespace: test-ns
+  key: test-ns/a2a-selector-same-ns
+  name:
+    name: a2a-selector-same-ns
+    namespace: test-ns

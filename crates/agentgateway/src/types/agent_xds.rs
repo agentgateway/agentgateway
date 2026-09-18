@@ -2097,6 +2097,25 @@ pub(crate) fn backend_with_policies_from_proto(
 			diagnostics.add_warning("guardrail backends are not yet implemented and will be ignored");
 			Backend::Invalid
 		},
+		Some(proto::agent::backend::Kind::A2a(a)) => {
+			let targets = a
+				.targets
+				.iter()
+				.map(|t| {
+					Arc::new(A2aTarget {
+						name: t.name.clone(),
+						backend: resolve_simple_reference(t.backend.as_ref()),
+						path: if t.path.is_empty() {
+							"/".to_string()
+						} else {
+							t.path.clone()
+						},
+						namespace: t.namespace.clone(),
+					})
+				})
+				.collect();
+			Backend::A2A(name.into(), A2aBackend { targets })
+		},
 		Some(backend::Kind::ModelRouter(_)) => {
 			return Err(ProtoError::Generic(
 				"model router backend must be dispatched through Store::insert_xds_model_router"
