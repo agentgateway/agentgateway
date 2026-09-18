@@ -403,6 +403,8 @@ struct ExtProcInstance {
 	span_target: Arc<SimpleBackendReference>,
 	client: Option<proto::external_processor_client::ExternalProcessorClient<GrpcReferenceChannel>>,
 	tx_req: Option<Sender<ProcessingRequest>>,
+	// Completes on the transport's first poll, or errors if setup drops the stream first.
+	request_stream_polled: Option<tokio::sync::oneshot::Receiver<()>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
@@ -438,6 +440,7 @@ impl ExtProcInstance {
 					.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE),
 			),
 			tx_req: None,
+			request_stream_polled: None,
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
 			metadata_context,
@@ -460,9 +463,19 @@ impl ExtProcInstance {
 		let failure_mode = self.failure_mode;
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
-		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
+		let (tx_req, mut rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
-		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
+		// Enqueueing a ProcessingRequest does not mean we connected to the processor.
+		// Signal when the outbound path actually starts reading the gRPC request stream,
+		// so mutate_request can keep the original HTTP body untouched during setup.
+		let (tx_polled, rx_polled) = tokio::sync::oneshot::channel();
+		let mut tx_polled = Some(tx_polled);
+		let req_stream = futures::stream::poll_fn(move |cx| {
+			if let Some(tx) = tx_polled.take() {
+				let _ = tx.send(());
+			}
+			rx_req.poll_recv(cx)
+		});
 		dtrace::spawn(async move {
 			let mut request = tonic::Request::new(req_stream);
 			*request.metadata_mut() = grpc_initial_metadata;
@@ -535,6 +548,7 @@ impl ExtProcInstance {
 		});
 
 		self.tx_req = Some(tx_req);
+		self.request_stream_polled = Some(rx_polled);
 		self.rx_resp_for_request = Some(rx_resp_for_request);
 		self.rx_resp_for_response = Some(rx_resp_for_response);
 		Ok(())
@@ -967,6 +981,20 @@ impl ExtProcInstance {
 				"complete_request_phase_preserves_original_body",
 			);
 			return Ok((req, None));
+		}
+
+		// Wait before handing the original body to a producer that can consume it.
+		// A setup failure drops the unpolled stream (and its one-shot sender), letting
+		// FailOpen return the intact request. Do not wait for client.process() or an EPP
+		// response here: a full-duplex processor may need the body before responding.
+		if let Some(polled) = self.request_stream_polled.take()
+			&& polled.await.is_err()
+		{
+			if failure_mode == FailureMode::FailOpen {
+				self.skipped = true;
+				return Ok((req, None));
+			}
+			return Err(Error::RequestSend);
 		}
 
 		let tx = self.tx_req.clone();

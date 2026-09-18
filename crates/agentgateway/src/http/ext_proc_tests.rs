@@ -1668,6 +1668,53 @@ mod immediate_and_failure {
 	}
 
 	#[tokio::test]
+	async fn unavailable_ext_proc_preserves_unstarted_body() {
+		let mock = simple_mock().await;
+		for target in [
+			json!({"host": "127.0.0.1:0"}),
+			json!({"name": STANDALONE_SERVICE_REF, "port": STANDALONE_SERVICE_PORT}),
+		] {
+			for header_mode in ["send", "skip"] {
+				for failure_mode in [
+					ext_proc::FailureMode::FailOpen,
+					ext_proc::FailureMode::FailClosed,
+				] {
+					let mut policy = target.clone();
+					policy["failureMode"] = json!(failure_mode);
+					policy["processingOptions"] = json!({
+						"requestHeaderMode": header_mode,
+						"requestBodyMode": "fullDuplexStreamed",
+						"responseBodyMode": "fullDuplexStreamed",
+					});
+					let bind = setup_proxy_test("{}")
+						.unwrap()
+						.with_backend(*mock.address())
+						.with_bind(simple_bind())
+						.with_route(basic_route(*mock.address()))
+						.attach_route_policy_builder(json!({"extProc": policy}))
+						.await;
+					configure_standalone_service(&bind);
+					let io = bind.serve_http(strng::new("bind"));
+					let body_in = br#"{"model":"test","messages":[{"role":"user","content":"hello"}]}"#;
+					let res = tokio::time::timeout(
+						Duration::from_secs(3),
+						send_request_body(io, Method::POST, "http://lo/v1/chat/completions", body_in),
+					)
+					.await
+					.unwrap();
+					if failure_mode == ext_proc::FailureMode::FailOpen {
+						assert_eq!(res.status(), 200);
+						let dump = read_body(res.into_body()).await;
+						assert_eq!(dump.body.as_ref(), body_in);
+					} else {
+						assert_eq!(res.status(), 500);
+					}
+				}
+			}
+		}
+	}
+
+	#[tokio::test]
 	async fn failure_fail_open_body() {
 		let mock = simple_mock().await;
 		let processing_options = json!({
