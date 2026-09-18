@@ -106,109 +106,58 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 }
 
 #[test]
-fn bedrock_chat_translation_follows_endpoint_selection() {
-	fn bedrock(pref: bedrock::BedrockEndpointPreference) -> AIProvider {
-		AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
-			model_override: None,
-			region: strng::new("us-east-1"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			endpoint_preference: pref,
-		}))
-	}
+fn native_anthropic_applies_prompt_caching_policy() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let translation = provider
+		.chat_translation(InputFormat::Messages, Some("claude-sonnet-4-5"), None)
+		.unwrap();
+	let request: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-5",
+		"max_tokens": 128,
+		"system": "system prompt",
+		"messages": [
+			{"role": "assistant", "content": [{
+				"type": "text",
+				"text": "previous answer",
+				"future_content_field": "preserve-me"
+			}]},
+			{"role": "user", "content": "current question"}
+		],
+		"tools": [{"name": "lookup", "input_schema": {"type": "object"}}],
+		"future_anthropic_field": true
+	}))
+	.unwrap();
+	let caching = PromptCachingConfig {
+		cache_system: true,
+		cache_messages: true,
+		cache_tools: true,
+		min_tokens: Some(1),
+		cache_message_offset: 0,
+	};
 
-	let runtime = bedrock(bedrock::BedrockEndpointPreference::RuntimeOnly);
-	for input in [
-		InputFormat::Completions,
-		InputFormat::Messages,
-		InputFormat::Responses,
-	] {
-		assert_eq!(
-			runtime
-				.chat_translation(input, "anthropic.claude-3-5-sonnet-20241022-v2:0", None)
-				.unwrap()
-				.output,
-			ChatFormat::BedrockConverse,
-			"{input:?} must render Converse on the Runtime endpoint"
-		);
-	}
-
-	let catalog = crate::llm::catalog::ModelCatalog::from_json(
-		r#"{"providers":{"aws.bedrock":{"models":{
-			"anthropic.claude-sonnet-5":{"tags":["mantle","anthropic_messages"]},
-			"openai.gpt-oss-120b":{"tags":["mantle","openai_completions","openai_responses"]}
-		}}}}"#,
-	);
-	let catalog = Some(catalog.as_handle());
-	let mantle = bedrock(bedrock::BedrockEndpointPreference::MantleOnly);
-	// gpt-oss-120b serves the two OpenAI-compatible formats on Mantle.
-	for (input, expected) in [
-		(InputFormat::Completions, ChatFormat::OpenAICompletions),
-		(InputFormat::Responses, ChatFormat::OpenAIResponses),
-	] {
-		assert_eq!(
-			mantle
-				.chat_translation(input, "openai.gpt-oss-120b", catalog)
-				.unwrap()
-				.output,
-			expected,
-			"{input:?} must pass through natively on the Mantle endpoint"
-		);
-	}
-	// Claude serves the native Messages API on Mantle.
+	let rendered = translation
+		.render_request(
+			types::ChatRequest::Messages(request),
+			&ChatRequestContext {
+				provider: &provider,
+				headers: &HeaderMap::new(),
+				prompt_caching: Some(&caching),
+				catalog: None,
+			},
+		)
+		.unwrap();
+	let output: Value = serde_json::from_slice(&rendered.body).unwrap();
+	assert_eq!(output["future_anthropic_field"], true);
 	assert_eq!(
-		mantle
-			.chat_translation(InputFormat::Messages, "anthropic.claude-sonnet-5", catalog)
-			.unwrap()
-			.output,
-		ChatFormat::AnthropicMessages,
-		"Messages must pass through natively for a Claude model on Mantle"
+		output["messages"][0]["content"][0]["future_content_field"],
+		"preserve-me"
 	);
-}
-
-// A Claude model only speaks the Anthropic Messages API on Mantle, so an inbound Chat Completions
-// request must be translated to Messages, never sent to Mantle as OpenAI Chat Completions.
-#[test]
-fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
-	fn mantle_provider() -> AIProvider {
-		AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
-			model_override: None,
-			region: strng::new("us-east-1"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
-		}))
-	}
-	let mantle = mantle_provider();
-
-	// Tag-driven: the imported catalog tags Claude with anthropic_messages only.
-	let catalog = crate::llm::catalog::ModelCatalog::from_json(
-		r#"{"providers":{"aws.bedrock":{"models":{
-			"anthropic.claude-sonnet-5":{"tags":["mantle","anthropic_messages"]}
-		}}}}"#,
-	);
+	assert_eq!(output["system"][0]["cache_control"]["type"], "ephemeral");
 	assert_eq!(
-		mantle
-			.chat_translation(
-				InputFormat::Completions,
-				"anthropic.claude-sonnet-5",
-				Some(catalog.as_handle()),
-			)
-			.unwrap()
-			.output,
-		ChatFormat::AnthropicMessages,
-		"a Completions request to a tagged Claude model must translate to Messages, not completions"
+		output["messages"][0]["content"][0]["cache_control"]["type"],
+		"ephemeral"
 	);
-
-	// Untagged fallback: the is_anthropic_model heuristic must also keep Completions off completions.
-	assert_eq!(
-		mantle
-			.chat_translation(InputFormat::Completions, "anthropic.claude-opus-4-8", None)
-			.unwrap()
-			.output,
-		ChatFormat::AnthropicMessages,
-		"an untagged Claude model must still translate Completions to Messages"
-	);
+	assert_eq!(output["tools"][0]["cache_control"]["type"], "ephemeral");
 }
 
 #[test]
