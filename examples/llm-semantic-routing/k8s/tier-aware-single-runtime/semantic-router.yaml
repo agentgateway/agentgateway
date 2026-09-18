@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router
+  namespace: agentgateway-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tier-aware-router
+  template:
+    metadata:
+      labels:
+        app: tier-aware-router
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: router
+          image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+          imagePullPolicy: Always
+          args: ["/app/config/config.yaml"]
+          ports:
+            - name: grpc
+              containerPort: 50051
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: tier-aware-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router
+  namespace: agentgateway-system
+spec:
+  selector:
+    app: tier-aware-router
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc

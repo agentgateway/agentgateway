@@ -1,0 +1,26 @@
+name: tier-aware-semantic-routing
+services:
+  agentgateway:
+    image: cr.agentgateway.dev/agentgateway:v1.5.0
+    command: ["-f", "/etc/agentgateway/config.yaml"]
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env or your shell}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in .env or your shell}
+    ports:
+      - "127.0.0.1:${PORT:-4000}:4000"
+    volumes:
+      - ./agentgateway.yaml:/etc/agentgateway/config.yaml:ro
+    depends_on:
+      semantic-router:
+        condition: service_healthy
+  semantic-router:
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+    command: ["/app/config/config.yaml"]
+    volumes:
+      - ./semantic-router-config.yaml:/app/config/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
